@@ -37,6 +37,7 @@ dependencies = [
     "networkx>=3.0",
     "python-dateutil>=2.8",
     "typer>=0.9.0",
+    "aiohttp>=3.9.0",
 ]
 
 [project.optional-dependencies]
