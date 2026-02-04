@@ -301,6 +301,98 @@ def remember(
 
 
 @app.command()
+def todo(
+    task: Annotated[str, typer.Argument(help="Task to remember")],
+    priority: Annotated[
+        int,
+        typer.Option("--priority", "-p", help="Priority 0-10 (default: 5=normal, 7=high, 10=critical)"),
+    ] = 5,
+    project: Annotated[
+        Optional[str],
+        typer.Option("--project", "-P", help="Associate with a project"),
+    ] = None,
+    expires: Annotated[
+        Optional[int],
+        typer.Option("--expires", "-e", help="Days until expiry (default: 30)"),
+    ] = None,
+    tags: Annotated[
+        Optional[list[str]],
+        typer.Option("--tag", "-t", help="Tags for the task"),
+    ] = None,
+    json_output: Annotated[
+        bool, typer.Option("--json", "-j", help="Output as JSON")
+    ] = False,
+) -> None:
+    """Quick shortcut to add a TODO memory.
+
+    Equivalent to: nmem remember --type todo "task"
+
+    Examples:
+        nmem todo "Fix the login bug"
+        nmem todo "Review PR #123" --priority 7
+        nmem todo "Deploy to prod" -p 10 --project "Q1 Sprint"
+        nmem todo "Update docs" --expires 7
+    """
+    # Determine expiry (default 30 days for todos)
+    expiry_days = expires if expires is not None else 30
+    mem_priority = Priority.from_int(priority)
+
+    async def _todo() -> dict:
+        config = get_config()
+        storage = await get_storage(config)
+
+        brain = await storage.get_brain(storage._current_brain_id)
+        if not brain:
+            return {"error": "No brain configured"}
+
+        # Look up project if specified
+        project_id = None
+        if project:
+            proj = await storage.get_project_by_name(project)
+            if not proj:
+                return {"error": f"Project '{project}' not found. Create it with: nmem project create \"{project}\""}
+            project_id = proj.id
+
+        encoder = MemoryEncoder(storage, brain.config)
+        storage.disable_auto_save()
+
+        result = await encoder.encode(
+            content=task,
+            timestamp=datetime.now(),
+            tags=set(tags) if tags else None,
+        )
+
+        # Create TODO typed memory
+        typed_mem = TypedMemory.create(
+            fiber_id=result.fiber.id,
+            memory_type=MemoryType.TODO,
+            priority=mem_priority,
+            source="user_input",
+            expires_in_days=expiry_days,
+            tags=set(tags) if tags else None,
+            project_id=project_id,
+        )
+        await storage.add_typed_memory(typed_mem)
+        await storage.batch_save()
+
+        response = {
+            "message": f"TODO: {task[:50]}{'...' if len(task) > 50 else ''}",
+            "fiber_id": result.fiber.id,
+            "memory_type": "todo",
+            "priority": mem_priority.name.lower(),
+            "expires_in_days": typed_mem.days_until_expiry,
+        }
+
+        if project_id:
+            response["project"] = project
+
+        return response
+
+    result = asyncio.run(_todo())
+    output_result(result, json_output)
+
+
+@app.command()
 def recall(
     query: Annotated[str, typer.Argument(help="Query to search memories")],
     depth: Annotated[
