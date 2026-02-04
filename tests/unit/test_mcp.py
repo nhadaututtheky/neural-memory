@@ -470,6 +470,99 @@ class TestMCPProtocol:
         assert "Method not found" in response["error"]["message"]
 
 
+class TestMCPResources:
+    """Tests for MCP server resources (system prompts)."""
+
+    @pytest.fixture
+    def server(self) -> MCPServer:
+        """Create an MCP server instance."""
+        with patch("neural_memory.mcp.server.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(
+                current_brain="test-brain",
+                get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
+            )
+            return MCPServer()
+
+    def test_get_resources(self, server: MCPServer) -> None:
+        """Test that get_resources returns available prompts."""
+        resources = server.get_resources()
+
+        assert len(resources) == 2
+        uris = {r["uri"] for r in resources}
+        assert "neuralmemory://prompt/system" in uris
+        assert "neuralmemory://prompt/compact" in uris
+
+    def test_get_resource_content_system(self, server: MCPServer) -> None:
+        """Test getting system prompt content."""
+        content = server.get_resource_content("neuralmemory://prompt/system")
+
+        assert content is not None
+        assert "NeuralMemory" in content
+        assert "nmem_remember" in content
+
+    def test_get_resource_content_compact(self, server: MCPServer) -> None:
+        """Test getting compact prompt content."""
+        content = server.get_resource_content("neuralmemory://prompt/compact")
+
+        assert content is not None
+        assert len(content) < 1000  # Compact should be shorter
+
+    def test_get_resource_content_unknown(self, server: MCPServer) -> None:
+        """Test getting unknown resource returns None."""
+        content = server.get_resource_content("neuralmemory://unknown")
+
+        assert content is None
+
+    @pytest.mark.asyncio
+    async def test_resources_list_message(self, server: MCPServer) -> None:
+        """Test MCP resources/list message."""
+        message = {"jsonrpc": "2.0", "id": 1, "method": "resources/list", "params": {}}
+
+        response = await handle_message(server, message)
+
+        assert response["jsonrpc"] == "2.0"
+        assert response["id"] == 1
+        assert "result" in response
+        assert "resources" in response["result"]
+        assert len(response["result"]["resources"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_resources_read_message(self, server: MCPServer) -> None:
+        """Test MCP resources/read message."""
+        message = {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "resources/read",
+            "params": {"uri": "neuralmemory://prompt/system"},
+        }
+
+        response = await handle_message(server, message)
+
+        assert response["jsonrpc"] == "2.0"
+        assert response["id"] == 2
+        assert "result" in response
+        assert "contents" in response["result"]
+        assert response["result"]["contents"][0]["uri"] == "neuralmemory://prompt/system"
+        assert "NeuralMemory" in response["result"]["contents"][0]["text"]
+
+    @pytest.mark.asyncio
+    async def test_resources_read_not_found(self, server: MCPServer) -> None:
+        """Test MCP resources/read with unknown URI."""
+        message = {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "resources/read",
+            "params": {"uri": "neuralmemory://unknown"},
+        }
+
+        response = await handle_message(server, message)
+
+        assert response["jsonrpc"] == "2.0"
+        assert response["id"] == 3
+        assert "error" in response
+        assert response["error"]["code"] == -32002
+
+
 class TestMCPStorage:
     """Tests for MCP server storage management."""
 

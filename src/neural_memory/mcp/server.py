@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Any
 from neural_memory.core.memory_types import MemoryType, Priority, TypedMemory, suggest_memory_type
 from neural_memory.engine.encoder import MemoryEncoder
 from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline
+from neural_memory.mcp.prompt import get_prompt_for_mcp, get_system_prompt
 from neural_memory.unified_config import get_config, get_shared_storage
 
 if TYPE_CHECKING:
@@ -57,6 +58,31 @@ class MCPServer:
         if self._storage is None:
             self._storage = await get_shared_storage()
         return self._storage
+
+    def get_resources(self) -> list[dict[str, Any]]:
+        """Return list of available MCP resources."""
+        return [
+            {
+                "uri": "neuralmemory://prompt/system",
+                "name": "NeuralMemory System Prompt",
+                "description": "Instructions for AI on when/how to use NeuralMemory",
+                "mimeType": "text/plain",
+            },
+            {
+                "uri": "neuralmemory://prompt/compact",
+                "name": "NeuralMemory Compact Prompt",
+                "description": "Short version of system prompt for limited context",
+                "mimeType": "text/plain",
+            },
+        ]
+
+    def get_resource_content(self, uri: str) -> str | None:
+        """Get content of a resource by URI."""
+        if uri == "neuralmemory://prompt/system":
+            return get_system_prompt(compact=False)
+        elif uri == "neuralmemory://prompt/compact":
+            return get_system_prompt(compact=True)
+        return None
 
     def get_tools(self) -> list[dict[str, Any]]:
         """Return list of available MCP tools."""
@@ -549,12 +575,30 @@ async def handle_message(server: MCPServer, message: dict[str, Any]) -> dict[str
             "result": {
                 "protocolVersion": "2024-11-05",
                 "serverInfo": {"name": "neural-memory", "version": "0.1.0"},
-                "capabilities": {"tools": {}},
+                "capabilities": {"tools": {}, "resources": {}},
             },
         }
 
     elif method == "tools/list":
         return {"jsonrpc": "2.0", "id": msg_id, "result": {"tools": server.get_tools()}}
+
+    elif method == "resources/list":
+        return {"jsonrpc": "2.0", "id": msg_id, "result": {"resources": server.get_resources()}}
+
+    elif method == "resources/read":
+        uri = params.get("uri", "")
+        content = server.get_resource_content(uri)
+        if content is None:
+            return {
+                "jsonrpc": "2.0",
+                "id": msg_id,
+                "error": {"code": -32002, "message": f"Resource not found: {uri}"},
+            }
+        return {
+            "jsonrpc": "2.0",
+            "id": msg_id,
+            "result": {"contents": [{"uri": uri, "mimeType": "text/plain", "text": content}]},
+        }
 
     elif method == "tools/call":
         tool_name = params.get("name", "")

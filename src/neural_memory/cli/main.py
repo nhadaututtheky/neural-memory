@@ -2685,6 +2685,89 @@ def show_today() -> None:
     asyncio.run(_today())
 
 
+@app.command(name="mcp-config")
+def mcp_config(
+    with_prompt: Annotated[
+        bool, typer.Option("--with-prompt", "-p", help="Include system prompt in config")
+    ] = False,
+    compact_prompt: Annotated[
+        bool, typer.Option("--compact", "-c", help="Use compact prompt (if --with-prompt)")
+    ] = False,
+) -> None:
+    """Generate MCP server configuration for Claude Code/Cursor.
+
+    Outputs JSON configuration that can be added to your MCP settings.
+
+    Examples:
+        nmem mcp-config                    # Basic config
+        nmem mcp-config --with-prompt      # Include system prompt
+        nmem mcp-config -p -c              # Include compact prompt
+    """
+    import shutil
+    import sys
+
+    from neural_memory.mcp.prompt import get_system_prompt
+
+    # Find nmem executable path
+    nmem_path = shutil.which("nmem") or shutil.which("nmem-mcp") or sys.executable
+
+    config = {
+        "neural-memory": {
+            "command": nmem_path if "python" not in nmem_path.lower() else "python",
+            "args": ["-m", "neural_memory.mcp"] if "python" in nmem_path.lower() else ["mcp"],
+        }
+    }
+
+    # Simplify if nmem is available
+    if shutil.which("nmem-mcp"):
+        config["neural-memory"] = {"command": "nmem-mcp", "args": []}
+
+    typer.echo("Add this to your MCP configuration:\n")
+    typer.echo(json.dumps(config, indent=2))
+
+    if with_prompt:
+        typer.echo("\n" + "=" * 60)
+        typer.echo("System prompt to add to your AI assistant:\n")
+        typer.echo(get_system_prompt(compact=compact_prompt))
+
+
+@app.command()
+def prompt(
+    compact: Annotated[
+        bool, typer.Option("--compact", "-c", help="Show compact version")
+    ] = False,
+    copy: Annotated[
+        bool, typer.Option("--copy", help="Copy to clipboard (requires pyperclip)")
+    ] = False,
+) -> None:
+    """Show system prompt for AI tools.
+
+    This prompt instructs AI assistants (Claude, GPT, etc.) on when and how
+    to use NeuralMemory for persistent memory across sessions.
+
+    Examples:
+        nmem prompt              # Show full prompt
+        nmem prompt --compact    # Show shorter version
+        nmem prompt --copy       # Copy to clipboard
+    """
+    from neural_memory.mcp.prompt import get_system_prompt
+
+    text = get_system_prompt(compact=compact)
+
+    if copy:
+        try:
+            import pyperclip
+
+            pyperclip.copy(text)
+            typer.echo("System prompt copied to clipboard!")
+        except ImportError:
+            typer.echo("Install pyperclip for clipboard support: pip install pyperclip")
+            typer.echo("")
+            typer.echo(text)
+    else:
+        typer.echo(text)
+
+
 @app.command()
 def version() -> None:
     """Show version information."""
