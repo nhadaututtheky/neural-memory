@@ -1,8 +1,11 @@
 """MCP server implementation for NeuralMemory.
 
 Exposes NeuralMemory as tools via Model Context Protocol (MCP),
-allowing Claude Code, Claude Desktop, and other MCP clients to
+allowing Claude Code, Cursor, AntiGravity and other MCP clients to
 store and recall memories.
+
+All tools share the same SQLite database at ~/.neuralmemory/brains/<brain>.db
+This enables seamless memory sharing between different AI tools.
 
 Usage:
     # Run directly
@@ -15,6 +18,9 @@ Usage:
             "args": ["-m", "neural_memory.mcp"]
         }
     }
+
+    # Or set NEURALMEMORY_BRAIN to use a specific brain:
+    NEURALMEMORY_BRAIN=myproject python -m neural_memory.mcp
 """
 
 from __future__ import annotations
@@ -23,27 +29,33 @@ import asyncio
 import json
 import sys
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from neural_memory.cli.config import CLIConfig
-from neural_memory.cli.storage import PersistentStorage
 from neural_memory.core.memory_types import MemoryType, Priority, TypedMemory, suggest_memory_type
 from neural_memory.engine.encoder import MemoryEncoder
 from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline
+from neural_memory.unified_config import get_config, get_shared_storage
+
+if TYPE_CHECKING:
+    from neural_memory.storage.sqlite_store import SQLiteStorage
+    from neural_memory.unified_config import UnifiedConfig
 
 
 class MCPServer:
-    """MCP server that exposes NeuralMemory tools."""
+    """MCP server that exposes NeuralMemory tools.
+
+    Uses shared SQLite storage for cross-tool memory sharing.
+    Configuration from ~/.neuralmemory/config.toml
+    """
 
     def __init__(self) -> None:
-        self.config = CLIConfig.load()
-        self._storage: PersistentStorage | None = None
+        self.config: UnifiedConfig = get_config()
+        self._storage: SQLiteStorage | None = None
 
-    async def get_storage(self) -> PersistentStorage:
-        """Get or create storage instance."""
+    async def get_storage(self) -> SQLiteStorage:
+        """Get or create shared SQLite storage instance."""
         if self._storage is None:
-            brain_path = self.config.get_brain_path()
-            self._storage = await PersistentStorage.load(brain_path)
+            self._storage = await get_shared_storage()
         return self._storage
 
     def get_tools(self) -> list[dict[str, Any]]:

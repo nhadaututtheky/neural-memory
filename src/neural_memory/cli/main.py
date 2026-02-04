@@ -66,20 +66,22 @@ async def get_storage(
     *,
     force_shared: bool = False,
     force_local: bool = False,
+    force_sqlite: bool = False,
 ) -> PersistentStorage:
     """
     Get storage for current brain.
 
     Args:
         config: CLI configuration
-        force_shared: Override config to use shared mode
-        force_local: Override config to use local mode
+        force_shared: Override config to use remote shared mode
+        force_local: Override config to use local JSON mode
+        force_sqlite: Override config to use local SQLite mode
 
     Returns:
-        Storage instance (local or shared based on config)
+        Storage instance (local JSON, local SQLite, or remote shared)
     """
+    # Remote shared mode (via server)
     use_shared = (config.is_shared_mode or force_shared) and not force_local
-
     if use_shared:
         from neural_memory.storage.shared_store import SharedStorage
 
@@ -92,6 +94,13 @@ async def get_storage(
         await storage.connect()
         return storage  # type: ignore
 
+    # SQLite mode (unified config - shared file-based storage)
+    if config.use_sqlite or force_sqlite:
+        from neural_memory.unified_config import get_shared_storage
+
+        return await get_shared_storage(config.current_brain)  # type: ignore
+
+    # Legacy JSON mode
     brain_path = config.get_brain_path()
     return await PersistentStorage.load(brain_path)
 
@@ -2450,6 +2459,60 @@ def graph(
         await render_graph(storage, query=query, depth=depth)
 
     asyncio.run(_graph())
+
+
+@app.command()
+def init(
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="Overwrite existing config"),
+    ] = False,
+) -> None:
+    """Initialize unified config for cross-tool memory sharing.
+
+    This sets up ~/.neuralmemory/ which enables memory sharing between:
+    - CLI (nmem commands)
+    - MCP (Claude Code, Cursor, AntiGravity)
+    - Any other tool using NeuralMemory
+
+    After running this, all tools will share the same brain database.
+
+    Examples:
+        nmem init              # Initialize unified config
+        nmem init --force      # Overwrite existing config
+    """
+    from neural_memory.unified_config import UnifiedConfig, get_neuralmemory_dir
+
+    data_dir = get_neuralmemory_dir()
+    config_path = data_dir / "config.toml"
+
+    if config_path.exists() and not force:
+        typer.secho(f"Config already exists at {config_path}", fg=typer.colors.YELLOW)
+        typer.echo("Use --force to overwrite")
+        return
+
+    # Create unified config
+    config = UnifiedConfig(data_dir=data_dir)
+    config.save()
+
+    # Ensure brains directory exists
+    brains_dir = data_dir / "brains"
+    brains_dir.mkdir(parents=True, exist_ok=True)
+
+    typer.secho(f"Initialized NeuralMemory at {data_dir}", fg=typer.colors.GREEN)
+    typer.echo()
+    typer.echo("Directory structure:")
+    typer.echo(f"  {data_dir}/")
+    typer.echo("  +-- config.toml        # Shared configuration")
+    typer.echo("  +-- brains/")
+    typer.echo("      +-- default.db     # SQLite brain database")
+    typer.echo()
+    typer.echo("This enables memory sharing between:")
+    typer.echo("  - CLI: nmem commands")
+    typer.echo("  - MCP: Claude Code, Cursor, AntiGravity")
+    typer.echo()
+    typer.echo("To use a specific brain, set NEURALMEMORY_BRAIN environment variable:")
+    typer.echo("  export NEURALMEMORY_BRAIN=myproject")
 
 
 @app.command()

@@ -1592,3 +1592,22 @@ class SQLiteStorage(NeuralStorage):
         await conn.execute("DELETE FROM brains WHERE id = ?", (brain_id,))
 
         await conn.commit()
+
+    # ========== Compatibility with PersistentStorage ==========
+
+    def disable_auto_save(self) -> None:
+        """No-op for SQLite (transactions handle this)."""
+        pass
+
+    def enable_auto_save(self) -> None:
+        """No-op for SQLite (transactions handle this)."""
+        pass
+
+    async def batch_save(self) -> None:
+        """Commit any pending transactions (SQLite auto-commits, so this is mostly a no-op)."""
+        conn = self._ensure_conn()
+        await conn.commit()
+
+    async def _save_to_file(self) -> None:
+        """No-op for SQLite (auto-persisted)."""
+        pass

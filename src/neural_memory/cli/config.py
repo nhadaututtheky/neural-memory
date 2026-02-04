@@ -1,8 +1,21 @@
-"""CLI configuration management."""
+"""CLI configuration management.
+
+This module provides backward-compatible configuration for the CLI.
+New code should use unified_config.py for cross-tool compatibility.
+
+Storage locations:
+- Legacy: ~/.neural-memory/brains/<name>.json (JSON files)
+- New:    ~/.neuralmemory/brains/<name>.db (SQLite database)
+
+The CLI automatically migrates to the new unified config when:
+- NEURALMEMORY_DIR environment variable is set, OR
+- ~/.neuralmemory/config.toml exists
+"""
 
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -10,9 +23,35 @@ from typing import Any
 
 
 def get_default_data_dir() -> Path:
-    """Get default data directory for neural-memory."""
-    # Cross-platform: ~/.neural-memory/
+    """Get default data directory for neural-memory.
+
+    Priority:
+    1. NEURALMEMORY_DIR environment variable (new unified location)
+    2. ~/.neuralmemory/ (if config.toml exists there)
+    3. ~/.neural-memory/ (legacy location)
+    """
+    # Check for env var first (new unified approach)
+    env_dir = os.environ.get("NEURALMEMORY_DIR")
+    if env_dir:
+        return Path(env_dir)
+
+    # Check if new unified config exists
+    unified_dir = Path.home() / ".neuralmemory"
+    if (unified_dir / "config.toml").exists():
+        return unified_dir
+
+    # Fall back to legacy location
     return Path.home() / ".neural-memory"
+
+
+def use_unified_config() -> bool:
+    """Check if we should use the unified config system."""
+    env_dir = os.environ.get("NEURALMEMORY_DIR")
+    if env_dir:
+        return True
+
+    unified_dir = Path.home() / ".neuralmemory"
+    return (unified_dir / "config.toml").exists()
 
 
 @dataclass
@@ -121,4 +160,17 @@ class CLIConfig:
         """List available brains."""
         if not self.brains_dir.exists():
             return []
-        return [p.stem for p in self.brains_dir.glob("*.json")]
+        # Check both JSON (legacy) and DB (new) files
+        json_brains = [p.stem for p in self.brains_dir.glob("*.json")]
+        db_brains = [p.stem for p in self.brains_dir.glob("*.db")]
+        return list(set(json_brains + db_brains))
+
+    @property
+    def use_sqlite(self) -> bool:
+        """Check if SQLite storage should be used (unified mode)."""
+        return use_unified_config()
+
+    def get_brain_db_path(self, brain_name: str | None = None) -> Path:
+        """Get path to brain SQLite database (unified mode)."""
+        name = brain_name or self.current_brain
+        return self.brains_dir / f"{name}.db"

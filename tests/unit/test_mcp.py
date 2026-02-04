@@ -15,17 +15,19 @@ class TestMCPServer:
     @pytest.fixture
     def server(self) -> MCPServer:
         """Create an MCP server instance."""
-        with patch("neural_memory.mcp.server.CLIConfig") as mock_config:
-            mock_config.load.return_value = MagicMock(
-                get_brain_path=MagicMock(return_value="/tmp/test-brain")
+        with patch("neural_memory.mcp.server.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(
+                current_brain="test-brain",
+                get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
             )
             return MCPServer()
 
     def test_create_mcp_server(self) -> None:
         """Test server factory function."""
-        with patch("neural_memory.mcp.server.CLIConfig") as mock_config:
-            mock_config.load.return_value = MagicMock(
-                get_brain_path=MagicMock(return_value="/tmp/test-brain")
+        with patch("neural_memory.mcp.server.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(
+                current_brain="test-brain",
+                get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
             )
             server = create_mcp_server()
             assert isinstance(server, MCPServer)
@@ -114,9 +116,10 @@ class TestMCPToolCalls:
     @pytest.fixture
     def server(self) -> MCPServer:
         """Create an MCP server instance with mocked storage."""
-        with patch("neural_memory.mcp.server.CLIConfig") as mock_config:
-            mock_config.load.return_value = MagicMock(
-                get_brain_path=MagicMock(return_value="/tmp/test-brain")
+        with patch("neural_memory.mcp.server.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(
+                current_brain="test-brain",
+                get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
             )
             return MCPServer()
 
@@ -324,9 +327,10 @@ class TestMCPProtocol:
     @pytest.fixture
     def server(self) -> MCPServer:
         """Create an MCP server instance."""
-        with patch("neural_memory.mcp.server.CLIConfig") as mock_config:
-            mock_config.load.return_value = MagicMock(
-                get_brain_path=MagicMock(return_value="/tmp/test-brain")
+        with patch("neural_memory.mcp.server.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(
+                current_brain="test-brain",
+                get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
             )
             return MCPServer()
 
@@ -436,16 +440,17 @@ class TestMCPStorage:
     @pytest.mark.asyncio
     async def test_get_storage_caches_instance(self) -> None:
         """Test that get_storage caches the storage instance."""
-        with patch("neural_memory.mcp.server.CLIConfig") as mock_config:
-            mock_config.load.return_value = MagicMock(
-                get_brain_path=MagicMock(return_value="/tmp/test-brain")
+        with patch("neural_memory.mcp.server.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(
+                current_brain="test-brain",
+                get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
             )
             server = MCPServer()
 
         mock_storage = AsyncMock()
 
         with patch(
-            "neural_memory.mcp.server.PersistentStorage.load",
+            "neural_memory.mcp.server.get_shared_storage",
             return_value=mock_storage,
         ) as mock_load:
             storage1 = await server.get_storage()
