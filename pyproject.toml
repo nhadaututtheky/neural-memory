@@ -75,10 +75,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/neural-memory/neural-memory"
-Documentation = "https://neural-memory.github.io/neural-memory"
-Repository = "https://github.com/neural-memory/neural-memory"
-Issues = "https://github.com/neural-memory/neural-memory/issues"
+Homepage = "https://github.com/nhadaututtheky/neural-memory"
+Documentation = "https://github.com/nhadaututtheky/neural-memory#readme"
+Repository = "https://github.com/nhadaututtheky/neural-memory"
+Issues = "https://github.com/nhadaututtheky/neural-memory/issues"
 
 [project.scripts]
 neural-memory = "neural_memory.cli:main"
