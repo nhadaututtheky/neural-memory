@@ -1,0 +1,329 @@
+"""Storage factory for creating storage based on configuration."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from neural_memory.core.brain_mode import BrainMode, BrainModeConfig
+from neural_memory.storage.memory_store import InMemoryStorage
+from neural_memory.storage.shared_store import SharedStorage
+from neural_memory.storage.sqlite_store import SQLiteStorage
+
+if TYPE_CHECKING:
+    from neural_memory.storage.base import NeuralStorage
+
+
+async def create_storage(
+    config: BrainModeConfig,
+    brain_id: str,
+    *,
+    local_path: str | None = None,
+) -> NeuralStorage:
+    """
+    Create a storage instance based on configuration.
+
+    Args:
+        config: Brain mode configuration
+        brain_id: ID of the brain to connect to
+        local_path: Path for local SQLite storage (used in LOCAL mode)
+
+    Returns:
+        Configured storage instance
+
+    Examples:
+        # Local mode with SQLite
+        config = BrainModeConfig.local()
+        storage = await create_storage(config, "brain-1", local_path="./brain.db")
+
+        # Shared mode
+        config = BrainModeConfig.shared_mode("http://localhost:8000")
+        storage = await create_storage(config, "brain-1")
+
+        # Hybrid mode
+        config = BrainModeConfig.hybrid_mode("./local.db", "http://localhost:8000")
+        storage = await create_storage(config, "brain-1")
+    """
+    if config.mode == BrainMode.LOCAL:
+        if local_path:
+            storage = SQLiteStorage(local_path)
+            await storage.initialize()
+            storage.set_brain(brain_id)
+            return storage
+        else:
+            storage = InMemoryStorage()
+            storage.set_brain(brain_id)
+            return storage
+
+    elif config.mode == BrainMode.SHARED:
+        if not config.shared:
+            raise ValueError("SharedConfig required for SHARED mode")
+
+        storage = SharedStorage(
+            server_url=config.shared.server_url,
+            brain_id=brain_id,
+            timeout=config.shared.timeout,
+            api_key=config.shared.api_key,
+        )
+        await storage.connect()
+        return storage
+
+    elif config.mode == BrainMode.HYBRID:
+        if not config.hybrid:
+            raise ValueError("HybridConfig required for HYBRID mode")
+
+        # For hybrid mode, return a HybridStorage that wraps both local and remote
+        storage = await HybridStorage.create(
+            local_path=config.hybrid.local_path,
+            server_url=config.hybrid.server_url,
+            brain_id=brain_id,
+            api_key=config.hybrid.api_key,
+            sync_strategy=config.hybrid.sync_strategy,
+            auto_sync_on_encode=config.hybrid.auto_sync_on_encode,
+        )
+        return storage
+
+    else:
+        raise ValueError(f"Unknown brain mode: {config.mode}")
+
+
+class HybridStorage:
+    """
+    Hybrid storage that combines local SQLite with remote sync.
+
+    Provides offline-first capability with optional sync to server.
+    """
+
+    def __init__(
+        self,
+        local: SQLiteStorage,
+        remote: SharedStorage,
+        *,
+        auto_sync_on_encode: bool = True,
+    ) -> None:
+        self._local = local
+        self._remote = remote
+        self._auto_sync = auto_sync_on_encode
+        self._brain_id: str | None = None
+
+    @classmethod
+    async def create(
+        cls,
+        local_path: str,
+        server_url: str,
+        brain_id: str,
+        *,
+        api_key: str | None = None,
+        sync_strategy: str = "bidirectional",
+        auto_sync_on_encode: bool = True,
+    ) -> HybridStorage:
+        """Create and initialize hybrid storage."""
+        local = SQLiteStorage(local_path)
+        await local.initialize()
+        local.set_brain(brain_id)
+
+        remote = SharedStorage(
+            server_url=server_url,
+            brain_id=brain_id,
+            api_key=api_key,
+        )
+        # Don't connect remote immediately - connect on demand
+
+        storage = cls(
+            local=local,
+            remote=remote,
+            auto_sync_on_encode=auto_sync_on_encode,
+        )
+        storage._brain_id = brain_id
+        return storage
+
+    def set_brain(self, brain_id: str) -> None:
+        """Set the current brain context."""
+        self._brain_id = brain_id
+        self._local.set_brain(brain_id)
+        self._remote.set_brain(brain_id)
+
+    # Delegate all NeuralStorage methods to local storage
+    # Sync to remote when appropriate
+
+    async def add_neuron(self, neuron):
+        """Add neuron locally, optionally sync."""
+        result = await self._local.add_neuron(neuron)
+        if self._auto_sync:
+            try:
+                await self._ensure_connected()
+                await self._remote.add_neuron(neuron)
+            except Exception:
+                pass  # Offline, will sync later
+        return result
+
+    async def get_neuron(self, neuron_id):
+        """Get neuron from local storage."""
+        return await self._local.get_neuron(neuron_id)
+
+    async def find_neurons(self, **kwargs):
+        """Find neurons in local storage."""
+        return await self._local.find_neurons(**kwargs)
+
+    async def update_neuron(self, neuron):
+        """Update neuron locally, optionally sync."""
+        await self._local.update_neuron(neuron)
+        if self._auto_sync:
+            try:
+                await self._ensure_connected()
+                await self._remote.update_neuron(neuron)
+            except Exception:
+                pass
+
+    async def delete_neuron(self, neuron_id):
+        """Delete neuron locally, optionally sync."""
+        result = await self._local.delete_neuron(neuron_id)
+        if self._auto_sync:
+            try:
+                await self._ensure_connected()
+                await self._remote.delete_neuron(neuron_id)
+            except Exception:
+                pass
+        return result
+
+    async def get_neuron_state(self, neuron_id):
+        return await self._local.get_neuron_state(neuron_id)
+
+    async def update_neuron_state(self, state):
+        await self._local.update_neuron_state(state)
+
+    async def add_synapse(self, synapse):
+        result = await self._local.add_synapse(synapse)
+        if self._auto_sync:
+            try:
+                await self._ensure_connected()
+                await self._remote.add_synapse(synapse)
+            except Exception:
+                pass
+        return result
+
+    async def get_synapse(self, synapse_id):
+        return await self._local.get_synapse(synapse_id)
+
+    async def get_synapses(self, **kwargs):
+        return await self._local.get_synapses(**kwargs)
+
+    async def update_synapse(self, synapse):
+        await self._local.update_synapse(synapse)
+        if self._auto_sync:
+            try:
+                await self._ensure_connected()
+                await self._remote.update_synapse(synapse)
+            except Exception:
+                pass
+
+    async def delete_synapse(self, synapse_id):
+        result = await self._local.delete_synapse(synapse_id)
+        if self._auto_sync:
+            try:
+                await self._ensure_connected()
+                await self._remote.delete_synapse(synapse_id)
+            except Exception:
+                pass
+        return result
+
+    async def get_neighbors(self, neuron_id, **kwargs):
+        return await self._local.get_neighbors(neuron_id, **kwargs)
+
+    async def get_path(self, source_id, target_id, max_hops=4):
+        return await self._local.get_path(source_id, target_id, max_hops)
+
+    async def add_fiber(self, fiber):
+        result = await self._local.add_fiber(fiber)
+        if self._auto_sync:
+            try:
+                await self._ensure_connected()
+                await self._remote.add_fiber(fiber)
+            except Exception:
+                pass
+        return result
+
+    async def get_fiber(self, fiber_id):
+        return await self._local.get_fiber(fiber_id)
+
+    async def find_fibers(self, **kwargs):
+        return await self._local.find_fibers(**kwargs)
+
+    async def update_fiber(self, fiber):
+        await self._local.update_fiber(fiber)
+        if self._auto_sync:
+            try:
+                await self._ensure_connected()
+                await self._remote.update_fiber(fiber)
+            except Exception:
+                pass
+
+    async def delete_fiber(self, fiber_id):
+        result = await self._local.delete_fiber(fiber_id)
+        if self._auto_sync:
+            try:
+                await self._ensure_connected()
+                await self._remote.delete_fiber(fiber_id)
+            except Exception:
+                pass
+        return result
+
+    async def get_fibers(self, **kwargs):
+        return await self._local.get_fibers(**kwargs)
+
+    async def save_brain(self, brain):
+        await self._local.save_brain(brain)
+
+    async def get_brain(self, brain_id):
+        return await self._local.get_brain(brain_id)
+
+    async def export_brain(self, brain_id):
+        return await self._local.export_brain(brain_id)
+
+    async def import_brain(self, snapshot, target_brain_id=None):
+        return await self._local.import_brain(snapshot, target_brain_id)
+
+    async def get_stats(self, brain_id):
+        return await self._local.get_stats(brain_id)
+
+    async def clear(self, brain_id):
+        await self._local.clear(brain_id)
+
+    # Sync operations
+
+    async def sync(self) -> dict:
+        """
+        Manually trigger a full sync with remote server.
+
+        Returns:
+            Sync statistics
+        """
+        await self._ensure_connected()
+
+        # Export local brain
+        if not self._brain_id:
+            raise ValueError("No brain set")
+
+        local_snapshot = await self._local.export_brain(self._brain_id)
+
+        # Get remote snapshot
+        try:
+            remote_snapshot = await self._remote.export_brain(self._brain_id)
+        except Exception:
+            # Brain doesn't exist on remote, push our version
+            await self._remote.import_brain(local_snapshot, self._brain_id)
+            return {"pushed": True, "pulled": False}
+
+        # TODO: Implement proper merge logic
+        # For now, just push local to remote
+        await self._remote.import_brain(local_snapshot, self._brain_id)
+
+        return {"pushed": True, "pulled": False}
+
+    async def _ensure_connected(self) -> None:
+        """Ensure remote storage is connected."""
+        if not self._remote.is_connected:
+            await self._remote.connect()
+
+    async def close(self) -> None:
+        """Close all connections."""
+        await self._remote.disconnect()

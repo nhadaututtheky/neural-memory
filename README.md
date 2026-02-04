@@ -10,21 +10,47 @@
 
 NeuralMemory stores experiences as interconnected neurons and recalls them through spreading activation, mimicking how the human brain works. Instead of searching a database, memories are retrieved through associative recall - activating related concepts until the relevant memory emerges.
 
-## Why NeuralMemory?
+## Why Not RAG / Vector Search?
 
-AI agents (like Claude, GPT, etc.) face fundamental memory limitations:
+| Aspect | RAG / Vector Search | NeuralMemory |
+|--------|---------------------|--------------|
+| **Model** | Search Engine | Human Brain |
+| **Query** | "Find similar text" | "Recall through association" |
+| **Structure** | Flat chunks + embeddings | Neural graph + synapses |
+| **Relationships** | None (just similarity) | Explicit: `CAUSED_BY`, `LEADS_TO`, `DISCUSSED` |
+| **Temporal** | Timestamp filter | Time as first-class neurons |
+| **Multi-hop** | Multiple queries needed | Natural graph traversal |
+| **Memory lifecycle** | Static | Decay, reinforcement, compression |
 
-- **Limited context windows** - Cannot complete large projects across sessions
-- **Session amnesia** - Forget everything between conversations
-- **No knowledge sharing** - Cannot share learned patterns with other agents
-- **Context overflow** - Important early context gets lost as windows fill up
+**Example: "Why did Tuesday's outage happen?"**
 
-**NeuralMemory solves these problems:**
+- **RAG**: Returns "JWT caused outage" (missing *why* we used JWT)
+- **NeuralMemory**: Traces `outage ← CAUSED_BY ← JWT ← SUGGESTED_BY ← Alice` → full causal chain
 
-- **Persistent memory** that survives across sessions
-- **Efficient retrieval** - inject only relevant context, not everything
-- **Shareable brains** - export/import learned patterns like Git repos
-- **Project-bounded** - optimize memory for active project timeframes
+See [full comparison](docs/GUIDE.md#neuralmemory-vs-rag--vector-search) in the docs.
+
+---
+
+## The Problem
+
+AI agents face fundamental memory limitations:
+
+| Problem | Impact |
+|---------|--------|
+| **Limited context windows** | Cannot complete large projects across sessions |
+| **Session amnesia** | Forget everything between conversations |
+| **No knowledge sharing** | Cannot share learned patterns with other agents |
+| **Context overflow** | Important early context gets lost |
+
+## The Solution
+
+| Feature | Benefit |
+|---------|---------|
+| **Persistent memory** | Survives across sessions |
+| **Efficient retrieval** | Inject only relevant context, not everything |
+| **Shareable brains** | Export/import patterns like Git repos |
+| **Real-time sharing** | Multi-agent collaboration |
+| **Project-bounded** | Optimize for active project timeframes |
 
 ## Installation
 
@@ -32,117 +58,117 @@ AI agents (like Claude, GPT, etc.) face fundamental memory limitations:
 pip install neural-memory
 ```
 
-With optional dependencies:
-
+With optional features:
 ```bash
-# With FastAPI server
-pip install neural-memory[server]
-
-# With Vietnamese NLP support
-pip install neural-memory[nlp-vi]
-
-# With all features
-pip install neural-memory[all]
+pip install neural-memory[server]   # FastAPI server
+pip install neural-memory[nlp-vi]   # Vietnamese NLP
+pip install neural-memory[all]      # All features
 ```
 
 ## Quick Start
 
-### CLI (Simplest)
+### CLI
 
 ```bash
-# Store a memory
-nmem remember "Fixed auth bug by adding null check in login.py"
+# Store memories
+nmem remember "Fixed auth bug with null check in login.py:42"
+nmem remember "We decided to use PostgreSQL" --type decision
+nmem todo "Review PR #123" --priority 7
 
 # Query memories
 nmem recall "auth bug"
+nmem recall "database decision" --depth 2
 
-# Get recent context (for AI injection)
-nmem context
+# Get context for AI injection
+nmem context --limit 10 --json
 
 # Manage brains
 nmem brain list
 nmem brain create work
 nmem brain use work
+
+# Real-time sharing
+nmem shared enable http://localhost:8000
+nmem remember "Team knowledge" --shared
+nmem recall "project status" --shared
 ```
 
 ### Python API
 
 ```python
-from neural_memory import Brain, MemoryEncoder, ReflexPipeline
+import asyncio
+from neural_memory import Brain
+from neural_memory.storage import InMemoryStorage
+from neural_memory.engine.encoder import MemoryEncoder
+from neural_memory.engine.retrieval import ReflexPipeline
 
-# Create a brain
-brain = Brain.create("my_agent_brain")
+async def main():
+    storage = InMemoryStorage()
+    brain = Brain.create("my_brain")
+    await storage.save_brain(brain)
+    storage.set_brain(brain.id)
 
-# Encode memories
-encoder = MemoryEncoder(brain)
-encoder.encode("Met with Alice at the coffee shop to discuss the API design")
-encoder.encode("Decided to use FastAPI for the backend, Alice suggested adding rate limiting")
-encoder.encode("Completed the authentication module, took 3 hours")
+    # Encode memories
+    encoder = MemoryEncoder(storage, brain.config)
+    await encoder.encode("Met Alice to discuss API design")
+    await encoder.encode("Decided to use FastAPI for backend")
 
-# Query memories through activation (not search!)
-pipeline = ReflexPipeline(brain)
+    # Query through activation
+    pipeline = ReflexPipeline(storage, brain.config)
+    result = await pipeline.query("What did we decide about backend?")
+    print(result.context)  # "Decided to use FastAPI for backend"
 
-result = pipeline.query("What did Alice suggest?")
-print(result.answer)  # "Alice suggested adding rate limiting"
-
-result = pipeline.query("What was decided about the backend?")
-print(result.answer)  # "Use FastAPI for the backend"
+asyncio.run(main())
 ```
 
-## Core Concepts
+## Features
 
-### Neurons
+### Memory Types
+```bash
+nmem remember "Objective fact" --type fact
+nmem remember "We chose X" --type decision
+nmem remember "User prefers Y" --type preference
+nmem todo "Action item" --type todo --expires 30
+nmem remember "Learned pattern" --type insight
+nmem remember "Meeting notes" --type context --expires 7
+```
 
-The basic unit of memory. Each neuron represents a distinct piece of information:
+### Project Scoping
+```bash
+nmem project create "Q1 Sprint" --duration 14
+nmem remember "Sprint task" --project "Q1 Sprint"
+nmem recall "sprint progress" --project "Q1 Sprint"
+```
 
-- **Time neurons**: "3pm", "yesterday", "last week"
-- **Entity neurons**: "Alice", "coffee shop", "FastAPI"
-- **Action neurons**: "discussed", "decided", "completed"
-- **State neurons**: "happy", "frustrated", "confident"
-- **Concept neurons**: "API design", "authentication", "rate limiting"
+### Real-Time Brain Sharing
+```bash
+# Enable shared mode
+nmem shared enable http://localhost:8000
 
-### Synapses
+# Per-command sharing
+nmem remember "Team insight" --shared
+nmem recall "shared knowledge" --shared
 
-Connections between neurons with semantic meaning:
+# Sync local with remote
+nmem shared sync --direction push
+```
 
-- **Temporal**: `happened_at`, `before`, `after`
-- **Causal**: `caused_by`, `leads_to`, `enables`
-- **Associative**: `co_occurs`, `related_to`, `similar_to`
-- **Semantic**: `is_a`, `has_property`, `involves`
+### Safety Features
+```bash
+# Check for sensitive content
+nmem check "API_KEY=sk-xxx"
 
-### Fibers
+# Auto-redact before storing
+nmem remember "Config: API_KEY=sk-xxx" --redact
 
-Memory clusters - subgraphs of related neurons representing a coherent experience or concept.
+# Safe export
+nmem brain export --exclude-sensitive -o safe.json
 
-### Spreading Activation
-
-When you query, NeuralMemory:
-
-1. **Decomposes** your query into signals (time, entities, intent)
-2. **Activates** matching anchor neurons
-3. **Spreads** activation through synapses
-4. **Finds intersections** where multiple signals converge
-5. **Extracts** the relevant subgraph as context
-
-This mimics how human memory works - you don't "search" for memories, they emerge through association.
-
-## Multi-language Support
-
-NeuralMemory supports both English and Vietnamese from the start:
-
-```python
-# Vietnamese
-encoder.encode("Chiều nay 3h uống cafe ở Viva với Minh")
-result = pipeline.query("Chiều nay làm gì?")
-
-# English
-encoder.encode("Had coffee at Viva with Minh at 3pm")
-result = pipeline.query("What did I do this afternoon?")
+# Health check
+nmem brain health
 ```
 
 ## Server Mode
-
-Run NeuralMemory as a service:
 
 ```bash
 pip install neural-memory[server]
@@ -150,41 +176,26 @@ uvicorn neural_memory.server:app --reload
 ```
 
 API endpoints:
-
 ```
-POST /memory/encode    - Store new memory
-POST /memory/query     - Query memories
-POST /brain/create     - Create new brain
-GET  /brain/{id}       - Get brain info
-GET  /brain/{id}/export - Export brain snapshot
+POST /memory/encode     - Store memory
+POST /memory/query      - Query memories
+POST /brain/create      - Create brain
+GET  /brain/{id}/export - Export brain
+WS   /sync/ws           - Real-time sync
 ```
 
-## Brain Sharing
+## Documentation
 
-Export and share learned patterns:
-
-```python
-from neural_memory.sharing import BrainExporter, BrainImporter
-
-# Export
-exporter = BrainExporter()
-snapshot = exporter.export(brain, time_range=(start, end))
-exporter.to_json(snapshot, "my_brain.json")
-
-# Import into another agent
-importer = BrainImporter()
-importer.import_brain("my_brain.json", target_brain)
-```
+- **[Complete Guide](docs/GUIDE.md)** - Full documentation with all features
+- **[Integration Guide](docs/integration.md)** - AI assistant & tool integration
+- **[Safety & Limitations](docs/safety.md)** - Security best practices
+- **[Architecture & Scalability](docs/architecture.md)** - Technical design & future roadmap
 
 ## Development
 
 ```bash
-# Clone and setup
 git clone https://github.com/neural-memory/neural-memory
 cd neural-memory
-python -m venv .venv
-.venv\Scripts\activate  # Windows
-# source .venv/bin/activate  # Linux/Mac
 pip install -e ".[dev]"
 pre-commit install
 
@@ -198,14 +209,41 @@ mypy src/
 ruff check src/ tests/
 ```
 
-## Documentation
+## How It Works
 
-Full documentation: [https://neural-memory.github.io/neural-memory](https://neural-memory.github.io/neural-memory)
+```
+Query: "What did Alice suggest?"
+         │
+         ▼
+┌─────────────────────┐
+│ 1. Decompose Query  │  → time hints, entities, intent
+└─────────────────────┘
+         │
+         ▼
+┌─────────────────────┐
+│ 2. Find Anchors     │  → "Alice" neuron
+└─────────────────────┘
+         │
+         ▼
+┌─────────────────────┐
+│ 3. Spread Activation│  → activate connected neurons
+└─────────────────────┘
+         │
+         ▼
+┌─────────────────────┐
+│ 4. Find Intersection│  → high-activation subgraph
+└─────────────────────┘
+         │
+         ▼
+┌─────────────────────┐
+│ 5. Extract Context  │  → "Alice suggested rate limiting"
+└─────────────────────┘
+```
 
 ## Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) first.
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT License - see [LICENSE](LICENSE).

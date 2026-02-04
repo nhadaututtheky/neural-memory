@@ -1,43 +1,59 @@
 # Integration Guide
 
-This guide covers how to integrate Neural Memory with AI assistants, development tools, and other applications.
+This guide covers how to integrate NeuralMemory with AI assistants, IDEs, and development tools.
 
-## Quick Start
+---
+
+## Table of Contents
+
+1. [Claude Code Integration](#claude-code-integration)
+2. [Cursor Integration](#cursor-integration)
+3. [Windsurf Integration](#windsurf-integration)
+4. [Aider Integration](#aider-integration)
+5. [Other AI Assistants](#other-ai-assistants)
+6. [Shell Integration](#shell-integration)
+7. [CI/CD Integration](#cicd-integration)
+8. [Python API Integration](#python-api-integration)
+9. [Coding Principles for Better Memory](#coding-principles-for-better-memory)
+
+---
+
+## Claude Code Integration
+
+### Option A: MCP Server (Recommended)
+
+NeuralMemory provides a native MCP (Model Context Protocol) server that exposes memory tools directly to Claude Code.
+
+#### 1. Install NeuralMemory
 
 ```bash
-# Install
 pip install neural-memory
-
-# Store a memory
-nmem remember "Fixed auth bug by adding null check in login.py:42"
-
-# Query memories
-nmem recall "auth bug"
-
-# Get recent context (for AI injection)
-nmem context --json
 ```
 
-## Integration Patterns
+#### 2. Configure MCP Server
 
-### 1. Claude Code Integration
+Add to `~/.claude/mcp_servers.json` (or create the file):
 
-#### Option A: Manual Context Injection
-
-At the start of each session, inject context:
-
-```bash
-# Get recent context as JSON
-CONTEXT=$(nmem context --json --limit 20)
-
-# Include in your prompt or system message
-echo "Recent project context: $CONTEXT"
+**Option 1: Using the CLI (recommended)**
+```json
+{
+  "neural-memory": {
+    "command": "nmem",
+    "args": ["mcp"]
+  }
+}
 ```
 
-#### Option B: MCP Server (Coming Soon)
+**Option 2: Using the entry point**
+```json
+{
+  "neural-memory": {
+    "command": "nmem-mcp"
+  }
+}
+```
 
-Configure in `~/.claude/mcp_servers.json`:
-
+**Option 3: Using Python module**
 ```json
 {
   "neural-memory": {
@@ -47,11 +63,341 @@ Configure in `~/.claude/mcp_servers.json`:
 }
 ```
 
-This will expose `remember` and `recall` tools directly to Claude.
+#### 3. Restart Claude Code
 
-### 2. Shell Integration
+After restarting, Claude will have access to these tools:
 
-Add to your `.bashrc` or `.zshrc`:
+| Tool | Description |
+|------|-------------|
+| `nmem_remember` | Store a memory with type, priority, tags |
+| `nmem_recall` | Query memories with depth and confidence |
+| `nmem_context` | Get recent context for injection |
+| `nmem_todo` | Quick TODO with 30-day expiry |
+| `nmem_stats` | Get brain statistics |
+
+#### 4. Usage in Claude Code
+
+Claude will automatically use these tools when appropriate:
+
+```
+You: Remember that we decided to use PostgreSQL for the database
+Claude: [uses nmem_remember tool]
+       Stored the decision about PostgreSQL.
+
+You: What database did we choose?
+Claude: [uses nmem_recall tool]
+       Based on my memory, you decided to use PostgreSQL for the database.
+```
+
+### Option B: CLAUDE.md Instructions
+
+Add to your project's `CLAUDE.md`:
+
+```markdown
+## Memory Instructions
+
+At the start of each session, get context:
+```bash
+nmem context --limit 20 --json
+```
+
+When learning something important, remember it:
+```bash
+nmem remember "Important information here" --type decision
+```
+
+When you need to recall past information:
+```bash
+nmem recall "query here"
+```
+```
+
+### Option C: Manual Context Injection
+
+Get context and inject at session start:
+
+```bash
+# Get recent context
+CONTEXT=$(nmem context --json --limit 20)
+
+# Include in your first message to Claude
+echo "Recent project context: $CONTEXT"
+```
+
+---
+
+## Cursor Integration
+
+Cursor is an AI-powered IDE. Here's how to integrate NeuralMemory:
+
+### Option A: Cursor Rules
+
+Add to `.cursorrules` in your project:
+
+```markdown
+## Memory System
+
+This project uses NeuralMemory for persistent context.
+
+### Getting Context
+Before starting work, run:
+```bash
+nmem context --limit 10
+```
+
+### Storing Important Information
+When making decisions or learning patterns:
+```bash
+nmem remember "description" --type decision
+nmem remember "error fix" --type error
+nmem todo "task description"
+```
+
+### Recalling Information
+When you need past context:
+```bash
+nmem recall "query"
+```
+
+### Guidelines
+- Store all architectural decisions with --type decision
+- Store error resolutions with --type error
+- Store user preferences with --type preference
+- Use tags for better organization: --tag feature --tag auth
+```
+
+### Option B: Cursor Commands
+
+Create custom commands in Cursor settings:
+
+```json
+{
+  "cursor.commands": [
+    {
+      "name": "Memory: Get Context",
+      "command": "nmem context --limit 10"
+    },
+    {
+      "name": "Memory: Remember Selection",
+      "command": "nmem remember \"${selectedText}\""
+    },
+    {
+      "name": "Memory: Recall",
+      "command": "nmem recall \"${input:Query}\""
+    }
+  ]
+}
+```
+
+### Option C: Cursor Composer Integration
+
+In Cursor Composer, start your session with:
+
+```
+@terminal nmem context --json --limit 15
+
+Use the above context. Remember important decisions with:
+@terminal nmem remember "decision" --type decision
+```
+
+---
+
+## Windsurf Integration
+
+Windsurf (by Codeium) is an AI IDE. Here's how to integrate:
+
+### Option A: Windsurf Rules
+
+Create `.windsurfrules` in your project:
+
+```markdown
+## NeuralMemory Integration
+
+### Session Start
+Run this to get project context:
+```bash
+nmem context --fresh-only --limit 10
+```
+
+### During Development
+Store important information:
+- Decisions: `nmem remember "X" --type decision`
+- Errors: `nmem remember "X" --type error`
+- TODOs: `nmem todo "X" --priority 7`
+
+### Querying
+Recall past information:
+```bash
+nmem recall "your query" --depth 2
+```
+
+### Best Practices
+1. Store decisions immediately after making them
+2. Include rationale: "DECISION: X. REASON: Y"
+3. Link related items with tags
+```
+
+### Option B: Windsurf Cascade Instructions
+
+Add to Cascade system prompt:
+
+```
+You have access to NeuralMemory for persistent context.
+
+Commands available in terminal:
+- nmem context: Get recent memories
+- nmem remember "X": Store memory
+- nmem recall "X": Query memories
+- nmem todo "X": Add TODO
+
+Use these to maintain context across sessions.
+```
+
+### Option C: AI Flow Integration
+
+In Windsurf's AI Flow:
+
+```yaml
+name: "With Memory Context"
+steps:
+  - run: "nmem context --json --limit 10"
+    output: memory_context
+  - prompt: |
+      Recent project context:
+      {{memory_context}}
+
+      Now, {{user_request}}
+```
+
+---
+
+## Aider Integration
+
+Aider is a CLI AI coding assistant. Here's how to integrate:
+
+### Option A: Aider Configuration
+
+Create `.aider.conf.yml`:
+
+```yaml
+# Run before each session
+auto-commits: false
+edit-format: diff
+
+# Custom commands
+alias:
+  /context: "!nmem context --limit 10"
+  /remember: "!nmem remember"
+  /recall: "!nmem recall"
+```
+
+### Option B: Shell Wrapper
+
+Create `aider-with-memory.sh`:
+
+```bash
+#!/bin/bash
+# aider-with-memory.sh
+
+# Get context before starting
+echo "Loading memory context..."
+CONTEXT=$(nmem context --json --limit 15)
+
+# Start aider with context
+aider --message "Project context from memory:
+$CONTEXT
+
+Remember to use 'nmem remember' for important decisions." "$@"
+```
+
+Make executable and use:
+
+```bash
+chmod +x aider-with-memory.sh
+./aider-with-memory.sh
+```
+
+### Option C: In-Session Commands
+
+During Aider session, use shell commands:
+
+```
+> /run nmem context
+> /run nmem remember "We decided to use FastAPI" --type decision
+> /run nmem recall "API framework decision"
+```
+
+### Option D: Git Hook Integration
+
+Since Aider auto-commits, capture decisions via git hooks.
+
+Create `.git/hooks/post-commit`:
+
+```bash
+#!/bin/bash
+# Auto-remember commits
+MSG=$(git log -1 --pretty=%B)
+nmem remember "Git commit: $MSG" --tag git --tag auto
+```
+
+---
+
+## Other AI Assistants
+
+### GitHub Copilot
+
+Add to `.github/copilot-instructions.md`:
+
+```markdown
+## Memory Context
+
+Get project context: `nmem context`
+Store decisions: `nmem remember "X" --type decision`
+Query past info: `nmem recall "X"`
+```
+
+### ChatGPT / Custom GPT
+
+Create a Custom GPT with these instructions:
+
+```
+You are a coding assistant with access to NeuralMemory.
+
+When the user shares terminal output from these commands, use it:
+- `nmem context`: Recent project memories
+- `nmem recall "X"`: Specific memory query
+- `nmem stats`: Brain statistics
+
+Suggest the user run these commands when:
+- Starting a session: "Run `nmem context` to share recent context"
+- Making decisions: "Run `nmem remember 'decision' --type decision`"
+- Needing past info: "Run `nmem recall 'query'`"
+```
+
+### VS Code with Continue.dev
+
+In `.continue/config.json`:
+
+```json
+{
+  "customCommands": [
+    {
+      "name": "memory-context",
+      "description": "Get NeuralMemory context",
+      "prompt": "{{#if output}}Here's my project memory context:\n\n{{output}}\n\nUse this context.{{/if}}",
+      "command": "nmem context --limit 10"
+    }
+  ]
+}
+```
+
+---
+
+## Shell Integration
+
+### Auto-Remember Git Commits
+
+Add to `~/.bashrc` or `~/.zshrc`:
 
 ```bash
 # Auto-remember git commits
@@ -59,57 +405,110 @@ git() {
     command git "$@"
     if [[ "$1" == "commit" ]]; then
         local msg=$(command git log -1 --pretty=%B)
-        nmem remember "Git commit: $msg" -t git -t commit
+        nmem remember "Git commit: $msg" --tag git --type workflow &
     fi
 }
+```
 
-# Remember command outputs
+### Remember Command Outputs
+
+```bash
+# Remember output of any command
 remember-output() {
     local output=$("$@" 2>&1)
     echo "$output"
-    nmem remember "Command: $* -> Output: ${output:0:500}" -t shell
+    nmem remember "Command: $* -> Output: ${output:0:500}" --tag shell
+}
+
+# Usage
+remember-output npm test
+```
+
+### Session Start Hook
+
+```bash
+# Add to ~/.bashrc or ~/.zshrc
+nmem-session() {
+    echo "📧 Recent Memory Context:"
+    nmem context --limit 5
+    echo ""
+}
+
+# Auto-run when entering project directories
+cd() {
+    builtin cd "$@"
+    if [[ -f ".neural-memory" ]]; then
+        nmem-session
+    fi
 }
 ```
 
-### 3. VS Code Integration
+---
 
-Create a task in `.vscode/tasks.json`:
+## CI/CD Integration
 
-```json
-{
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "Remember Selection",
-      "type": "shell",
-      "command": "nmem remember \"${selectedText}\" -t vscode",
-      "problemMatcher": []
-    }
-  ]
-}
-```
-
-### 4. CI/CD Integration
-
-Add to your GitHub Actions workflow:
+### GitHub Actions
 
 ```yaml
-- name: Remember deployment
-  run: |
-    pip install neural-memory
-    nmem remember "Deployed ${{ github.sha }} to ${{ github.ref }}" -t deploy -t ci
+name: CI with Memory
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install NeuralMemory
+        run: pip install neural-memory
+
+      - name: Remember deployment
+        if: github.ref == 'refs/heads/main'
+        run: |
+          nmem remember "Deployed ${{ github.sha }} to main" \
+            --type workflow \
+            --tag deploy \
+            --tag ci
+
+      - name: Remember test results
+        if: always()
+        run: |
+          nmem remember "CI run: ${{ job.status }} for ${{ github.sha }}" \
+            --type workflow \
+            --tag ci
 ```
 
-### 5. API Integration
+### GitLab CI
+
+```yaml
+remember-deployment:
+  stage: deploy
+  script:
+    - pip install neural-memory
+    - nmem remember "Deployed ${CI_COMMIT_SHA} to ${CI_ENVIRONMENT_NAME}" --type workflow --tag deploy
+```
+
+---
+
+## Python API Integration
+
+### Basic Usage
 
 ```python
 import asyncio
-from neural_memory.cli.storage import PersistentStorage
 from neural_memory.cli.config import CLIConfig
+from neural_memory.cli.storage import PersistentStorage
 from neural_memory.engine.encoder import MemoryEncoder
 from neural_memory.engine.retrieval import ReflexPipeline
 
-async def remember(content: str) -> dict:
+async def remember(content: str, memory_type: str = "fact") -> dict:
+    """Store a memory programmatically."""
     config = CLIConfig.load()
     storage = await PersistentStorage.load(config.get_brain_path())
     brain = await storage.get_brain(storage._current_brain_id)
@@ -118,9 +517,10 @@ async def remember(content: str) -> dict:
     result = await encoder.encode(content)
     await storage.save()
 
-    return {"fiber_id": result.fiber.id}
+    return {"fiber_id": result.fiber.id, "neurons": len(result.neurons_created)}
 
 async def recall(query: str) -> dict:
+    """Query memories programmatically."""
     config = CLIConfig.load()
     storage = await PersistentStorage.load(config.get_brain_path())
     brain = await storage.get_brain(storage._current_brain_id)
@@ -134,19 +534,44 @@ async def recall(query: str) -> dict:
     }
 
 # Usage
-asyncio.run(remember("Important meeting notes"))
-print(asyncio.run(recall("meeting")))
+asyncio.run(remember("Important decision about architecture"))
+print(asyncio.run(recall("architecture decision")))
+```
+
+### Flask/FastAPI Integration
+
+```python
+from fastapi import FastAPI
+from neural_memory.cli.config import CLIConfig
+from neural_memory.cli.storage import PersistentStorage
+from neural_memory.engine.retrieval import ReflexPipeline
+
+app = FastAPI()
+
+@app.get("/memory/context")
+async def get_context(limit: int = 10):
+    config = CLIConfig.load()
+    storage = await PersistentStorage.load(config.get_brain_path())
+    fibers = await storage.get_fibers(limit=limit)
+
+    context = []
+    for fiber in fibers:
+        if fiber.summary:
+            context.append(fiber.summary)
+
+    return {"context": context}
+
+@app.post("/memory/remember")
+async def remember(content: str):
+    # ... implementation
+    pass
 ```
 
 ---
 
 ## Coding Principles for Better Memory
 
-These principles help Neural Memory understand and retrieve your information more effectively.
-
 ### 1. Semantic Commit Messages
-
-Write commits that Neural Memory can understand:
 
 ```bash
 # BAD - Hard to extract meaning
@@ -162,112 +587,87 @@ git commit -m "fix(auth): handle null email in validateUser
 
 ### 2. Structured Memories
 
-When storing memories, include context:
-
 ```bash
 # BAD - Missing context
 nmem remember "fixed it"
 
 # GOOD - Rich context
-nmem remember "Fixed auth bug: null email caused crash in validateUser(). Added null check at login.py:42. Took 2 hours to debug." -t auth -t bugfix
+nmem remember "Fixed auth bug: null email caused crash in validateUser(). Added null check at login.py:42. Took 2 hours to debug." --tag auth --tag bugfix
 ```
 
-### 3. Entity Naming
-
-Use consistent names for people, projects, and concepts:
+### 3. Decision Records
 
 ```bash
-# BAD - Inconsistent naming
-nmem remember "talked to bob about the thing"
-nmem remember "Bob mentioned that project"
+# GOOD - Decision with rationale
+nmem remember "DECISION: Using JWT instead of sessions. REASON: Stateless, scales better for microservices. ALTERNATIVE_CONSIDERED: Redis sessions" --type decision
+```
+
+### 4. Error-Solution Pairs
+
+```bash
+# GOOD - Problem + solution together
+nmem remember "ERROR: 'Cannot read property id of undefined' in UserService. SOLUTION: Add null check before accessing user.id. Fixed in PR #456" --type error
+```
+
+### 5. Consistent Entity Naming
+
+```bash
+# BAD - Inconsistent
+nmem remember "talked to bob"
+nmem remember "Bob mentioned..."
 nmem remember "Robert said..."
 
-# GOOD - Consistent naming
-nmem remember "Meeting with Bob about AuthService refactor"
+# GOOD - Consistent
+nmem remember "Meeting with Bob about AuthService"
 nmem remember "Bob suggested using JWT for AuthService"
 nmem remember "Bob approved AuthService PR #123"
 ```
 
-### 4. Time References
-
-Include temporal context when relevant:
-
-```bash
-# GOOD - Clear time reference
-nmem remember "Sprint 5 planning: decided to prioritize auth refactor"
-nmem remember "Yesterday's standup: blocked on API rate limits"
-nmem remember "Q1 2024 goal: improve login performance by 50%"
-```
-
-### 5. Causal Chains
-
-Link causes and effects:
-
-```bash
-# GOOD - Shows causality
-nmem remember "Login failures increased after deploying v2.3.0. Root cause: null email handling removed accidentally in commit abc123"
-```
-
-### 6. Error-Solution Pairs
-
-Document problems and their solutions together:
-
-```bash
-# GOOD - Problem + Solution
-nmem remember "ERROR: 'Cannot read property id of undefined' in UserService. SOLUTION: Add null check before accessing user.id. Fixed in PR #456"
-```
-
-### 7. Decision Records
-
-Record why decisions were made:
-
-```bash
-# GOOD - Decision + Rationale
-nmem remember "DECISION: Using JWT instead of sessions. REASON: Stateless, scales better for microservices. ALTERNATIVE_CONSIDERED: Redis sessions"
-```
-
 ---
 
-## Output Formats
+## Quick Reference
 
-### JSON Output (for programmatic use)
-
-All commands support `--json` flag:
+### CLI Commands
 
 ```bash
-nmem recall "auth" --json
+# Remember
+nmem remember "content" [--type TYPE] [--priority N] [--tag TAG]
+
+# Recall
+nmem recall "query" [--depth N] [--max-tokens N]
+
+# Context
+nmem context [--limit N] [--fresh-only] [--json]
+
+# TODO
+nmem todo "task" [--priority N]
+
+# Stats
+nmem stats
+
+# Brain management
+nmem brain list | create | use | export | import
+
+# Shared mode
+nmem shared enable URL | disable | status | test | sync
 ```
 
-Output:
-```json
-{
-  "answer": "...",
-  "confidence": 0.85,
-  "depth_used": 1,
-  "neurons_activated": 15,
-  "fibers_matched": ["abc123"],
-  "latency_ms": 45.2
-}
-```
+### Memory Types
 
-### Structured Context (for AI injection)
+| Type | Use For |
+|------|---------|
+| `fact` | Objective information |
+| `decision` | Choices made |
+| `preference` | User preferences |
+| `todo` | Action items |
+| `insight` | Learned patterns |
+| `context` | Situational info |
+| `instruction` | User guidelines |
+| `error` | Error patterns |
+| `workflow` | Process patterns |
+| `reference` | External references |
 
-```bash
-nmem context --json --limit 10
-```
-
-Output:
-```json
-{
-  "context": "- Fixed auth bug...\n- Meeting with Bob...",
-  "count": 10,
-  "fibers": [...]
-}
-```
-
----
-
-## Environment Variables
+### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
@@ -277,72 +677,27 @@ Output:
 
 ---
 
-## Brain Management
-
-### Multiple Brains
-
-Use different brains for different contexts:
-
-```bash
-# Create project-specific brains
-nmem brain create work
-nmem brain create personal
-nmem brain create project-x
-
-# Switch between brains
-nmem brain use work
-nmem remember "Work meeting notes..."
-
-nmem brain use personal
-nmem remember "Personal reminder..."
-
-# List all brains
-nmem brain list
-```
-
-### Export/Import
-
-Share brains between machines or team members:
-
-```bash
-# Export
-nmem brain export -o my-brain.json
-
-# Import on another machine
-nmem brain import my-brain.json --name shared-brain
-```
-
-### Brain Backup
-
-Automated backup script:
-
-```bash
-#!/bin/bash
-# backup-brain.sh
-DATE=$(date +%Y%m%d)
-nmem brain export -o "backup-${DATE}.json"
-```
-
----
-
 ## Troubleshooting
 
 ### Memory Not Found
 
-If recall returns no results:
 1. Check if content was stored: `nmem stats`
 2. Try broader query terms
 3. Use `--depth 3` for deeper search
 
+### MCP Server Not Working
+
+1. Check Python path: `which python`
+2. Test manually: `python -m neural_memory.mcp`
+3. Check Claude Code logs for errors
+
 ### Slow Queries
 
-For large brains:
 1. Use specific queries instead of broad ones
 2. Limit context: `nmem context --limit 5`
-3. Consider creating separate brains for different projects
+3. Create separate brains for different projects
 
 ### Data Location
 
-Brain data is stored in:
 - **Linux/Mac**: `~/.neural-memory/brains/`
 - **Windows**: `C:\Users\<name>\.neural-memory\brains\`

@@ -1,6 +1,13 @@
 """Core data models for NeuralMemory."""
 
 from neural_memory.core.brain import Brain, BrainConfig
+from neural_memory.core.brain_mode import (
+    BrainMode,
+    BrainModeConfig,
+    HybridConfig,
+    SharedConfig,
+    SyncStrategy,
+)
 from neural_memory.core.fiber import Fiber
 from neural_memory.core.memory_types import (
     Confidence,
@@ -18,6 +25,12 @@ __all__ = [
     # Brain
     "Brain",
     "BrainConfig",
+    # Brain mode (local/shared toggle)
+    "BrainMode",
+    "BrainModeConfig",
+    "SharedConfig",
+    "HybridConfig",
+    "SyncStrategy",
     # Memory structures
     "Fiber",
     "Neuron",

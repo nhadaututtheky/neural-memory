@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from neural_memory import __version__
 from neural_memory.server.models import HealthResponse
-from neural_memory.server.routes import brain_router, memory_router
+from neural_memory.server.routes import brain_router, memory_router, sync_router
 from neural_memory.storage.memory_store import InMemoryStorage
 
 
@@ -72,6 +72,7 @@ def create_app(
     # Include routers
     app.include_router(memory_router)
     app.include_router(brain_router)
+    app.include_router(sync_router)
 
     # Health check endpoint
     @app.get("/health", response_model=HealthResponse, tags=["health"])

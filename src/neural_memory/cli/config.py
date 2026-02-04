@@ -16,6 +16,35 @@ def get_default_data_dir() -> Path:
 
 
 @dataclass
+class SharedModeConfig:
+    """Configuration for shared/remote storage mode."""
+
+    enabled: bool = False
+    server_url: str = "http://localhost:8000"
+    api_key: str | None = None
+    timeout: float = 30.0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "enabled": self.enabled,
+            "server_url": self.server_url,
+            "api_key": self.api_key,
+            "timeout": self.timeout,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SharedModeConfig:
+        """Create from dictionary."""
+        return cls(
+            enabled=data.get("enabled", False),
+            server_url=data.get("server_url", "http://localhost:8000"),
+            api_key=data.get("api_key"),
+            timeout=data.get("timeout", 30.0),
+        )
+
+
+@dataclass
 class CLIConfig:
     """CLI configuration."""
 
@@ -24,6 +53,7 @@ class CLIConfig:
     default_depth: int | None = None  # Auto-detect
     default_max_tokens: int = 500
     json_output: bool = False
+    shared: SharedModeConfig = field(default_factory=SharedModeConfig)
 
     @classmethod
     def load(cls, data_dir: Path | None = None) -> CLIConfig:
@@ -42,12 +72,17 @@ class CLIConfig:
         with open(config_file, encoding="utf-8") as f:
             data = json.load(f)
 
+        # Parse shared config
+        shared_data = data.get("shared", {})
+        shared_config = SharedModeConfig.from_dict(shared_data)
+
         return cls(
             data_dir=data_dir,
             current_brain=data.get("current_brain", "default"),
             default_depth=data.get("default_depth"),
             default_max_tokens=data.get("default_max_tokens", 500),
             json_output=data.get("json_output", False),
+            shared=shared_config,
         )
 
     def save(self) -> None:
@@ -60,6 +95,7 @@ class CLIConfig:
             "default_depth": self.default_depth,
             "default_max_tokens": self.default_max_tokens,
             "json_output": self.json_output,
+            "shared": self.shared.to_dict(),
             "updated_at": datetime.now().isoformat(),
         }
 
@@ -70,6 +106,11 @@ class CLIConfig:
     def brains_dir(self) -> Path:
         """Get brains directory."""
         return self.data_dir / "brains"
+
+    @property
+    def is_shared_mode(self) -> bool:
+        """Check if shared mode is enabled."""
+        return self.shared.enabled
 
     def get_brain_path(self, brain_name: str | None = None) -> Path:
         """Get path to brain data file."""

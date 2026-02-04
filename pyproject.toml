@@ -79,6 +79,7 @@ Issues = "https://github.com/neural-memory/neural-memory/issues"
 [project.scripts]
 neural-memory = "neural_memory.cli:main"
 nmem = "neural_memory.cli:main"
+nmem-mcp = "neural_memory.mcp:main"
 
 [tool.hatch.build.targets.sdist]
 include = [

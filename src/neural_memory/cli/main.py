@@ -52,14 +52,47 @@ app.add_typer(brain_app, name="brain")
 project_app = typer.Typer(help="Project scoping for memory organization")
 app.add_typer(project_app, name="project")
 
+# Shared mode subcommand
+shared_app = typer.Typer(help="Real-time brain sharing configuration")
+app.add_typer(shared_app, name="shared")
+
 
 def get_config() -> CLIConfig:
     """Get CLI configuration."""
     return CLIConfig.load()
 
 
-async def get_storage(config: CLIConfig) -> PersistentStorage:
-    """Get storage for current brain."""
+async def get_storage(
+    config: CLIConfig,
+    *,
+    force_shared: bool = False,
+    force_local: bool = False,
+) -> PersistentStorage:
+    """
+    Get storage for current brain.
+
+    Args:
+        config: CLI configuration
+        force_shared: Override config to use shared mode
+        force_local: Override config to use local mode
+
+    Returns:
+        Storage instance (local or shared based on config)
+    """
+    use_shared = (config.is_shared_mode or force_shared) and not force_local
+
+    if use_shared:
+        from neural_memory.storage.shared_store import SharedStorage
+
+        storage = SharedStorage(
+            server_url=config.shared.server_url,
+            brain_id=config.current_brain,
+            timeout=config.shared.timeout,
+            api_key=config.shared.api_key,
+        )
+        await storage.connect()
+        return storage  # type: ignore
+
     brain_path = config.get_brain_path()
     return await PersistentStorage.load(brain_path)
 
@@ -162,6 +195,9 @@ def remember(
         Optional[str],
         typer.Option("--project", "-P", help="Associate with a project (by name)"),
     ] = None,
+    shared: Annotated[
+        bool, typer.Option("--shared", "-S", help="Use shared/remote storage for this command")
+    ] = False,
     force: Annotated[
         bool, typer.Option("--force", "-f", help="Store even if sensitive content detected")
     ] = False,
@@ -193,6 +229,7 @@ def remember(
         nmem remember "Meeting context" --type context --expires 7
         nmem remember "API_KEY=xxx" --redact  # Will redact sensitive content
         nmem remember "Sprint task done" --project "Q1 Sprint"  # Associate with project
+        nmem remember "Shared memory" --shared  # Store in shared brain
     """
     # Check for sensitive content
     sensitive_matches = check_sensitive_content(content, min_severity=2)
@@ -229,9 +266,10 @@ def remember(
 
     async def _remember() -> dict:
         config = get_config()
-        storage = await get_storage(config)
+        storage = await get_storage(config, force_shared=shared)
 
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain_id = storage._current_brain_id if hasattr(storage, "_current_brain_id") else config.current_brain
+        brain = await storage.get_brain(brain_id)
         if not brain:
             return {"error": "No brain configured"}
 
@@ -405,6 +443,9 @@ def recall(
     min_confidence: Annotated[
         float, typer.Option("--min-confidence", "-c", help="Minimum confidence threshold (0.0-1.0)")
     ] = 0.0,
+    shared: Annotated[
+        bool, typer.Option("--shared", "-S", help="Use shared/remote storage for this command")
+    ] = False,
     show_age: Annotated[
         bool, typer.Option("--show-age", "-a", help="Show memory ages in results")
     ] = True,
@@ -430,13 +471,15 @@ def recall(
         nmem recall "meetings with Alice" --depth 2
         nmem recall "Why did the build fail?" --show-routing
         nmem recall "project status" --min-confidence 0.5
+        nmem recall "shared knowledge" --shared  # Query from shared brain
     """
 
     async def _recall() -> dict:
         config = get_config()
-        storage = await get_storage(config)
+        storage = await get_storage(config, force_shared=shared)
 
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain_id = storage._current_brain_id if hasattr(storage, "_current_brain_id") else config.current_brain
+        brain = await storage.get_brain(brain_id)
         if not brain:
             return {"error": "No brain configured"}
 
@@ -2006,8 +2049,284 @@ def project_extend(
 
 
 # =============================================================================
+# Shared Mode Commands
+# =============================================================================
+
+
+@shared_app.command("enable")
+def shared_enable(
+    server_url: Annotated[
+        str, typer.Argument(help="NeuralMemory server URL (e.g., http://localhost:8000)")
+    ],
+    api_key: Annotated[
+        Optional[str], typer.Option("--api-key", "-k", help="API key for authentication")
+    ] = None,
+    timeout: Annotated[
+        float, typer.Option("--timeout", "-t", help="Request timeout in seconds")
+    ] = 30.0,
+) -> None:
+    """Enable shared mode to connect to a remote NeuralMemory server.
+
+    When shared mode is enabled, all memory operations (remember, recall, etc.)
+    will use the remote server instead of local storage.
+
+    Examples:
+        nmem shared enable http://localhost:8000
+        nmem shared enable https://memory.example.com --api-key mykey
+        nmem shared enable http://server:8000 --timeout 60
+    """
+    config = get_config()
+    config.shared.enabled = True
+    config.shared.server_url = server_url.rstrip("/")
+    config.shared.api_key = api_key
+    config.shared.timeout = timeout
+    config.save()
+
+    typer.secho("Shared mode enabled!", fg=typer.colors.GREEN)
+    typer.echo(f"  Server: {config.shared.server_url}")
+    if api_key:
+        typer.echo(f"  API Key: {'*' * 8}...{api_key[-4:] if len(api_key) > 4 else '****'}")
+    typer.echo(f"  Timeout: {timeout}s")
+    typer.echo("")
+    typer.secho("All memory commands will now use the remote server.", fg=typer.colors.BRIGHT_BLACK)
+    typer.secho("Use 'nmem shared disable' to switch back to local storage.", fg=typer.colors.BRIGHT_BLACK)
+
+
+@shared_app.command("disable")
+def shared_disable() -> None:
+    """Disable shared mode and use local storage.
+
+    Examples:
+        nmem shared disable
+    """
+    config = get_config()
+    config.shared.enabled = False
+    config.save()
+
+    typer.secho("Shared mode disabled.", fg=typer.colors.GREEN)
+    typer.echo("Memory commands will now use local storage.")
+
+
+@shared_app.command("status")
+def shared_status(
+    json_output: Annotated[
+        bool, typer.Option("--json", "-j", help="Output as JSON")
+    ] = False,
+) -> None:
+    """Show shared mode status and configuration.
+
+    Examples:
+        nmem shared status
+        nmem shared status --json
+    """
+    config = get_config()
+
+    status = {
+        "enabled": config.shared.enabled,
+        "server_url": config.shared.server_url,
+        "api_key_set": config.shared.api_key is not None,
+        "timeout": config.shared.timeout,
+    }
+
+    if json_output:
+        typer.echo(json.dumps(status, indent=2))
+    else:
+        if config.shared.enabled:
+            typer.secho("[ENABLED] Shared mode is active", fg=typer.colors.GREEN)
+        else:
+            typer.secho("[DISABLED] Using local storage", fg=typer.colors.YELLOW)
+
+        typer.echo(f"\nServer URL: {config.shared.server_url}")
+        typer.echo(f"API Key: {'configured' if config.shared.api_key else 'not set'}")
+        typer.echo(f"Timeout: {config.shared.timeout}s")
+
+
+@shared_app.command("test")
+def shared_test() -> None:
+    """Test connection to the shared server.
+
+    Examples:
+        nmem shared test
+    """
+    config = get_config()
+
+    if not config.shared.server_url:
+        typer.secho("No server URL configured. Use 'nmem shared enable <url>' first.", fg=typer.colors.RED)
+        raise typer.Exit(1)
+
+    async def _test() -> dict:
+        import aiohttp
+
+        url = f"{config.shared.server_url}/health"
+        headers = {}
+        if config.shared.api_key:
+            headers["Authorization"] = f"Bearer {config.shared.api_key}"
+
+        try:
+            timeout = aiohttp.ClientTimeout(total=config.shared.timeout)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(url, headers=headers) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return {
+                            "success": True,
+                            "status": data.get("status", "unknown"),
+                            "version": data.get("version", "unknown"),
+                        }
+                    else:
+                        return {
+                            "success": False,
+                            "error": f"Server returned status {response.status}",
+                        }
+        except aiohttp.ClientError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    typer.echo(f"Testing connection to {config.shared.server_url}...")
+    result = asyncio.run(_test())
+
+    if result["success"]:
+        typer.secho("[OK] Connection successful!", fg=typer.colors.GREEN)
+        typer.echo(f"  Server status: {result['status']}")
+        typer.echo(f"  Server version: {result['version']}")
+    else:
+        typer.secho("[FAILED] Connection failed!", fg=typer.colors.RED)
+        typer.echo(f"  Error: {result['error']}")
+        raise typer.Exit(1)
+
+
+@shared_app.command("sync")
+def shared_sync(
+    direction: Annotated[
+        str, typer.Option("--direction", "-d", help="Sync direction: push, pull, or both")
+    ] = "both",
+    json_output: Annotated[
+        bool, typer.Option("--json", "-j", help="Output as JSON")
+    ] = False,
+) -> None:
+    """Manually sync local brain with remote server.
+
+    Directions:
+        push  - Upload local brain to server
+        pull  - Download brain from server to local
+        both  - Full bidirectional sync (default)
+
+    Examples:
+        nmem shared sync
+        nmem shared sync --direction push
+        nmem shared sync --direction pull
+    """
+    config = get_config()
+
+    if not config.shared.server_url:
+        typer.secho("No server URL configured. Use 'nmem shared enable <url>' first.", fg=typer.colors.RED)
+        raise typer.Exit(1)
+
+    async def _sync() -> dict:
+        from neural_memory.storage.shared_store import SharedStorage
+
+        # Load local storage
+        local_storage = await PersistentStorage.load(config.get_brain_path())
+
+        # Connect to remote
+        remote = SharedStorage(
+            server_url=config.shared.server_url,
+            brain_id=config.current_brain,
+            api_key=config.shared.api_key,
+            timeout=config.shared.timeout,
+        )
+        await remote.connect()
+
+        result = {"direction": direction, "success": True}
+
+        try:
+            if direction in ("push", "both"):
+                # Export local and push to remote
+                snapshot = await local_storage.export_brain(local_storage._current_brain_id)
+                await remote.import_brain(snapshot, config.current_brain)
+                result["pushed"] = True
+                result["neurons_pushed"] = len(snapshot.neurons)
+                result["synapses_pushed"] = len(snapshot.synapses)
+                result["fibers_pushed"] = len(snapshot.fibers)
+
+            if direction in ("pull", "both"):
+                # Pull from remote and import locally
+                try:
+                    snapshot = await remote.export_brain(config.current_brain)
+                    await local_storage.import_brain(snapshot, local_storage._current_brain_id)
+                    await local_storage.save()
+                    result["pulled"] = True
+                    result["neurons_pulled"] = len(snapshot.neurons)
+                    result["synapses_pulled"] = len(snapshot.synapses)
+                    result["fibers_pulled"] = len(snapshot.fibers)
+                except Exception as e:
+                    if direction == "pull":
+                        raise
+                    # For "both", pulling may fail if brain doesn't exist on server
+                    result["pulled"] = False
+                    result["pull_error"] = str(e)
+
+        finally:
+            await remote.disconnect()
+
+        return result
+
+    typer.echo(f"Syncing brain '{config.current_brain}' with {config.shared.server_url}...")
+    result = asyncio.run(_sync())
+
+    if json_output:
+        typer.echo(json.dumps(result, indent=2))
+    else:
+        if result.get("pushed"):
+            typer.secho(f"[PUSHED] {result.get('neurons_pushed', 0)} neurons, "
+                       f"{result.get('synapses_pushed', 0)} synapses, "
+                       f"{result.get('fibers_pushed', 0)} fibers", fg=typer.colors.GREEN)
+
+        if result.get("pulled"):
+            typer.secho(f"[PULLED] {result.get('neurons_pulled', 0)} neurons, "
+                       f"{result.get('synapses_pulled', 0)} synapses, "
+                       f"{result.get('fibers_pulled', 0)} fibers", fg=typer.colors.GREEN)
+        elif result.get("pull_error"):
+            typer.secho(f"[PULL FAILED] {result['pull_error']}", fg=typer.colors.YELLOW)
+
+        typer.secho("\nSync complete!", fg=typer.colors.GREEN)
+
+
+# =============================================================================
 # Utility Commands
 # =============================================================================
+
+
+@app.command()
+def mcp() -> None:
+    """Run the MCP (Model Context Protocol) server.
+
+    This starts an MCP server over stdio that exposes NeuralMemory tools
+    to Claude Code, Claude Desktop, and other MCP-compatible clients.
+
+    Available tools:
+        nmem_remember  - Store a memory
+        nmem_recall    - Query memories
+        nmem_context   - Get recent context
+        nmem_todo      - Add a TODO memory
+        nmem_stats     - Get brain statistics
+
+    Examples:
+        nmem mcp                    # Run MCP server
+        python -m neural_memory.mcp # Alternative way
+
+    Configuration for Claude Code (~/.claude/mcp_servers.json):
+        {
+            "neural-memory": {
+                "command": "nmem",
+                "args": ["mcp"]
+            }
+        }
+    """
+    from neural_memory.mcp.server import main as mcp_main
+
+    mcp_main()
 
 
 @app.command()
