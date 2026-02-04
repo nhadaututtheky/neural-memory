@@ -36,7 +36,7 @@ class TestMCPServer:
         """Test that get_tools returns all expected tools."""
         tools = server.get_tools()
 
-        assert len(tools) == 5
+        assert len(tools) == 6
         tool_names = {tool["name"] for tool in tools}
         assert tool_names == {
             "nmem_remember",
@@ -44,6 +44,7 @@ class TestMCPServer:
             "nmem_context",
             "nmem_todo",
             "nmem_stats",
+            "nmem_auto",
         }
 
     def test_tool_schemas(self, server: MCPServer) -> None:
@@ -320,6 +321,41 @@ class TestMCPToolCalls:
         assert result["synapse_count"] == 250
         assert result["fiber_count"] == 50
 
+    @pytest.mark.asyncio
+    async def test_auto_tool_status(self, server: MCPServer) -> None:
+        """Test nmem_auto status action."""
+        result = await server.call_tool("nmem_auto", {"action": "status"})
+
+        assert "enabled" in result
+        assert "capture_decisions" in result
+        assert "capture_errors" in result
+
+    @pytest.mark.asyncio
+    async def test_auto_tool_analyze(self, server: MCPServer) -> None:
+        """Test nmem_auto analyze action."""
+        text = "We decided to use PostgreSQL for the database. TODO: Set up migrations."
+        result = await server.call_tool("nmem_auto", {"action": "analyze", "text": text})
+
+        assert "detected" in result
+        assert len(result["detected"]) >= 1  # Should detect at least the TODO
+
+    @pytest.mark.asyncio
+    async def test_auto_tool_analyze_errors(self, server: MCPServer) -> None:
+        """Test nmem_auto detects error patterns."""
+        text = "The error was: connection timeout. The issue is that the server is down."
+        result = await server.call_tool("nmem_auto", {"action": "analyze", "text": text})
+
+        assert "detected" in result
+        detected_types = [d["type"] for d in result["detected"]]
+        assert "error" in detected_types
+
+    @pytest.mark.asyncio
+    async def test_auto_tool_analyze_empty(self, server: MCPServer) -> None:
+        """Test nmem_auto with no detectable content."""
+        result = await server.call_tool("nmem_auto", {"action": "analyze", "text": "Hello world"})
+
+        assert result["detected"] == []
+
 
 class TestMCPProtocol:
     """Tests for MCP protocol message handling."""
@@ -359,7 +395,7 @@ class TestMCPProtocol:
         assert response["id"] == 2
         assert "result" in response
         assert "tools" in response["result"]
-        assert len(response["result"]["tools"]) == 5
+        assert len(response["result"]["tools"]) == 6
 
     @pytest.mark.asyncio
     async def test_tools_call_message(self, server: MCPServer) -> None:

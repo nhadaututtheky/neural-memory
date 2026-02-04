@@ -169,6 +169,29 @@ class MCPServer:
                 "description": "Get brain statistics including memory counts and freshness.",
                 "inputSchema": {"type": "object", "properties": {}},
             },
+            {
+                "name": "nmem_auto",
+                "description": "Control auto-capture settings and analyze text for auto-save. When enabled, NeuralMemory automatically detects and saves decisions, errors, todos, and important facts from conversations.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["status", "enable", "disable", "analyze"],
+                            "description": "Action to perform",
+                        },
+                        "text": {
+                            "type": "string",
+                            "description": "Text to analyze for auto-capture (required for 'analyze' action)",
+                        },
+                        "save": {
+                            "type": "boolean",
+                            "description": "If true, save detected memories (default: false for analyze)",
+                        },
+                    },
+                    "required": ["action"],
+                },
+            },
         ]
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -183,6 +206,8 @@ class MCPServer:
             return await self._todo(arguments)
         elif name == "nmem_stats":
             return await self._stats(arguments)
+        elif name == "nmem_auto":
+            return await self._auto(arguments)
         else:
             return {"error": f"Unknown tool: {name}"}
 
@@ -336,6 +361,174 @@ class MCPServer:
             "synapse_count": stats["synapse_count"],
             "fiber_count": stats["fiber_count"],
         }
+
+    async def _auto(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Handle auto-capture settings and analysis."""
+        action = args.get("action", "status")
+
+        if action == "status":
+            return {
+                "enabled": self.config.auto.enabled,
+                "capture_decisions": self.config.auto.capture_decisions,
+                "capture_errors": self.config.auto.capture_errors,
+                "capture_todos": self.config.auto.capture_todos,
+                "capture_facts": self.config.auto.capture_facts,
+                "min_confidence": self.config.auto.min_confidence,
+            }
+
+        elif action == "enable":
+            self.config.auto.enabled = True
+            self.config.save()
+            return {"enabled": True, "message": "Auto-capture enabled"}
+
+        elif action == "disable":
+            self.config.auto.enabled = False
+            self.config.save()
+            return {"enabled": False, "message": "Auto-capture disabled"}
+
+        elif action == "analyze":
+            text = args.get("text", "")
+            if not text:
+                return {"error": "Text required for analyze action"}
+
+            # Analyze text for potential memories
+            detected = self._analyze_text_for_memories(text)
+
+            if not detected:
+                return {"detected": [], "message": "No memorable content detected"}
+
+            # Optionally save detected memories
+            if args.get("save", False) and self.config.auto.enabled:
+                saved = []
+                for item in detected:
+                    if item["confidence"] >= self.config.auto.min_confidence:
+                        result = await self._remember(
+                            {
+                                "content": item["content"],
+                                "type": item["type"],
+                                "priority": item.get("priority", 5),
+                            }
+                        )
+                        if "error" not in result:
+                            saved.append(item["content"][:50])
+                return {
+                    "detected": detected,
+                    "saved": saved,
+                    "message": f"Analyzed and saved {len(saved)} memories",
+                }
+
+            return {
+                "detected": detected,
+                "message": f"Detected {len(detected)} potential memories (not saved)",
+            }
+
+        return {"error": f"Unknown action: {action}"}
+
+    def _analyze_text_for_memories(self, text: str) -> list[dict[str, Any]]:
+        """Analyze text and detect potential memories.
+
+        Returns list of detected memories with type, content, and confidence.
+        """
+        import re
+
+        detected: list[dict[str, Any]] = []
+        text_lower = text.lower()
+
+        # Decision patterns
+        decision_patterns = [
+            r"(?:we |I )(?:decided|chose|selected|picked|opted)(?: to)?[:\s]+(.+?)(?:\.|$)",
+            r"(?:the )?decision(?: is)?[:\s]+(.+?)(?:\.|$)",
+            r"(?:we\'re |I\'m )going (?:to|with)[:\s]+(.+?)(?:\.|$)",
+            r"let\'s (?:go with|use|choose)[:\s]+(.+?)(?:\.|$)",
+        ]
+        if self.config.auto.capture_decisions:
+            for pattern in decision_patterns:
+                matches = re.findall(pattern, text_lower, re.IGNORECASE)
+                for match in matches:
+                    if len(match) > 10:
+                        detected.append(
+                            {
+                                "type": "decision",
+                                "content": f"Decision: {match.strip()}",
+                                "confidence": 0.8,
+                                "priority": 6,
+                            }
+                        )
+
+        # Error patterns
+        error_patterns = [
+            r"error[:\s]+(.+?)(?:\.|$)",
+            r"failed[:\s]+(.+?)(?:\.|$)",
+            r"bug[:\s]+(.+?)(?:\.|$)",
+            r"(?:the )?issue (?:is|was)[:\s]+(.+?)(?:\.|$)",
+            r"problem[:\s]+(.+?)(?:\.|$)",
+        ]
+        if self.config.auto.capture_errors:
+            for pattern in error_patterns:
+                matches = re.findall(pattern, text_lower, re.IGNORECASE)
+                for match in matches:
+                    if len(match) > 10:
+                        detected.append(
+                            {
+                                "type": "error",
+                                "content": f"Error: {match.strip()}",
+                                "confidence": 0.85,
+                                "priority": 7,
+                            }
+                        )
+
+        # TODO patterns
+        todo_patterns = [
+            r"(?:TODO|FIXME|HACK|XXX)[:\s]+(.+?)(?:\.|$)",
+            r"(?:we |I )?(?:need to|should|must|have to)[:\s]+(.+?)(?:\.|$)",
+            r"(?:remember to|don\'t forget to)[:\s]+(.+?)(?:\.|$)",
+            r"(?:later|next)[:\s]+(.+?)(?:\.|$)",
+        ]
+        if self.config.auto.capture_todos:
+            for pattern in todo_patterns:
+                matches = re.findall(pattern, text, re.IGNORECASE)
+                for match in matches:
+                    if len(match) > 5:
+                        detected.append(
+                            {
+                                "type": "todo",
+                                "content": f"TODO: {match.strip()}",
+                                "confidence": 0.75,
+                                "priority": 5,
+                            }
+                        )
+
+        # Fact patterns (more conservative)
+        fact_patterns = [
+            r"(?:the |a )?(?:answer|solution|fix) (?:is|was)[:\s]+(.+?)(?:\.|$)",
+            r"(?:it |this )(?:works|worked) because[:\s]+(.+?)(?:\.|$)",
+            r"(?:the )?(?:key|important|note)[:\s]+(.+?)(?:\.|$)",
+            r"(?:learned|discovered|found out)[:\s]+(.+?)(?:\.|$)",
+        ]
+        if self.config.auto.capture_facts:
+            for pattern in fact_patterns:
+                matches = re.findall(pattern, text_lower, re.IGNORECASE)
+                for match in matches:
+                    if len(match) > 15:
+                        detected.append(
+                            {
+                                "type": "fact",
+                                "content": match.strip(),
+                                "confidence": 0.7,
+                                "priority": 5,
+                            }
+                        )
+
+        # Remove duplicates
+        seen = set()
+        unique_detected = []
+        for item in detected:
+            content_key = item["content"][:50].lower()
+            if content_key not in seen:
+                seen.add(content_key)
+                unique_detected.append(item)
+
+        return unique_detected
 
 
 def create_mcp_server() -> MCPServer:
