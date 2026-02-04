@@ -47,6 +47,26 @@ pip install neural-memory[all]
 
 ## Quick Start
 
+### CLI (Simplest)
+
+```bash
+# Store a memory
+nmem remember "Fixed auth bug by adding null check in login.py"
+
+# Query memories
+nmem recall "auth bug"
+
+# Get recent context (for AI injection)
+nmem context
+
+# Manage brains
+nmem brain list
+nmem brain create work
+nmem brain use work
+```
+
+### Python API
+
 ```python
 from neural_memory import Brain, MemoryEncoder, ReflexPipeline
 

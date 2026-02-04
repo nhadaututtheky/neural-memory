@@ -427,6 +427,25 @@ class InMemoryStorage(NeuralStorage):
         del self._fibers[brain_id][fiber_id]
         return True
 
+    async def get_fibers(
+        self,
+        limit: int = 10,
+        order_by: Literal["created_at", "salience", "frequency"] = "created_at",
+        descending: bool = True,
+    ) -> list[Fiber]:
+        brain_id = self._get_brain_id()
+        fibers = list(self._fibers[brain_id].values())
+
+        # Sort by the specified field
+        if order_by == "created_at":
+            fibers.sort(key=lambda f: f.created_at, reverse=descending)
+        elif order_by == "salience":
+            fibers.sort(key=lambda f: f.salience, reverse=descending)
+        elif order_by == "frequency":
+            fibers.sort(key=lambda f: f.frequency, reverse=descending)
+
+        return fibers[:limit]
+
     # ========== Brain Operations ==========
 
     async def save_brain(self, brain: Brain) -> None:

@@ -36,6 +36,7 @@ dependencies = [
     "pydantic>=2.0",
     "networkx>=3.0",
     "python-dateutil>=2.8",
+    "typer>=0.9.0",
 ]
 
 [project.optional-dependencies]
@@ -77,6 +78,7 @@ Issues = "https://github.com/neural-memory/neural-memory/issues"
 
 [project.scripts]
 neural-memory = "neural_memory.cli:main"
+nmem = "neural_memory.cli:main"
 
 [tool.hatch.build.targets.sdist]
 include = [

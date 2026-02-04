@@ -334,6 +334,26 @@ class NeuralStorage(ABC):
         """
         ...
 
+    @abstractmethod
+    async def get_fibers(
+        self,
+        limit: int = 10,
+        order_by: Literal["created_at", "salience", "frequency"] = "created_at",
+        descending: bool = True,
+    ) -> list[Fiber]:
+        """
+        Get fibers with ordering.
+
+        Args:
+            limit: Maximum results
+            order_by: Field to order by
+            descending: Sort descending if True
+
+        Returns:
+            List of fibers
+        """
+        ...
+
     # ========== Brain Operations ==========
 
     @abstractmethod
