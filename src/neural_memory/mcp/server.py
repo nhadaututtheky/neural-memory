@@ -197,22 +197,22 @@ class MCPServer:
             },
             {
                 "name": "nmem_auto",
-                "description": "Control auto-capture settings and analyze text for auto-save. When enabled, NeuralMemory automatically detects and saves decisions, errors, todos, and important facts from conversations.",
+                "description": "Auto-capture memories from text. Use 'process' to analyze and save in one call. Call this after important conversations to capture decisions, errors, todos, and facts automatically.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "action": {
                             "type": "string",
-                            "enum": ["status", "enable", "disable", "analyze"],
-                            "description": "Action to perform",
+                            "enum": ["status", "enable", "disable", "analyze", "process"],
+                            "description": "Action: 'process' analyzes and saves, 'analyze' only detects",
                         },
                         "text": {
                             "type": "string",
-                            "description": "Text to analyze for auto-capture (required for 'analyze' action)",
+                            "description": "Text to analyze (required for 'analyze' and 'process')",
                         },
                         "save": {
                             "type": "boolean",
-                            "description": "If true, save detected memories (default: false for analyze)",
+                            "description": "Force save even if auto-capture disabled (for 'analyze')",
                         },
                     },
                     "required": ["action"],
@@ -423,20 +423,10 @@ class MCPServer:
             if not detected:
                 return {"detected": [], "message": "No memorable content detected"}
 
-            # Optionally save detected memories
-            if args.get("save", False) and self.config.auto.enabled:
-                saved = []
-                for item in detected:
-                    if item["confidence"] >= self.config.auto.min_confidence:
-                        result = await self._remember(
-                            {
-                                "content": item["content"],
-                                "type": item["type"],
-                                "priority": item.get("priority", 5),
-                            }
-                        )
-                        if "error" not in result:
-                            saved.append(item["content"][:50])
+            # Optionally save detected memories (save=true forces save regardless of auto setting)
+            should_save = args.get("save", False)
+            if should_save:
+                saved = await self._save_detected_memories(detected)
                 return {
                     "detected": detected,
                     "saved": saved,
@@ -448,7 +438,46 @@ class MCPServer:
                 "message": f"Detected {len(detected)} potential memories (not saved)",
             }
 
+        elif action == "process":
+            # Process = analyze + auto-save (simpler API for AI tools)
+            text = args.get("text", "")
+            if not text:
+                return {"error": "Text required for process action"}
+
+            detected = self._analyze_text_for_memories(text)
+
+            if not detected:
+                return {"saved": 0, "message": "No memorable content detected"}
+
+            # Auto-save all detected memories above confidence threshold
+            saved = await self._save_detected_memories(detected)
+
+            return {
+                "saved": len(saved),
+                "memories": saved,
+                "message": f"Auto-captured {len(saved)} memories" if saved else "No memories met confidence threshold",
+            }
+
         return {"error": f"Unknown action: {action}"}
+
+    async def _save_detected_memories(self, detected: list[dict[str, Any]]) -> list[str]:
+        """Save detected memories that meet confidence threshold.
+
+        Returns list of saved memory summaries.
+        """
+        saved = []
+        for item in detected:
+            if item["confidence"] >= self.config.auto.min_confidence:
+                result = await self._remember(
+                    {
+                        "content": item["content"],
+                        "type": item["type"],
+                        "priority": item.get("priority", 5),
+                    }
+                )
+                if "error" not in result:
+                    saved.append(item["content"][:50])
+        return saved
 
     def _analyze_text_for_memories(self, text: str) -> list[dict[str, Any]]:
         """Analyze text and detect potential memories.

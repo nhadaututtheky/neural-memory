@@ -37,13 +37,30 @@ Use at session start to:
 
 ## Auto-Capture (nmem_auto)
 
-When auto-capture is enabled, analyze your responses for:
-- Decisions being made
-- Errors encountered and their solutions
-- TODOs mentioned
-- Important facts learned
+After important conversations, call nmem_auto to automatically capture memories:
 
-Call `nmem_auto(action="analyze", text="...", save=true)` to auto-save.
+```
+# Simple: process and save in one call
+nmem_auto(action="process", text="<conversation or response text>")
+
+# Preview first: see what would be captured
+nmem_auto(action="analyze", text="<text>")
+
+# Force save (even if auto-capture disabled)
+nmem_auto(action="analyze", text="<text>", save=true)
+```
+
+Auto-capture detects:
+- **Decisions**: "We decided...", "Let's use...", "Going with..."
+- **Errors**: "Error:", "The issue was...", "Bug:", "Failed to..."
+- **TODOs**: "TODO:", "Need to...", "Remember to...", "Later:"
+- **Facts**: "The solution is...", "It works because...", "Learned that..."
+
+**When to call nmem_auto(action="process")**:
+- After making important decisions
+- After solving bugs or errors
+- After learning something new about the project
+- At the end of a productive session
 
 ## Best Practices
 
@@ -90,11 +107,12 @@ User: "I always use 4-space indentation"
 
 COMPACT_PROMPT = """You have NeuralMemory for persistent memory across sessions.
 
-**Remember** (nmem_remember): Save decisions, preferences, facts, errors, todos automatically.
-**Recall** (nmem_recall): Query past context before making decisions or answering questions.
+**Remember** (nmem_remember): Save decisions, preferences, facts, errors, todos.
+**Recall** (nmem_recall): Query past context before making decisions.
 **Context** (nmem_context): Load recent memories at session start.
+**Auto-capture** (nmem_auto): Call `nmem_auto(action="process", text="...")` after important conversations to auto-save decisions, errors, and todos.
 
-Be proactive: remember important info without being asked. Check memory before asking questions user answered before."""
+Be proactive: remember important info without being asked. Use auto-capture after solving bugs or making decisions."""
 
 
 def get_system_prompt(compact: bool = False) -> str:

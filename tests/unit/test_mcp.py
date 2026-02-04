@@ -356,6 +356,58 @@ class TestMCPToolCalls:
 
         assert result["detected"] == []
 
+    @pytest.mark.asyncio
+    async def test_auto_tool_process(self) -> None:
+        """Test nmem_auto process action (analyze + save)."""
+        # Create server with proper auto config mocked
+        mock_auto_config = MagicMock(
+            enabled=True,
+            capture_decisions=True,
+            capture_errors=True,
+            capture_todos=True,
+            capture_facts=True,
+            min_confidence=0.7,
+        )
+        with patch("neural_memory.mcp.server.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(
+                current_brain="test-brain",
+                get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
+                auto=mock_auto_config,
+            )
+            server = MCPServer()
+
+        mock_storage = AsyncMock()
+        mock_brain = MagicMock(
+            id="test-brain",
+            name="test",
+            config=MagicMock(),
+        )
+        mock_storage.get_brain = AsyncMock(return_value=mock_brain)
+        mock_storage._current_brain_id = "test-brain"
+
+        mock_fiber = MagicMock(id="auto-123")
+        mock_encoder = AsyncMock()
+        mock_encoder.encode = AsyncMock(
+            return_value=MagicMock(fiber=mock_fiber, neurons_created=[])
+        )
+
+        with (
+            patch.object(server, "get_storage", return_value=mock_storage),
+            patch("neural_memory.mcp.server.MemoryEncoder", return_value=mock_encoder),
+        ):
+            text = "We decided to use Redis for caching. TODO: Set up Redis server."
+            result = await server.call_tool("nmem_auto", {"action": "process", "text": text})
+
+        assert "saved" in result
+        assert result["saved"] >= 1  # Should save at least the decision or TODO
+
+    @pytest.mark.asyncio
+    async def test_auto_tool_process_empty(self, server: MCPServer) -> None:
+        """Test nmem_auto process with no detectable content."""
+        result = await server.call_tool("nmem_auto", {"action": "process", "text": "Hello world"})
+
+        assert result["saved"] == 0
+
 
 class TestMCPProtocol:
     """Tests for MCP protocol message handling."""
