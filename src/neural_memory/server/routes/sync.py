@@ -286,7 +286,6 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     sync_manager = get_sync_manager()
 
     client_id: str | None = None
-    client: ConnectedClient | None = None
 
     try:
         while True:
@@ -296,7 +295,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
             if action == "connect":
                 client_id = message.get("client_id", f"client-{id(websocket)}")
-                client = await sync_manager.connect(client_id, websocket)
+                await sync_manager.connect(client_id, websocket)
                 await websocket.send_text(
                     SyncEvent(
                         type=SyncEventType.CONNECTED,

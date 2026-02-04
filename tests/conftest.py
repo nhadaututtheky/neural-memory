@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from datetime import datetime
-from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio

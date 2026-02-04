@@ -151,7 +151,7 @@ class TestEncodingFlow:
         encoder = MemoryEncoder(storage, brain.config)
 
         # Encode first memory
-        result1 = await encoder.encode(
+        _result1 = await encoder.encode(
             "First event",
             timestamp=datetime(2024, 2, 4, 14, 0),
         )

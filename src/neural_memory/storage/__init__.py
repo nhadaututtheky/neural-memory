@@ -7,11 +7,11 @@ from neural_memory.storage.shared_store import SharedStorage, SharedStorageError
 from neural_memory.storage.sqlite_store import SQLiteStorage
 
 __all__ = [
-    "NeuralStorage",
+    "HybridStorage",
     "InMemoryStorage",
+    "NeuralStorage",
     "SQLiteStorage",
     "SharedStorage",
     "SharedStorageError",
-    "HybridStorage",
     "create_storage",
 ]

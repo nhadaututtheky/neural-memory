@@ -16,27 +16,23 @@ from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline, Retrieval
 __version__ = "0.1.0"
 
 __all__ = [
-    # Core models
+    "__version__",
     "Brain",
     "BrainConfig",
+    "BrainMode",
+    "BrainModeConfig",
+    "DepthLevel",
+    "Direction",
+    "EncodingResult",
     "Fiber",
+    "MemoryEncoder",
     "Neuron",
     "NeuronState",
     "NeuronType",
-    "Synapse",
-    "SynapseType",
-    "Direction",
-    # Brain mode (local/shared toggle)
-    "BrainMode",
-    "BrainModeConfig",
-    "SharedConfig",
-    "SyncStrategy",
-    # Engine
-    "MemoryEncoder",
-    "EncodingResult",
     "ReflexPipeline",
     "RetrievalResult",
-    "DepthLevel",
-    # Version
-    "__version__",
+    "SharedConfig",
+    "Synapse",
+    "SynapseType",
+    "SyncStrategy",
 ]

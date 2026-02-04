@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import networkx as nx
 
@@ -21,9 +21,6 @@ from neural_memory.core.neuron import Neuron, NeuronState, NeuronType
 from neural_memory.core.project import Project
 from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.storage.base import NeuralStorage
-
-if TYPE_CHECKING:
-    pass
 
 
 class InMemoryStorage(NeuralStorage):

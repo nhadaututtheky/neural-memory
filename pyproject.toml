@@ -109,6 +109,19 @@ select = [
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
+    "RUF022", # __all__ sorting (we use comments for organization)
+    "RUF012", # mutable class attributes (false positives on frozen sets)
+    "RUF005", # list concatenation (clearer in some cases)
+    "RUF059", # unused variable in unpacking (test fixtures)
+    "TCH003", # move imports to type-checking block (too strict)
+    "TC001",  # move app imports to type-checking block
+    "TC003",  # move stdlib imports to type-checking block
+    "SIM102", # nested if (clearer in some cases)
+    "SIM103", # return negated condition (clearer explicitly)
+    "SIM105", # contextlib.suppress (try-except clearer)
+    "SIM108", # ternary operator (if-else clearer)
+    "SIM117", # nested with statements (clearer in some cases)
+    "B904",   # raise from (not always needed)
 ]
 
 [tool.ruff.lint.isort]

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from neural_memory.core.fiber import Fiber
 from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
-from neural_memory.extraction.entities import Entity, EntityExtractor, EntityType, extract_keywords
+from neural_memory.extraction.entities import EntityExtractor, EntityType, extract_keywords
 from neural_memory.extraction.temporal import TemporalExtractor
 
 if TYPE_CHECKING:

@@ -6,10 +6,10 @@ from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline, Retrieval
 
 __all__ = [
     "ActivationResult",
-    "SpreadingActivation",
+    "DepthLevel",
     "EncodingResult",
     "MemoryEncoder",
-    "DepthLevel",
     "ReflexPipeline",
     "RetrievalResult",
+    "SpreadingActivation",
 ]

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from neural_memory.core.synapse import (
     BIDIRECTIONAL_TYPES,
     INVERSE_TYPES,

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-import pytest
-
 from neural_memory.safety.freshness import (
     FreshnessLevel,
     analyze_freshness,

@@ -4,15 +4,13 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-import pytest
-
 from neural_memory.core.memory_types import (
+    DEFAULT_EXPIRY_DAYS,
     Confidence,
     MemoryType,
     Priority,
     Provenance,
     TypedMemory,
-    DEFAULT_EXPIRY_DAYS,
     suggest_memory_type,
 )
 

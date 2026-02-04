@@ -8,7 +8,7 @@ import pytest
 
 from neural_memory.core.brain import Brain
 from neural_memory.core.fiber import Fiber
-from neural_memory.core.memory_types import MemoryType, Priority, TypedMemory
+from neural_memory.core.memory_types import MemoryType, TypedMemory
 from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.project import MemoryScope, Project
 from neural_memory.storage.memory_store import InMemoryStorage

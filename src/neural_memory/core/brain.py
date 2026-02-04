@@ -4,11 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import uuid4
-
-if TYPE_CHECKING:
-    from neural_memory.storage.base import NeuralStorage
 
 
 @dataclass(frozen=True)

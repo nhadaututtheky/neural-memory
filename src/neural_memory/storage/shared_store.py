@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import aiohttp
 
@@ -14,9 +12,6 @@ from neural_memory.core.fiber import Fiber
 from neural_memory.core.neuron import Neuron, NeuronState, NeuronType
 from neural_memory.core.synapse import Direction, Synapse, SynapseType
 from neural_memory.storage.base import NeuralStorage
-
-if TYPE_CHECKING:
-    pass
 
 
 class SharedStorageError(Exception):

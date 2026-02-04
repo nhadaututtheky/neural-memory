@@ -6,6 +6,11 @@ This module provides tools for:
 - Privacy protection
 """
 
+from neural_memory.safety.freshness import (
+    FreshnessLevel,
+    evaluate_freshness,
+    get_freshness_warning,
+)
 from neural_memory.safety.sensitive import (
     SensitiveMatch,
     SensitivePattern,
@@ -13,19 +18,14 @@ from neural_memory.safety.sensitive import (
     filter_sensitive_content,
     get_default_patterns,
 )
-from neural_memory.safety.freshness import (
-    FreshnessLevel,
-    evaluate_freshness,
-    get_freshness_warning,
-)
 
 __all__ = [
+    "FreshnessLevel",
     "SensitiveMatch",
     "SensitivePattern",
     "check_sensitive_content",
+    "evaluate_freshness",
     "filter_sensitive_content",
     "get_default_patterns",
-    "FreshnessLevel",
-    "evaluate_freshness",
     "get_freshness_warning",
 ]

@@ -1,12 +1,10 @@
 """Tests for sync components."""
 
-import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytest
 
 from neural_memory.server.routes.sync import (
-    ConnectedClient,
     SyncEvent,
     SyncEventType,
     SyncManager,

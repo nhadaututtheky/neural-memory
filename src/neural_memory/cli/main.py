@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-import sys
 from datetime import datetime
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
@@ -23,7 +22,7 @@ from neural_memory.core.project import Project
 from neural_memory.engine.encoder import MemoryEncoder
 from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline
 from neural_memory.extraction.parser import QueryParser
-from neural_memory.extraction.router import QueryRouter, QueryType
+from neural_memory.extraction.router import QueryRouter
 from neural_memory.safety.freshness import (
     FreshnessLevel,
     analyze_freshness,
@@ -171,10 +170,10 @@ def output_result(data: dict, as_json: bool = False) -> None:
 def remember(
     content: Annotated[str, typer.Argument(help="Content to remember")],
     tags: Annotated[
-        Optional[list[str]], typer.Option("--tag", "-t", help="Tags for the memory")
+        list[str] | None, typer.Option("--tag", "-t", help="Tags for the memory")
     ] = None,
     memory_type: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--type",
             "-T",
@@ -182,17 +181,17 @@ def remember(
         ),
     ] = None,
     priority: Annotated[
-        Optional[int],
+        int | None,
         typer.Option(
             "--priority", "-p", help="Priority 0-10 (0=lowest, 5=normal, 10=critical)"
         ),
     ] = None,
     expires: Annotated[
-        Optional[int],
+        int | None,
         typer.Option("--expires", "-e", help="Days until this memory expires"),
     ] = None,
     project: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--project", "-P", help="Associate with a project (by name)"),
     ] = None,
     shared: Annotated[
@@ -346,15 +345,15 @@ def todo(
         typer.Option("--priority", "-p", help="Priority 0-10 (default: 5=normal, 7=high, 10=critical)"),
     ] = 5,
     project: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--project", "-P", help="Associate with a project"),
     ] = None,
     expires: Annotated[
-        Optional[int],
+        int | None,
         typer.Option("--expires", "-e", help="Days until expiry (default: 30)"),
     ] = None,
     tags: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         typer.Option("--tag", "-t", help="Tags for the task"),
     ] = None,
     json_output: Annotated[
@@ -434,7 +433,7 @@ def todo(
 def recall(
     query: Annotated[str, typer.Argument(help="Query to search memories")],
     depth: Annotated[
-        Optional[int],
+        int | None,
         typer.Option("--depth", "-d", help="Search depth (0=instant, 1=context, 2=habit, 3=deep)"),
     ] = None,
     max_tokens: Annotated[
@@ -652,15 +651,15 @@ def context(
 @app.command("list")
 def list_memories(
     memory_type: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--type", "-T", help="Filter by memory type (fact, decision, todo, etc.)"),
     ] = None,
     min_priority: Annotated[
-        Optional[int],
+        int | None,
         typer.Option("--min-priority", "-p", help="Minimum priority (0-10)"),
     ] = None,
     project_name: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--project", "-P", help="Filter by project name"),
     ] = None,
     show_expired: Annotated[
@@ -920,7 +919,7 @@ def cleanup(
         typer.Option("--expired", "-e", help="Only clean up expired memories"),
     ] = True,
     memory_type: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--type", "-T", help="Only clean up specific memory type"),
     ] = None,
     dry_run: Annotated[
@@ -1292,10 +1291,10 @@ def brain_create(
 @brain_app.command("export")
 def brain_export(
     output: Annotated[
-        Optional[str], typer.Option("--output", "-o", help="Output file path")
+        str | None, typer.Option("--output", "-o", help="Output file path")
     ] = None,
     name: Annotated[
-        Optional[str], typer.Option("--name", "-n", help="Brain name (default: current)")
+        str | None, typer.Option("--name", "-n", help="Brain name (default: current)")
     ] = None,
     exclude_sensitive: Annotated[
         bool, typer.Option("--exclude-sensitive", "-s", help="Exclude memories with sensitive content")
@@ -1385,7 +1384,7 @@ def brain_export(
 def brain_import(
     file: Annotated[str, typer.Argument(help="JSON file to import")],
     name: Annotated[
-        Optional[str], typer.Option("--name", "-n", help="Name for imported brain")
+        str | None, typer.Option("--name", "-n", help="Name for imported brain")
     ] = None,
     use: Annotated[
         bool, typer.Option("--use", "-u", help="Switch to imported brain")
@@ -1496,7 +1495,7 @@ def brain_delete(
 @brain_app.command("health")
 def brain_health(
     name: Annotated[
-        Optional[str], typer.Option("--name", "-n", help="Brain name (default: current)")
+        str | None, typer.Option("--name", "-n", help="Brain name (default: current)")
     ] = None,
     json_output: Annotated[
         bool, typer.Option("--json", "-j", help="Output as JSON")
@@ -1630,15 +1629,15 @@ def brain_health(
 def project_create(
     name: Annotated[str, typer.Argument(help="Project name")],
     description: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--description", "-d", help="Project description"),
     ] = None,
     duration: Annotated[
-        Optional[int],
+        int | None,
         typer.Option("--duration", "-D", help="Duration in days (creates end date)"),
     ] = None,
     tags: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         typer.Option("--tag", "-t", help="Project tags"),
     ] = None,
     priority: Annotated[
@@ -2059,7 +2058,7 @@ def shared_enable(
         str, typer.Argument(help="NeuralMemory server URL (e.g., http://localhost:8000)")
     ],
     api_key: Annotated[
-        Optional[str], typer.Option("--api-key", "-k", help="API key for authentication")
+        str | None, typer.Option("--api-key", "-k", help="API key for authentication")
     ] = None,
     timeout: Annotated[
         float, typer.Option("--timeout", "-t", help="Request timeout in seconds")

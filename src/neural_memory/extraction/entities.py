@@ -310,7 +310,6 @@ class EntityExtractor:
         """Extract locations based on context indicators."""
         entities = []
         existing_texts = {e.text.lower() for e in existing}
-        text_lower = text.lower()
 
         # Find words after location indicators
         for indicator in self.LOCATION_INDICATORS:

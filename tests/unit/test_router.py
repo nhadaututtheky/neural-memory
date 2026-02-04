@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from neural_memory.extraction.parser import QueryIntent, QueryParser, Perspective
+from neural_memory.extraction.parser import QueryIntent, QueryParser
 from neural_memory.extraction.router import (
     QueryRouter,
     QueryType,

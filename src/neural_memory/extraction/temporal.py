@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
-from typing import Callable
 
 
 class TimeGranularity(StrEnum):
@@ -387,9 +387,7 @@ def _resolve_vi_hour(ref: datetime, match: re.Match[str]) -> tuple[datetime, dat
 
     if period:
         period = period.lower()
-        if period == "chiều" and hour < 12:
-            hour += 12
-        elif period == "tối" and hour < 12:
+        if (period == "chiều" and hour < 12) or (period == "tối" and hour < 12):
             hour += 12
         elif period == "sáng" and hour == 12:
             hour = 0

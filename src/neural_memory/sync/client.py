@@ -5,10 +5,11 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import Any, Callable
+from typing import Any
 
 import aiohttp
 
