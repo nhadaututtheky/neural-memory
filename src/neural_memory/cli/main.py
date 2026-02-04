@@ -2360,6 +2360,99 @@ def mcp() -> None:
 
 
 @app.command()
+def dashboard() -> None:
+    """Show a rich dashboard with brain stats and recent activity.
+
+    Displays:
+        - Brain statistics (neurons, synapses, fibers)
+        - Memory types distribution
+        - Freshness analysis
+        - Recent memories
+
+    Examples:
+        nmem dashboard
+    """
+    from neural_memory.cli.tui import render_dashboard
+
+    async def _dashboard() -> None:
+        config = get_config()
+        storage = await get_storage(config)
+        await render_dashboard(storage)
+
+    asyncio.run(_dashboard())
+
+
+@app.command()
+def ui(
+    memory_type: Annotated[
+        str | None,
+        typer.Option("--type", "-t", help="Filter by memory type"),
+    ] = None,
+    search: Annotated[
+        str | None,
+        typer.Option("--search", "-s", help="Search in memory content"),
+    ] = None,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", "-n", help="Number of memories to show"),
+    ] = 20,
+) -> None:
+    """Interactive memory browser with rich formatting.
+
+    Browse memories with color-coded types, priorities, and freshness.
+
+    Examples:
+        nmem ui                        # Browse all memories
+        nmem ui --type decision        # Filter by type
+        nmem ui --search "database"    # Search content
+        nmem ui --limit 50             # Show more
+    """
+    from neural_memory.cli.tui import render_memory_browser
+
+    async def _ui() -> None:
+        config = get_config()
+        storage = await get_storage(config)
+        await render_memory_browser(
+            storage,
+            memory_type=memory_type,
+            limit=limit,
+            search=search,
+        )
+
+    asyncio.run(_ui())
+
+
+@app.command()
+def graph(
+    query: Annotated[
+        str | None,
+        typer.Argument(help="Query to find related memories (optional)"),
+    ] = None,
+    depth: Annotated[
+        int,
+        typer.Option("--depth", "-d", help="Traversal depth (1-3)"),
+    ] = 2,
+) -> None:
+    """Visualize neural connections as a tree graph.
+
+    Shows memories and their relationships (caused_by, leads_to, etc.)
+
+    Examples:
+        nmem graph                     # Show recent memories
+        nmem graph "database"          # Graph around query
+        nmem graph "auth" --depth 3    # Deeper traversal
+    """
+    from neural_memory.cli.tui import render_graph
+
+    async def _graph() -> None:
+        config = get_config()
+        storage = await get_storage(config)
+        await render_graph(storage, query=query, depth=depth)
+
+    asyncio.run(_graph())
+
+
+@app.command()
 def version() -> None:
     """Show version information."""
     from neural_memory import __version__
