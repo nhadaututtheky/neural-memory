@@ -2515,6 +2515,176 @@ def init(
     typer.echo("  export NEURALMEMORY_BRAIN=myproject")
 
 
+# =============================================================================
+# Quick Shortcut Commands (Natural Language Interface)
+# =============================================================================
+
+
+@app.command(name="q")
+def quick_recall(
+    query: Annotated[str, typer.Argument(help="Query to search")],
+    depth: Annotated[int | None, typer.Option("-d")] = None,
+) -> None:
+    """Quick recall - shortcut for 'nmem recall'.
+
+    Examples:
+        nmem q "what's the API format"
+        nmem q "yesterday's work" -d 2
+    """
+    from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline
+
+    async def _recall() -> None:
+        config = get_config()
+        storage = await get_storage(config)
+        brain = await storage.get_brain(storage._current_brain_id)
+
+        if not brain:
+            typer.secho("No brain configured", fg=typer.colors.RED)
+            return
+
+        pipeline = ReflexPipeline(storage, brain.config)
+        depth_level = DepthLevel(depth) if depth is not None else None
+        result = await pipeline.query(query, depth=depth_level, max_tokens=500)
+
+        if result.confidence < 0.1:
+            typer.secho("No relevant memories found.", fg=typer.colors.YELLOW)
+            return
+
+        typer.echo(result.context)
+        typer.secho(f"\n[confidence: {result.confidence:.2f}]", fg=typer.colors.BRIGHT_BLACK)
+
+    asyncio.run(_recall())
+
+
+@app.command(name="a")
+def quick_add(
+    content: Annotated[str, typer.Argument(help="Content to remember")],
+    priority: Annotated[int | None, typer.Option("-p")] = None,
+) -> None:
+    """Quick add - shortcut for 'nmem remember' with auto-detect.
+
+    Examples:
+        nmem a "API key format is sk-xxx"
+        nmem a "Always use UTC for timestamps" -p 8
+        nmem a "TODO: Review PR #123"
+    """
+    from neural_memory.engine.encoder import MemoryEncoder
+
+    async def _add() -> None:
+        config = get_config()
+        storage = await get_storage(config)
+        brain = await storage.get_brain(storage._current_brain_id)
+
+        if not brain:
+            typer.secho("No brain configured", fg=typer.colors.RED)
+            return
+
+        # Auto-detect memory type
+        mem_type = suggest_memory_type(content)
+        mem_priority = Priority.from_int(priority) if priority is not None else Priority.NORMAL
+
+        encoder = MemoryEncoder(storage, brain.config)
+        storage.disable_auto_save()
+
+        result = await encoder.encode(
+            content=content,
+            timestamp=datetime.now(),
+        )
+
+        # Create typed memory
+        typed_mem = TypedMemory.create(
+            fiber_id=result.fiber.id,
+            memory_type=mem_type,
+            priority=mem_priority,
+        )
+        await storage.add_typed_memory(typed_mem)
+        await storage.batch_save()
+
+        typer.secho(f"+ {content[:60]}{'...' if len(content) > 60 else ''}", fg=typer.colors.GREEN)
+        typer.secho(f"  [{mem_type.value}]", fg=typer.colors.BRIGHT_BLACK)
+
+    asyncio.run(_add())
+
+
+@app.command(name="last")
+def show_last(
+    count: Annotated[int, typer.Option("-n", help="Number of memories to show")] = 5,
+) -> None:
+    """Show last N memories - quick view of recent activity.
+
+    Examples:
+        nmem last           # Show last 5 memories
+        nmem last -n 10     # Show last 10 memories
+    """
+    from neural_memory.safety.freshness import evaluate_freshness, format_age
+
+    async def _last() -> None:
+        config = get_config()
+        storage = await get_storage(config)
+
+        fibers = await storage.get_fibers(limit=count)
+
+        if not fibers:
+            typer.secho("No memories found.", fg=typer.colors.YELLOW)
+            return
+
+        for i, fiber in enumerate(fibers, 1):
+            content = fiber.summary or ""
+            if not content and fiber.anchor_neuron_id:
+                anchor = await storage.get_neuron(fiber.anchor_neuron_id)
+                if anchor:
+                    content = anchor.content
+
+            display = content[:70] + "..." if len(content) > 70 else content
+            freshness = evaluate_freshness(fiber.created_at)
+
+            typer.echo(f"{i}. {display}")
+            typer.secho(f"   [{format_age(freshness.age_days)}]", fg=typer.colors.BRIGHT_BLACK)
+
+    asyncio.run(_last())
+
+
+@app.command(name="today")
+def show_today() -> None:
+    """Show today's memories.
+
+    Examples:
+        nmem today
+    """
+
+    async def _today() -> None:
+        config = get_config()
+        storage = await get_storage(config)
+
+        # Get recent fibers and filter for today
+        fibers = await storage.get_fibers(limit=100)
+        today = datetime.now().date()
+        today_fibers = [f for f in fibers if f.created_at.date() == today]
+
+        if not today_fibers:
+            typer.secho("No memories from today.", fg=typer.colors.YELLOW)
+            return
+
+        typer.secho(
+            f"Today ({today.strftime('%Y-%m-%d')}) - {len(today_fibers)} memories:\n",
+            fg=typer.colors.CYAN,
+        )
+
+        for fiber in today_fibers:
+            content = fiber.summary or ""
+            if not content and fiber.anchor_neuron_id:
+                anchor = await storage.get_neuron(fiber.anchor_neuron_id)
+                if anchor:
+                    content = anchor.content
+
+            display = content[:65] + "..." if len(content) > 65 else content
+            time_str = fiber.created_at.strftime("%H:%M")
+
+            typer.echo(f"  {time_str}  {display}")
+
+    asyncio.run(_today())
+
+
 @app.command()
 def version() -> None:
     """Show version information."""
