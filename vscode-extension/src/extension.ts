@@ -8,6 +8,7 @@ import { ServerLifecycle } from "./server/lifecycle";
 import { SyncClient } from "./server/websocket";
 import { getConfig } from "./utils/config";
 import { checkForUpdates } from "./utils/updateChecker";
+import { GraphPanel } from "./views/graph/GraphPanel";
 import { MemoryTreeProvider } from "./views/MemoryTreeProvider";
 import { StatusBarManager } from "./views/StatusBarManager";
 
@@ -82,8 +83,8 @@ export async function activate(
     statusBar.setStatus("disconnected");
   }
 
-  // 8. Register remaining feature commands (stubs for future phases)
-  registerFeatureCommandStubs(context);
+  // 8. Register graph explorer command
+  registerGraphCommands(context, server);
 
   // 9. Refresh everything when server reconnects
   const serverRef = server;
@@ -202,17 +203,15 @@ function registerLifecycleCommands(
 }
 
 /**
- * Stub commands for features coming in later phases.
+ * Register the Graph Explorer command (Phase 8).
  */
-function registerFeatureCommandStubs(
+function registerGraphCommands(
   context: vscode.ExtensionContext,
+  server: ServerLifecycle,
 ): void {
-  // Graph (Phase 8)
   context.subscriptions.push(
     vscode.commands.registerCommand("neuralmemory.openGraph", () => {
-      vscode.window.showInformationMessage(
-        "NeuralMemory: Graph Explorer — coming in Phase 8",
-      );
+      GraphPanel.createOrShow(server, context.extensionUri);
     }),
   );
 }
@@ -243,10 +242,11 @@ async function connectWebSocket(
       targets.codeLens.refresh();
       targets.triggerWatcher.refresh();
       targets.statusBar.refresh();
+      GraphPanel.refreshIfOpen();
       return;
     }
 
-    // Neuron/synapse/fiber changes → refresh tree + stats
+    // Neuron/synapse/fiber changes → refresh tree + stats + graph
     if (
       type.startsWith("neuron_") ||
       type.startsWith("synapse_") ||
@@ -254,6 +254,7 @@ async function connectWebSocket(
     ) {
       targets.memoryTree.refresh();
       targets.statusBar.refresh();
+      GraphPanel.refreshIfOpen();
       return;
     }
   });
