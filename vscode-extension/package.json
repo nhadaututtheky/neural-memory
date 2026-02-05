@@ -191,17 +191,24 @@
     "build": "node esbuild.js --production",
     "watch": "node esbuild.js --watch",
     "lint": "eslint src --ext ts",
+    "pretest": "tsc -p test/tsconfig.json",
     "test": "node ./out/test/runTest.js",
+    "test:unit": "node test/unit/build.js && mocha out/test/unit/**/*.test.js --timeout 10000",
+    "test:perf": "npx playwright test test/webview/graph.perf.test.ts",
     "package": "vsce package"
   },
   "devDependencies": {
     "@types/cytoscape": "^3.21.9",
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
     "@types/ws": "^8.5.0",
     "@vscode/test-electron": "^2.3.0",
     "@vscode/vsce": "^2.22.0",
     "esbuild": "^0.19.0",
+    "glob": "^13.0.1",
+    "mocha": "^11.7.5",
     "typescript": "^5.3.0"
   },
   "dependencies": {
