@@ -12,3 +12,5 @@ build.log
 **/*.map
 **/*.ts
 !dist/**
+nul
+*.vsix

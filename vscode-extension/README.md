@@ -8,8 +8,6 @@ A visual brain explorer, inline recall, and memory management extension for [Neu
 
 Browse your brain's neurons directly in the sidebar. Memories are grouped by type (Concepts, Entities, Actions, Time, State) with counts and relative timestamps. Click any neuron to instantly recall related memories.
 
-![Memory Tree](https://raw.githubusercontent.com/nhadaututtheky/neural-memory/main/docs/img/tree-view.png)
-
 ### Graph Explorer
 
 Visualize your entire brain as an interactive force-directed graph. Neurons are color-coded by type, synapses show weighted connections. Double-click any node to zoom into its neighborhood.
@@ -17,8 +15,6 @@ Visualize your entire brain as an interactive force-directed graph. Neurons are 
 - Drag to pan, scroll to zoom
 - Click nodes for details and quick recall
 - Respects VS Code dark/light themes
-
-![Graph Explorer](https://raw.githubusercontent.com/nhadaututtheky/neural-memory/main/docs/img/graph-explorer.png)
 
 ### Encode Memories from the Editor
 
