@@ -1,6 +1,6 @@
 # NeuralMemory for VS Code
 
-A visual brain explorer, inline recall, and memory management extension for [NeuralMemory](https://github.com/neuralmemory/neural-memory) — the reflex-based memory system for AI agents.
+A visual brain explorer, inline recall, and memory management extension for [NeuralMemory](https://github.com/nhadaututtheky/neural-memory) — the reflex-based memory system for AI agents.
 
 ## Features
 
@@ -8,7 +8,7 @@ A visual brain explorer, inline recall, and memory management extension for [Neu
 
 Browse your brain's neurons directly in the sidebar. Memories are grouped by type (Concepts, Entities, Actions, Time, State) with counts and relative timestamps. Click any neuron to instantly recall related memories.
 
-![Memory Tree](https://raw.githubusercontent.com/neuralmemory/neural-memory/main/docs/img/tree-view.png)
+![Memory Tree](https://raw.githubusercontent.com/nhadaututtheky/neural-memory/main/docs/img/tree-view.png)
 
 ### Graph Explorer
 
@@ -18,7 +18,7 @@ Visualize your entire brain as an interactive force-directed graph. Neurons are 
 - Click nodes for details and quick recall
 - Respects VS Code dark/light themes
 
-![Graph Explorer](https://raw.githubusercontent.com/neuralmemory/neural-memory/main/docs/img/graph-explorer.png)
+![Graph Explorer](https://raw.githubusercontent.com/nhadaututtheky/neural-memory/main/docs/img/graph-explorer.png)
 
 ### Encode Memories from the Editor
 
