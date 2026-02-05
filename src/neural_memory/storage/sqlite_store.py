@@ -11,7 +11,7 @@ from neural_memory.storage.sqlite_brain_ops import SQLiteBrainMixin
 from neural_memory.storage.sqlite_fibers import SQLiteFiberMixin
 from neural_memory.storage.sqlite_neurons import SQLiteNeuronMixin
 from neural_memory.storage.sqlite_projects import SQLiteProjectMixin
-from neural_memory.storage.sqlite_schema import SCHEMA, SCHEMA_VERSION
+from neural_memory.storage.sqlite_schema import SCHEMA, SCHEMA_VERSION, run_migrations
 from neural_memory.storage.sqlite_synapses import SQLiteSynapseMixin
 from neural_memory.storage.sqlite_typed import SQLiteTypedMemoryMixin
 
@@ -37,23 +37,44 @@ class SQLiteStorage(
         self._current_brain_id: str | None = None
 
     async def initialize(self) -> None:
-        """Initialize database connection and schema."""
+        """Initialize database connection and schema.
+
+        For new databases, creates all tables at the latest schema version.
+        For existing databases, runs pending migrations first (e.g. adding
+        missing columns like conductivity) then applies the full schema
+        so that indexes on new columns can be created safely.
+        """
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
 
         self._conn = await aiosqlite.connect(self._db_path)
         self._conn.row_factory = aiosqlite.Row
 
         await self._conn.execute("PRAGMA foreign_keys = ON")
+
+        # Ensure version table exists so we can read the current version
+        await self._conn.execute(
+            "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY)"
+        )
+        await self._conn.commit()
+
+        # Check stored version and migrate if needed BEFORE full schema
+        async with self._conn.execute("SELECT version FROM schema_version") as cursor:
+            row = await cursor.fetchone()
+
+        if row is not None and row["version"] < SCHEMA_VERSION:
+            await run_migrations(self._conn, row["version"])
+
+        # Full schema: CREATE TABLE/INDEX IF NOT EXISTS (safe after migration)
         await self._conn.executescript(SCHEMA)
 
+        # Stamp version for brand-new databases
         async with self._conn.execute("SELECT version FROM schema_version") as cursor:
             row = await cursor.fetchone()
             if row is None:
                 await self._conn.execute(
                     "INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,)
                 )
-
-        await self._conn.commit()
+                await self._conn.commit()
 
     async def close(self) -> None:
         """Close database connection."""

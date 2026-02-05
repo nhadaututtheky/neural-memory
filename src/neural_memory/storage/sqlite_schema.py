@@ -1,7 +1,57 @@
 """SQLite schema definition for neural memory storage."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import aiosqlite
+
 # Schema version for migrations
 SCHEMA_VERSION = 2
+
+# ── Migrations ──────────────────────────────────────────────────────
+# Each entry maps (from_version -> to_version) with a list of SQL statements.
+# Migrations run sequentially in initialize() when db version < SCHEMA_VERSION.
+
+MIGRATIONS: dict[tuple[int, int], list[str]] = {
+    (1, 2): [
+        "ALTER TABLE fibers ADD COLUMN pathway TEXT DEFAULT '[]'",
+        "ALTER TABLE fibers ADD COLUMN conductivity REAL DEFAULT 1.0",
+        "ALTER TABLE fibers ADD COLUMN last_conducted TEXT",
+        "CREATE INDEX IF NOT EXISTS idx_fibers_conductivity ON fibers(brain_id, conductivity)",
+    ],
+}
+
+
+async def run_migrations(conn: aiosqlite.Connection, current_version: int) -> int:
+    """Apply all pending migrations from current_version to SCHEMA_VERSION.
+
+    Returns the final schema version after all migrations.
+    """
+    version = current_version
+
+    while version < SCHEMA_VERSION:
+        next_version = version + 1
+        key = (version, next_version)
+        statements = MIGRATIONS.get(key, [])
+
+        for sql in statements:
+            try:
+                await conn.execute(sql)
+            except Exception:
+                # Column/index may already exist (partial migration or manual fix).
+                # ALTER TABLE ADD COLUMN raises OperationalError if column exists.
+                pass
+
+        version = next_version
+
+    # Update stored version
+    await conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
+    await conn.commit()
+
+    return version
+
 
 SCHEMA = """
 -- Schema version tracking

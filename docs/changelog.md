@@ -5,6 +5,13 @@ All notable changes to NeuralMemory are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-02-05
+
+### Fixed
+
+- **Schema migration for old databases** — Existing `default.db` from v1 missing `conductivity`, `pathway`, and `last_conducted` columns in `fibers` table, causing `nmem remember` to crash with `OperationalError`. Now auto-migrates on startup via `ALTER TABLE ADD COLUMN`.
+- Added migration framework (`MIGRATIONS` dict + `run_migrations()`) for future schema upgrades
+
 ## [0.7.1] - 2026-02-05
 
 ### Added
