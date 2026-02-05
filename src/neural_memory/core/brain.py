@@ -28,6 +28,9 @@ class BrainConfig:
     max_spread_hops: int = 4
     max_context_tokens: int = 1500
     default_synapse_weight: float = 0.5
+    hebbian_delta: float = 0.03
+    hebbian_threshold: float = 0.5
+    hebbian_initial_weight: float = 0.2
 
     def with_updates(self, **kwargs: Any) -> BrainConfig:
         """Create a new config with updated values."""
@@ -39,6 +42,11 @@ class BrainConfig:
             max_context_tokens=kwargs.get("max_context_tokens", self.max_context_tokens),
             default_synapse_weight=kwargs.get(
                 "default_synapse_weight", self.default_synapse_weight
+            ),
+            hebbian_delta=kwargs.get("hebbian_delta", self.hebbian_delta),
+            hebbian_threshold=kwargs.get("hebbian_threshold", self.hebbian_threshold),
+            hebbian_initial_weight=kwargs.get(
+                "hebbian_initial_weight", self.hebbian_initial_weight
             ),
         )
 

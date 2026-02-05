@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from neural_memory.core.fiber import Fiber
 from neural_memory.core.neuron import NeuronType
+from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.engine.activation import ActivationResult, SpreadingActivation
 from neural_memory.engine.reflex_activation import CoActivation, ReflexActivation
 from neural_memory.engine.retrieval_context import format_context, reconstitute_answer
@@ -279,7 +280,86 @@ class ReflexPipeline:
             conducted_fiber = fiber.conduct(conducted_at=reference_time)
             await self._storage.update_fiber(conducted_fiber)
 
+        # Hebbian strengthening: co-activated neurons wire together
+        if co_activations:
+            await self._strengthen_co_activated(co_activations)
+
         return activations, intersections, co_activations
+
+    async def _strengthen_co_activated(
+        self,
+        co_activations: list[CoActivation],
+    ) -> None:
+        """
+        Strengthen or create synapses between co-activated neurons.
+
+        Implements Hebbian plasticity: neurons that fire together
+        get their connections reinforced. Only processes co-activations
+        with binding_strength >= config.hebbian_threshold and with
+        2+ neuron_ids (a pair to connect).
+
+        Args:
+            co_activations: List of co-activation records from retrieval
+        """
+        threshold = self._config.hebbian_threshold
+        delta = self._config.hebbian_delta
+        initial_weight = self._config.hebbian_initial_weight
+
+        for co in co_activations:
+            if co.binding_strength < threshold:
+                continue
+
+            neuron_ids = sorted(co.neuron_ids)
+            if len(neuron_ids) < 2:
+                continue
+
+            # Process all pairs in the co-activation set
+            for i in range(len(neuron_ids)):
+                for j in range(i + 1, len(neuron_ids)):
+                    a, b = neuron_ids[i], neuron_ids[j]
+                    await self._reinforce_or_create_synapse(a, b, delta, initial_weight)
+
+    async def _reinforce_or_create_synapse(
+        self,
+        neuron_a: str,
+        neuron_b: str,
+        delta: float,
+        initial_weight: float,
+    ) -> None:
+        """
+        Reinforce an existing synapse between two neurons, or create one.
+
+        Checks both directions (A->B and B->A) since RELATED_TO is
+        bidirectional and may be stored in either direction.
+
+        Args:
+            neuron_a: First neuron ID
+            neuron_b: Second neuron ID
+            delta: Weight increase for reinforcement
+            initial_weight: Weight for newly created synapses
+        """
+        # Check A->B
+        forward = await self._storage.get_synapses(source_id=neuron_a, target_id=neuron_b)
+        if forward:
+            reinforced = forward[0].reinforce(delta)
+            await self._storage.update_synapse(reinforced)
+            return
+
+        # Check B->A
+        reverse = await self._storage.get_synapses(source_id=neuron_b, target_id=neuron_a)
+        if reverse:
+            reinforced = reverse[0].reinforce(delta)
+            await self._storage.update_synapse(reinforced)
+            return
+
+        # No existing synapse — create a new RELATED_TO connection
+        synapse = Synapse.create(
+            source_id=neuron_a,
+            target_id=neuron_b,
+            type=SynapseType.RELATED_TO,
+            weight=initial_weight,
+        )
+        await self._storage.add_synapse(synapse)
 
     async def _find_anchors_time_first(self, stimulus: Stimulus) -> list[list[str]]:
         """

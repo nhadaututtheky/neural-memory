@@ -162,6 +162,49 @@ class DecayManager:
         report.duration_ms = (time.perf_counter() - start_time) * 1000
         return report
 
+    async def consolidate(
+        self,
+        storage: NeuralStorage,
+        frequency_threshold: int = 5,
+        boost_delta: float = 0.03,
+    ) -> int:
+        """Consolidate frequently-accessed memory paths.
+
+        Boosts synapse weights for fibers that have been accessed
+        at least `frequency_threshold` times, reinforcing well-trodden
+        memory pathways into long-term structures.
+
+        Args:
+            storage: Storage instance containing fibers and synapses
+            frequency_threshold: Minimum fiber frequency to consolidate
+            boost_delta: Amount to boost each synapse weight
+
+        Returns:
+            Number of synapses consolidated (weight-boosted)
+        """
+        fibers = await storage.get_fibers(
+            limit=100,
+            order_by="frequency",
+            descending=True,
+        )
+
+        consolidated = 0
+
+        for fiber in fibers:
+            if fiber.frequency < frequency_threshold:
+                break
+
+            for synapse_id in fiber.synapse_ids:
+                synapse = await storage.get_synapse(synapse_id)
+                if synapse is None:
+                    continue
+
+                reinforced = synapse.reinforce(boost_delta)
+                await storage.update_synapse(reinforced)
+                consolidated += 1
+
+        return consolidated
+
 
 class ReinforcementManager:
     """Strengthen frequently accessed memory paths.
