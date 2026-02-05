@@ -10,7 +10,6 @@ import typer
 from neural_memory.cli._helpers import get_config, get_storage, output_result
 from neural_memory.core.project import Project
 
-
 project_app = typer.Typer(help="Project scoping for memory organization")
 
 

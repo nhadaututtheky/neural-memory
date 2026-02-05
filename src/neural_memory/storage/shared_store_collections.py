@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from neural_memory.core.brain import Brain, BrainConfig, BrainSnapshot
+from neural_memory.core.brain import Brain, BrainSnapshot
 from neural_memory.core.fiber import Fiber
 from neural_memory.storage.shared_store_mappers import dict_to_brain, dict_to_fiber
 

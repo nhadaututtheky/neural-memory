@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from typing import TYPE_CHECKING
 
-import aiosqlite
+if TYPE_CHECKING:
+    import aiosqlite
 
 from neural_memory.core.brain import Brain, BrainConfig
 from neural_memory.core.fiber import Fiber

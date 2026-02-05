@@ -10,7 +10,7 @@ import typer
 
 from neural_memory.cli._helpers import get_config, get_storage, output_result
 from neural_memory.core.memory_types import MemoryType
-from neural_memory.safety.freshness import analyze_freshness, evaluate_freshness, format_age
+from neural_memory.safety.freshness import analyze_freshness, format_age
 from neural_memory.safety.sensitive import check_sensitive_content, format_sensitive_warning
 
 

@@ -35,7 +35,7 @@ from neural_memory.core.memory_types import MemoryType, Priority, TypedMemory, s
 from neural_memory.engine.encoder import MemoryEncoder
 from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline
 from neural_memory.mcp.auto_capture import analyze_text_for_memories
-from neural_memory.mcp.prompt import get_prompt_for_mcp, get_system_prompt
+from neural_memory.mcp.prompt import get_system_prompt
 from neural_memory.mcp.tool_schemas import get_tool_schemas
 from neural_memory.unified_config import get_config, get_shared_storage
 

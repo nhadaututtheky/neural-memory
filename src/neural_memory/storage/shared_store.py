@@ -7,10 +7,8 @@ from typing import Any, Literal
 
 import aiohttp
 
-from neural_memory.core.brain import Brain, BrainConfig, BrainSnapshot
-from neural_memory.core.fiber import Fiber
 from neural_memory.core.neuron import Neuron, NeuronState, NeuronType
-from neural_memory.core.synapse import Direction, Synapse, SynapseType
+from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.storage.base import NeuralStorage
 from neural_memory.storage.shared_store_collections import SharedFiberBrainMixin, SharedStorageError
 from neural_memory.storage.shared_store_mappers import (

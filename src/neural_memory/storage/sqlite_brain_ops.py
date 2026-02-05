@@ -8,7 +8,13 @@ from typing import TYPE_CHECKING
 
 from neural_memory.core.brain import Brain, BrainConfig, BrainSnapshot
 from neural_memory.core.fiber import Fiber
-from neural_memory.core.memory_types import Confidence, MemoryType, Priority, Provenance, TypedMemory
+from neural_memory.core.memory_types import (
+    Confidence,
+    MemoryType,
+    Priority,
+    Provenance,
+    TypedMemory,
+)
 from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.project import Project
 from neural_memory.core.synapse import Direction, Synapse, SynapseType

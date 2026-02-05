@@ -8,7 +8,7 @@ from typing import Annotated
 
 import typer
 
-from neural_memory.cli._helpers import get_config, output_result
+from neural_memory.cli._helpers import get_config
 from neural_memory.cli.storage import PersistentStorage
 
 shared_app = typer.Typer(help="Real-time brain sharing configuration")

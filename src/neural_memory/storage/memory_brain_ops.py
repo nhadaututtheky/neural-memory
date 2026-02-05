@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
 from dataclasses import asdict
 from datetime import datetime
-from typing import TYPE_CHECKING
 
 from neural_memory.core.brain import Brain, BrainConfig, BrainSnapshot
 from neural_memory.core.fiber import Fiber
-from neural_memory.core.memory_types import Confidence, MemoryType, Priority, Provenance, TypedMemory
+from neural_memory.core.memory_types import (
+    Confidence,
+    MemoryType,
+    Priority,
+    Provenance,
+    TypedMemory,
+)
 from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.project import Project
 from neural_memory.core.synapse import Direction, Synapse, SynapseType
-
-if TYPE_CHECKING:
-    pass
 
 
 class InMemoryBrainMixin:
@@ -34,7 +35,6 @@ class InMemoryBrainMixin:
     async def add_neuron(self, neuron: Neuron) -> str: ...
     async def add_synapse(self, synapse: Synapse) -> str: ...
     async def add_fiber(self, fiber: Fiber) -> str: ...
-    async def save_brain(self, brain: Brain) -> None: ...
 
     async def save_brain(self, brain: Brain) -> None:
         self._brains[brain.id] = brain

@@ -15,7 +15,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-
 PYPI_URL = "https://pypi.org/pypi/neural-memory/json"
 CHECK_INTERVAL_SECONDS = 24 * 60 * 60  # 24 hours
 REQUEST_TIMEOUT_SECONDS = 3

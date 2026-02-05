@@ -267,15 +267,7 @@ class ReflexPipeline:
             existing = activations.get(neuron_id)
             dampened_level = classic_result.activation_level * discovery_dampen
 
-            if existing is None:
-                activations[neuron_id] = ActivationResult(
-                    neuron_id=neuron_id,
-                    activation_level=dampened_level,
-                    hop_distance=classic_result.hop_distance,
-                    path=classic_result.path,
-                    source_anchor=classic_result.source_anchor,
-                )
-            elif dampened_level > existing.activation_level:
+            if existing is None or dampened_level > existing.activation_level:
                 activations[neuron_id] = ActivationResult(
                     neuron_id=neuron_id,
                     activation_level=dampened_level,

@@ -9,7 +9,7 @@ from typing import Annotated
 
 import typer
 
-from neural_memory.cli._helpers import get_config, get_storage, output_result
+from neural_memory.cli._helpers import get_config, get_storage
 from neural_memory.core.memory_types import Priority, TypedMemory, suggest_memory_type
 
 
