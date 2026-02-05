@@ -7,6 +7,7 @@ import { CommentTriggerWatcher } from "./editors/CommentTriggerWatcher";
 import { ServerLifecycle } from "./server/lifecycle";
 import { SyncClient } from "./server/websocket";
 import { getConfig } from "./utils/config";
+import { checkForUpdates } from "./utils/updateChecker";
 import { MemoryTreeProvider } from "./views/MemoryTreeProvider";
 import { StatusBarManager } from "./views/StatusBarManager";
 
@@ -108,6 +109,9 @@ export async function activate(
   });
 
   outputChannel.appendLine("NeuralMemory extension activated.");
+
+  // 10. Non-blocking update check (fire and forget)
+  checkForUpdates(context);
 }
 
 export function deactivate(): void {
