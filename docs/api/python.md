@@ -272,7 +272,7 @@ print(f"Co-activations: {len(result.co_activations)}")
 Trail-based activation engine (v0.6.0+).
 
 ```python
-from neural_memory.engine.activation import ReflexActivation
+from neural_memory.engine.reflex_activation import ReflexActivation
 
 reflex = ReflexActivation(storage, brain.config)
 
@@ -299,7 +299,7 @@ activations, co_activations = await reflex.activate_with_co_binding(
 Represents neurons that co-fired from multiple anchor sets (Hebbian binding).
 
 ```python
-from neural_memory.engine.activation import CoActivation
+from neural_memory.engine.reflex_activation import CoActivation
 
 # Created by ReflexActivation.find_co_activated()
 co = CoActivation(

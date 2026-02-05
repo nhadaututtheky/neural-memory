@@ -107,6 +107,54 @@ echo "Recent project context: $CONTEXT"
 
 ---
 
+## VS Code Extension
+
+NeuralMemory has a dedicated VS Code extension with visual brain exploration and inline memory tools.
+
+### Installation
+
+```bash
+cd vscode-extension
+npm install && npm run build
+```
+
+Then install the generated `.vsix` file via **Extensions > Install from VSIX** or use Extension Developer Host (`F5`).
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| **Memory Tree** | Activity bar sidebar with neurons grouped by type |
+| **Graph Explorer** | Cytoscape.js force-directed graph with sub-graph navigation |
+| **Encode** | Store selected text or typed input as memories |
+| **Recall** | Query memories with depth selection |
+| **CodeLens** | Memory counts on functions/classes, comment triggers |
+| **Status Bar** | Live brain stats (neurons, synapses, fibers) |
+| **WebSocket Sync** | Real-time updates across all views |
+
+### Configuration
+
+In VS Code settings (`neuralmemory.*`):
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `serverUrl` | `http://localhost:8000` | NeuralMemory server URL |
+| `pythonPath` | `python` | Python executable path |
+| `graphNodeLimit` | `200` | Max nodes shown in graph |
+| `codeLensTriggers` | `remember,note,decision,todo` | Comment triggers |
+
+### Usage
+
+1. Start the NeuralMemory server: `nmem serve`
+2. Open VS Code — the extension connects automatically
+3. Use command palette (`Ctrl+Shift+P`) for:
+   - `NeuralMemory: Encode Selection as Memory`
+   - `NeuralMemory: Recall Memory`
+   - `NeuralMemory: Open Graph Explorer`
+   - `NeuralMemory: Switch Brain`
+
+---
+
 ## Cursor Integration
 
 ### Cursor Rules

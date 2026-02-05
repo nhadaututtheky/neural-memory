@@ -146,6 +146,21 @@ pip install neural-memory[all]      # All features
     - `nmem_stats` - Brain statistics
     - `nmem_auto` - Auto-capture memories
 
+## VS Code Extension
+
+Install the NeuralMemory extension for a visual brain explorer directly in your editor:
+
+- **Memory Tree View** — Browse neurons grouped by type in the activity bar
+- **Graph Explorer** — Interactive Cytoscape.js force-directed graph
+- **CodeLens** — Memory counts on functions/classes, comment trigger detection
+- **Encode & Recall** — Store and query memories from the command palette
+- **Real-time Sync** — WebSocket updates for tree, graph, and status bar
+
+```bash
+cd vscode-extension && npm run build
+# Install from .vsix or use Extension Developer Host
+```
+
 ## Web UI Visualization
 
 Start the server and access the interactive brain visualization:

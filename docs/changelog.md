@@ -5,6 +5,37 @@ All notable changes to NeuralMemory are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-02-05
+
+### Added
+
+- **VS Code Extension** (`vscode-extension/`) — Visual brain explorer and memory management
+  - Memory tree view in activity bar sidebar with neurons grouped by type
+  - Interactive graph explorer with Cytoscape.js force-directed layout
+  - Encode commands: selected text or typed input as memories
+  - Recall workflow with depth selection (Instant, Context, Habit, Deep)
+  - CodeLens integration with memory counts on functions/classes
+  - Comment trigger detection (`remember:`, `note:`, `decision:`, `todo:`)
+  - Brain management via status bar and command palette
+  - Real-time WebSocket sync for tree, graph, and status bar
+  - Configurable settings (server URL, Python path, graph node limit)
+  - Status bar with live brain stats (neurons, synapses, fibers)
+  - Extension icons, README, CHANGELOG, and VSIX packaging
+
+### Changed
+
+- **Enforced 500-line file limit** — Split 8 oversized files into modular sub-modules
+  - `sqlite_store.py` (1659 lines) → 9 files: schema, row mappers, neurons, synapses, fibers, typed memories, projects, brain ops, core store
+  - `memory_store.py` (906 lines) → 3 files: brain ops, collections, core store
+  - `activation.py` (672 lines) → 2 files: spreading activation + reflex activation
+  - `shared_store.py` (650 lines) → 3 files: mappers, fiber/brain mixin, core store
+  - `retrieval.py` (639 lines) → 3 files: types, context formatting, pipeline
+  - `mcp/server.py` (694 lines) → 3 files: tool schemas, auto-capture, server
+  - `entities.py` (547 lines) → 2 files: entities + keywords
+  - `GraphPanel.ts` (771 lines) → 2 files: template + panel controller
+- All source files now under 500 lines per CLAUDE.md coding standards
+- Backward-compatible re-exports maintain existing import paths
+
 ## [0.6.0] - 2026-02-05
 
 ### Added
@@ -175,6 +206,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.7.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v0.7.0
+[0.6.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v0.6.0
 [0.5.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v0.5.0
 [0.4.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v0.4.0
 [0.3.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v0.3.0

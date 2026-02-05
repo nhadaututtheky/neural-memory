@@ -245,38 +245,73 @@ api_key = ""
 
 ```
 src/neural_memory/
-├── __init__.py           # Public API exports
-├── py.typed              # PEP 561 marker
+├── __init__.py                # Public API exports
+├── py.typed                   # PEP 561 marker
 ├── core/
-│   ├── brain.py          # Brain, BrainConfig
-│   ├── neuron.py         # Neuron, NeuronType, NeuronState
-│   ├── synapse.py        # Synapse, SynapseType, Direction
-│   ├── fiber.py          # Fiber
-│   └── typed_memory.py   # TypedMemory, MemoryType
+│   ├── brain.py               # Brain, BrainConfig
+│   ├── brain_mode.py          # BrainMode, SharedConfig
+│   ├── neuron.py              # Neuron, NeuronType, NeuronState
+│   ├── synapse.py             # Synapse, SynapseType, Direction
+│   ├── fiber.py               # Fiber (with pathway, conductivity)
+│   ├── memory_types.py        # TypedMemory, MemoryType, Priority
+│   └── project.py             # Project
 ├── engine/
-│   ├── encoder.py        # MemoryEncoder
-│   ├── retrieval.py      # ReflexPipeline, DepthLevel
-│   ├── activation.py     # SpreadingActivation, ReflexActivation, CoActivation
-│   └── lifecycle.py      # DecayManager, ReinforcementManager
+│   ├── encoder.py             # MemoryEncoder
+│   ├── retrieval.py           # ReflexPipeline
+│   ├── retrieval_types.py     # DepthLevel, Subgraph, RetrievalResult
+│   ├── retrieval_context.py   # reconstitute_answer, format_context
+│   ├── activation.py          # ActivationResult, SpreadingActivation
+│   ├── reflex_activation.py   # ReflexActivation, CoActivation
+│   └── lifecycle.py           # DecayManager, ReinforcementManager
 ├── extraction/
-│   ├── parser.py         # QueryParser, Stimulus
-│   ├── router.py         # QueryRouter
-│   └── temporal.py       # TemporalExtractor
+│   ├── parser.py              # QueryParser, Stimulus
+│   ├── router.py              # QueryRouter
+│   ├── entities.py            # EntityExtractor
+│   ├── keywords.py            # extract_keywords, STOP_WORDS
+│   └── temporal.py            # TemporalExtractor
 ├── storage/
-│   ├── base.py           # NeuralStorage ABC
-│   ├── memory_store.py   # InMemoryStorage
-│   ├── sqlite_store.py   # SQLiteStorage
-│   └── shared_store.py   # SharedStorage
+│   ├── base.py                # NeuralStorage ABC
+│   ├── sqlite_store.py        # SQLiteStorage (core)
+│   ├── sqlite_schema.py       # Schema DDL and migrations
+│   ├── sqlite_row_mappers.py  # Row-to-object converters
+│   ├── sqlite_neurons.py      # Neuron CRUD mixin
+│   ├── sqlite_synapses.py     # Synapse CRUD mixin
+│   ├── sqlite_fibers.py       # Fiber CRUD mixin
+│   ├── sqlite_typed.py        # TypedMemory/Project mixin
+│   ├── sqlite_projects.py     # Project CRUD mixin
+│   ├── sqlite_brain_ops.py    # Brain import/export mixin
+│   ├── memory_store.py        # InMemoryStorage (core)
+│   ├── memory_brain_ops.py    # InMemory brain operations
+│   ├── memory_collections.py  # InMemory neuron/synapse/fiber ops
+│   ├── shared_store.py        # SharedStorage HTTP client (core)
+│   ├── shared_store_mappers.py    # dict_to_* converters
+│   └── shared_store_collections.py # Fiber/brain HTTP mixin
 ├── server/
-│   ├── app.py            # FastAPI application
-│   ├── routes/           # API route handlers
-│   └── models.py         # Pydantic models
+│   ├── app.py                 # FastAPI application
+│   ├── routes/                # API route handlers
+│   └── models.py              # Pydantic models
 ├── mcp/
-│   ├── server.py         # MCP server implementation
-│   └── prompt.py         # System prompts
+│   ├── server.py              # MCP server implementation
+│   ├── tool_schemas.py        # MCP tool definitions
+│   ├── auto_capture.py        # Pattern-based memory detection
+│   └── prompt.py              # System prompts
 ├── cli/
-│   └── main.py           # Typer CLI
-└── sharing/
-    ├── export.py         # BrainExporter
-    └── import_.py        # BrainImporter
+│   ├── main.py                # Entry point, app registration
+│   └── commands/              # One file per command group
+├── safety/                    # Freshness, sensitive content
+├── sync/                      # Shared brain sync client
+└── utils/                     # Shared utilities
+
+vscode-extension/
+├── src/
+│   ├── extension.ts           # Entry point
+│   ├── commands/              # Command handlers
+│   ├── editors/               # CodeLens, decorations
+│   ├── server/                # HTTP client, WebSocket, lifecycle
+│   └── views/
+│       ├── tree/              # MemoryTreeProvider
+│       └── graph/
+│           ├── GraphPanel.ts      # Panel controller
+│           └── graphTemplate.ts   # Cytoscape.js HTML template
+└── test/                      # Unit, integration, perf tests
 ```
