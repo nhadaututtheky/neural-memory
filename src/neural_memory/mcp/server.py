@@ -107,6 +107,8 @@ class MCPServer:
             return await self._auto(arguments)
         elif name == "nmem_suggest":
             return await self._suggest(arguments)
+        elif name == "nmem_session":
+            return await self._session(arguments)
         else:
             return {"error": f"Unknown tool: {name}"}
 
@@ -209,6 +211,7 @@ class MCPServer:
             "neurons_activated": result.neurons_activated,
             "fibers_matched": result.fibers_matched,
             "depth_used": result.depth_used.value,
+            "tokens_used": result.tokens_used,
         }
 
     async def _passive_capture(self, text: str) -> None:
@@ -272,9 +275,11 @@ class MCPServer:
             if content:
                 context_parts.append(f"- {content}")
 
+        context_text = "\n".join(context_parts) if context_parts else "No context available."
         return {
-            "context": "\n".join(context_parts) if context_parts else "No context available.",
+            "context": context_text,
             "count": len(context_parts),
+            "tokens_used": len(context_text.split()),
         }
 
     async def _todo(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -425,18 +430,157 @@ class MCPServer:
             type_filter=type_filter,
             limit=limit,
         )
+        formatted = [
+            {
+                "content": s["content"],
+                "type": s["type"],
+                "neuron_id": s["neuron_id"],
+                "score": s["score"],
+            }
+            for s in suggestions
+        ]
         return {
-            "suggestions": [
-                {
-                    "content": s["content"],
-                    "type": s["type"],
-                    "neuron_id": s["neuron_id"],
-                    "score": s["score"],
-                }
-                for s in suggestions
-            ],
-            "count": len(suggestions),
+            "suggestions": formatted,
+            "count": len(formatted),
+            "tokens_used": sum(len(s["content"].split()) for s in formatted),
         }
+
+    async def _session(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Track current working session state."""
+        action = args.get("action", "get")
+        storage = await self.get_storage()
+
+        async def _find_current_session() -> TypedMemory | None:
+            sessions = await storage.find_typed_memories(
+                memory_type=MemoryType.CONTEXT,
+                tags={"session_state"},
+                limit=1,
+            )
+            return sessions[0] if sessions else None
+
+        if action == "get":
+            session = await _find_current_session()
+            if not session:
+                return {"active": False, "message": "No active session"}
+
+            return {
+                "active": True,
+                "feature": session.metadata.get("feature", ""),
+                "task": session.metadata.get("task", ""),
+                "progress": session.metadata.get("progress", 0.0),
+                "started_at": session.metadata.get("started_at", ""),
+                "notes": session.metadata.get("notes", ""),
+            }
+
+        elif action == "set":
+            # Build metadata from args
+            now = datetime.now()
+            existing = await _find_current_session()
+
+            metadata: dict[str, Any] = {
+                "feature": args.get(
+                    "feature", existing.metadata.get("feature", "") if existing else ""
+                ),
+                "task": args.get("task", existing.metadata.get("task", "") if existing else ""),
+                "progress": args.get(
+                    "progress", existing.metadata.get("progress", 0.0) if existing else 0.0
+                ),
+                "notes": args.get("notes", existing.metadata.get("notes", "") if existing else ""),
+                "started_at": existing.metadata.get("started_at", now.isoformat())
+                if existing
+                else now.isoformat(),
+                "updated_at": now.isoformat(),
+            }
+
+            # Build content summary
+            content = f"Session: {metadata['feature']}"
+            if metadata["task"]:
+                content += f" — {metadata['task']}"
+            if metadata["progress"]:
+                content += f" ({int(metadata['progress'] * 100)}%)"
+
+            # Encode as a new CONTEXT memory (immutable pattern)
+            brain = await storage.get_brain(storage._current_brain_id)
+            if not brain:
+                return {"error": "No brain configured"}
+
+            encoder = MemoryEncoder(storage, brain.config)
+            storage.disable_auto_save()
+
+            result = await encoder.encode(
+                content=content,
+                timestamp=now,
+                tags={"session_state"},
+            )
+
+            typed_mem = TypedMemory.create(
+                fiber_id=result.fiber.id,
+                memory_type=MemoryType.CONTEXT,
+                priority=Priority.from_int(7),
+                source="mcp_session",
+                expires_in_days=1,
+                tags={"session_state"},
+                metadata=metadata,
+            )
+            await storage.add_typed_memory(typed_mem)
+            await storage.batch_save()
+
+            return {
+                "active": True,
+                "feature": metadata["feature"],
+                "task": metadata["task"],
+                "progress": metadata["progress"],
+                "started_at": metadata["started_at"],
+                "notes": metadata["notes"],
+                "message": "Session state updated",
+            }
+
+        elif action == "end":
+            existing = await _find_current_session()
+            if not existing:
+                return {"active": False, "message": "No active session to end"}
+
+            feature = existing.metadata.get("feature", "unknown")
+            task = existing.metadata.get("task", "")
+            progress = existing.metadata.get("progress", 0.0)
+
+            # Create a summary memory
+            summary = f"Session ended: worked on {feature}"
+            if task:
+                summary += f", task: {task}"
+            summary += f", progress: {int(progress * 100)}%"
+
+            brain = await storage.get_brain(storage._current_brain_id)
+            if not brain:
+                return {"error": "No brain configured"}
+
+            encoder = MemoryEncoder(storage, brain.config)
+            storage.disable_auto_save()
+
+            result = await encoder.encode(
+                content=summary,
+                timestamp=datetime.now(),
+                tags={"session_summary"},
+            )
+
+            typed_mem = TypedMemory.create(
+                fiber_id=result.fiber.id,
+                memory_type=MemoryType.CONTEXT,
+                priority=Priority.from_int(5),
+                source="mcp_session",
+                expires_in_days=7,
+                tags={"session_summary"},
+            )
+            await storage.add_typed_memory(typed_mem)
+            await storage.batch_save()
+
+            return {
+                "active": False,
+                "summary": summary,
+                "message": "Session ended and summary saved",
+            }
+
+        return {"error": f"Unknown session action: {action}"}
 
     async def _save_detected_memories(self, detected: list[dict[str, Any]]) -> list[str]:
         """Save detected memories that meet confidence threshold."""

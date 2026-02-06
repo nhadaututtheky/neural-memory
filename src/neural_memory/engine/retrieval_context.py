@@ -66,8 +66,12 @@ async def format_context(
     activations: dict[str, ActivationResult],
     fibers: list[Fiber],
     max_tokens: int,
-) -> str:
-    """Format activated memories into context for agent injection."""
+) -> tuple[str, int]:
+    """Format activated memories into context for agent injection.
+
+    Returns:
+        Tuple of (formatted_context, token_estimate).
+    """
     lines: list[str] = []
     token_estimate = 0
 
@@ -118,4 +122,4 @@ async def format_context(
 
             lines.append(line)
 
-    return "\n".join(lines)
+    return "\n".join(lines), token_estimate

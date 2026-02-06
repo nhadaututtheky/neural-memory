@@ -62,6 +62,15 @@ Auto-capture detects:
 - After learning something new about the project
 - At the end of a productive session
 
+## Session State (nmem_session)
+
+Track your current working session:
+- **Session start**: `nmem_session(action="get")` to resume where you left off
+- **During work**: `nmem_session(action="set", feature="auth", task="login form", progress=0.5)`
+- **Session end**: `nmem_session(action="end")` to save summary
+
+This helps you resume exactly where you left off in the next session.
+
 ## Best Practices
 
 1. **Be proactive**: Don't wait for user to ask - remember important info automatically
@@ -111,6 +120,8 @@ COMPACT_PROMPT = """You have NeuralMemory for persistent memory across sessions.
 **Recall** (nmem_recall): Query past context before making decisions.
 **Context** (nmem_context): Load recent memories at session start.
 **Auto-capture** (nmem_auto): Call `nmem_auto(action="process", text="...")` after important conversations to auto-save decisions, errors, and todos.
+
+**Session** (nmem_session): Track current task/feature/progress. Call `get` at start, `set` during work, `end` when done.
 
 Be proactive: remember important info without being asked. Use auto-capture after solving bugs or making decisions."""
 

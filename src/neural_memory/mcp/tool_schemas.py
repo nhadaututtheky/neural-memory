@@ -173,4 +173,37 @@ def get_tool_schemas() -> list[dict[str, Any]]:
                 "required": ["prefix"],
             },
         },
+        {
+            "name": "nmem_session",
+            "description": "Track current working session state (task, feature, progress). Use at session start to resume context, and during work to track progress.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["get", "set", "end"],
+                        "description": "get=load current session, set=update session state, end=close session",
+                    },
+                    "feature": {
+                        "type": "string",
+                        "description": "Current feature being worked on",
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "Current specific task",
+                    },
+                    "progress": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1,
+                        "description": "Progress 0.0 to 1.0",
+                    },
+                    "notes": {
+                        "type": "string",
+                        "description": "Additional context notes",
+                    },
+                },
+                "required": ["action"],
+            },
+        },
     ]

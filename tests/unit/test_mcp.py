@@ -37,7 +37,7 @@ class TestMCPServer:
         """Test that get_tools returns all expected tools."""
         tools = server.get_tools()
 
-        assert len(tools) == 7
+        assert len(tools) == 8
         tool_names = {tool["name"] for tool in tools}
         assert tool_names == {
             "nmem_remember",
@@ -47,6 +47,7 @@ class TestMCPServer:
             "nmem_stats",
             "nmem_auto",
             "nmem_suggest",
+            "nmem_session",
         }
 
     def test_tool_schemas(self, server: MCPServer) -> None:
@@ -122,6 +123,19 @@ class TestMCPServer:
         assert "limit" in schema["properties"]
         assert "type_filter" in schema["properties"]
         assert schema["required"] == ["prefix"]
+
+    def test_session_tool_schema(self, server: MCPServer) -> None:
+        """Test nmem_session tool schema."""
+        tools = server.get_tools()
+        session_tool = next(t for t in tools if t["name"] == "nmem_session")
+
+        schema = session_tool["inputSchema"]
+        assert "action" in schema["properties"]
+        assert "feature" in schema["properties"]
+        assert "task" in schema["properties"]
+        assert "progress" in schema["properties"]
+        assert "notes" in schema["properties"]
+        assert schema["required"] == ["action"]
 
 
 class TestMCPToolCalls:
@@ -208,6 +222,7 @@ class TestMCPToolCalls:
                 neurons_activated=5,
                 fibers_matched=2,
                 depth_used=MagicMock(value=1),
+                tokens_used=12,
             )
         )
 
@@ -220,6 +235,8 @@ class TestMCPToolCalls:
         assert result["answer"] == "Test answer"
         assert result["confidence"] == 0.85
         assert result["neurons_activated"] == 5
+        assert isinstance(result["tokens_used"], int)
+        assert result["tokens_used"] >= 0
 
     @pytest.mark.asyncio
     async def test_recall_low_confidence(self, server: MCPServer) -> None:
@@ -269,6 +286,8 @@ class TestMCPToolCalls:
         assert result["count"] == 2
         assert "Memory 1" in result["context"]
         assert "Memory 2" in result["context"]
+        assert isinstance(result["tokens_used"], int)
+        assert result["tokens_used"] >= 0
 
     @pytest.mark.asyncio
     async def test_context_empty(self, server: MCPServer) -> None:
@@ -455,6 +474,8 @@ class TestMCPToolCalls:
         assert result["suggestions"][0]["content"] == "API design patterns"
         assert result["suggestions"][0]["neuron_id"] == "n-1"
         assert result["suggestions"][0]["score"] == 1.5
+        assert isinstance(result["tokens_used"], int)
+        assert result["tokens_used"] >= 0
 
     @pytest.mark.asyncio
     async def test_suggest_empty_prefix(self, server: MCPServer) -> None:
@@ -491,6 +512,102 @@ class TestMCPToolCalls:
 
         call_kwargs = mock_storage.suggest_neurons.call_args
         assert call_kwargs.kwargs["limit"] == 2
+
+    @pytest.mark.asyncio
+    async def test_session_get_empty(self, server: MCPServer) -> None:
+        """Test nmem_session get with no active session."""
+        mock_storage = AsyncMock()
+        mock_storage.find_typed_memories = AsyncMock(return_value=[])
+
+        with patch.object(server, "get_storage", return_value=mock_storage):
+            result = await server.call_tool("nmem_session", {"action": "get"})
+
+        assert result["active"] is False
+        assert "No active session" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_session_set_and_get(self, server: MCPServer) -> None:
+        """Test nmem_session set then get roundtrip."""
+        mock_storage = AsyncMock()
+        mock_brain = MagicMock(id="test-brain", name="test", config=MagicMock())
+        mock_storage.get_brain = AsyncMock(return_value=mock_brain)
+        mock_storage._current_brain_id = "test-brain"
+        mock_storage.find_typed_memories = AsyncMock(return_value=[])
+
+        mock_fiber = MagicMock(id="session-123")
+        mock_encoder = AsyncMock()
+        mock_encoder.encode = AsyncMock(
+            return_value=MagicMock(fiber=mock_fiber, neurons_created=[])
+        )
+
+        with (
+            patch.object(server, "get_storage", return_value=mock_storage),
+            patch("neural_memory.mcp.server.MemoryEncoder", return_value=mock_encoder),
+        ):
+            result = await server.call_tool(
+                "nmem_session",
+                {
+                    "action": "set",
+                    "feature": "auth",
+                    "task": "login form",
+                    "progress": 0.3,
+                    "notes": "Working on OAuth",
+                },
+            )
+
+        assert result["active"] is True
+        assert result["feature"] == "auth"
+        assert result["task"] == "login form"
+        assert result["progress"] == 0.3
+        assert result["notes"] == "Working on OAuth"
+        assert "message" in result
+
+    @pytest.mark.asyncio
+    async def test_session_end(self, server: MCPServer) -> None:
+        """Test nmem_session end creates summary."""
+        mock_storage = AsyncMock()
+        mock_brain = MagicMock(id="test-brain", name="test", config=MagicMock())
+        mock_storage.get_brain = AsyncMock(return_value=mock_brain)
+        mock_storage._current_brain_id = "test-brain"
+
+        mock_existing = MagicMock(
+            metadata={
+                "feature": "auth",
+                "task": "login form",
+                "progress": 0.75,
+                "started_at": "2026-02-06T10:00:00",
+            }
+        )
+        mock_storage.find_typed_memories = AsyncMock(return_value=[mock_existing])
+
+        mock_fiber = MagicMock(id="summary-123")
+        mock_encoder = AsyncMock()
+        mock_encoder.encode = AsyncMock(
+            return_value=MagicMock(fiber=mock_fiber, neurons_created=[])
+        )
+
+        with (
+            patch.object(server, "get_storage", return_value=mock_storage),
+            patch("neural_memory.mcp.server.MemoryEncoder", return_value=mock_encoder),
+        ):
+            result = await server.call_tool("nmem_session", {"action": "end"})
+
+        assert result["active"] is False
+        assert "auth" in result["summary"]
+        assert "75%" in result["summary"]
+        assert "message" in result
+
+    @pytest.mark.asyncio
+    async def test_session_end_no_active(self, server: MCPServer) -> None:
+        """Test nmem_session end with no active session."""
+        mock_storage = AsyncMock()
+        mock_storage.find_typed_memories = AsyncMock(return_value=[])
+
+        with patch.object(server, "get_storage", return_value=mock_storage):
+            result = await server.call_tool("nmem_session", {"action": "end"})
+
+        assert result["active"] is False
+        assert "No active session" in result["message"]
 
 
 class TestMCPProtocol:
@@ -531,7 +648,7 @@ class TestMCPProtocol:
         assert response["id"] == 2
         assert "result" in response
         assert "tools" in response["result"]
-        assert len(response["result"]["tools"]) == 7
+        assert len(response["result"]["tools"]) == 8
 
     @pytest.mark.asyncio
     async def test_tools_call_message(self, server: MCPServer) -> None:
@@ -842,6 +959,7 @@ class TestPassiveCapture:
                 neurons_activated=5,
                 fibers_matched=2,
                 depth_used=MagicMock(value=1),
+                tokens_used=12,
             )
         )
         return mock_storage, mock_pipeline

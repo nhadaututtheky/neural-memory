@@ -141,7 +141,7 @@ class ReflexPipeline:
             stimulus,
         )
 
-        context = await format_context(
+        context, tokens_used = await format_context(
             self._storage,
             activations,
             fibers_matched,
@@ -159,6 +159,7 @@ class ReflexPipeline:
             subgraph=subgraph,
             context=context,
             latency_ms=latency_ms,
+            tokens_used=tokens_used,
             co_activations=co_activations,
             metadata={
                 "query_intent": stimulus.intent.value,

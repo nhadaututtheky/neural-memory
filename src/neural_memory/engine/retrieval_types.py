@@ -64,5 +64,6 @@ class RetrievalResult:
     subgraph: Subgraph
     context: str
     latency_ms: float
+    tokens_used: int = 0
     co_activations: list[CoActivation] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)

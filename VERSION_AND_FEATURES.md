@@ -136,6 +136,7 @@
 | `nmem_stats` | — | Brain statistics |
 | `nmem_auto` | action (status/enable/disable/analyze/process), text?, save? | Auto-capture from text (with passive recall learning) |
 | `nmem_suggest` | prefix, limit?, type_filter? | Prefix-based autocomplete suggestions ranked by relevance + frequency |
+| `nmem_session` | action (get/set/end), feature?, task?, progress?, notes? | Track current working session state for cross-session resume |
 
 **MCP Resources:**
 - `neuralmemory://prompt/system` — Full system prompt
@@ -297,7 +298,7 @@ nmem-mcp = neural_memory.mcp:main
 ### Unit Tests (16)
 - test_neuron, test_synapse, test_fiber, test_brain_mode, test_project
 - test_memory_types, test_activation, test_consolidation, test_hebbian
-- test_mcp (52 tests: schemas, tool calls, protocol, resources, storage, auto-capture, passive capture)
+- test_mcp (62 tests: schemas, tool calls, protocol, resources, storage, auto-capture, passive capture, session, tokens_used)
 - test_router, test_safety, test_sqlite_storage
 - test_sync, test_temporal, test_typed_memory_storage
 
