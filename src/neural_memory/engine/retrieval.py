@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -10,6 +11,7 @@ from neural_memory.core.fiber import Fiber
 from neural_memory.core.neuron import NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.engine.activation import ActivationResult, SpreadingActivation
+from neural_memory.engine.lifecycle import ReinforcementManager
 from neural_memory.engine.reflex_activation import CoActivation, ReflexActivation
 from neural_memory.engine.retrieval_context import format_context, reconstitute_answer
 from neural_memory.engine.retrieval_types import DepthLevel, RetrievalResult, Subgraph
@@ -58,6 +60,9 @@ class ReflexPipeline:
         self._use_reflex = use_reflex
         self._activator = SpreadingActivation(storage, config)
         self._reflex_activator = ReflexActivation(storage, config)
+        self._reinforcer = ReinforcementManager(
+            reinforcement_delta=config.reinforcement_delta,
+        )
 
     async def query(
         self,
@@ -150,6 +155,24 @@ class ReflexPipeline:
 
         latency_ms = (time.perf_counter() - start_time) * 1000
 
+        # 8. Reinforce accessed memories (feedback loop)
+        # "Neurons that fire together wire together" — recalled memories
+        # become easier to find next time
+        if activations and confidence > 0.3:
+            try:
+                top_neuron_ids = [
+                    nid
+                    for nid, _ in sorted(
+                        activations.items(),
+                        key=lambda x: x[1].activation_level,
+                        reverse=True,
+                    )[:10]
+                ]
+                top_synapse_ids = subgraph.synapse_ids[:20] if subgraph.synapse_ids else None
+                await self._reinforcer.reinforce(self._storage, top_neuron_ids, top_synapse_ids)
+            except Exception:
+                pass  # Never let reinforcement failure break retrieval
+
         return RetrievalResult(
             answer=answer,
             confidence=confidence,
@@ -188,6 +211,13 @@ class ReflexPipeline:
         context_words = {"before", "after", "then", "trước", "sau", "rồi"}
         query_words = set(stimulus.raw_query.lower().split())
         if query_words & context_words:
+            return DepthLevel.CONTEXT
+
+        # Complexity-based depth: multiple entities/time hints = intersection query
+        signal_count = len(stimulus.entities) + len(stimulus.time_hints)
+        if signal_count >= 3 or len(stimulus.keywords) >= 5:
+            return DepthLevel.CONTEXT
+        if signal_count >= 2:
             return DepthLevel.CONTEXT
 
         # Simple queries use instant retrieval
@@ -439,8 +469,15 @@ class ReflexPipeline:
                     fibers.append(fiber)
                     seen_fiber_ids.add(fiber.id)
 
-        # Sort by salience
-        fibers.sort(key=lambda f: f.salience, reverse=True)
+        # Sort by composite score: salience * freshness * conductivity
+        def _fiber_score(fiber: Fiber) -> float:
+            freshness = 0.5
+            if fiber.last_conducted:
+                hours_ago = (datetime.now() - fiber.last_conducted).total_seconds() / 3600
+                freshness = max(0.1, 1.0 / (1.0 + math.exp((hours_ago - 72) / 36)))
+            return fiber.salience * freshness * fiber.conductivity
+
+        fibers.sort(key=_fiber_score, reverse=True)
 
         return fibers[:10]  # Limit to top 10
 

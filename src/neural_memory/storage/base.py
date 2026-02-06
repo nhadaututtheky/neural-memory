@@ -52,6 +52,25 @@ class NeuralStorage(ABC):
         """
         ...
 
+    async def get_neurons_batch(self, neuron_ids: list[str]) -> dict[str, Neuron]:
+        """Get multiple neurons by ID in a single operation.
+
+        Default implementation falls back to sequential get_neuron.
+        Backends should override for batch efficiency.
+
+        Args:
+            neuron_ids: List of neuron IDs to fetch
+
+        Returns:
+            Dict mapping neuron_id to Neuron for found neurons
+        """
+        results: dict[str, Neuron] = {}
+        for nid in neuron_ids:
+            neuron = await self.get_neuron(nid)
+            if neuron is not None:
+                results[nid] = neuron
+        return results
+
     @abstractmethod
     async def find_neurons(
         self,

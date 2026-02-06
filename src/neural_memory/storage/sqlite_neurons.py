@@ -102,6 +102,22 @@ class SQLiteNeuronMixin:
                 return None
             return row_to_neuron(row)
 
+    async def get_neurons_batch(self, neuron_ids: list[str]) -> dict[str, Neuron]:
+        """Fetch multiple neurons in a single SQL query."""
+        if not neuron_ids:
+            return {}
+
+        conn = self._ensure_conn()
+        brain_id = self._get_brain_id()
+
+        placeholders = ",".join("?" for _ in neuron_ids)
+        query = f"SELECT * FROM neurons WHERE brain_id = ? AND id IN ({placeholders})"
+        params: list[Any] = [brain_id, *neuron_ids]
+
+        async with conn.execute(query, params) as cursor:
+            rows = await cursor.fetchall()
+            return {row["id"]: row_to_neuron(row) for row in rows}
+
     async def find_neurons(
         self,
         type: NeuronType | None = None,

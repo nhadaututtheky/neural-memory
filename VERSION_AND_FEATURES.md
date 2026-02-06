@@ -11,7 +11,7 @@
 | 1 | `pyproject.toml` | 7 | `version = "0.9.1"` | Every release |
 | 2 | `src/neural_memory/__init__.py` | 17 | `__version__ = "0.9.1"` | Every release (must match #1) |
 | 3 | `CHANGELOG.md` | 8 | Move `[Unreleased]` to `[X.Y.Z]` | Every release |
-| 4 | `vscode-extension/package.json` | 5 | `"version": "0.1.3"` | Every extension release |
+| 4 | `vscode-extension/package.json` | 5 | `"version": "0.1.4"` | Every extension release |
 | 5 | `vscode-extension/CHANGELOG.md` | 3 | Add `[X.Y.Z] - date` section | Every extension release |
 | 6 | `storage/sqlite_schema.py` | 14 | `SCHEMA_VERSION = 4` | Only on DB schema changes |
 | 7 | `storage/sqlite_brain_ops.py` + `memory_brain_ops.py` | 108/138 | `version="0.1.0"` | Only on snapshot format changes |
@@ -350,7 +350,7 @@ nmem-mcp = neural_memory.mcp:main
 | Component | Version |
 |-----------|---------|
 | Python Package | 0.9.1 |
-| VS Code Extension | 0.1.3 |
+| VS Code Extension | 0.1.4 |
 | Database Schema | 4 |
 | Brain Snapshot Format | 0.1.0 |
 | API Prefix | /api/v1 |

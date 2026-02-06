@@ -55,6 +55,10 @@ class Fiber:
     tags: set[str] = field(default_factory=set)
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.utcnow)
+    # Lazy pathway index cache (not part of constructor/repr/compare)
+    _pathway_index: dict[str, int] | None = field(
+        default=None, init=False, repr=False, compare=False
+    )
 
     @classmethod
     def create(
@@ -245,21 +249,16 @@ class Fiber:
         """Number of neurons in the signal pathway."""
         return len(self.pathway)
 
+    def _ensure_pathway_index(self) -> dict[str, int]:
+        """Build pathway index lazily on first access."""
+        if self._pathway_index is None:
+            self._pathway_index = {nid: i for i, nid in enumerate(self.pathway)}
+        return self._pathway_index
+
     def pathway_position(self, neuron_id: str) -> int | None:
-        """
-        Get the position of a neuron in the pathway.
-
-        Args:
-            neuron_id: The neuron to find
-
-        Returns:
-            Position index (0-based) or None if not in pathway
-        """
-        try:
-            return self.pathway.index(neuron_id)
-        except ValueError:
-            return None
+        """Get the position of a neuron in the pathway. O(1) after first call."""
+        return self._ensure_pathway_index().get(neuron_id)
 
     def is_in_pathway(self, neuron_id: str) -> bool:
-        """Check if a neuron is in the signal pathway."""
-        return neuron_id in self.pathway
+        """Check if a neuron is in the signal pathway. O(1) after first call."""
+        return neuron_id in self._ensure_pathway_index()

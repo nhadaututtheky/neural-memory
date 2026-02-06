@@ -68,6 +68,12 @@ class InMemoryStorage(InMemoryCollectionsMixin, InMemoryBrainMixin, NeuralStorag
         brain_id = self._get_brain_id()
         return self._neurons[brain_id].get(neuron_id)
 
+    async def get_neurons_batch(self, neuron_ids: list[str]) -> dict[str, Neuron]:
+        """Batch fetch neurons from in-memory store."""
+        brain_id = self._get_brain_id()
+        brain_neurons = self._neurons[brain_id]
+        return {nid: brain_neurons[nid] for nid in neuron_ids if nid in brain_neurons}
+
     async def find_neurons(
         self,
         type: NeuronType | None = None,

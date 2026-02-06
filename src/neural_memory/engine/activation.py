@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import heapq
+import math
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -103,6 +104,9 @@ class SpreadingActivation:
         # Track best activation for each neuron
         results: dict[str, ActivationResult] = {}
 
+        # Frequency cache: neuron_id -> access_frequency (myelination boost)
+        freq_cache: dict[str, int] = {}
+
         # Priority queue for BFS with activation ordering
         queue: list[ActivationState] = []
 
@@ -155,8 +159,17 @@ class SpreadingActivation:
             )
 
             for neighbor_neuron, synapse in neighbors:
-                # Calculate new activation
-                new_level = current.level * decay_factor * synapse.weight
+                # Frequency boost: frequently accessed neurons conduct stronger
+                # (myelination metaphor — well-used pathways transmit faster)
+                freq = freq_cache.get(neighbor_neuron.id)
+                if freq is None:
+                    state = await self._storage.get_neuron_state(neighbor_neuron.id)
+                    freq = state.access_frequency if state else 0
+                    freq_cache[neighbor_neuron.id] = freq
+                freq_factor = 1.0 + min(0.15, 0.05 * math.log1p(freq))
+
+                # Calculate new activation with frequency boost
+                new_level = current.level * decay_factor * synapse.weight * freq_factor
 
                 # Skip if below threshold
                 if new_level < min_activation:

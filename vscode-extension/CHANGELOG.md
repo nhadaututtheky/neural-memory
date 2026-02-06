@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.4] - 2026-02-06
+
+### Changed
+
+- Intelligence upgrade: multi-factor confidence scoring (freshness + frequency)
+- Frequency-boosted spreading activation (myelination metaphor)
+- Recall reinforcement feedback loop — recalled memories become easier to find
+- Complexity-aware depth detection for multi-entity queries
+- Batch neuron fetch for 25x fewer DB queries in context formatting
+- Composite fiber scoring (salience * freshness * conductivity)
+- Pathway index cache for O(1) fiber position lookups
+
 ## [0.1.3] - 2026-02-06
 
 ### Changed

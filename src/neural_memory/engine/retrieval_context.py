@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from neural_memory.core.neuron import NeuronType
@@ -53,10 +55,27 @@ async def reconstitute_answer(
     if top_neuron is None:
         return None, 0.0
 
-    # Confidence based on activation and intersection count
-    confidence = min(1.0, candidates[0][1])
-    if intersections:
-        confidence = min(1.0, confidence + 0.1 * len(intersections))
+    # Multi-factor confidence scoring
+    base_confidence = min(1.0, candidates[0][1])
+
+    # Intersection boost (neurons reached from multiple anchor sets)
+    intersection_boost = 0.05 * len(intersections) if intersections else 0.0
+
+    # Freshness + frequency boosts from neuron state
+    freshness_boost = 0.0
+    frequency_boost = 0.0
+    top_state = await storage.get_neuron_state(top_neuron_id)
+    if top_state:
+        # Freshness: sigmoid decay — ~0.15 at <1h, ~0.08 at 3d, ~0.02 at 7d
+        if top_state.last_activated:
+            hours_since = (datetime.now() - top_state.last_activated).total_seconds() / 3600
+            freshness_boost = 0.15 / (1.0 + math.exp((hours_since - 72) / 36))
+
+        # Frequency: logarithmic — diminishing returns past ~10 accesses
+        if top_state.access_frequency > 0:
+            frequency_boost = min(0.1, 0.03 * math.log1p(top_state.access_frequency))
+
+    confidence = min(1.0, base_confidence + intersection_boost + freshness_boost + frequency_boost)
 
     return top_neuron.content, confidence
 
@@ -75,15 +94,18 @@ async def format_context(
     lines: list[str] = []
     token_estimate = 0
 
-    # Add fiber summaries first
+    # Add fiber summaries first (batch fetch anchors)
     if fibers:
         lines.append("## Relevant Memories\n")
+
+        anchor_ids = [f.anchor_neuron_id for f in fibers[:5] if not f.summary]
+        anchor_map = await storage.get_neurons_batch(anchor_ids) if anchor_ids else {}
 
         for fiber in fibers[:5]:
             if fiber.summary:
                 line = f"- {fiber.summary}"
             else:
-                anchor = await storage.get_neuron(fiber.anchor_neuron_id)
+                anchor = anchor_map.get(fiber.anchor_neuron_id)
                 if anchor:
                     line = f"- {anchor.content}"
                 else:
@@ -95,7 +117,7 @@ async def format_context(
 
             lines.append(line)
 
-    # Add individual activated neurons
+    # Add individual activated neurons (batch fetch)
     if token_estimate < max_tokens:
         lines.append("\n## Related Information\n")
 
@@ -105,8 +127,11 @@ async def format_context(
             reverse=True,
         )
 
+        top_ids = [r.neuron_id for r in sorted_activations[:20]]
+        neuron_map = await storage.get_neurons_batch(top_ids)
+
         for result in sorted_activations[:20]:
-            neuron = await storage.get_neuron(result.neuron_id)
+            neuron = neuron_map.get(result.neuron_id)
             if neuron is None:
                 continue
 
