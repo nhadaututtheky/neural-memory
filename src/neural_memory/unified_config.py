@@ -56,11 +56,12 @@ def get_default_brain() -> str:
 class AutoConfig:
     """Auto-capture configuration for MCP server."""
 
-    enabled: bool = False
+    enabled: bool = True
     capture_decisions: bool = True
     capture_errors: bool = True
     capture_todos: bool = True
     capture_facts: bool = True
+    capture_insights: bool = True
     min_confidence: float = 0.7
 
     def to_dict(self) -> dict[str, Any]:
@@ -70,17 +71,19 @@ class AutoConfig:
             "capture_errors": self.capture_errors,
             "capture_todos": self.capture_todos,
             "capture_facts": self.capture_facts,
+            "capture_insights": self.capture_insights,
             "min_confidence": self.min_confidence,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AutoConfig:
         return cls(
-            enabled=data.get("enabled", False),
+            enabled=data.get("enabled", True),
             capture_decisions=data.get("capture_decisions", True),
             capture_errors=data.get("capture_errors", True),
             capture_todos=data.get("capture_todos", True),
             capture_facts=data.get("capture_facts", True),
+            capture_insights=data.get("capture_insights", True),
             min_confidence=data.get("min_confidence", 0.7),
         )
 
@@ -206,6 +209,7 @@ class UnifiedConfig:
             f"capture_errors = {'true' if self.auto.capture_errors else 'false'}",
             f"capture_todos = {'true' if self.auto.capture_todos else 'false'}",
             f"capture_facts = {'true' if self.auto.capture_facts else 'false'}",
+            f"capture_insights = {'true' if self.auto.capture_insights else 'false'}",
             f"min_confidence = {self.auto.min_confidence}",
             "",
             "# CLI preferences",

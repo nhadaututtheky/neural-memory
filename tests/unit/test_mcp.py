@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from neural_memory.mcp.auto_capture import analyze_text_for_memories
 from neural_memory.mcp.server import MCPServer, create_mcp_server, handle_message
 
 
@@ -375,6 +376,7 @@ class TestMCPToolCalls:
             capture_errors=True,
             capture_todos=True,
             capture_facts=True,
+            capture_insights=True,
             min_confidence=0.7,
         )
         with patch("neural_memory.mcp.server.get_config") as mock_get_config:
@@ -649,3 +651,211 @@ class TestMCPStorage:
         # Should only load once
         mock_load.assert_called_once()
         assert storage1 is storage2
+
+
+class TestAutoCapture:
+    """Tests for auto-capture pattern detection."""
+
+    def test_insight_pattern_english(self) -> None:
+        """Test insight detection for English aha-moments."""
+        text = "Turns out the timeout was caused by DNS resolution being slow."
+        detected = analyze_text_for_memories(text, capture_insights=True)
+        types = [d["type"] for d in detected]
+        assert "insight" in types
+
+    def test_insight_pattern_root_cause(self) -> None:
+        """Test insight detection for root cause identification."""
+        text = "The root cause was a race condition in the connection pool handler."
+        detected = analyze_text_for_memories(text, capture_insights=True)
+        types = [d["type"] for d in detected]
+        assert "insight" in types
+
+    def test_insight_pattern_realized(self) -> None:
+        """Test insight detection for realization patterns."""
+        text = "I realized that the cache was never being invalidated after writes."
+        detected = analyze_text_for_memories(text, capture_insights=True)
+        types = [d["type"] for d in detected]
+        assert "insight" in types
+
+    def test_vietnamese_decision_pattern(self) -> None:
+        """Test Vietnamese decision pattern detection."""
+        text = "Quyết định dùng Redis thay vì Memcached cho hệ thống caching."
+        detected = analyze_text_for_memories(text, capture_decisions=True)
+        types = [d["type"] for d in detected]
+        assert "decision" in types
+
+    def test_vietnamese_insight_pattern(self) -> None:
+        """Test Vietnamese insight pattern detection."""
+        text = "Hóa ra lỗi do DNS resolution bị chậm khi kết nối database."
+        detected = analyze_text_for_memories(text, capture_insights=True)
+        types = [d["type"] for d in detected]
+        assert "insight" in types
+
+    def test_vietnamese_error_pattern(self) -> None:
+        """Test Vietnamese error pattern detection."""
+        text = "Lỗi do connection pool bị đầy khi có quá nhiều request đồng thời."
+        detected = analyze_text_for_memories(text, capture_errors=True)
+        types = [d["type"] for d in detected]
+        assert "error" in types
+
+    def test_minimum_text_length_guard(self) -> None:
+        """Test that very short text returns empty."""
+        text = "short text"
+        detected = analyze_text_for_memories(text)
+        assert detected == []
+
+    def test_dedup_strips_prefix(self) -> None:
+        """Test deduplication handles type prefixes correctly."""
+        text = "We decided to use Redis. The decision is: use Redis for caching."
+        detected = analyze_text_for_memories(text, capture_decisions=True)
+        # Both patterns match "use Redis" but dedup should merge
+        contents = [d["content"].lower() for d in detected]
+        redis_matches = [c for c in contents if "redis" in c]
+        # Should have at most 2 (different captures), but dedup limits exact dupes
+        assert len(redis_matches) <= 3
+
+    def test_tuple_match_handling(self) -> None:
+        """Test patterns with multiple groups (tuple matches)."""
+        text = "We chose PostgreSQL over MySQL for better JSONB support."
+        detected = analyze_text_for_memories(text, capture_decisions=True)
+        assert len(detected) >= 1
+
+    def test_capture_insights_disabled(self) -> None:
+        """Test that insights are not captured when disabled."""
+        text = "Turns out the timeout was caused by DNS resolution being slow."
+        detected = analyze_text_for_memories(text, capture_insights=False)
+        types = [d["type"] for d in detected]
+        assert "insight" not in types
+
+
+class TestPassiveCapture:
+    """Tests for passive auto-capture on recall."""
+
+    def _make_server(self, *, auto_enabled: bool = True) -> MCPServer:
+        """Create a server with controlled auto config."""
+        mock_auto_config = MagicMock(
+            enabled=auto_enabled,
+            capture_decisions=True,
+            capture_errors=True,
+            capture_todos=True,
+            capture_facts=True,
+            capture_insights=True,
+            min_confidence=0.7,
+        )
+        with patch("neural_memory.mcp.server.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(
+                current_brain="test-brain",
+                get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
+                auto=mock_auto_config,
+            )
+            return MCPServer()
+
+    def _mock_recall_deps(self, server: MCPServer):
+        """Set up mocks for recall dependencies."""
+        mock_storage = AsyncMock()
+        mock_brain = MagicMock(
+            id="test-brain",
+            name="test",
+            config=MagicMock(),
+        )
+        mock_storage.get_brain = AsyncMock(return_value=mock_brain)
+        mock_storage._current_brain_id = "test-brain"
+
+        mock_pipeline = AsyncMock()
+        mock_pipeline.query = AsyncMock(
+            return_value=MagicMock(
+                context="Test answer",
+                confidence=0.85,
+                neurons_activated=5,
+                fibers_matched=2,
+                depth_used=MagicMock(value=1),
+            )
+        )
+        return mock_storage, mock_pipeline
+
+    @pytest.mark.asyncio
+    async def test_passive_capture_on_long_recall(self) -> None:
+        """Test that recall with long query triggers passive capture."""
+        server = self._make_server(auto_enabled=True)
+        mock_storage, mock_pipeline = self._mock_recall_deps(server)
+
+        with (
+            patch.object(server, "get_storage", return_value=mock_storage),
+            patch("neural_memory.mcp.server.ReflexPipeline", return_value=mock_pipeline),
+            patch.object(server, "_passive_capture", new_callable=AsyncMock) as mock_capture,
+        ):
+            long_query = (
+                "We decided to switch from MySQL to PostgreSQL because of better JSONB support"
+            )
+            await server.call_tool("nmem_recall", {"query": long_query})
+
+        mock_capture.assert_called_once_with(long_query)
+
+    @pytest.mark.asyncio
+    async def test_passive_capture_skipped_short_query(self) -> None:
+        """Test that short queries do not trigger passive capture."""
+        server = self._make_server(auto_enabled=True)
+        mock_storage, mock_pipeline = self._mock_recall_deps(server)
+
+        with (
+            patch.object(server, "get_storage", return_value=mock_storage),
+            patch("neural_memory.mcp.server.ReflexPipeline", return_value=mock_pipeline),
+            patch.object(server, "_passive_capture", new_callable=AsyncMock) as mock_capture,
+        ):
+            await server.call_tool("nmem_recall", {"query": "auth setup"})
+
+        mock_capture.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_passive_capture_skipped_when_disabled(self) -> None:
+        """Test that passive capture is skipped when auto-capture is disabled."""
+        server = self._make_server(auto_enabled=False)
+        mock_storage, mock_pipeline = self._mock_recall_deps(server)
+
+        with (
+            patch.object(server, "get_storage", return_value=mock_storage),
+            patch("neural_memory.mcp.server.ReflexPipeline", return_value=mock_pipeline),
+            patch.object(server, "_passive_capture", new_callable=AsyncMock) as mock_capture,
+        ):
+            long_query = (
+                "We decided to switch from MySQL to PostgreSQL because of better JSONB support"
+            )
+            await server.call_tool("nmem_recall", {"query": long_query})
+
+        mock_capture.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_process_respects_enabled_flag(self) -> None:
+        """Test that process action returns early when disabled."""
+        server = self._make_server(auto_enabled=False)
+
+        result = await server.call_tool(
+            "nmem_auto",
+            {"action": "process", "text": "We decided to use Redis for caching."},
+        )
+
+        assert result["saved"] == 0
+        assert "disabled" in result["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_passive_capture_error_swallowed(self) -> None:
+        """Test that errors in passive capture don't break recall."""
+        server = self._make_server(auto_enabled=True)
+        mock_storage, mock_pipeline = self._mock_recall_deps(server)
+
+        with (
+            patch.object(server, "get_storage", return_value=mock_storage),
+            patch("neural_memory.mcp.server.ReflexPipeline", return_value=mock_pipeline),
+            patch(
+                "neural_memory.mcp.server.analyze_text_for_memories",
+                side_effect=RuntimeError("boom"),
+            ),
+        ):
+            long_query = (
+                "We decided to switch from MySQL to PostgreSQL because of better JSONB support"
+            )
+            result = await server.call_tool("nmem_recall", {"query": long_query})
+
+        # Recall should still succeed despite passive capture error
+        assert result["answer"] == "Test answer"
+        assert result["confidence"] == 0.85

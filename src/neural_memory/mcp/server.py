@@ -190,6 +190,10 @@ class MCPServer:
             reference_time=datetime.now(),
         )
 
+        # Passive auto-capture: analyze query text for capturable content
+        if self.config.auto.enabled and len(query) >= 50:
+            await self._passive_capture(query)
+
         if result.confidence < min_confidence:
             return {
                 "answer": None,
@@ -204,6 +208,32 @@ class MCPServer:
             "fibers_matched": result.fibers_matched,
             "depth_used": result.depth_used.value,
         }
+
+    async def _passive_capture(self, text: str) -> None:
+        """Silently analyze text and capture high-confidence memories.
+
+        Fire-and-forget: errors are swallowed to avoid disrupting
+        the primary tool call.
+        """
+        try:
+            detected = analyze_text_for_memories(
+                text,
+                capture_decisions=self.config.auto.capture_decisions,
+                capture_errors=self.config.auto.capture_errors,
+                capture_todos=self.config.auto.capture_todos,
+                capture_facts=self.config.auto.capture_facts,
+                capture_insights=self.config.auto.capture_insights,
+            )
+            if detected:
+                # Higher threshold for passive capture (user didn't ask to save)
+                passive_threshold = max(self.config.auto.min_confidence, 0.8)
+                high_confidence = [
+                    item for item in detected if item["confidence"] >= passive_threshold
+                ]
+                if high_confidence:
+                    await self._save_detected_memories(high_confidence)
+        except Exception:
+            pass
 
     async def _context(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get recent context."""
@@ -290,6 +320,7 @@ class MCPServer:
                 "capture_errors": self.config.auto.capture_errors,
                 "capture_todos": self.config.auto.capture_todos,
                 "capture_facts": self.config.auto.capture_facts,
+                "capture_insights": self.config.auto.capture_insights,
                 "min_confidence": self.config.auto.min_confidence,
             }
 
@@ -318,6 +349,7 @@ class MCPServer:
                 capture_errors=self.config.auto.capture_errors,
                 capture_todos=self.config.auto.capture_todos,
                 capture_facts=self.config.auto.capture_facts,
+                capture_insights=self.config.auto.capture_insights,
             )
 
             if not detected:
@@ -338,6 +370,12 @@ class MCPServer:
             }
 
         elif action == "process":
+            if not self.config.auto.enabled:
+                return {
+                    "saved": 0,
+                    "message": "Auto-capture is disabled. Use nmem_auto(action='enable') to enable.",
+                }
+
             text = args.get("text", "")
             if not text:
                 return {"error": "Text required for process action"}
@@ -348,6 +386,7 @@ class MCPServer:
                 capture_errors=self.config.auto.capture_errors,
                 capture_todos=self.config.auto.capture_todos,
                 capture_facts=self.config.auto.capture_facts,
+                capture_insights=self.config.auto.capture_insights,
             )
 
             if not detected:
