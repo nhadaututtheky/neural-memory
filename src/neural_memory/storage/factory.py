@@ -188,6 +188,10 @@ class HybridStorage:
                 logger.debug("Remote sync failed for delete_neuron: %s", e)
         return result
 
+    async def suggest_neurons(self, prefix, type_filter=None, limit=5):
+        """Suggest neurons from local storage."""
+        return await self._local.suggest_neurons(prefix, type_filter=type_filter, limit=limit)
+
     async def get_neuron_state(self, neuron_id):
         return await self._local.get_neuron_state(neuron_id)
 

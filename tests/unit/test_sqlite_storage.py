@@ -11,9 +11,10 @@ import pytest
 from neural_memory.core.brain import Brain
 from neural_memory.core.fiber import Fiber
 from neural_memory.core.memory_types import MemoryType, Priority, TypedMemory
-from neural_memory.core.neuron import Neuron, NeuronType
+from neural_memory.core.neuron import Neuron, NeuronState, NeuronType
 from neural_memory.core.project import Project
 from neural_memory.core.synapse import Synapse, SynapseType
+from neural_memory.storage.sqlite_neurons import _build_fts_prefix_query
 from neural_memory.storage.sqlite_store import SQLiteStorage
 
 
@@ -829,3 +830,126 @@ class TestFTS:
         results = await storage.find_neurons(content_exact="Exact match test")
         assert len(results) == 1
         assert results[0].content == "Exact match test"
+
+
+class TestFTSPrefixQuery:
+    """Tests for _build_fts_prefix_query helper."""
+
+    def test_fts_prefix_single_token(self) -> None:
+        """Single token gets * suffix."""
+        assert _build_fts_prefix_query("data") == "data*"
+
+    def test_fts_prefix_multi_token(self) -> None:
+        """All tokens except last are quoted, last gets *."""
+        assert _build_fts_prefix_query("API des") == '"API" des*'
+
+    def test_fts_prefix_empty(self) -> None:
+        """Empty string returns empty quoted string."""
+        assert _build_fts_prefix_query("") == '""'
+
+    def test_fts_prefix_sanitizes_operators(self) -> None:
+        """FTS5 operator-like tokens are quoted or sanitized."""
+        result = _build_fts_prefix_query("NOT evil")
+        assert result == '"NOT" evil*'
+
+    def test_fts_prefix_three_tokens(self) -> None:
+        """Three tokens: first two quoted, last with *."""
+        result = _build_fts_prefix_query("REST API des")
+        assert result == '"REST" "API" des*'
+
+    def test_fts_prefix_special_chars_in_last(self) -> None:
+        """Special chars stripped from last token."""
+        result = _build_fts_prefix_query("test query*")
+        assert result == '"test" query*'
+
+
+class TestSuggestNeurons:
+    """Tests for suggest_neurons storage method."""
+
+    @pytest.mark.asyncio
+    async def test_suggest_neurons_basic(self, storage: SQLiteStorage) -> None:
+        """Test prefix match returns matching neurons."""
+        n1 = Neuron.create(type=NeuronType.CONCEPT, content="API design patterns")
+        n2 = Neuron.create(type=NeuronType.CONCEPT, content="Database migration")
+        await storage.add_neuron(n1)
+        await storage.add_neuron(n2)
+
+        results = await storage.suggest_neurons("API")
+        assert len(results) == 1
+        assert results[0]["content"] == "API design patterns"
+        assert results[0]["neuron_id"] == n1.id
+        assert "score" in results[0]
+
+    @pytest.mark.asyncio
+    async def test_suggest_neurons_frequency_ranking(self, storage: SQLiteStorage) -> None:
+        """Higher frequency neuron ranks first."""
+        n1 = Neuron.create(type=NeuronType.CONCEPT, content="API rate limiting")
+        n2 = Neuron.create(type=NeuronType.CONCEPT, content="API design patterns")
+        await storage.add_neuron(n1)
+        await storage.add_neuron(n2)
+
+        # Boost n2's frequency
+        state = await storage.get_neuron_state(n2.id)
+        if state:
+            boosted = NeuronState(
+                neuron_id=state.neuron_id,
+                activation_level=0.9,
+                access_frequency=10,
+                last_activated=state.last_activated,
+                decay_rate=state.decay_rate,
+                created_at=state.created_at,
+            )
+            await storage.update_neuron_state(boosted)
+
+        results = await storage.suggest_neurons("API")
+        assert len(results) == 2
+        assert results[0]["content"] == "API design patterns"
+
+    @pytest.mark.asyncio
+    async def test_suggest_neurons_type_filter(self, storage: SQLiteStorage) -> None:
+        """Filter by NeuronType."""
+        n1 = Neuron.create(type=NeuronType.CONCEPT, content="Database concepts")
+        n2 = Neuron.create(type=NeuronType.ACTION, content="Database migration script")
+        await storage.add_neuron(n1)
+        await storage.add_neuron(n2)
+
+        results = await storage.suggest_neurons("Database", type_filter=NeuronType.CONCEPT)
+        assert len(results) == 1
+        assert results[0]["type"] == "concept"
+
+    @pytest.mark.asyncio
+    async def test_suggest_neurons_empty_prefix(self, storage: SQLiteStorage) -> None:
+        """Empty prefix returns empty list."""
+        n1 = Neuron.create(type=NeuronType.CONCEPT, content="Something")
+        await storage.add_neuron(n1)
+
+        results = await storage.suggest_neurons("")
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_suggest_neurons_brain_isolation(self, storage: SQLiteStorage) -> None:
+        """Only current brain's neurons are returned."""
+        n1 = Neuron.create(type=NeuronType.CONCEPT, content="Shared concept")
+        await storage.add_neuron(n1)
+
+        # Switch to another brain
+        brain2 = Brain.create(name="other_brain")
+        await storage.save_brain(brain2)
+        storage.set_brain(brain2.id)
+
+        n2 = Neuron.create(type=NeuronType.CONCEPT, content="Shared concept copy")
+        await storage.add_neuron(n2)
+
+        results = await storage.suggest_neurons("Shared")
+        assert len(results) == 1
+        assert results[0]["neuron_id"] == n2.id
+
+    @pytest.mark.asyncio
+    async def test_suggest_neurons_limit(self, storage: SQLiteStorage) -> None:
+        """Respects limit parameter."""
+        for i in range(5):
+            n = Neuron.create(type=NeuronType.CONCEPT, content=f"Topic number {i}")
+            await storage.add_neuron(n)
+
+        results = await storage.suggest_neurons("Topic", limit=2)
+        assert len(results) == 2

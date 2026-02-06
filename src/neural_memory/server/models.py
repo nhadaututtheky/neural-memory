@@ -213,6 +213,24 @@ class MergeReportResponse(BaseModel):
     id_remap_count: int
 
 
+class SuggestionItem(BaseModel):
+    """A single neuron suggestion."""
+
+    neuron_id: str
+    content: str
+    type: str
+    access_frequency: int
+    activation_level: float
+    score: float
+
+
+class SuggestResponse(BaseModel):
+    """Response from neuron suggestion query."""
+
+    suggestions: list[SuggestionItem]
+    count: int
+
+
 class ErrorResponse(BaseModel):
     """Error response."""
 

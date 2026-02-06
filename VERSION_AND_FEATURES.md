@@ -109,6 +109,7 @@
 | POST | `/memory/query` | Query memories |
 | GET | `/memory/fiber/{id}` | Get fiber details |
 | GET | `/memory/neurons` | List neurons |
+| GET | `/memory/suggest` | Prefix-based neuron suggestions |
 | POST | `/brain/create` | Create brain |
 | GET | `/brain/{id}` | Get brain details |
 | GET | `/brain/{id}/stats` | Enhanced statistics |
@@ -134,6 +135,7 @@
 | `nmem_todo` | task, priority? | Quick TODO (30-day expiry) |
 | `nmem_stats` | — | Brain statistics |
 | `nmem_auto` | action (status/enable/disable/analyze/process), text?, save? | Auto-capture from text (with passive recall learning) |
+| `nmem_suggest` | prefix, limit?, type_filter? | Prefix-based autocomplete suggestions ranked by relevance + frequency |
 
 **MCP Resources:**
 - `neuralmemory://prompt/system` — Full system prompt

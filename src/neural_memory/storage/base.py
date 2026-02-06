@@ -77,6 +77,20 @@ class NeuralStorage(ABC):
         ...
 
     @abstractmethod
+    async def suggest_neurons(
+        self,
+        prefix: str,
+        type_filter: NeuronType | None = None,
+        limit: int = 5,
+    ) -> list[dict[str, Any]]:
+        """Suggest neurons matching a prefix, ranked by relevance + frequency.
+
+        Returns list of dicts with keys: neuron_id, content, type,
+        access_frequency, activation_level, score.
+        """
+        ...
+
+    @abstractmethod
     async def update_neuron(self, neuron: Neuron) -> None:
         """
         Update an existing neuron.

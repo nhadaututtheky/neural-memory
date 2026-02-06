@@ -17,6 +17,7 @@ from neural_memory.server.models import (
     QueryRequest,
     QueryResponse,
     SubgraphResponse,
+    SuggestResponse,
 )
 from neural_memory.storage.base import NeuralStorage
 
@@ -178,3 +179,28 @@ async def list_neurons(
         ],
         "count": len(neurons),
     }
+
+
+@router.get(
+    "/suggest",
+    response_model=SuggestResponse,
+    summary="Neuron suggestions",
+    description="Get autocomplete suggestions matching a prefix, ranked by relevance and usage.",
+)
+async def suggest_neurons(
+    brain: Annotated[Brain, Depends(get_brain)],
+    storage: Annotated[NeuralStorage, Depends(get_storage)],
+    prefix: str,
+    limit: int = 5,
+    type: str | None = None,
+) -> SuggestResponse:
+    """Get prefix-based neuron suggestions."""
+    from neural_memory.core.neuron import NeuronType
+
+    type_filter = NeuronType(type) if type else None
+    suggestions = await storage.suggest_neurons(
+        prefix=prefix,
+        type_filter=type_filter,
+        limit=limit,
+    )
+    return SuggestResponse(suggestions=suggestions, count=len(suggestions))

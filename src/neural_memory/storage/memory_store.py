@@ -142,6 +142,43 @@ class InMemoryStorage(InMemoryCollectionsMixin, InMemoryBrainMixin, NeuralStorag
         brain_id = self._get_brain_id()
         return list(self._states[brain_id].values())
 
+    async def suggest_neurons(
+        self,
+        prefix: str,
+        type_filter: NeuronType | None = None,
+        limit: int = 5,
+    ) -> list[dict[str, Any]]:
+        """Suggest neurons matching a prefix, ranked by relevance + frequency."""
+        if not prefix.strip():
+            return []
+
+        brain_id = self._get_brain_id()
+        prefix_lower = prefix.lower()
+        scored: list[dict[str, Any]] = []
+
+        for neuron in self._neurons[brain_id].values():
+            if prefix_lower not in neuron.content.lower():
+                continue
+            if type_filter is not None and neuron.type != type_filter:
+                continue
+            state = self._states[brain_id].get(neuron.id)
+            freq = state.access_frequency if state else 0
+            activation = state.activation_level if state else 0.0
+            score = freq * 0.1 + activation * 0.5
+            scored.append(
+                {
+                    "neuron_id": neuron.id,
+                    "content": neuron.content,
+                    "type": neuron.type.value,
+                    "access_frequency": freq,
+                    "activation_level": activation,
+                    "score": score,
+                }
+            )
+
+        scored.sort(key=lambda s: s["score"], reverse=True)
+        return scored[:limit]
+
     # ========== Synapse Operations ==========
 
     async def add_synapse(self, synapse: Synapse) -> str:

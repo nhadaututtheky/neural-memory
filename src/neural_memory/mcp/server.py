@@ -105,6 +105,8 @@ class MCPServer:
             return await self._stats(arguments)
         elif name == "nmem_auto":
             return await self._auto(arguments)
+        elif name == "nmem_suggest":
+            return await self._suggest(arguments)
         else:
             return {"error": f"Unknown tool: {name}"}
 
@@ -403,6 +405,38 @@ class MCPServer:
             }
 
         return {"error": f"Unknown action: {action}"}
+
+    async def _suggest(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Get prefix-based autocomplete suggestions."""
+        storage = await self.get_storage()
+        prefix = args.get("prefix", "")
+        if not prefix.strip():
+            return {"suggestions": [], "count": 0}
+
+        limit = args.get("limit", 5)
+        type_filter = None
+        if "type_filter" in args:
+            from neural_memory.core.neuron import NeuronType
+
+            type_filter = NeuronType(args["type_filter"])
+
+        suggestions = await storage.suggest_neurons(
+            prefix=prefix,
+            type_filter=type_filter,
+            limit=limit,
+        )
+        return {
+            "suggestions": [
+                {
+                    "content": s["content"],
+                    "type": s["type"],
+                    "neuron_id": s["neuron_id"],
+                    "score": s["score"],
+                }
+                for s in suggestions
+            ],
+            "count": len(suggestions),
+        }
 
     async def _save_detected_memories(self, detected: list[dict[str, Any]]) -> list[str]:
         """Save detected memories that meet confidence threshold."""

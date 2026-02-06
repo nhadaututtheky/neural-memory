@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -26,6 +27,26 @@ def _build_fts_query(search_term: str) -> str:
     if not tokens:
         return '""'
     return " ".join(f'"{token.replace(chr(34), chr(34) + chr(34))}"' for token in tokens)
+
+
+def _build_fts_prefix_query(prefix: str) -> str:
+    """Build FTS5 MATCH with prefix on last token.
+
+    All tokens except the last are quoted (exact match).
+    The last token is sanitized and gets a ``*`` suffix (prefix match).
+    Example: ``'API des'`` → ``'"API" des*'``
+    """
+    tokens = prefix.split()
+    if not tokens:
+        return '""'
+    parts: list[str] = []
+    for token in tokens[:-1]:
+        escaped = token.replace(chr(34), chr(34) + chr(34))
+        parts.append(f'"{escaped}"')
+    last = re.sub(r"[^\w]", "", tokens[-1], flags=re.UNICODE)
+    if last:
+        parts.append(f"{last}*")
+    return " ".join(parts) if parts else '""'
 
 
 class SQLiteNeuronMixin:
@@ -226,3 +247,78 @@ class SQLiteNeuronMixin:
         ) as cursor:
             rows = await cursor.fetchall()
             return [row_to_neuron_state(row) for row in rows]
+
+    async def suggest_neurons(
+        self,
+        prefix: str,
+        type_filter: NeuronType | None = None,
+        limit: int = 5,
+    ) -> list[dict[str, Any]]:
+        """Suggest neurons matching a prefix, ranked by relevance + frequency."""
+        if not prefix.strip():
+            return []
+
+        conn = self._ensure_conn()
+        brain_id = self._get_brain_id()
+
+        if self._has_fts:
+            fts_expr = _build_fts_prefix_query(prefix)
+            query = (
+                "SELECT n.id AS neuron_id, n.content, n.type,"
+                " COALESCE(ns.access_frequency, 0) AS access_frequency,"
+                " COALESCE(ns.activation_level, 0.0) AS activation_level,"
+                " ("
+                "   -fts.rank"
+                "   + COALESCE(ns.access_frequency, 0) * 0.1"
+                "   + COALESCE(ns.activation_level, 0.0) * 0.5"
+                " ) AS score"
+                " FROM neurons n"
+                " JOIN neurons_fts fts ON n.rowid = fts.rowid"
+                " LEFT JOIN neuron_states ns"
+                "   ON ns.brain_id = n.brain_id AND ns.neuron_id = n.id"
+                " WHERE fts.neurons_fts MATCH ? AND fts.brain_id = ?"
+            )
+            params: list[Any] = [fts_expr, brain_id]
+
+            if type_filter is not None:
+                query += " AND n.type = ?"
+                params.append(type_filter.value)
+
+            query += " ORDER BY score DESC LIMIT ?"
+            params.append(limit)
+        else:
+            query = (
+                "SELECT n.id AS neuron_id, n.content, n.type,"
+                " COALESCE(ns.access_frequency, 0) AS access_frequency,"
+                " COALESCE(ns.activation_level, 0.0) AS activation_level,"
+                " ("
+                "   COALESCE(ns.access_frequency, 0) * 0.1"
+                "   + COALESCE(ns.activation_level, 0.0) * 0.5"
+                " ) AS score"
+                " FROM neurons n"
+                " LEFT JOIN neuron_states ns"
+                "   ON ns.brain_id = n.brain_id AND ns.neuron_id = n.id"
+                " WHERE n.brain_id = ? AND n.content LIKE ?"
+            )
+            params = [brain_id, f"{prefix}%"]
+
+            if type_filter is not None:
+                query += " AND n.type = ?"
+                params.append(type_filter.value)
+
+            query += " ORDER BY COALESCE(ns.access_frequency, 0) DESC LIMIT ?"
+            params.append(limit)
+
+        async with conn.execute(query, params) as cursor:
+            rows = await cursor.fetchall()
+            return [
+                {
+                    "neuron_id": row[0],
+                    "content": row[1],
+                    "type": row[2],
+                    "access_frequency": row[3],
+                    "activation_level": row[4],
+                    "score": row[5],
+                }
+                for row in rows
+            ]

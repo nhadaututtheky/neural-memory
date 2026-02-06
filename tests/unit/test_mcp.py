@@ -37,7 +37,7 @@ class TestMCPServer:
         """Test that get_tools returns all expected tools."""
         tools = server.get_tools()
 
-        assert len(tools) == 6
+        assert len(tools) == 7
         tool_names = {tool["name"] for tool in tools}
         assert tool_names == {
             "nmem_remember",
@@ -46,6 +46,7 @@ class TestMCPServer:
             "nmem_todo",
             "nmem_stats",
             "nmem_auto",
+            "nmem_suggest",
         }
 
     def test_tool_schemas(self, server: MCPServer) -> None:
@@ -110,6 +111,17 @@ class TestMCPServer:
 
         schema = stats_tool["inputSchema"]
         assert schema["properties"] == {}
+
+    def test_suggest_tool_schema(self, server: MCPServer) -> None:
+        """Test nmem_suggest tool schema."""
+        tools = server.get_tools()
+        suggest_tool = next(t for t in tools if t["name"] == "nmem_suggest")
+
+        schema = suggest_tool["inputSchema"]
+        assert "prefix" in schema["properties"]
+        assert "limit" in schema["properties"]
+        assert "type_filter" in schema["properties"]
+        assert schema["required"] == ["prefix"]
 
 
 class TestMCPToolCalls:
@@ -419,6 +431,67 @@ class TestMCPToolCalls:
 
         assert result["saved"] == 0
 
+    @pytest.mark.asyncio
+    async def test_suggest_basic(self, server: MCPServer) -> None:
+        """Test nmem_suggest returns matching suggestions."""
+        mock_storage = AsyncMock()
+        mock_storage.suggest_neurons = AsyncMock(
+            return_value=[
+                {
+                    "neuron_id": "n-1",
+                    "content": "API design patterns",
+                    "type": "concept",
+                    "access_frequency": 5,
+                    "activation_level": 0.8,
+                    "score": 1.5,
+                },
+            ]
+        )
+
+        with patch.object(server, "get_storage", return_value=mock_storage):
+            result = await server.call_tool("nmem_suggest", {"prefix": "API"})
+
+        assert result["count"] == 1
+        assert result["suggestions"][0]["content"] == "API design patterns"
+        assert result["suggestions"][0]["neuron_id"] == "n-1"
+        assert result["suggestions"][0]["score"] == 1.5
+
+    @pytest.mark.asyncio
+    async def test_suggest_empty_prefix(self, server: MCPServer) -> None:
+        """Test nmem_suggest with empty prefix returns empty."""
+        result = await server.call_tool("nmem_suggest", {"prefix": ""})
+
+        assert result["suggestions"] == []
+        assert result["count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_suggest_with_type_filter(self, server: MCPServer) -> None:
+        """Test nmem_suggest with type_filter."""
+        mock_storage = AsyncMock()
+        mock_storage.suggest_neurons = AsyncMock(return_value=[])
+
+        with patch.object(server, "get_storage", return_value=mock_storage):
+            result = await server.call_tool(
+                "nmem_suggest", {"prefix": "auth", "type_filter": "concept"}
+            )
+
+        mock_storage.suggest_neurons.assert_called_once()
+        call_kwargs = mock_storage.suggest_neurons.call_args
+        assert call_kwargs.kwargs["type_filter"].value == "concept"
+        assert result["count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_suggest_respects_limit(self, server: MCPServer) -> None:
+        """Test nmem_suggest respects limit parameter."""
+        mock_storage = AsyncMock()
+        mock_storage.suggest_neurons = AsyncMock(return_value=[])
+
+        with patch.object(server, "get_storage", return_value=mock_storage):
+            await server.call_tool("nmem_suggest", {"prefix": "test", "limit": 2})
+
+        call_kwargs = mock_storage.suggest_neurons.call_args
+        assert call_kwargs.kwargs["limit"] == 2
+
 
 class TestMCPProtocol:
     """Tests for MCP protocol message handling."""
@@ -458,7 +531,7 @@ class TestMCPProtocol:
         assert response["id"] == 2
         assert "result" in response
         assert "tools" in response["result"]
-        assert len(response["result"]["tools"]) == 6
+        assert len(response["result"]["tools"]) == 7
 
     @pytest.mark.asyncio
     async def test_tools_call_message(self, server: MCPServer) -> None:

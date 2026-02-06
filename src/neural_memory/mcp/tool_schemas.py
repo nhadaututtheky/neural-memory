@@ -139,4 +139,38 @@ def get_tool_schemas() -> list[dict[str, Any]]:
                 "required": ["action"],
             },
         },
+        {
+            "name": "nmem_suggest",
+            "description": "Get autocomplete suggestions from brain neurons. Returns matches ranked by relevance and usage frequency.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "prefix": {
+                        "type": "string",
+                        "description": "The prefix text to autocomplete",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 20,
+                        "description": "Max suggestions (default: 5)",
+                    },
+                    "type_filter": {
+                        "type": "string",
+                        "enum": [
+                            "time",
+                            "spatial",
+                            "entity",
+                            "action",
+                            "state",
+                            "concept",
+                            "sensory",
+                            "intent",
+                        ],
+                        "description": "Filter by neuron type",
+                    },
+                },
+                "required": ["prefix"],
+            },
+        },
     ]

@@ -223,6 +223,19 @@ class SharedStorage(SharedFiberBrainMixin, NeuralStorage):
                 return False
             raise
 
+    async def suggest_neurons(
+        self,
+        prefix: str,
+        type_filter: NeuronType | None = None,
+        limit: int = 5,
+    ) -> list[dict[str, Any]]:
+        """Get neuron suggestions via API."""
+        params: dict[str, Any] = {"prefix": prefix, "limit": limit}
+        if type_filter:
+            params["type"] = type_filter.value
+        result = await self._request("GET", "/memory/suggest", params=params)
+        return result.get("suggestions", [])
+
     # ========== Neuron State Operations ==========
 
     async def get_neuron_state(self, neuron_id: str) -> NeuronState | None:
