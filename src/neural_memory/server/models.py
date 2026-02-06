@@ -247,7 +247,9 @@ class IndexResponse(BaseModel):
     synapses_created: int = Field(0, description="Number of synapses created")
     path: str | None = Field(None, description="Indexed directory path")
     message: str = Field(..., description="Human-readable summary")
-    indexed_files: list[str] | None = Field(None, description="List of indexed file paths (status action)")
+    indexed_files: list[str] | None = Field(
+        None, description="List of indexed file paths (status action)"
+    )
 
 
 class ErrorResponse(BaseModel):

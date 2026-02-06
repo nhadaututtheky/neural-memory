@@ -253,7 +253,9 @@ async def index_codebase(
         return IndexResponse(
             files_indexed=len(code_files),
             indexed_files=[n.content for n in code_files[:50]],
-            message=f"{len(code_files)} files indexed" if code_files else "No codebase indexed yet.",
+            message=f"{len(code_files)} files indexed"
+            if code_files
+            else "No codebase indexed yet.",
         )
 
     raise HTTPException(status_code=400, detail=f"Unknown action: {request.action}")
