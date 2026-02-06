@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/sync", tags=["sync"])
 
@@ -365,15 +368,16 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         pass
     except Exception as e:
+        logger.warning("WebSocket error for client %s: %s", client_id, e)
         try:
             await websocket.send_text(
                 SyncEvent(
                     type=SyncEventType.ERROR,
                     brain_id="*",
-                    data={"error": str(e)},
+                    data={"error": "Internal server error"},
                 ).to_json()
             )
-        except Exception:
+        except (ConnectionError, RuntimeError):
             pass
     finally:
         if client_id:

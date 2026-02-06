@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
+
+logger = logging.getLogger(__name__)
 
 
 class TimeGranularity(StrEnum):
@@ -349,8 +352,8 @@ class TemporalExtractor:
                             is_fuzzy=True,
                         )
                     )
-                except Exception:
-                    # Skip patterns that fail to resolve
+                except (ValueError, TypeError, OverflowError) as e:
+                    logger.debug("Time pattern failed to resolve '%s': %s", match.group(0), e)
                     continue
 
         # Try numbered patterns
@@ -367,7 +370,8 @@ class TemporalExtractor:
                             is_fuzzy=False,
                         )
                     )
-                except Exception:
+                except (ValueError, TypeError, OverflowError) as e:
+                    logger.debug("Numbered time pattern failed '%s': %s", match.group(0), e)
                     continue
 
         # Remove duplicates (same time range)

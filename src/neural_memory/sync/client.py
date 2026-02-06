@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -12,6 +13,8 @@ from enum import StrEnum
 from typing import Any
 
 import aiohttp
+
+logger = logging.getLogger(__name__)
 
 
 class SyncClientState(StrEnum):
@@ -401,17 +404,16 @@ class SyncClient:
         if event.source_client_id == self._client_id:
             return
 
-        # Dispatch to handlers
-        handlers = self._handlers.get(event_type, [])
-        handlers.extend(self._handlers.get("*", []))  # Wildcard handlers
+        # Dispatch to handlers (copy to avoid mutating _handlers)
+        handlers = [*self._handlers.get(event_type, []), *self._handlers.get("*", [])]
 
         for handler in handlers:
             try:
                 result = handler(event)
                 if asyncio.iscoroutine(result):
                     await result
-            except Exception:
-                pass  # Don't let handler errors crash the client
+            except Exception as e:
+                logger.warning("Sync event handler error for '%s': %s", event_type, e)
 
     async def _try_reconnect(self) -> None:
         """Attempt to reconnect to the server."""
@@ -431,5 +433,5 @@ class SyncClient:
 
         try:
             await self.connect()
-        except Exception:
-            pass  # Will retry on next loop iteration
+        except (ConnectionError, OSError) as e:
+            logger.debug("Reconnect attempt %d failed: %s", self._reconnect_attempts, e)

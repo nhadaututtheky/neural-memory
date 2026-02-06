@@ -80,10 +80,26 @@ def dict_to_fiber(data: dict[str, Any]) -> Fiber:
 
 def dict_to_brain(data: dict[str, Any]) -> Brain:
     """Convert API response dict to Brain."""
+    config_data = data.get("config", {})
+    if isinstance(config_data, dict) and config_data:
+        config = BrainConfig(
+            decay_rate=config_data.get("decay_rate", 0.1),
+            reinforcement_delta=config_data.get("reinforcement_delta", 0.05),
+            activation_threshold=config_data.get("activation_threshold", 0.2),
+            max_spread_hops=config_data.get("max_spread_hops", 4),
+            max_context_tokens=config_data.get("max_context_tokens", 1500),
+            default_synapse_weight=config_data.get("default_synapse_weight", 0.5),
+            hebbian_delta=config_data.get("hebbian_delta", 0.03),
+            hebbian_threshold=config_data.get("hebbian_threshold", 0.5),
+            hebbian_initial_weight=config_data.get("hebbian_initial_weight", 0.2),
+        )
+    else:
+        config = BrainConfig()
+
     return Brain(
         id=data["id"],
         name=data["name"],
-        config=BrainConfig(),  # Default config, actual config fetched from server
+        config=config,
         owner_id=data.get("owner_id"),
         is_public=data.get("is_public", False),
         shared_with=data.get("shared_with", []),

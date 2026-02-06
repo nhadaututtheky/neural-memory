@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from enum import StrEnum
+
+logger = logging.getLogger(__name__)
 
 
 class EntityType(StrEnum):
@@ -218,8 +221,8 @@ class EntityExtractor:
                                 )
                 if entities:
                     return entities
-            except Exception:
-                pass
+            except (ValueError, TypeError, AttributeError) as e:
+                logger.debug("Vietnamese NER failed: %s", e)
 
         return None
 

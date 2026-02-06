@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from neural_memory.core.brain_mode import BrainMode, BrainModeConfig
 from neural_memory.storage.memory_store import InMemoryStorage
 from neural_memory.storage.shared_store import SharedStorage
 from neural_memory.storage.sqlite_store import SQLiteStorage
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
@@ -152,8 +155,8 @@ class HybridStorage:
             try:
                 await self._ensure_connected()
                 await self._remote.add_neuron(neuron)
-            except Exception:
-                pass  # Offline, will sync later
+            except (ConnectionError, OSError) as e:
+                logger.debug("Remote sync failed for add_neuron: %s", e)
         return result
 
     async def get_neuron(self, neuron_id):
@@ -171,8 +174,8 @@ class HybridStorage:
             try:
                 await self._ensure_connected()
                 await self._remote.update_neuron(neuron)
-            except Exception:
-                pass
+            except (ConnectionError, OSError) as e:
+                logger.debug("Remote sync failed for update_neuron: %s", e)
 
     async def delete_neuron(self, neuron_id):
         """Delete neuron locally, optionally sync."""
@@ -181,8 +184,8 @@ class HybridStorage:
             try:
                 await self._ensure_connected()
                 await self._remote.delete_neuron(neuron_id)
-            except Exception:
-                pass
+            except (ConnectionError, OSError) as e:
+                logger.debug("Remote sync failed for delete_neuron: %s", e)
         return result
 
     async def get_neuron_state(self, neuron_id):
@@ -197,8 +200,8 @@ class HybridStorage:
             try:
                 await self._ensure_connected()
                 await self._remote.add_synapse(synapse)
-            except Exception:
-                pass
+            except (ConnectionError, OSError) as e:
+                logger.debug("Remote sync failed for add_synapse: %s", e)
         return result
 
     async def get_synapse(self, synapse_id):
@@ -213,8 +216,8 @@ class HybridStorage:
             try:
                 await self._ensure_connected()
                 await self._remote.update_synapse(synapse)
-            except Exception:
-                pass
+            except (ConnectionError, OSError) as e:
+                logger.debug("Remote sync failed for update_synapse: %s", e)
 
     async def delete_synapse(self, synapse_id):
         result = await self._local.delete_synapse(synapse_id)
@@ -222,8 +225,8 @@ class HybridStorage:
             try:
                 await self._ensure_connected()
                 await self._remote.delete_synapse(synapse_id)
-            except Exception:
-                pass
+            except (ConnectionError, OSError) as e:
+                logger.debug("Remote sync failed for delete_synapse: %s", e)
         return result
 
     async def get_neighbors(self, neuron_id, **kwargs):
@@ -238,8 +241,8 @@ class HybridStorage:
             try:
                 await self._ensure_connected()
                 await self._remote.add_fiber(fiber)
-            except Exception:
-                pass
+            except (ConnectionError, OSError) as e:
+                logger.debug("Remote sync failed for add_fiber: %s", e)
         return result
 
     async def get_fiber(self, fiber_id):
@@ -254,8 +257,8 @@ class HybridStorage:
             try:
                 await self._ensure_connected()
                 await self._remote.update_fiber(fiber)
-            except Exception:
-                pass
+            except (ConnectionError, OSError) as e:
+                logger.debug("Remote sync failed for update_fiber: %s", e)
 
     async def delete_fiber(self, fiber_id):
         result = await self._local.delete_fiber(fiber_id)
@@ -263,8 +266,8 @@ class HybridStorage:
             try:
                 await self._ensure_connected()
                 await self._remote.delete_fiber(fiber_id)
-            except Exception:
-                pass
+            except (ConnectionError, OSError) as e:
+                logger.debug("Remote sync failed for delete_fiber: %s", e)
         return result
 
     async def get_fibers(self, **kwargs):
@@ -326,4 +329,5 @@ class HybridStorage:
 
     async def close(self) -> None:
         """Close all connections."""
+        await self._local.close()
         await self._remote.disconnect()

@@ -13,10 +13,14 @@ Brain data is stored in ~/.neuralmemory/brains/<name>.db (SQLite)
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+# Valid brain name: alphanumeric, hyphens, underscores, dots (no path separators)
+_BRAIN_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 
 # Try to import tomllib (Python 3.11+) or fallback
 try:
@@ -234,9 +238,20 @@ class UnifiedConfig:
 
         Returns:
             Path to SQLite database file
+
+        Raises:
+            ValueError: If brain name contains invalid characters
         """
         name = brain_name or self.current_brain
-        return self.brains_dir / f"{name}.db"
+        if not _BRAIN_NAME_PATTERN.match(name):
+            raise ValueError(
+                f"Invalid brain name '{name}': must contain only "
+                "alphanumeric characters, hyphens, underscores, or dots"
+            )
+        db_path = (self.brains_dir / f"{name}.db").resolve()
+        if not db_path.is_relative_to(self.brains_dir.resolve()):
+            raise ValueError(f"Invalid brain name '{name}': path traversal detected")
+        return db_path
 
     def list_brains(self) -> list[str]:
         """List available brains (by database files)."""

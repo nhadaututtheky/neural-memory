@@ -19,12 +19,13 @@ def _build_fts_query(search_term: str) -> str:
 
     Splits on whitespace, quotes each token to escape FTS5 operators
     (AND, OR, NOT, NEAR, *, etc.), and joins with implicit AND.
+    Double quotes within tokens are escaped by doubling them.
     Example: 'API design' → '"API" "design"'
     """
     tokens = search_term.split()
     if not tokens:
         return '""'
-    return " ".join(f'"{token}"' for token in tokens)
+    return " ".join(f'"{token.replace(chr(34), chr(34)+chr(34))}"' for token in tokens)
 
 
 class SQLiteNeuronMixin:
