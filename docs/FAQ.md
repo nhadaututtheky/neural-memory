@@ -103,3 +103,56 @@ The root URL (`/`) only shows basic API info. To view your data:
 - **Neurons list (API)**: go to `/memory/neurons` (requires `X-Brain-ID` header)
 
 The VS Code sidebar is the main way to browse your neurons and fibers.
+
+## Data & Multi-tool Sharing
+
+### Q: Do I need to install NeuralMemory per project?
+
+No. Install once globally and it works for the entire machine:
+
+```bash
+python -m pip install neural-memory[all]
+```
+
+Data is stored in `~/.neuralmemory/` — not tied to any specific project. All tools (CLI, AntiGravity, Claude Code, VS Code extension) read from the same location.
+
+To separate data per project, use different brains:
+
+```bash
+nmem brain create my-project
+nmem brain switch my-project
+```
+
+### Q: How to share brain data between AntiGravity and Claude Code?
+
+They already share the same brain automatically. Both read/write to the same files:
+
+- **Config**: `~/.neuralmemory/config.toml`
+- **Data**: `~/.neuralmemory/brains/<name>.db`
+
+As long as both tools point to the same `current_brain`, all memories are synced. Verify with:
+
+```bash
+nmem config show
+```
+
+### Q: How do I let Claude Code query my brain using natural language?
+
+Add the NeuralMemory MCP server to `~/.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "neuralmemory": {
+      "command": "python",
+      "args": ["-m", "neural_memory.mcp"]
+    }
+  }
+}
+```
+
+After restarting Claude Code, just ask naturally:
+
+> "What did we decide about the volume spike feature?"
+
+The agent will automatically call the `recall` tool to search your brain.
