@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
@@ -118,24 +118,7 @@ class Fiber:
         Returns:
             New Fiber with frequency + 1
         """
-        return Fiber(
-            id=self.id,
-            neuron_ids=self.neuron_ids,
-            synapse_ids=self.synapse_ids,
-            anchor_neuron_id=self.anchor_neuron_id,
-            pathway=self.pathway,
-            conductivity=self.conductivity,
-            last_conducted=self.last_conducted,
-            time_start=self.time_start,
-            time_end=self.time_end,
-            coherence=self.coherence,
-            salience=self.salience,
-            frequency=self.frequency + 1,
-            summary=self.summary,
-            tags=self.tags,
-            metadata=self.metadata,
-            created_at=self.created_at,
-        )
+        return replace(self, frequency=self.frequency + 1)
 
     def with_salience(self, salience: float) -> Fiber:
         """
@@ -147,24 +130,7 @@ class Fiber:
         Returns:
             New Fiber with updated salience
         """
-        return Fiber(
-            id=self.id,
-            neuron_ids=self.neuron_ids,
-            synapse_ids=self.synapse_ids,
-            anchor_neuron_id=self.anchor_neuron_id,
-            pathway=self.pathway,
-            conductivity=self.conductivity,
-            last_conducted=self.last_conducted,
-            time_start=self.time_start,
-            time_end=self.time_end,
-            coherence=self.coherence,
-            salience=max(0.0, min(1.0, salience)),
-            frequency=self.frequency,
-            summary=self.summary,
-            tags=self.tags,
-            metadata=self.metadata,
-            created_at=self.created_at,
-        )
+        return replace(self, salience=max(0.0, min(1.0, salience)))
 
     def with_summary(self, summary: str) -> Fiber:
         """
@@ -176,24 +142,7 @@ class Fiber:
         Returns:
             New Fiber with summary
         """
-        return Fiber(
-            id=self.id,
-            neuron_ids=self.neuron_ids,
-            synapse_ids=self.synapse_ids,
-            anchor_neuron_id=self.anchor_neuron_id,
-            pathway=self.pathway,
-            conductivity=self.conductivity,
-            last_conducted=self.last_conducted,
-            time_start=self.time_start,
-            time_end=self.time_end,
-            coherence=self.coherence,
-            salience=self.salience,
-            frequency=self.frequency,
-            summary=summary,
-            tags=self.tags,
-            metadata=self.metadata,
-            created_at=self.created_at,
-        )
+        return replace(self, summary=summary)
 
     def add_tags(self, *new_tags: str) -> Fiber:
         """
@@ -205,24 +154,7 @@ class Fiber:
         Returns:
             New Fiber with merged tags
         """
-        return Fiber(
-            id=self.id,
-            neuron_ids=self.neuron_ids,
-            synapse_ids=self.synapse_ids,
-            anchor_neuron_id=self.anchor_neuron_id,
-            pathway=self.pathway,
-            conductivity=self.conductivity,
-            last_conducted=self.last_conducted,
-            time_start=self.time_start,
-            time_end=self.time_end,
-            coherence=self.coherence,
-            salience=self.salience,
-            frequency=self.frequency,
-            summary=self.summary,
-            tags=self.tags | set(new_tags),
-            metadata=self.metadata,
-            created_at=self.created_at,
-        )
+        return replace(self, tags=self.tags | set(new_tags))
 
     def conduct(
         self,
@@ -246,26 +178,13 @@ class Fiber:
         """
         new_conductivity = self.conductivity
         if reinforce:
-            # Reinforce conductivity, max 1.0
             new_conductivity = min(1.0, self.conductivity + 0.02)
 
-        return Fiber(
-            id=self.id,
-            neuron_ids=self.neuron_ids,
-            synapse_ids=self.synapse_ids,
-            anchor_neuron_id=self.anchor_neuron_id,
-            pathway=self.pathway,
+        return replace(
+            self,
             conductivity=new_conductivity,
             last_conducted=conducted_at or datetime.utcnow(),
-            time_start=self.time_start,
-            time_end=self.time_end,
-            coherence=self.coherence,
-            salience=self.salience,
             frequency=self.frequency + 1,
-            summary=self.summary,
-            tags=self.tags,
-            metadata=self.metadata,
-            created_at=self.created_at,
         )
 
     def with_conductivity(self, conductivity: float) -> Fiber:
@@ -278,24 +197,7 @@ class Fiber:
         Returns:
             New Fiber with updated conductivity
         """
-        return Fiber(
-            id=self.id,
-            neuron_ids=self.neuron_ids,
-            synapse_ids=self.synapse_ids,
-            anchor_neuron_id=self.anchor_neuron_id,
-            pathway=self.pathway,
-            conductivity=max(0.0, min(1.0, conductivity)),
-            last_conducted=self.last_conducted,
-            time_start=self.time_start,
-            time_end=self.time_end,
-            coherence=self.coherence,
-            salience=self.salience,
-            frequency=self.frequency,
-            summary=self.summary,
-            tags=self.tags,
-            metadata=self.metadata,
-            created_at=self.created_at,
-        )
+        return replace(self, conductivity=max(0.0, min(1.0, conductivity)))
 
     @property
     def neuron_count(self) -> int:

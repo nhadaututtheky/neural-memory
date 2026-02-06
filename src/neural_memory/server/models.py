@@ -131,6 +131,20 @@ class HealthResponse(BaseModel):
     version: str
 
 
+class ImportBrainRequest(BaseModel):
+    """Request to import a brain from a snapshot."""
+
+    brain_id: str = Field(..., description="Brain ID in the snapshot")
+    brain_name: str = Field(..., min_length=1, max_length=100, description="Brain name")
+    exported_at: datetime = Field(..., description="When the snapshot was exported")
+    version: str = Field(..., description="Snapshot version")
+    neurons: list[dict[str, Any]] = Field(default_factory=list, description="Neuron data")
+    synapses: list[dict[str, Any]] = Field(default_factory=list, description="Synapse data")
+    fibers: list[dict[str, Any]] = Field(default_factory=list, description="Fiber data")
+    config: dict[str, Any] = Field(default_factory=dict, description="Brain configuration")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+
+
 class ErrorResponse(BaseModel):
     """Error response."""
 

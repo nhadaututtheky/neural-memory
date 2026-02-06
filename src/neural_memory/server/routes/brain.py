@@ -12,6 +12,7 @@ from neural_memory.server.models import (
     BrainResponse,
     CreateBrainRequest,
     ErrorResponse,
+    ImportBrainRequest,
     StatsResponse,
 )
 from neural_memory.storage.base import NeuralStorage
@@ -159,25 +160,22 @@ async def export_brain(
 )
 async def import_brain(
     brain_id: str,
-    snapshot: dict,
+    snapshot: ImportBrainRequest,
     storage: Annotated[NeuralStorage, Depends(get_storage)],
 ) -> BrainResponse:
     """Import brain from snapshot."""
-    from datetime import datetime
-
     from neural_memory.core.brain import BrainSnapshot
 
-    # Convert dict to BrainSnapshot
     brain_snapshot = BrainSnapshot(
-        brain_id=snapshot.get("brain_id", brain_id),
-        brain_name=snapshot["brain_name"],
-        exported_at=datetime.fromisoformat(snapshot["exported_at"]),
-        version=snapshot["version"],
-        neurons=snapshot["neurons"],
-        synapses=snapshot["synapses"],
-        fibers=snapshot["fibers"],
-        config=snapshot["config"],
-        metadata=snapshot.get("metadata", {}),
+        brain_id=snapshot.brain_id,
+        brain_name=snapshot.brain_name,
+        exported_at=snapshot.exported_at,
+        version=snapshot.version,
+        neurons=snapshot.neurons,
+        synapses=snapshot.synapses,
+        fibers=snapshot.fibers,
+        config=snapshot.config,
+        metadata=snapshot.metadata,
     )
 
     imported_id = await storage.import_brain(brain_snapshot, brain_id)

@@ -36,6 +36,17 @@ async def encode_memory(
     storage: Annotated[NeuralStorage, Depends(get_storage)],
 ) -> EncodeResponse:
     """Encode new content as a memory."""
+    from neural_memory.safety.sensitive import check_sensitive_content
+
+    sensitive_matches = check_sensitive_content(request.content, min_severity=2)
+    if sensitive_matches:
+        types_found = sorted({m.type.value for m in sensitive_matches})
+        raise HTTPException(
+            status_code=400,
+            detail=f"Sensitive content detected: {', '.join(types_found)}. "
+            "Remove secrets before storing.",
+        )
+
     encoder = MemoryEncoder(storage, brain.config)
 
     tags = set(request.tags) if request.tags else None

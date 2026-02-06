@@ -117,6 +117,19 @@ class MCPServer:
 
         content = args["content"]
 
+        # Check for sensitive content (high severity only)
+        from neural_memory.safety.sensitive import check_sensitive_content
+
+        sensitive_matches = check_sensitive_content(content, min_severity=2)
+        if sensitive_matches:
+            types_found = sorted({m.type.value for m in sensitive_matches})
+            return {
+                "error": "Sensitive content detected",
+                "sensitive_types": types_found,
+                "message": "Content contains potentially sensitive information. "
+                "Remove secrets before storing.",
+            }
+
         # Determine memory type
         if "type" in args:
             mem_type = MemoryType(args["type"])
@@ -274,12 +287,16 @@ class MCPServer:
             }
 
         elif action == "enable":
-            self.config.auto.enabled = True
+            from dataclasses import replace
+
+            self.config = replace(self.config, auto=replace(self.config.auto, enabled=True))
             self.config.save()
             return {"enabled": True, "message": "Auto-capture enabled"}
 
         elif action == "disable":
-            self.config.auto.enabled = False
+            from dataclasses import replace
+
+            self.config = replace(self.config, auto=replace(self.config.auto, enabled=False))
             self.config.save()
             return {"enabled": False, "message": "Auto-capture disabled"}
 
@@ -427,6 +444,9 @@ async def handle_message(server: MCPServer, message: dict[str, Any]) -> dict[str
         }
 
 
+_MAX_MESSAGE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
 async def run_mcp_server() -> None:
     """Run the MCP server over stdio."""
     server = create_mcp_server()
@@ -441,6 +461,15 @@ async def run_mcp_server() -> None:
 
             line = line.strip()
             if not line:
+                continue
+
+            if len(line) > _MAX_MESSAGE_SIZE:
+                error_resp = {
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {"code": -32000, "message": "Message too large"},
+                }
+                print(json.dumps(error_resp), flush=True)
                 continue
 
             message = json.loads(line)

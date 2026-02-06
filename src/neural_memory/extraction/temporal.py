@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 import re
 from collections.abc import Callable
@@ -289,9 +290,15 @@ class TemporalExtractor:
 
     def __init__(self) -> None:
         """Initialize the extractor."""
-        # Compile regex patterns
-        self._vi_compiled = [(re.compile(p, re.IGNORECASE), r) for p, r in self.VI_PATTERNS.items()]
-        self._en_compiled = [(re.compile(p, re.IGNORECASE), r) for p, r in self.EN_PATTERNS.items()]
+        # Compile regex patterns and cache resolver arity
+        self._vi_compiled = [
+            (re.compile(p, re.IGNORECASE), r, len(inspect.signature(r).parameters))
+            for p, r in self.VI_PATTERNS.items()
+        ]
+        self._en_compiled = [
+            (re.compile(p, re.IGNORECASE), r, len(inspect.signature(r).parameters))
+            for p, r in self.EN_PATTERNS.items()
+        ]
         self._vi_numbered = [
             (re.compile(p, re.IGNORECASE), r, g) for p, r, g in self.VI_NUMBERED_PATTERNS
         ]
@@ -331,14 +338,10 @@ class TemporalExtractor:
             numbered_patterns = []
 
         # Try each pattern
-        for pattern, resolver in patterns:
+        for pattern, resolver, arity in patterns:
             for match in pattern.finditer(text):
                 try:
-                    # Check if resolver takes a match argument
-                    import inspect
-
-                    sig = inspect.signature(resolver)
-                    if len(sig.parameters) == 2:
+                    if arity == 2:
                         start, end = resolver(reference_time, match)  # type: ignore
                     else:
                         start, end = resolver(reference_time)

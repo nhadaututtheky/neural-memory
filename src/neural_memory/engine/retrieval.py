@@ -412,49 +412,6 @@ class ReflexPipeline:
 
         return anchor_sets
 
-    async def _find_anchors(self, stimulus: Stimulus) -> list[list[str]]:
-        """Find anchor neurons for each signal type."""
-        anchor_sets: list[list[str]] = []
-
-        # Time anchors
-        time_anchors: list[str] = []
-        for hint in stimulus.time_hints:
-            neurons = await self._storage.find_neurons(
-                type=NeuronType.TIME,
-                time_range=(hint.absolute_start, hint.absolute_end),
-                limit=5,
-            )
-            time_anchors.extend(n.id for n in neurons)
-
-        if time_anchors:
-            anchor_sets.append(time_anchors)
-
-        # Entity anchors
-        entity_anchors: list[str] = []
-        for entity in stimulus.entities:
-            neurons = await self._storage.find_neurons(
-                content_contains=entity.text,
-                limit=3,
-            )
-            entity_anchors.extend(n.id for n in neurons)
-
-        if entity_anchors:
-            anchor_sets.append(entity_anchors)
-
-        # Keyword anchors
-        keyword_anchors: list[str] = []
-        for keyword in stimulus.keywords[:5]:  # Limit keywords
-            neurons = await self._storage.find_neurons(
-                content_contains=keyword,
-                limit=2,
-            )
-            keyword_anchors.extend(n.id for n in neurons)
-
-        if keyword_anchors:
-            anchor_sets.append(keyword_anchors)
-
-        return anchor_sets
-
     async def _find_matching_fibers(
         self,
         activations: dict[str, ActivationResult],
