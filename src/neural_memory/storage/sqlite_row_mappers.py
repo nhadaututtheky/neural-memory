@@ -158,6 +158,10 @@ def row_to_brain(row: aiosqlite.Row) -> Brain:
         activation_threshold=config_data.get("activation_threshold", 0.2),
         max_spread_hops=config_data.get("max_spread_hops", 4),
         max_context_tokens=config_data.get("max_context_tokens", 1500),
+        default_synapse_weight=config_data.get("default_synapse_weight", 0.5),
+        hebbian_delta=config_data.get("hebbian_delta", 0.03),
+        hebbian_threshold=config_data.get("hebbian_threshold", 0.5),
+        hebbian_initial_weight=config_data.get("hebbian_initial_weight", 0.2),
     )
 
     return Brain(

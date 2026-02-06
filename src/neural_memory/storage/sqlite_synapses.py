@@ -166,23 +166,29 @@ class SQLiteSynapseMixin:
         brain_id = self._get_brain_id()
         results: list[tuple[Neuron, Synapse]] = []
 
-        type_filter = ""
-        if synapse_types:
-            types_str = ",".join(f"'{t.value}'" for t in synapse_types)
-            type_filter = f" AND s.type IN ({types_str})"
+        # Build parameterized filter clauses
+        extra_conditions: list[str] = []
+        extra_params: list[Any] = []
 
-        weight_filter = ""
+        if synapse_types:
+            placeholders = ",".join("?" for _ in synapse_types)
+            extra_conditions.append(f"s.type IN ({placeholders})")
+            extra_params.extend(t.value for t in synapse_types)
+
         if min_weight is not None:
-            weight_filter = f" AND s.weight >= {min_weight}"
+            extra_conditions.append("s.weight >= ?")
+            extra_params.append(min_weight)
 
         if direction in ("out", "both"):
             results.extend(
-                await self._fetch_outgoing(conn, neuron_id, brain_id, type_filter, weight_filter)
+                await self._fetch_outgoing(
+                    conn, neuron_id, brain_id, extra_conditions, extra_params
+                )
             )
 
         if direction in ("in", "both"):
             incoming = await self._fetch_incoming(
-                conn, neuron_id, brain_id, type_filter, weight_filter
+                conn, neuron_id, brain_id, extra_conditions, extra_params
             )
             for pair in incoming:
                 if direction == "in" and not pair[1].is_bidirectional:
@@ -197,10 +203,17 @@ class SQLiteSynapseMixin:
         conn: aiosqlite.Connection,
         neuron_id: str,
         brain_id: str,
-        type_filter: str,
-        weight_filter: str,
+        extra_conditions: list[str],
+        extra_params: list[Any],
     ) -> list[tuple[Neuron, Synapse]]:
         """Fetch outgoing neighbor neurons and their synapses."""
+        where_clause = "s.source_id = ? AND s.brain_id = ?"
+        params: list[Any] = [neuron_id, brain_id]
+
+        for condition in extra_conditions:
+            where_clause += f" AND {condition}"
+        params.extend(extra_params)
+
         query = f"""
             SELECT n.*, s.id as s_id, s.source_id, s.target_id, s.type as s_type,
                    s.weight, s.direction, s.metadata as s_metadata,
@@ -208,10 +221,10 @@ class SQLiteSynapseMixin:
                    s.created_at as s_created_at
             FROM synapses s
             JOIN neurons n ON s.target_id = n.id
-            WHERE s.source_id = ? AND s.brain_id = ?{type_filter}{weight_filter}
+            WHERE {where_clause}
         """
         results: list[tuple[Neuron, Synapse]] = []
-        async with conn.execute(query, (neuron_id, brain_id)) as cursor:
+        async with conn.execute(query, params) as cursor:
             async for row in cursor:
                 results.append((row_to_neuron(row), _row_to_joined_synapse(row)))
         return results
@@ -221,10 +234,17 @@ class SQLiteSynapseMixin:
         conn: aiosqlite.Connection,
         neuron_id: str,
         brain_id: str,
-        type_filter: str,
-        weight_filter: str,
+        extra_conditions: list[str],
+        extra_params: list[Any],
     ) -> list[tuple[Neuron, Synapse]]:
         """Fetch incoming neighbor neurons and their synapses."""
+        where_clause = "s.target_id = ? AND s.brain_id = ?"
+        params: list[Any] = [neuron_id, brain_id]
+
+        for condition in extra_conditions:
+            where_clause += f" AND {condition}"
+        params.extend(extra_params)
+
         query = f"""
             SELECT n.*, s.id as s_id, s.source_id, s.target_id, s.type as s_type,
                    s.weight, s.direction, s.metadata as s_metadata,
@@ -232,10 +252,10 @@ class SQLiteSynapseMixin:
                    s.created_at as s_created_at
             FROM synapses s
             JOIN neurons n ON s.source_id = n.id
-            WHERE s.target_id = ? AND s.brain_id = ?{type_filter}{weight_filter}
+            WHERE {where_clause}
         """
         results: list[tuple[Neuron, Synapse]] = []
-        async with conn.execute(query, (neuron_id, brain_id)) as cursor:
+        async with conn.execute(query, params) as cursor:
             async for row in cursor:
                 results.append((row_to_neuron(row), _row_to_joined_synapse(row)))
         return results

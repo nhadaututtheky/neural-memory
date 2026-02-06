@@ -52,6 +52,10 @@ class SQLiteBrainMixin:
                         "activation_threshold": brain.config.activation_threshold,
                         "max_spread_hops": brain.config.max_spread_hops,
                         "max_context_tokens": brain.config.max_context_tokens,
+                        "default_synapse_weight": brain.config.default_synapse_weight,
+                        "hebbian_delta": brain.config.hebbian_delta,
+                        "hebbian_threshold": brain.config.hebbian_threshold,
+                        "hebbian_initial_weight": brain.config.hebbian_initial_weight,
                     }
                 ),
                 brain.owner_id,
@@ -108,6 +112,10 @@ class SQLiteBrainMixin:
                 "activation_threshold": brain.config.activation_threshold,
                 "max_spread_hops": brain.config.max_spread_hops,
                 "max_context_tokens": brain.config.max_context_tokens,
+                "default_synapse_weight": brain.config.default_synapse_weight,
+                "hebbian_delta": brain.config.hebbian_delta,
+                "hebbian_threshold": brain.config.hebbian_threshold,
+                "hebbian_initial_weight": brain.config.hebbian_initial_weight,
             },
             metadata={
                 "typed_memories": typed_memories,

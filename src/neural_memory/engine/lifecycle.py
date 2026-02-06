@@ -116,8 +116,6 @@ class DecayManager:
                     new_level = 0.0
 
                 if not dry_run:
-                    # Update the neuron state
-                    updated_state = state.with_activation(new_level)
                     updated_state = type(state)(
                         neuron_id=state.neuron_id,
                         activation_level=new_level,
