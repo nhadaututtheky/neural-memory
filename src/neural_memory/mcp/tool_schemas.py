@@ -262,4 +262,59 @@ def get_tool_schemas() -> list[dict[str, Any]]:
                 "required": ["source"],
             },
         },
+        {
+            "name": "nmem_eternal",
+            "description": "Manage eternal context persistence. Auto-saves project context, decisions, and session state across sessions so nothing is lost.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["status", "save", "load", "compact"],
+                        "description": "status=view state, save=force save+snapshot, load=reload from files, compact=summarize context into session",
+                    },
+                    "project_name": {
+                        "type": "string",
+                        "description": "Set project name (Tier 1)",
+                    },
+                    "tech_stack": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Set tech stack (Tier 1)",
+                    },
+                    "decision": {
+                        "type": "string",
+                        "description": "Add a key decision (Tier 1)",
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Reason for the decision",
+                    },
+                    "instruction": {
+                        "type": "string",
+                        "description": "Add a user instruction (Tier 1)",
+                    },
+                },
+                "required": ["action"],
+            },
+        },
+        {
+            "name": "nmem_recap",
+            "description": "Load saved context at session start. Returns project state, decisions, progress. Use at the beginning of every session to resume where you left off.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "level": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 3,
+                        "description": "Detail level: 1=quick (~500 tokens), 2=detailed (~1300 tokens), 3=full (~3300 tokens). Default: 1",
+                    },
+                    "topic": {
+                        "type": "string",
+                        "description": "Search for a specific topic in context (e.g., 'auth', 'database')",
+                    },
+                },
+            },
+        },
     ]

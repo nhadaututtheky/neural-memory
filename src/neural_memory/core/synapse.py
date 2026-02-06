@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -151,18 +152,28 @@ class Synapse:
         """
         Create a new Synapse with reinforced weight.
 
+        Includes dormancy bonus: synapses reactivated after long dormancy
+        get an extra boost (re-learning effect).
+
         Args:
             delta: Amount to increase weight by
 
         Returns:
             New Synapse with increased weight (capped at 1.0)
         """
+        dormancy_bonus = 0.0
+        if self.last_activated:
+            hours_dormant = (datetime.utcnow() - self.last_activated).total_seconds() / 3600
+            if hours_dormant > 168:  # > 1 week dormant
+                dormancy_bonus = min(0.1, 0.02 * math.log1p(hours_dormant / 168))
+
+        effective_delta = delta + dormancy_bonus
         return Synapse(
             id=self.id,
             source_id=self.source_id,
             target_id=self.target_id,
             type=self.type,
-            weight=min(1.0, self.weight + delta),
+            weight=min(1.0, self.weight + effective_delta),
             direction=self.direction,
             metadata=self.metadata,
             reinforced_count=self.reinforced_count + 1,
@@ -186,6 +197,46 @@ class Synapse:
             target_id=self.target_id,
             type=self.type,
             weight=self.weight * factor,
+            direction=self.direction,
+            metadata=self.metadata,
+            reinforced_count=self.reinforced_count,
+            last_activated=self.last_activated,
+            created_at=self.created_at,
+        )
+
+    def time_decay(self, reference_time: datetime | None = None) -> Synapse:
+        """Decay weight based on time since last activation.
+
+        Uses sigmoid: recent synapses barely decay, old ones decay more.
+        Synapses that were never activated decay fastest.
+
+        ~0.98 at 1 day, ~0.90 at 7 days, ~0.70 at 30 days, ~0.50 at 60 days.
+
+        Args:
+            reference_time: Reference time for age calculation (default: now)
+
+        Returns:
+            New Synapse with time-decayed weight (floor at 30% of original)
+        """
+        if reference_time is None:
+            reference_time = datetime.utcnow()
+
+        if self.last_activated:
+            hours_since = (reference_time - self.last_activated).total_seconds() / 3600
+        else:
+            hours_since = (reference_time - self.created_at).total_seconds() / 3600
+
+        # Sigmoid decay: center at 1440h (60 days), spread 720h
+        factor = 1.0 / (1.0 + math.exp((hours_since - 1440) / 720))
+        factor = max(0.3, factor)  # Floor: never decay below 30% of original
+
+        new_weight = self.weight * factor
+        return Synapse(
+            id=self.id,
+            source_id=self.source_id,
+            target_id=self.target_id,
+            type=self.type,
+            weight=new_weight,
             direction=self.direction,
             metadata=self.metadata,
             reinforced_count=self.reinforced_count,

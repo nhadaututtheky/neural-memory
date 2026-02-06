@@ -13,6 +13,8 @@ import type {
   EncodeRequest,
   EncodeResponse,
   ErrorResponse,
+  EternalRequest,
+  EternalResponse,
   FiberResponse,
   GraphData,
   HealthResponse,
@@ -23,6 +25,8 @@ import type {
   NeuronListResponse,
   QueryRequest,
   QueryResponse,
+  RecapRequest,
+  RecapResponse,
   StatsResponse,
   SyncStatsResponse,
 } from "./types";
@@ -119,6 +123,20 @@ export class NeuralMemoryClient {
     request: ImportRequest,
   ): Promise<ImportResponse> {
     return this._post<ImportResponse>("/memory/import", request, brainId);
+  }
+
+  async eternal(
+    brainId: string,
+    request: EternalRequest,
+  ): Promise<EternalResponse> {
+    return this._post<EternalResponse>("/memory/eternal", request, brainId);
+  }
+
+  async recap(
+    brainId: string,
+    request: RecapRequest,
+  ): Promise<RecapResponse> {
+    return this._post<RecapResponse>("/memory/recap", request, brainId);
   }
 
   // ============ Graph ============

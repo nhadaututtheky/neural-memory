@@ -119,6 +119,39 @@ class BrainSettings:
 
 
 @dataclass
+class EternalConfig:
+    """Eternal context auto-save configuration."""
+
+    enabled: bool = True
+    notifications: bool = True
+    snapshot_retention_days: int = 7
+    auto_save_interval: int = 15
+    context_warning_threshold: float = 0.8
+    max_context_tokens: int = 128_000
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "notifications": self.notifications,
+            "snapshot_retention_days": self.snapshot_retention_days,
+            "auto_save_interval": self.auto_save_interval,
+            "context_warning_threshold": self.context_warning_threshold,
+            "max_context_tokens": self.max_context_tokens,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> EternalConfig:
+        return cls(
+            enabled=data.get("enabled", True),
+            notifications=data.get("notifications", True),
+            snapshot_retention_days=data.get("snapshot_retention_days", 7),
+            auto_save_interval=data.get("auto_save_interval", 15),
+            context_warning_threshold=data.get("context_warning_threshold", 0.8),
+            max_context_tokens=data.get("max_context_tokens", 128_000),
+        )
+
+
+@dataclass
 class UnifiedConfig:
     """Unified configuration for NeuralMemory.
 
@@ -142,6 +175,9 @@ class UnifiedConfig:
 
     # Auto-capture settings for MCP
     auto: AutoConfig = field(default_factory=AutoConfig)
+
+    # Eternal context settings
+    eternal: EternalConfig = field(default_factory=EternalConfig)
 
     # CLI preferences
     json_output: bool = False
@@ -175,6 +211,7 @@ class UnifiedConfig:
             current_brain=data.get("current_brain", get_default_brain()),
             brain=BrainSettings.from_dict(data.get("brain", {})),
             auto=AutoConfig.from_dict(data.get("auto", {})),
+            eternal=EternalConfig.from_dict(data.get("eternal", {})),
             json_output=data.get("cli", {}).get("json_output", False),
             default_depth=data.get("cli", {}).get("default_depth"),
             default_max_tokens=data.get("cli", {}).get("default_max_tokens", 500),
@@ -211,6 +248,15 @@ class UnifiedConfig:
             f"capture_facts = {'true' if self.auto.capture_facts else 'false'}",
             f"capture_insights = {'true' if self.auto.capture_insights else 'false'}",
             f"min_confidence = {self.auto.min_confidence}",
+            "",
+            "# Eternal context settings",
+            "[eternal]",
+            f"enabled = {'true' if self.eternal.enabled else 'false'}",
+            f"notifications = {'true' if self.eternal.notifications else 'false'}",
+            f"snapshot_retention_days = {self.eternal.snapshot_retention_days}",
+            f"auto_save_interval = {self.eternal.auto_save_interval}",
+            f"context_warning_threshold = {self.eternal.context_warning_threshold}",
+            f"max_context_tokens = {self.eternal.max_context_tokens}",
             "",
             "# CLI preferences",
             "[cli]",

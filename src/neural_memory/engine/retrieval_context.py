@@ -9,6 +9,15 @@ from typing import TYPE_CHECKING
 from neural_memory.core.neuron import NeuronType
 from neural_memory.engine.activation import ActivationResult
 
+# Average tokens per whitespace-separated word (accounts for subword tokenization)
+_TOKEN_RATIO = 1.3
+
+
+def _estimate_tokens(text: str) -> int:
+    """Estimate LLM token count from text using word-based heuristic."""
+    return int(len(text.split()) * _TOKEN_RATIO)
+
+
 if TYPE_CHECKING:
     from neural_memory.core.fiber import Fiber
     from neural_memory.extraction.parser import Stimulus
@@ -98,7 +107,7 @@ async def format_context(
     if fibers:
         lines.append("## Relevant Memories\n")
 
-        anchor_ids = [f.anchor_neuron_id for f in fibers[:5] if not f.summary]
+        anchor_ids = list({f.anchor_neuron_id for f in fibers[:5] if not f.summary})
         anchor_map = await storage.get_neurons_batch(anchor_ids) if anchor_ids else {}
 
         for fiber in fibers[:5]:
@@ -111,7 +120,7 @@ async def format_context(
                 else:
                     continue
 
-            token_estimate += len(line.split())
+            token_estimate += _estimate_tokens(line)
             if token_estimate > max_tokens:
                 break
 
@@ -140,7 +149,7 @@ async def format_context(
                 continue
 
             line = f"- [{neuron.type.value}] {neuron.content}"
-            token_estimate += len(line.split())
+            token_estimate += _estimate_tokens(line)
 
             if token_estimate > max_tokens:
                 break

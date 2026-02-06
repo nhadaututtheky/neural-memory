@@ -161,7 +161,9 @@ class ConsolidationEngine:
         pruned_synapse_ids: set[str] = set()
 
         for synapse in all_synapses:
-            should_prune = synapse.weight < self._config.prune_weight_threshold
+            # Apply time-based decay before checking weight threshold
+            decayed = synapse.time_decay(reference_time=reference_time)
+            should_prune = decayed.weight < self._config.prune_weight_threshold
 
             # Check inactivity
             if synapse.last_activated is not None:

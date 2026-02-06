@@ -234,46 +234,28 @@ class QueryRouter:
         query_lower = stimulus.raw_query.lower()
         signals: list[str] = []
 
-        # Score each query type
-        scores: dict[QueryType, float] = {
-            QueryType.SEMANTIC: 0.0,
-            QueryType.TEMPORAL: 0.0,
-            QueryType.CAUSAL: 0.0,
-            QueryType.DIRECT: 0.0,
-            QueryType.PATTERN: 0.0,
-            QueryType.COMPARATIVE: 0.0,
+        # Pre-build word set + bigram set for O(1) lookups
+        words = query_lower.split()
+        word_set = frozenset(words)
+        bigrams = frozenset(f"{words[i]} {words[i + 1]}" for i in range(len(words) - 1))
+        all_tokens = word_set | bigrams
+
+        # Score each query type via consolidated loop
+        signal_map: dict[QueryType, tuple[frozenset[str], float]] = {
+            QueryType.TEMPORAL: (self.TEMPORAL_SIGNALS, 2.0),
+            QueryType.CAUSAL: (self.CAUSAL_SIGNALS, 2.0),
+            QueryType.DIRECT: (self.DIRECT_SIGNALS, 1.5),
+            QueryType.PATTERN: (self.PATTERN_SIGNALS, 2.0),
+            QueryType.COMPARATIVE: (self.COMPARATIVE_SIGNALS, 2.0),
+            QueryType.SEMANTIC: (self.SEMANTIC_SIGNALS, 1.0),
         }
 
-        # Check for signal keywords
-        for signal in self.TEMPORAL_SIGNALS:
-            if signal in query_lower:
-                scores[QueryType.TEMPORAL] += 2.0
-                signals.append(f"temporal:{signal}")
-
-        for signal in self.CAUSAL_SIGNALS:
-            if signal in query_lower:
-                scores[QueryType.CAUSAL] += 2.0
-                signals.append(f"causal:{signal}")
-
-        for signal in self.DIRECT_SIGNALS:
-            if signal in query_lower:
-                scores[QueryType.DIRECT] += 1.5
-                signals.append(f"direct:{signal}")
-
-        for signal in self.PATTERN_SIGNALS:
-            if signal in query_lower:
-                scores[QueryType.PATTERN] += 2.0
-                signals.append(f"pattern:{signal}")
-
-        for signal in self.COMPARATIVE_SIGNALS:
-            if signal in query_lower:
-                scores[QueryType.COMPARATIVE] += 2.0
-                signals.append(f"comparative:{signal}")
-
-        for signal in self.SEMANTIC_SIGNALS:
-            if signal in query_lower:
-                scores[QueryType.SEMANTIC] += 1.0
-                signals.append(f"semantic:{signal}")
+        scores: dict[QueryType, float] = dict.fromkeys(QueryType, 0.0)
+        for query_type, (signal_set, weight) in signal_map.items():
+            for signal in signal_set:
+                if signal in all_tokens or signal in query_lower:
+                    scores[query_type] += weight
+                    signals.append(f"{query_type.value}:{signal}")
 
         # Use parsed intent to boost scores
         intent_boosts = self._get_intent_boosts(stimulus.intent)

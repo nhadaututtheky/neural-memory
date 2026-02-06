@@ -71,6 +71,28 @@ Track your current working session:
 
 This helps you resume exactly where you left off in the next session.
 
+## System Behaviors (automatic — no action needed)
+
+- **Session-aware recall**: When you call nmem_recall with a short query (<8 words),
+  the system automatically injects your active session's feature/task as context.
+  No need to manually add session info to queries.
+- **Passive learning**: Every nmem_recall call with >=50 characters automatically
+  analyzes the query for capturable patterns (decisions, errors, insights).
+  You do NOT need to call nmem_auto after recalls — it happens automatically.
+- **Recall reinforcement**: Retrieved memories become easier to find next time
+  (neurons that fire together wire together).
+- **Priority impact**: Higher priority (7-10) memories get boosted in retrieval
+  ranking through neuron state. Use 7+ for decisions and errors you'll need again.
+
+## Depth Guide (for nmem_recall)
+
+- **0 (instant)**: Direct lookup, 1 hop. Use for: "What's Alice's email?"
+- **1 (context)**: Spreading activation, 3 hops. Use for: "What happened with auth?"
+- **2 (habit)**: Cross-time patterns, 4 hops. Use for: "What do I usually do on deploy?"
+- **3 (deep)**: Full graph traversal. Use for: "Why did the outage happen?"
+
+Leave depth unset for auto-detection (recommended).
+
 ## Best Practices
 
 1. **Be proactive**: Don't wait for user to ask - remember important info automatically
@@ -109,6 +131,34 @@ Index code for code-aware recall:
 
 Indexed code becomes neurons in the memory graph. Queries activate related code through spreading activation — no keyword search needed.
 
+## Eternal Context (nmem_eternal + nmem_recap)
+
+Context is **automatically saved** on these events:
+- Workflow completion ("done", "finished", "xong")
+- Key decisions ("decided to use...", "going with...")
+- Error fixes ("fixed by...", "resolved")
+- User leaving ("bye", "tam nghi")
+- Every 15 messages (background checkpoint)
+- Context > 80% full (emergency save)
+
+### Session Start
+Always call `nmem_recap()` to resume where you left off:
+```
+nmem_recap()             # Quick: project + current task (~500 tokens)
+nmem_recap(level=2)      # Detailed: + decisions, errors, progress
+nmem_recap(level=3)      # Full: + conversation history, files
+nmem_recap(topic="auth") # Search: find context about a topic
+```
+
+### Manual Save
+Use `nmem_eternal(action="save")` for explicit checkpoints:
+```
+nmem_eternal(action="save", project_name="MyApp", tech_stack=["Next.js", "Prisma"])
+nmem_eternal(action="save", decision="Use Redis for caching", reason="Low latency")
+nmem_eternal(action="status")   # View current state
+nmem_eternal(action="compact")  # Compress context into session
+```
+
 ## Memory Types
 
 - `fact`: Objective information
@@ -126,14 +176,17 @@ Indexed code becomes neurons in the memory graph. Queries activate related code 
 COMPACT_PROMPT = """You have NeuralMemory for persistent memory across sessions.
 
 **Remember** (nmem_remember): Save decisions, preferences, facts, errors, todos.
-**Recall** (nmem_recall): Query past context before making decisions.
+**Recall** (nmem_recall): Query past context. Depth: 0=direct, 1=context, 2=patterns, 3=deep (auto if unset).
 **Context** (nmem_context): Load recent memories at session start.
-**Auto-capture** (nmem_auto): Call `nmem_auto(action="process", text="...")` after important conversations to auto-save decisions, errors, and todos.
+**Auto-capture** (nmem_auto): `nmem_auto(action="process", text="...")` after important conversations.
+**Session** (nmem_session): Track task/feature/progress. `get` at start, `set` during, `end` when done.
+**Index** (nmem_index): Scan codebase into memory. `scan` once, then recall finds code.
+**Recap** (nmem_recap): Resume session context. `nmem_recap()` quick, `nmem_recap(level=2)` detailed, `nmem_recap(topic="X")` search.
+**Eternal** (nmem_eternal): Manual save/load. Context auto-saves on decisions, milestones, errors, user leaving, every 15 messages.
 
-**Session** (nmem_session): Track current task/feature/progress. Call `get` at start, `set` during work, `end` when done.
-**Index** (nmem_index): Scan codebase into memory. Call `scan` once, then `nmem_recall` finds code structure.
+**Auto**: Short recall queries get session context injected. Recall >=50 chars auto-captures patterns. Retrieved memories get reinforced. Context auto-saves on key events.
 
-Be proactive: remember important info without being asked. Use auto-capture after solving bugs or making decisions."""
+Be proactive: remember important info without being asked. Call nmem_recap() at session start."""
 
 
 def get_system_prompt(compact: bool = False) -> str:

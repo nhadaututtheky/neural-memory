@@ -1,14 +1,16 @@
-"""Keyword extraction from text."""
+"""Keyword extraction from text with Vietnamese word segmentation support."""
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 
-# Common stop words (English + Vietnamese)
-STOP_WORDS: frozenset[str] = frozenset(
+logger = logging.getLogger(__name__)
+
+# English stop words
+STOP_WORDS_EN: frozenset[str] = frozenset(
     {
-        # English
         "the",
         "a",
         "an",
@@ -128,7 +130,12 @@ STOP_WORDS: frozenset[str] = frozenset(
         "which",
         "who",
         "whom",
-        # Vietnamese
+    }
+)
+
+# Vietnamese stop words
+STOP_WORDS_VI: frozenset[str] = frozenset(
+    {
         "và",
         "của",
         "là",
@@ -183,6 +190,41 @@ STOP_WORDS: frozenset[str] = frozenset(
     }
 )
 
+# Combined stop words for backward compatibility
+STOP_WORDS: frozenset[str] = STOP_WORDS_EN | STOP_WORDS_VI
+
+# Vietnamese diacritical character pattern (unique to Vietnamese, not French)
+_VI_DIACRITICS = re.compile(r"[ăâđêôơưắằẳẵặấầẩẫậếềểễệốồổỗộớờởỡợứừửữự]")
+
+
+def _detect_vietnamese(text: str) -> bool:
+    """Detect if text contains Vietnamese based on diacritical characters."""
+    return bool(_VI_DIACRITICS.search(text.lower()))
+
+
+def _get_stop_words(language: str, text: str) -> frozenset[str]:
+    """Get appropriate stop words for the detected language."""
+    if language == "vi":
+        return STOP_WORDS_VI
+    if language == "en":
+        return STOP_WORDS_EN
+    # "auto" — use both
+    return STOP_WORDS
+
+
+def _tokenize_vietnamese(text: str) -> str | None:
+    """Try to tokenize Vietnamese text using pyvi.
+
+    Returns tokenized text with compound words joined by underscores,
+    or None if pyvi is not available.
+    """
+    try:
+        from pyvi import ViTokenizer  # type: ignore[import-untyped]
+
+        return ViTokenizer.tokenize(text)  # type: ignore[no-any-return]
+    except ImportError:
+        return None
+
 
 @dataclass
 class WeightedKeyword:
@@ -197,7 +239,11 @@ class WeightedKeyword:
     weight: float
 
 
-def extract_weighted_keywords(text: str, min_length: int = 2) -> list[WeightedKeyword]:
+def extract_weighted_keywords(
+    text: str,
+    min_length: int = 2,
+    language: str = "auto",
+) -> list[WeightedKeyword]:
     """
     Extract weighted keywords with bi-gram support.
 
@@ -205,18 +251,36 @@ def extract_weighted_keywords(text: str, min_length: int = 2) -> list[WeightedKe
     - Position: earlier words score higher (1.0 → 0.5 linear decay)
     - Bi-grams: adjacent non-stop-word pairs get averaged weight * 1.2 boost
 
+    For Vietnamese text, uses pyvi word segmentation to detect compound words
+    (e.g., "học sinh" → single keyword "học sinh" instead of separate "học", "sinh").
+
     Args:
         text: The text to extract from
         min_length: Minimum word length for unigrams
+        language: Language hint ("vi", "en", or "auto")
 
     Returns:
         List of WeightedKeyword sorted by weight descending
     """
-    words = re.findall(r"\b[a-zA-ZÀ-ỹ]+\b", text.lower())
+    is_vietnamese = language == "vi" or (language == "auto" and _detect_vietnamese(text))
+    stop_words = _get_stop_words(language, text)
+
+    # For Vietnamese: try pyvi tokenization to detect compound words
+    tokenized_text = text
+    if is_vietnamese:
+        vi_tokenized = _tokenize_vietnamese(text)
+        if vi_tokenized is not None:
+            tokenized_text = vi_tokenized
+
+    words = re.findall(r"\b[a-zA-ZÀ-ỹ]+(?:_[a-zA-ZÀ-ỹ]+)*\b", tokenized_text.lower())
 
     # Filter to content words with original position
     filtered: list[tuple[str, int]] = [
-        (w, i) for i, w in enumerate(words) if len(w) >= min_length and w not in STOP_WORDS
+        (w, i)
+        for i, w in enumerate(words)
+        if len(w.replace("_", "")) >= min_length
+        and w.replace("_", " ") not in stop_words
+        and w not in stop_words
     ]
 
     if not filtered:
@@ -228,15 +292,19 @@ def extract_weighted_keywords(text: str, min_length: int = 2) -> list[WeightedKe
     # Unigrams with position decay (1.0 at start → 0.5 at end)
     for idx, (word, _orig_pos) in enumerate(filtered):
         position_weight = 1.0 - 0.5 * (idx / max(1, total - 1))
-        weighted[word] = max(weighted.get(word, 0.0), position_weight)
+        # Store with underscores replaced by spaces for readability
+        display_word = word.replace("_", " ")
+        weighted[display_word] = max(weighted.get(display_word, 0.0), position_weight)
 
     # Bi-grams from adjacent non-stop words within 3 original word positions
     for i in range(len(filtered) - 1):
         w1, p1 = filtered[i]
         w2, p2 = filtered[i + 1]
         if p2 - p1 <= 3:
-            bigram = f"{w1} {w2}"
-            bigram_weight = (weighted.get(w1, 0.5) + weighted.get(w2, 0.5)) / 2 * 1.2
+            dw1 = w1.replace("_", " ")
+            dw2 = w2.replace("_", " ")
+            bigram = f"{dw1} {dw2}"
+            bigram_weight = (weighted.get(dw1, 0.5) + weighted.get(dw2, 0.5)) / 2 * 1.2
             weighted[bigram] = max(weighted.get(bigram, 0.0), bigram_weight)
 
     results = [WeightedKeyword(text=k, weight=v) for k, v in weighted.items()]
@@ -244,7 +312,11 @@ def extract_weighted_keywords(text: str, min_length: int = 2) -> list[WeightedKe
     return results
 
 
-def extract_keywords(text: str, min_length: int = 2) -> list[str]:
+def extract_keywords(
+    text: str,
+    min_length: int = 2,
+    language: str = "auto",
+) -> list[str]:
     """
     Extract keywords from text, sorted by importance.
 
@@ -254,9 +326,10 @@ def extract_keywords(text: str, min_length: int = 2) -> list[str]:
     Args:
         text: The text to extract from
         min_length: Minimum word length
+        language: Language hint ("vi", "en", or "auto")
 
     Returns:
         List of keyword strings
     """
-    weighted = extract_weighted_keywords(text, min_length)
+    weighted = extract_weighted_keywords(text, min_length, language=language)
     return [kw.text for kw in weighted]

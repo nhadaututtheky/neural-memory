@@ -94,6 +94,30 @@
         "title": "Import Memories from External Source",
         "category": "NeuralMemory",
         "icon": "$(cloud-download)"
+      },
+      {
+        "command": "neuralmemory.recap",
+        "title": "Recap Session Context",
+        "category": "NeuralMemory",
+        "icon": "$(history)"
+      },
+      {
+        "command": "neuralmemory.recapTopic",
+        "title": "Recap by Topic",
+        "category": "NeuralMemory",
+        "icon": "$(search)"
+      },
+      {
+        "command": "neuralmemory.eternalSave",
+        "title": "Save Eternal Context",
+        "category": "NeuralMemory",
+        "icon": "$(save)"
+      },
+      {
+        "command": "neuralmemory.eternalStatus",
+        "title": "Eternal Context Status",
+        "category": "NeuralMemory",
+        "icon": "$(info)"
       }
     ],
     "viewsContainers": {
@@ -156,6 +180,11 @@
         "command": "neuralmemory.indexCodebase",
         "key": "ctrl+shift+m i",
         "mac": "cmd+shift+m i"
+      },
+      {
+        "command": "neuralmemory.recap",
+        "key": "ctrl+shift+m c",
+        "mac": "cmd+shift+m c"
       }
     ],
     "configuration": {

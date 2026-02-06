@@ -42,7 +42,7 @@ ERROR_PATTERNS = [
 TODO_PATTERNS = [
     # English
     r"(?:TODO|FIXME|HACK|XXX)[:\s]+(.+?)(?:\.|$)",
-    r"(?:we |I )?(?:need to|should|must|have to)[:\s]+(.+?)(?:\.|$)",
+    r"(?:we |I )?(?:need to|should|must|have to)[:\s]+(.{5,80}?)(?:\.|,| but | or | and |$)",
     r"(?:remember to|don\'t forget to)[:\s]+(.+?)(?:\.|$)",
     r"(?:later|next)[:\s]+(.+?)(?:\.|$)",
     # Vietnamese
@@ -100,16 +100,18 @@ def _detect_patterns(
 
             # Adjust confidence based on capture quality
             adjusted_confidence = confidence
-            if len(captured) > 120:
-                adjusted_confidence *= 0.5  # Penalize over-captures
+            if len(captured) > 200:
+                adjusted_confidence *= 0.7  # Penalize truly excessive captures
             elif len(captured) < 10:
                 adjusted_confidence *= 0.3  # Penalize too-short captures
 
             # Trim at sentence boundary if over-captured
             if len(captured) > 100:
-                period_idx = captured.find(".", 50)
-                if period_idx > 0:
-                    captured = captured[:period_idx]
+                for sep in (".", "!", "?", ";"):
+                    idx = captured.find(sep, 50)
+                    if idx > 0:
+                        captured = captured[:idx]
+                        break
 
             content = f"{prefix}{captured}" if prefix else captured
             detected.append(

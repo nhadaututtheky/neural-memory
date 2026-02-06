@@ -75,6 +75,7 @@ class MemoryEncoder:
         timestamp: datetime | None = None,
         metadata: dict[str, Any] | None = None,
         tags: set[str] | None = None,
+        language: str = "auto",
     ) -> EncodingResult:
         """
         Encode content into neural structures.
@@ -84,6 +85,7 @@ class MemoryEncoder:
             timestamp: When this memory occurred (default: now)
             metadata: Additional metadata to attach
             tags: Optional tags for the fiber
+            language: Language hint ("vi", "en", or "auto")
 
         Returns:
             EncodingResult with created structures
@@ -100,11 +102,11 @@ class MemoryEncoder:
         neurons_created.extend(time_neurons)
 
         # 2. Extract entity neurons
-        entity_neurons = await self._extract_entity_neurons(content)
+        entity_neurons = await self._extract_entity_neurons(content, language)
         neurons_created.extend(entity_neurons)
 
         # 3. Extract concept/keyword neurons
-        concept_neurons = await self._extract_concept_neurons(content)
+        concept_neurons = await self._extract_concept_neurons(content, language)
         neurons_created.extend(concept_neurons)
 
         # 4. Create the anchor neuron (main content)
@@ -149,7 +151,9 @@ class MemoryEncoder:
             synapses_created.append(synapse)
 
         # Connect anchor to concept neurons (weight by keyword importance)
-        kw_weight_map = {kw.text: kw.weight for kw in extract_weighted_keywords(content)}
+        kw_weight_map = {
+            kw.text: kw.weight for kw in extract_weighted_keywords(content, language=language)
+        }
         for concept_neuron in concept_neurons:
             kw_weight = kw_weight_map.get(concept_neuron.content.lower(), 0.5)
             concept_weight = min(0.8, 0.4 + 0.3 * kw_weight)
@@ -273,11 +277,12 @@ class MemoryEncoder:
     async def _extract_entity_neurons(
         self,
         content: str,
+        language: str = "auto",
     ) -> list[Neuron]:
         """Extract and create entity neurons from content."""
         neurons: list[Neuron] = []
 
-        entities = self._entity.extract(content)
+        entities = self._entity.extract(content, language=language)
 
         for entity in entities:
             # Map entity type to neuron type
@@ -343,11 +348,12 @@ class MemoryEncoder:
     async def _extract_concept_neurons(
         self,
         content: str,
+        language: str = "auto",
     ) -> list[Neuron]:
         """Extract and create concept neurons from keywords."""
         neurons: list[Neuron] = []
 
-        keywords = extract_keywords(content)
+        keywords = extract_keywords(content, language=language)
 
         # Dynamic limit based on content length
         concept_limit = min(20, max(5, len(content) // 100))

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { registerBrainCommands, readCurrentBrain } from "./commands/brain";
 import { registerEncodeCommands } from "./commands/encode";
+import { registerEternalCommands } from "./commands/eternal";
 import { registerImportCommands } from "./commands/import";
 import { registerIndexCommands } from "./commands/index";
 import { registerRecallCommands } from "./commands/recall";
@@ -55,6 +56,7 @@ export async function activate(
   registerImportCommands(context, server);
   registerIndexCommands(context, server);
   registerRecallCommands(context, server);
+  registerEternalCommands(context, server);
 
   // 6. Connect or start server
   let syncClient: SyncClient | undefined;

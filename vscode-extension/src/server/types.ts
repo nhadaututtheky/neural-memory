@@ -187,6 +187,64 @@ export interface ImportResponse {
   readonly message: string;
 }
 
+// ============ Eternal context types ============
+
+export interface EternalRequest {
+  readonly action: "status" | "save" | "load" | "compact";
+  readonly project_name?: string;
+  readonly tech_stack?: readonly string[];
+  readonly decision?: string;
+  readonly reason?: string;
+  readonly instruction?: string;
+}
+
+export interface EternalResponse {
+  readonly enabled?: boolean;
+  readonly loaded?: boolean;
+  readonly saved?: boolean;
+  readonly compacted?: boolean;
+  readonly brain?: {
+    readonly project_name: string;
+    readonly tech_stack: readonly string[];
+    readonly decisions_count: number;
+    readonly instructions_count: number;
+  };
+  readonly session?: {
+    readonly feature: string;
+    readonly task: string;
+    readonly progress: number;
+    readonly errors_count: number;
+    readonly pending_tasks_count: number;
+    readonly branch: string;
+  };
+  readonly context?: {
+    readonly message_count: number;
+    readonly summaries_count: number;
+    readonly recent_files_count: number;
+    readonly token_estimate: number;
+  };
+  readonly context_usage?: number;
+  readonly project_name?: string;
+  readonly feature?: string;
+  readonly task?: string;
+  readonly summary?: string;
+  readonly message?: string;
+}
+
+export interface RecapRequest {
+  readonly level?: number;
+  readonly topic?: string;
+}
+
+export interface RecapResponse {
+  readonly context: string;
+  readonly level?: number;
+  readonly tokens_used?: number;
+  readonly topic?: string;
+  readonly confidence?: number;
+  readonly message?: string;
+}
+
 // ============ Graph types (from /api/graph) ============
 
 export interface GraphNeuron {
