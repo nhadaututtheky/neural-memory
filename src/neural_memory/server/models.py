@@ -231,6 +231,25 @@ class SuggestResponse(BaseModel):
     count: int
 
 
+class IndexRequest(BaseModel):
+    """Request to index a codebase directory."""
+
+    action: str = Field(..., description="scan=index codebase, status=show what's indexed")
+    path: str | None = Field(None, description="Directory to index (default: cwd)")
+    extensions: list[str] | None = Field(None, description='File extensions (default: [".py"])')
+
+
+class IndexResponse(BaseModel):
+    """Response from codebase indexing."""
+
+    files_indexed: int = Field(0, description="Number of files indexed")
+    neurons_created: int = Field(0, description="Number of neurons created")
+    synapses_created: int = Field(0, description="Number of synapses created")
+    path: str | None = Field(None, description="Indexed directory path")
+    message: str = Field(..., description="Human-readable summary")
+    indexed_files: list[str] | None = Field(None, description="List of indexed file paths (status action)")
+
+
 class ErrorResponse(BaseModel):
     """Error response."""
 

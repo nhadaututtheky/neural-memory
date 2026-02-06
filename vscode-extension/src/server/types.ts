@@ -106,7 +106,10 @@ export type NeuronType =
   | "entity"
   | "time"
   | "action"
-  | "state";
+  | "state"
+  | "spatial"
+  | "sensory"
+  | "intent";
 
 export interface NeuronItem {
   readonly id: string;
@@ -133,6 +136,23 @@ export interface FiberResponse {
   readonly summary: string | null;
   readonly tags: readonly string[];
   readonly created_at: string;
+}
+
+// ============ Index types ============
+
+export interface IndexRequest {
+  readonly action: "scan" | "status";
+  readonly path?: string;
+  readonly extensions?: readonly string[];
+}
+
+export interface IndexResponse {
+  readonly files_indexed: number;
+  readonly neurons_created: number;
+  readonly synapses_created: number;
+  readonly path: string | null;
+  readonly message: string;
+  readonly indexed_files: readonly string[] | null;
 }
 
 // ============ Graph types (from /api/graph) ============

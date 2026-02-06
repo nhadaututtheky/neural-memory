@@ -82,6 +82,12 @@
         "title": "Recall Related Memories",
         "category": "NeuralMemory",
         "icon": "$(search)"
+      },
+      {
+        "command": "neuralmemory.indexCodebase",
+        "title": "Index Codebase",
+        "category": "NeuralMemory",
+        "icon": "$(search-fuzzy)"
       }
     ],
     "viewsContainers": {
@@ -139,6 +145,11 @@
         "command": "neuralmemory.openGraph",
         "key": "ctrl+shift+m g",
         "mac": "cmd+shift+m g"
+      },
+      {
+        "command": "neuralmemory.indexCodebase",
+        "key": "ctrl+shift+m i",
+        "mac": "cmd+shift+m i"
       }
     ],
     "configuration": {

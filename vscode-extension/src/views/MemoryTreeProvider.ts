@@ -14,6 +14,9 @@ const TYPE_META: ReadonlyMap<
   ["action", { label: "Actions", icon: "symbol-event" }],
   ["time", { label: "Time", icon: "calendar" }],
   ["state", { label: "State", icon: "symbol-enum" }],
+  ["spatial", { label: "Files", icon: "file-code" }],
+  ["sensory", { label: "Sensory", icon: "eye" }],
+  ["intent", { label: "Intent", icon: "rocket" }],
 ]);
 
 // ── Tree item types ──────────────────────────────────────────

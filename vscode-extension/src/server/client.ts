@@ -16,6 +16,8 @@ import type {
   FiberResponse,
   GraphData,
   HealthResponse,
+  IndexRequest,
+  IndexResponse,
   NeuronListResponse,
   QueryRequest,
   QueryResponse,
@@ -101,6 +103,13 @@ export class NeuralMemoryClient {
     const query = params.toString();
     const path = `/memory/neurons${query ? `?${query}` : ""}`;
     return this._get<NeuronListResponse>(path, brainId);
+  }
+
+  async indexCodebase(
+    brainId: string,
+    request: IndexRequest,
+  ): Promise<IndexResponse> {
+    return this._post<IndexResponse>("/memory/index", request, brainId);
   }
 
   // ============ Graph ============

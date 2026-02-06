@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,6 +15,8 @@ from neural_memory.server.models import (
     EncodeRequest,
     EncodeResponse,
     ErrorResponse,
+    IndexRequest,
+    IndexResponse,
     QueryRequest,
     QueryResponse,
     SubgraphResponse,
@@ -204,3 +207,53 @@ async def suggest_neurons(
         limit=limit,
     )
     return SuggestResponse(suggestions=suggestions, count=len(suggestions))
+
+
+@router.post(
+    "/index",
+    response_model=IndexResponse,
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    summary="Index codebase",
+    description="Index Python files into neural graph for code-aware recall.",
+)
+async def index_codebase(
+    request: IndexRequest,
+    brain: Annotated[Brain, Depends(get_brain)],
+    storage: Annotated[NeuralStorage, Depends(get_storage)],
+) -> IndexResponse:
+    """Index codebase or check indexing status."""
+    if request.action == "scan":
+        from neural_memory.engine.codebase_encoder import CodebaseEncoder
+
+        path = Path(request.path or ".").resolve()
+        if not path.is_dir():
+            raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
+
+        extensions = set(request.extensions or [".py"])
+        encoder = CodebaseEncoder(storage, brain.config)
+        results = await encoder.index_directory(path, extensions=extensions)
+
+        total_neurons = sum(len(r.neurons_created) for r in results)
+        total_synapses = sum(len(r.synapses_created) for r in results)
+
+        return IndexResponse(
+            files_indexed=len(results),
+            neurons_created=total_neurons,
+            synapses_created=total_synapses,
+            path=str(path),
+            message=f"Indexed {len(results)} files → {total_neurons} neurons, {total_synapses} synapses",
+        )
+
+    if request.action == "status":
+        from neural_memory.core.neuron import NeuronType
+
+        neurons = await storage.find_neurons(type=NeuronType.SPATIAL, limit=1000)
+        code_files = [n for n in neurons if n.metadata.get("indexed")]
+
+        return IndexResponse(
+            files_indexed=len(code_files),
+            indexed_files=[n.content for n in code_files[:50]],
+            message=f"{len(code_files)} files indexed" if code_files else "No codebase indexed yet.",
+        )
+
+    raise HTTPException(status_code=400, detail=f"Unknown action: {request.action}")

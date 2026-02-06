@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { registerBrainCommands, readCurrentBrain } from "./commands/brain";
 import { registerEncodeCommands } from "./commands/encode";
+import { registerIndexCommands } from "./commands/index";
 import { registerRecallCommands } from "./commands/recall";
 import { MemoryCodeLensProvider } from "./editors/MemoryCodeLensProvider";
 import { CommentTriggerWatcher } from "./editors/CommentTriggerWatcher";
@@ -50,6 +51,7 @@ export async function activate(
   registerLifecycleCommands(context, server, statusBar);
   registerBrainCommands(context, server, statusBar);
   registerEncodeCommands(context, server);
+  registerIndexCommands(context, server);
   registerRecallCommands(context, server);
 
   // 6. Connect or start server

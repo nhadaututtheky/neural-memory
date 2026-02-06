@@ -111,6 +111,7 @@
 | GET | `/memory/fiber/{id}` | Get fiber details |
 | GET | `/memory/neurons` | List neurons |
 | GET | `/memory/suggest` | Prefix-based neuron suggestions |
+| POST | `/memory/index` | Index codebase into neural graph |
 | POST | `/brain/create` | Create brain |
 | GET | `/brain/{id}` | Get brain details |
 | GET | `/brain/{id}/stats` | Enhanced statistics |
@@ -148,7 +149,7 @@
 
 ## VS Code Extension Features
 
-### Commands (10)
+### Commands (11)
 
 | Command ID | Label | Keybinding |
 |------------|-------|------------|
@@ -162,6 +163,7 @@
 | `neuralmemory.startServer` | Start Server | — |
 | `neuralmemory.connectServer` | Connect to Server | — |
 | `neuralmemory.recallFromTree` | Recall Related Memories | — |
+| `neuralmemory.indexCodebase` | Index Codebase | `Ctrl+Shift+M I` |
 
 ### Settings (6)
 
