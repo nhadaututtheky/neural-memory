@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 import time
@@ -16,6 +17,7 @@ from neural_memory.engine.lifecycle import ReinforcementManager
 from neural_memory.engine.reflex_activation import CoActivation, ReflexActivation
 from neural_memory.engine.retrieval_context import format_context, reconstitute_answer
 from neural_memory.engine.retrieval_types import DepthLevel, RetrievalResult, Subgraph
+from neural_memory.engine.write_queue import DeferredWriteQueue
 from neural_memory.extraction.parser import QueryIntent, QueryParser, Stimulus
 
 logger = logging.getLogger(__name__)
@@ -66,6 +68,7 @@ class ReflexPipeline:
         self._reinforcer = ReinforcementManager(
             reinforcement_delta=config.reinforcement_delta,
         )
+        self._write_queue = DeferredWriteQueue()
 
     async def query(
         self,
@@ -158,7 +161,7 @@ class ReflexPipeline:
 
         latency_ms = (time.perf_counter() - start_time) * 1000
 
-        # 8. Reinforce accessed memories (feedback loop)
+        # 8. Reinforce accessed memories (deferred to after response)
         # "Neurons that fire together wire together" — recalled memories
         # become easier to find next time
         if activations and confidence > 0.3:
@@ -176,7 +179,7 @@ class ReflexPipeline:
             except Exception:
                 logger.debug("Reinforcement failed (non-critical)", exc_info=True)
 
-        return RetrievalResult(
+        result = RetrievalResult(
             answer=answer,
             confidence=confidence,
             depth_used=depth,
@@ -195,6 +198,15 @@ class ReflexPipeline:
                 "use_reflex": self._use_reflex,
             },
         )
+
+        # Flush deferred writes (fiber conductivity, Hebbian strengthening)
+        if self._write_queue.pending_count > 0:
+            try:
+                await self._write_queue.flush(self._storage)
+            except Exception:
+                logger.debug("Deferred write flush failed (non-critical)", exc_info=True)
+
+        return result
 
     def _detect_depth(self, stimulus: Stimulus) -> DepthLevel:
         """Auto-detect required depth from query intent."""
@@ -249,20 +261,9 @@ class ReflexPipeline:
         2. Run limited classic BFS to discover neurons outside fibers (coverage)
         3. Merge results: reflex activations are primary, classic fills gaps
         """
-        # Get all fibers containing any anchor neurons
+        # Get all fibers containing any anchor neurons (batch query)
         all_anchors = [a for anchors in anchor_sets for a in anchors]
-        fibers: list[Fiber] = []
-        seen_fiber_ids: set[str] = set()
-
-        for anchor_id in all_anchors:
-            matching_fibers = await self._storage.find_fibers(
-                contains_neuron=anchor_id,
-                limit=10,
-            )
-            for fiber in matching_fibers:
-                if fiber.id not in seen_fiber_ids:
-                    fibers.append(fiber)
-                    seen_fiber_ids.add(fiber.id)
+        fibers = await self._storage.find_fibers_batch(all_anchors, limit_per_neuron=10)
 
         # If no fibers found, fall back entirely to classic activation
         if not fibers:
@@ -309,31 +310,25 @@ class ReflexPipeline:
             n for n in classic_intersections if n not in co_intersection_ids
         ]
 
-        # Update fiber conductivity for accessed fibers
+        # Defer fiber conductivity updates (non-blocking)
         for fiber in fibers:
             conducted_fiber = fiber.conduct(conducted_at=reference_time)
-            await self._storage.update_fiber(conducted_fiber)
+            self._write_queue.defer_fiber_update(conducted_fiber)
 
-        # Hebbian strengthening: co-activated neurons wire together
+        # Defer Hebbian strengthening (non-blocking)
         if co_activations:
-            await self._strengthen_co_activated(co_activations)
+            await self._defer_co_activated(co_activations)
 
         return activations, intersections, co_activations
 
-    async def _strengthen_co_activated(
+    async def _defer_co_activated(
         self,
         co_activations: list[CoActivation],
     ) -> None:
-        """
-        Strengthen or create synapses between co-activated neurons.
+        """Defer Hebbian strengthening writes to the write queue.
 
-        Implements Hebbian plasticity: neurons that fire together
-        get their connections reinforced. Only processes co-activations
-        with binding_strength >= config.hebbian_threshold and with
-        2+ neuron_ids (a pair to connect).
-
-        Args:
-            co_activations: List of co-activation records from retrieval
+        Reads existing synapses to determine update vs create, but
+        defers the actual writes to flush time.
         """
         threshold = self._config.hebbian_threshold
         delta = self._config.hebbian_delta
@@ -347,53 +342,41 @@ class ReflexPipeline:
             if len(neuron_ids) < 2:
                 continue
 
-            # Process all pairs in the co-activation set
             for i in range(len(neuron_ids)):
                 for j in range(i + 1, len(neuron_ids)):
                     a, b = neuron_ids[i], neuron_ids[j]
-                    await self._reinforce_or_create_synapse(a, b, delta, initial_weight)
+                    await self._defer_reinforce_or_create(a, b, delta, initial_weight)
 
-    async def _reinforce_or_create_synapse(
+    async def _defer_reinforce_or_create(
         self,
         neuron_a: str,
         neuron_b: str,
         delta: float,
         initial_weight: float,
     ) -> None:
-        """
-        Reinforce an existing synapse between two neurons, or create one.
-
-        Checks both directions (A->B and B->A) since RELATED_TO is
-        bidirectional and may be stored in either direction.
-
-        Args:
-            neuron_a: First neuron ID
-            neuron_b: Second neuron ID
-            delta: Weight increase for reinforcement
-            initial_weight: Weight for newly created synapses
-        """
+        """Check synapse existence (read) and defer the write."""
         # Check A->B
         forward = await self._storage.get_synapses(source_id=neuron_a, target_id=neuron_b)
         if forward:
             reinforced = forward[0].reinforce(delta)
-            await self._storage.update_synapse(reinforced)
+            self._write_queue.defer_synapse_update(reinforced)
             return
 
         # Check B->A
         reverse = await self._storage.get_synapses(source_id=neuron_b, target_id=neuron_a)
         if reverse:
             reinforced = reverse[0].reinforce(delta)
-            await self._storage.update_synapse(reinforced)
+            self._write_queue.defer_synapse_update(reinforced)
             return
 
-        # No existing synapse — create a new RELATED_TO connection
+        # No existing synapse — defer creation
         synapse = Synapse.create(
             source_id=neuron_a,
             target_id=neuron_b,
             type=SynapseType.RELATED_TO,
             weight=initial_weight,
         )
-        await self._storage.add_synapse(synapse)
+        self._write_queue.defer_synapse_create(synapse)
 
     async def _find_anchors_time_first(self, stimulus: Stimulus) -> list[list[str]]:
         """
@@ -420,29 +403,32 @@ class ReflexPipeline:
         if time_anchors:
             anchor_sets.append(time_anchors)
 
-        # 2. Entity anchors (secondary - constrained by time context)
-        entity_anchors: list[str] = []
-        for entity in stimulus.entities:
-            neurons = await self._storage.find_neurons(
-                content_contains=entity.text,
-                limit=3,
-            )
-            entity_anchors.extend(n.id for n in neurons)
+        # 2 & 3. Entity + keyword anchors (parallel)
+        entity_tasks = [
+            self._storage.find_neurons(content_contains=entity.text, limit=3)
+            for entity in stimulus.entities
+        ]
+        keyword_tasks = [
+            self._storage.find_neurons(content_contains=keyword, limit=2)
+            for keyword in stimulus.keywords[:5]
+        ]
 
-        if entity_anchors:
-            anchor_sets.append(entity_anchors)
+        all_tasks = entity_tasks + keyword_tasks
+        if all_tasks:
+            all_results = await asyncio.gather(*all_tasks)
 
-        # 3. Keyword anchors (tertiary)
-        keyword_anchors: list[str] = []
-        for keyword in stimulus.keywords[:5]:
-            neurons = await self._storage.find_neurons(
-                content_contains=keyword,
-                limit=2,
-            )
-            keyword_anchors.extend(n.id for n in neurons)
+            entity_anchors: list[str] = []
+            for neurons in all_results[: len(entity_tasks)]:
+                entity_anchors.extend(n.id for n in neurons)
 
-        if keyword_anchors:
-            anchor_sets.append(keyword_anchors)
+            keyword_anchors: list[str] = []
+            for neurons in all_results[len(entity_tasks) :]:
+                keyword_anchors.extend(n.id for n in neurons)
+
+            if entity_anchors:
+                anchor_sets.append(entity_anchors)
+            if keyword_anchors:
+                anchor_sets.append(keyword_anchors)
 
         return anchor_sets
 
@@ -450,10 +436,7 @@ class ReflexPipeline:
         self,
         activations: dict[str, ActivationResult],
     ) -> list[Fiber]:
-        """Find fibers that contain activated neurons."""
-        fibers: list[Fiber] = []
-        seen_fiber_ids: set[str] = set()
-
+        """Find fibers that contain activated neurons (batch query)."""
         # Get highly activated neurons
         top_neurons = sorted(
             activations.values(),
@@ -461,16 +444,8 @@ class ReflexPipeline:
             reverse=True,
         )[:20]
 
-        for activation in top_neurons:
-            matching = await self._storage.find_fibers(
-                contains_neuron=activation.neuron_id,
-                limit=3,
-            )
-
-            for fiber in matching:
-                if fiber.id not in seen_fiber_ids:
-                    fibers.append(fiber)
-                    seen_fiber_ids.add(fiber.id)
+        top_neuron_ids = [a.neuron_id for a in top_neurons]
+        fibers = await self._storage.find_fibers_batch(top_neuron_ids, limit_per_neuron=3)
 
         # Sort by composite score: salience * freshness * conductivity
         def _fiber_score(fiber: Fiber) -> float:
@@ -482,7 +457,7 @@ class ReflexPipeline:
 
         fibers.sort(key=_fiber_score, reverse=True)
 
-        return fibers[:10]  # Limit to top 10
+        return fibers[:10]
 
     async def query_with_stimulus(
         self,

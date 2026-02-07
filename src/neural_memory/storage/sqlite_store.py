@@ -60,6 +60,9 @@ class SQLiteStorage(
         self._conn.row_factory = aiosqlite.Row
 
         await self._conn.execute("PRAGMA foreign_keys = ON")
+        await self._conn.execute("PRAGMA journal_mode=WAL")
+        await self._conn.execute("PRAGMA synchronous=NORMAL")
+        await self._conn.execute("PRAGMA cache_size=-8000")
 
         # Ensure version table exists so we can read the current version
         await self._conn.execute(

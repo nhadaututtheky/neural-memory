@@ -65,7 +65,8 @@ async def test_strengthen_existing_synapse(
         temporal_window_ms=500,
         binding_strength=0.8,
     )
-    await pipeline._strengthen_co_activated([co])
+    await pipeline._defer_co_activated([co])
+    await pipeline._write_queue.flush(hebbian_storage)
 
     updated = await hebbian_storage.get_synapse("syn-ab")
     assert updated is not None
@@ -85,7 +86,8 @@ async def test_create_new_synapse(
         temporal_window_ms=500,
         binding_strength=0.8,
     )
-    await pipeline._strengthen_co_activated([co])
+    await pipeline._defer_co_activated([co])
+    await pipeline._write_queue.flush(hebbian_storage)
 
     # Should have created a new synapse
     forward = await hebbian_storage.get_synapses(source_id="n-a", target_id="n-b")
@@ -118,7 +120,8 @@ async def test_below_threshold_ignored(
         temporal_window_ms=500,
         binding_strength=0.3,  # Below threshold of 0.5
     )
-    await pipeline._strengthen_co_activated([co])
+    await pipeline._defer_co_activated([co])
+    await pipeline._write_queue.flush(hebbian_storage)
 
     unchanged = await hebbian_storage.get_synapse("syn-ab")
     assert unchanged is not None
@@ -148,7 +151,8 @@ async def test_reverse_direction_found(
         temporal_window_ms=500,
         binding_strength=0.8,
     )
-    await pipeline._strengthen_co_activated([co])
+    await pipeline._defer_co_activated([co])
+    await pipeline._write_queue.flush(hebbian_storage)
 
     updated = await hebbian_storage.get_synapse("syn-ba")
     assert updated is not None
@@ -172,7 +176,8 @@ async def test_single_neuron_skipped(
         temporal_window_ms=500,
         binding_strength=0.9,
     )
-    await pipeline._strengthen_co_activated([co])
+    await pipeline._defer_co_activated([co])
+    await pipeline._write_queue.flush(hebbian_storage)
 
     # No synapses should be created
     all_synapses = await hebbian_storage.get_all_synapses()

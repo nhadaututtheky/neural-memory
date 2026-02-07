@@ -164,14 +164,18 @@ class SpreadingActivation:
                 min_weight=0.1,
             )
 
+            # Batch-prefetch neuron states for uncached neighbors
+            uncached_ids = [n.id for n, _ in neighbors if n.id not in freq_cache]
+            if uncached_ids:
+                batch_states = await self._storage.get_neuron_states_batch(uncached_ids)
+                for nid in uncached_ids:
+                    state = batch_states.get(nid)
+                    freq_cache[nid] = state.access_frequency if state else 0
+
             for neighbor_neuron, synapse in neighbors:
                 # Frequency boost: frequently accessed neurons conduct stronger
                 # (myelination metaphor — well-used pathways transmit faster)
-                freq = freq_cache.get(neighbor_neuron.id)
-                if freq is None:
-                    state = await self._storage.get_neuron_state(neighbor_neuron.id)
-                    freq = state.access_frequency if state else 0
-                    freq_cache[neighbor_neuron.id] = freq
+                freq = freq_cache.get(neighbor_neuron.id, 0)
                 freq_factor = 1.0 + min(0.15, 0.05 * math.log1p(freq))
 
                 # Calculate new activation with frequency boost
@@ -339,11 +343,13 @@ class SpreadingActivation:
         selected_neurons = [n[0] for n in filtered[:max_neurons]]
         selected_set = set(selected_neurons)
 
-        # Find synapses connecting selected neurons
+        # Find synapses connecting selected neurons (batch query)
         synapse_ids: list[str] = []
 
-        for neuron_id in selected_neurons:
-            synapses = await self._storage.get_synapses(source_id=neuron_id)
+        all_synapses = await self._storage.get_synapses_for_neurons(
+            selected_neurons, direction="out"
+        )
+        for _neuron_id, synapses in all_synapses.items():
             for synapse in synapses:
                 if synapse.target_id in selected_set:
                     synapse_ids.append(synapse.id)

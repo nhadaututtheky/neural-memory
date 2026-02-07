@@ -64,6 +64,27 @@ class InMemoryCollectionsMixin:
         results.sort(key=lambda f: f.salience, reverse=True)
         return results
 
+    async def find_fibers_batch(
+        self,
+        neuron_ids: list[str],
+        limit_per_neuron: int = 10,
+    ) -> list[Fiber]:
+        """Find fibers containing any of the given neurons from in-memory store."""
+        brain_id = self._get_brain_id()
+        nid_set = set(neuron_ids)
+        seen: set[str] = set()
+        result: list[Fiber] = []
+
+        for fiber in self._fibers[brain_id].values():
+            if fiber.id in seen:
+                continue
+            if fiber.neuron_ids & nid_set:
+                seen.add(fiber.id)
+                result.append(fiber)
+
+        result.sort(key=lambda f: f.salience, reverse=True)
+        return result
+
     async def update_fiber(self, fiber: Fiber) -> None:
         brain_id = self._get_brain_id()
 

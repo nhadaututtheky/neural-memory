@@ -120,6 +120,34 @@ class SQLiteFiberMixin:
 
         return fibers
 
+    async def find_fibers_batch(
+        self,
+        neuron_ids: list[str],
+        limit_per_neuron: int = 10,
+    ) -> list[Fiber]:
+        """Find fibers containing any of the given neurons in a single SQL query."""
+        if not neuron_ids:
+            return []
+
+        conn = self._ensure_conn()
+        brain_id = self._get_brain_id()
+
+        placeholders = ",".join("?" for _ in neuron_ids)
+        # Use junction table for efficient lookup, limit total results
+        total_limit = limit_per_neuron * len(neuron_ids)
+        query = f"""
+            SELECT DISTINCT f.* FROM fibers f
+            JOIN fiber_neurons fn ON f.brain_id = fn.brain_id AND f.id = fn.fiber_id
+            WHERE fn.brain_id = ? AND fn.neuron_id IN ({placeholders})
+            ORDER BY f.salience DESC
+            LIMIT ?
+        """
+        params: list[Any] = [brain_id, *neuron_ids, total_limit]
+
+        async with conn.execute(query, params) as cursor:
+            rows = await cursor.fetchall()
+            return [row_to_fiber(row) for row in rows]
+
     async def update_fiber(self, fiber: Fiber) -> None:
         conn = self._ensure_conn()
         brain_id = self._get_brain_id()

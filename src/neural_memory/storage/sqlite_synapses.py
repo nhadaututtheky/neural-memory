@@ -153,6 +153,32 @@ class SQLiteSynapseMixin:
 
         return cursor.rowcount > 0
 
+    async def get_synapses_for_neurons(
+        self,
+        neuron_ids: list[str],
+        direction: str = "out",
+    ) -> dict[str, list[Synapse]]:
+        """Batch fetch synapses for multiple neurons in a single SQL query."""
+        if not neuron_ids:
+            return {}
+
+        conn = self._ensure_conn()
+        brain_id = self._get_brain_id()
+
+        col = "source_id" if direction == "out" else "target_id"
+        placeholders = ",".join("?" for _ in neuron_ids)
+        query = f"SELECT * FROM synapses WHERE brain_id = ? AND {col} IN ({placeholders})"
+        params: list[Any] = [brain_id, *neuron_ids]
+
+        result: dict[str, list[Synapse]] = {nid: [] for nid in neuron_ids}
+        async with conn.execute(query, params) as cursor:
+            async for row in cursor:
+                synapse = row_to_synapse(row)
+                key = row[col]
+                result[key].append(synapse)
+
+        return result
+
     # ========== Graph Traversal ==========
 
     async def get_neighbors(

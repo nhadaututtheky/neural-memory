@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0] - 2026-02-07
+
+### Performance
+
+- Synced with NeuralMemory v0.9.4: retrieval pipeline 3-5x faster
+- SQLite WAL mode + 8MB cache for concurrent reads
+- Batch storage methods: single SQL queries replace hundreds of sequential calls
+- Deferred write queue: non-critical writes (Hebbian, conductivity) batched after response
+- Parallel anchor finding via asyncio.gather
+- Batch fiber discovery and subgraph extraction
+
 ## [0.1.9] - 2026-02-07
 
 ### Changed

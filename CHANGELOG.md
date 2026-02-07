@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-02-07
+
+### Performance
+
+- **SQLite WAL mode** + `synchronous=NORMAL` + 8MB cache for concurrent reads and reduced I/O
+- **Batch storage methods**: `get_synapses_for_neurons()`, `find_fibers_batch()`, `get_neuron_states_batch()` — single `IN()` queries replacing N sequential calls
+- **Deferred write queue**: Fiber conductivity, Hebbian strengthening, and synapse writes batched after response assembly
+- **Parallel anchor finding**: Entity + keyword lookups via `asyncio.gather()` instead of sequential loops
+- **Batch fiber discovery**: Single junction-table query replaces 5-15 sequential `find_fibers()` calls
+- **Batch subgraph extraction**: Single query replaces 20-50 sequential `get_synapses()` calls
+- **BFS state prefetch**: Batch `get_neuron_states_batch()` per hop instead of individual lookups
+- Target: 3-5x faster retrieval (800-4500ms → 200-800ms)
+
 ## [0.9.0] - 2026-02-06
 
 ### Added

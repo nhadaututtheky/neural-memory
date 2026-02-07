@@ -160,6 +160,25 @@ class NeuralStorage(ABC):
         """
         ...
 
+    async def get_neuron_states_batch(self, neuron_ids: list[str]) -> dict[str, NeuronState]:
+        """Get activation states for multiple neurons in one call.
+
+        Default implementation falls back to sequential get_neuron_state.
+        Backends should override for batch efficiency.
+
+        Args:
+            neuron_ids: List of neuron IDs to fetch states for
+
+        Returns:
+            Dict mapping neuron_id to NeuronState for found states
+        """
+        result: dict[str, NeuronState] = {}
+        for nid in neuron_ids:
+            state = await self.get_neuron_state(nid)
+            if state is not None:
+                result[nid] = state
+        return result
+
     # ========== Synapse Operations ==========
 
     @abstractmethod
@@ -238,6 +257,31 @@ class NeuralStorage(ABC):
             True if deleted, False if not found
         """
         ...
+
+    async def get_synapses_for_neurons(
+        self,
+        neuron_ids: list[str],
+        direction: str = "out",
+    ) -> dict[str, list[Synapse]]:
+        """Get all synapses for multiple neurons in one call.
+
+        Default implementation falls back to sequential get_synapses.
+        Backends should override for batch efficiency.
+
+        Args:
+            neuron_ids: List of neuron IDs
+            direction: "out" for outgoing, "in" for incoming synapses
+
+        Returns:
+            Dict mapping neuron_id to list of synapses
+        """
+        result: dict[str, list[Synapse]] = {}
+        for nid in neuron_ids:
+            if direction == "out":
+                result[nid] = await self.get_synapses(source_id=nid)
+            else:
+                result[nid] = await self.get_synapses(target_id=nid)
+        return result
 
     # ========== Graph Traversal ==========
 
@@ -366,6 +410,32 @@ class NeuralStorage(ABC):
             True if deleted, False if not found
         """
         ...
+
+    async def find_fibers_batch(
+        self,
+        neuron_ids: list[str],
+        limit_per_neuron: int = 10,
+    ) -> list[Fiber]:
+        """Find fibers containing ANY of the given neurons, deduplicated.
+
+        Default implementation falls back to sequential find_fibers.
+        Backends should override for batch efficiency.
+
+        Args:
+            neuron_ids: List of neuron IDs to search for
+            limit_per_neuron: Max fibers per neuron in fallback
+
+        Returns:
+            Deduplicated list of fibers containing any of the neurons
+        """
+        seen: set[str] = set()
+        result: list[Fiber] = []
+        for nid in neuron_ids:
+            for f in await self.find_fibers(contains_neuron=nid, limit=limit_per_neuron):
+                if f.id not in seen:
+                    seen.add(f.id)
+                    result.append(f)
+        return result
 
     @abstractmethod
     async def get_fibers(

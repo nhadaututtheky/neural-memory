@@ -140,6 +140,12 @@ class InMemoryStorage(InMemoryCollectionsMixin, InMemoryBrainMixin, NeuralStorag
         brain_id = self._get_brain_id()
         return self._states[brain_id].get(neuron_id)
 
+    async def get_neuron_states_batch(self, neuron_ids: list[str]) -> dict[str, NeuronState]:
+        """Batch fetch neuron states from in-memory store."""
+        brain_id = self._get_brain_id()
+        brain_states = self._states[brain_id]
+        return {nid: brain_states[nid] for nid in neuron_ids if nid in brain_states}
+
     async def update_neuron_state(self, state: NeuronState) -> None:
         brain_id = self._get_brain_id()
         self._states[brain_id][state.neuron_id] = state
@@ -233,6 +239,23 @@ class InMemoryStorage(InMemoryCollectionsMixin, InMemoryBrainMixin, NeuralStorag
             results.append(synapse)
 
         return results
+
+    async def get_synapses_for_neurons(
+        self,
+        neuron_ids: list[str],
+        direction: str = "out",
+    ) -> dict[str, list[Synapse]]:
+        """Batch fetch synapses for multiple neurons from in-memory store."""
+        brain_id = self._get_brain_id()
+        result: dict[str, list[Synapse]] = {nid: [] for nid in neuron_ids}
+        nid_set = set(neuron_ids)
+
+        for synapse in self._synapses[brain_id].values():
+            key = synapse.source_id if direction == "out" else synapse.target_id
+            if key in nid_set:
+                result[key].append(synapse)
+
+        return result
 
     async def get_all_synapses(self) -> list[Synapse]:
         return await self.get_synapses()
