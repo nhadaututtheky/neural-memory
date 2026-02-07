@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.1] - 2026-02-07
+
+### Added
+
+- Synced with NeuralMemory v0.9.5: OpenMemory-inspired intelligence features
+- Type-aware decay: facts persist longer, todos expire faster
+- Score breakdown: retrieval results now show why memories ranked high
+- SimHash dedup: near-duplicate detection catches paraphrased content
+- Point-in-time queries: `valid_at` filter on recall for temporal memory search
+
 ## [0.2.0] - 2026-02-07
 
 ### Performance

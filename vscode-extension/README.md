@@ -83,7 +83,7 @@ WebSocket connection keeps your tree view, graph, and status bar updated in real
 
 ## Requirements
 
-- [NeuralMemory](https://pypi.org/project/neural-memory/) v0.9.4+ (`pip install neural-memory`)
+- [NeuralMemory](https://pypi.org/project/neural-memory/) v0.9.5+ (`pip install neural-memory`)
 - Python 3.11+
 - A configured brain (`nmem init` or `nmem brain create my-brain && nmem brain use my-brain`)
 
