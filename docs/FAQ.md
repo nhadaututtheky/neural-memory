@@ -108,18 +108,21 @@ The VS Code sidebar is the main way to browse your neurons and fibers.
 
 ### Q: How do I keep AI instructions/memories separate between projects?
 
-Use **one brain per project** so context never leaks across projects:
+**Short answer: NeuralMemory already handles this automatically.**
+
+When you start a session (`nmem_session`), NeuralMemory auto-detects your git branch, commit, and repo name. Memories are tagged with `branch:<name>`, and recall queries are enriched with your current session context (feature, task, branch). This means relevant memories naturally surface for the project/branch you're working in.
+
+**No configuration needed** — just use NeuralMemory normally and it will prioritize context from your current branch and feature.
+
+For **full isolation** between completely unrelated projects, use separate brains:
 
 ```bash
-# Create a brain for each project
 nmem brain create my-web-app
 nmem brain create my-ml-pipeline
-
-# Switch when you change projects
 nmem brain switch my-web-app
 ```
 
-If you use Claude Code, configure the MCP server per-project in each project's `.mcp.json`:
+Or configure per-project in `.mcp.json` (for Claude Code):
 
 ```jsonc
 // my-web-app/.mcp.json
@@ -136,22 +139,10 @@ If you use Claude Code, configure the MCP server per-project in each project's `
 }
 ```
 
-```jsonc
-// my-ml-pipeline/.mcp.json
-{
-  "mcpServers": {
-    "neuralmemory": {
-      "command": "python",
-      "args": ["-m", "neural_memory.mcp"],
-      "env": {
-        "NEURALMEMORY_BRAIN": "my-ml-pipeline"
-      }
-    }
-  }
-}
-```
-
-This way each project automatically loads the correct brain — decisions, errors, and context from project A never appear in project B.
+| Approach | When to use |
+|----------|------------|
+| Auto branch tagging (default) | Same project, different features/branches |
+| Separate brains | Completely unrelated projects |
 
 ### Q: Can I store project-specific instructions that persist across AI sessions?
 
