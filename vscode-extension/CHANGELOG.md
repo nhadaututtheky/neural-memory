@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.6] - 2026-02-07
+
+### Added
+
+- Eternal Context commands: Recap Session (`Ctrl+Shift+M C`), Recap by Topic, Save Eternal Context, Eternal Context Status
+- Import Memories from external sources (ChromaDB, Mem0, AWF, Cognee, Graphiti, LlamaIndex)
+- Synced with NeuralMemory v0.9.2: 3-tier auto-save, trigger engine, lazy loading
+
 ## [0.1.5] - 2026-02-06
 
 ### Changed
