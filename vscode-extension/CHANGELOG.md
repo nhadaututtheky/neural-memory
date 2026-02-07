@@ -1,9 +1,10 @@
 # Changelog
 
-## [0.1.8] - 2026-02-07
+## [0.1.9] - 2026-02-07
 
 ### Changed
 
+- Updated marketplace listing with new features and commands
 - Eternal Context now stores everything in the neural graph (no more JSON sidecar files)
 - Decisions, instructions, and project context are fully discoverable via recall/spreading activation
 - MCP server refactored into modular handler mixins for better maintainability
