@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.8] - 2026-02-07
+
+### Changed
+
+- Eternal Context now stores everything in the neural graph (no more JSON sidecar files)
+- Decisions, instructions, and project context are fully discoverable via recall/spreading activation
+- MCP server refactored into modular handler mixins for better maintainability
+- `max_tokens` parameter capped at 10,000 (schema + runtime validation)
+- API key handling prefers environment variables (`MEM0_API_KEY`, `COGNEE_API_KEY`) over connection params
+- CLI commands refactored: smaller functions, better error messages
+- 584 tests passing, all bare `except` clauses eliminated
+- Synced with NeuralMemory v0.9.3
+
 ## [0.1.7] - 2026-02-07
 
 ### Security

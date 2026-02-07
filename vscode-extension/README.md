@@ -6,7 +6,7 @@ A visual brain explorer, inline recall, and memory management extension for [Neu
 
 ### Memory Tree View
 
-Browse your brain's neurons directly in the sidebar. Memories are grouped by type (Concepts, Entities, Actions, Time, State) with counts and relative timestamps. Click any neuron to instantly recall related memories.
+Browse your brain's neurons directly in the sidebar. Memories are grouped by type (Concepts, Entities, Actions, Time, State, Spatial, Sensory, Intent) with counts and relative timestamps. Click any neuron to instantly recall related memories.
 
 ### Graph Explorer
 
@@ -15,6 +15,28 @@ Visualize your entire brain as an interactive force-directed graph. Neurons are 
 - Drag to pan, scroll to zoom
 - Click nodes for details and quick recall
 - Respects VS Code dark/light themes
+
+### Eternal Context
+
+Project decisions, instructions, and tech stack are stored directly in the neural graph — fully discoverable via recall and spreading activation. No more JSON sidecar files.
+
+- Save project context, decisions, and instructions that persist across sessions
+- Recap at session start with configurable detail levels (quick / detailed / full)
+- Topic-based recall for specific areas (e.g., "auth", "database")
+
+### Codebase Indexing
+
+Index your codebase into neural memory for code-aware recall. Scans Python files and creates neurons for functions, classes, and imports.
+
+- "Where is X implemented?" queries work after indexing
+- Keyboard shortcut: `Ctrl+Shift+M I`
+
+### External Memory Import
+
+Import memories from other systems into NeuralMemory:
+
+- ChromaDB, Mem0, AWF, Cognee, Graphiti, LlamaIndex
+- Full and incremental sync support
 
 ### Encode Memories from the Editor
 
@@ -36,6 +58,12 @@ WebSocket connection keeps your tree view, graph, and status bar updated in real
 | Encode Text as Memory | — | Type and encode memory content |
 | Recall Memory | `Ctrl+Shift+M R` | Query brain with selectable search depth |
 | Open Graph Explorer | `Ctrl+Shift+M G` | Interactive neuron/synapse visualization |
+| Index Codebase | `Ctrl+Shift+M I` | Scan and index code into neural memory |
+| Recap Session Context | `Ctrl+Shift+M C` | Load saved context at session start |
+| Recap by Topic | — | Search for specific topic in context |
+| Save Eternal Context | — | Save project decisions/instructions |
+| Eternal Context Status | — | View memory counts and session state |
+| Import Memories | — | Import from ChromaDB, Mem0, AWF, etc. |
 | Switch Brain | Click status bar | Switch between local brains |
 | Create Brain | — | Create a new isolated brain |
 | Refresh Memory Tree | Tree header icon | Force refresh from server |
@@ -55,9 +83,9 @@ WebSocket connection keeps your tree view, graph, and status bar updated in real
 
 ## Requirements
 
-- [NeuralMemory](https://pypi.org/project/neural-memory/) Python package (`pip install neural-memory`)
-- Python 3.10+
-- A configured brain (`nmem brain create my-brain && nmem brain use my-brain`)
+- [NeuralMemory](https://pypi.org/project/neural-memory/) v0.9.3+ (`pip install neural-memory`)
+- Python 3.11+
+- A configured brain (`nmem init` or `nmem brain create my-brain && nmem brain use my-brain`)
 
 ## Configuration
 
@@ -74,10 +102,9 @@ WebSocket connection keeps your tree view, graph, and status bar updated in real
 
 1. Install the extension
 2. Install NeuralMemory: `pip install neural-memory`
-3. Create a brain: `nmem brain create my-brain`
-4. Set it active: `nmem brain use my-brain`
-5. Start the server: run **NeuralMemory: Start Server** from the command palette, or enable `neuralmemory.autoStart`
-6. Open the NeuralMemory sidebar (brain icon in the activity bar)
+3. Run setup: `nmem init` (creates config, brain, and auto-configures MCP)
+4. Start the server: run **NeuralMemory: Start Server** from the command palette, or enable `neuralmemory.autoStart`
+5. Open the NeuralMemory sidebar (brain icon in the activity bar)
 
 ## Status Bar
 
