@@ -1100,7 +1100,7 @@ class TestPassiveCapture:
             patch.object(server, "get_storage", return_value=mock_storage),
             patch("neural_memory.mcp.server.ReflexPipeline", return_value=mock_pipeline),
             patch(
-                "neural_memory.mcp.server.analyze_text_for_memories",
+                "neural_memory.mcp.auto_handler.analyze_text_for_memories",
                 side_effect=RuntimeError("boom"),
             ),
         ):
@@ -1413,7 +1413,7 @@ class TestMCPEternal:
         with (
             patch.object(server, "get_eternal_context", return_value=ctx),
             patch.object(server, "get_storage", return_value=mock_storage),
-            patch("neural_memory.mcp.server.ReflexPipeline", return_value=mock_pipeline),
+            patch("neural_memory.mcp.eternal_handler.ReflexPipeline", return_value=mock_pipeline),
         ):
             result = await server.call_tool("nmem_recap", {"topic": "auth"})
 
@@ -2014,7 +2014,7 @@ class TestMCPFireTrigger:
         ctx.increment_message_count = MagicMock(return_value=15)
         server._eternal_ctx = ctx
 
-        with patch("neural_memory.mcp.server.check_triggers") as mock_check:
+        with patch("neural_memory.mcp.eternal_handler.check_triggers") as mock_check:
             mock_check.return_value = MagicMock(triggered=False)
             server._fire_eternal_trigger("Some text")
 
@@ -2026,7 +2026,7 @@ class TestMCPFireTrigger:
         server = self._make_server(eternal_enabled=True)
         assert server._eternal_ctx is None
 
-        with patch("neural_memory.mcp.server.check_triggers") as mock_check:
+        with patch("neural_memory.mcp.eternal_handler.check_triggers") as mock_check:
             server._fire_eternal_trigger("Some text")
 
         mock_check.assert_not_called()

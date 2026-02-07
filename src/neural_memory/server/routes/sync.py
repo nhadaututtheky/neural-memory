@@ -104,6 +104,7 @@ class ConnectedClient:
             await self.websocket.send_text(event.to_json())
             return True
         except Exception:
+            logger.debug("WebSocket send failed for client %s", self.client_id, exc_info=True)
             return False
 
 

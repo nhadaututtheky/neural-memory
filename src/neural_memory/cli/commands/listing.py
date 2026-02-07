@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Annotated
 
 import typer
@@ -10,6 +11,8 @@ import typer
 from neural_memory.cli._helpers import get_config, get_storage, output_result
 from neural_memory.core.memory_types import MemoryType, Priority
 from neural_memory.safety.freshness import evaluate_freshness, format_age
+
+logger = logging.getLogger(__name__)
 
 
 def list_memories(
@@ -389,7 +392,7 @@ def cleanup(
                     mem_type = MemoryType(memory_type.lower())
                     expired = [tm for tm in expired if tm.memory_type == mem_type]
                 except ValueError:
-                    pass
+                    logger.debug("Invalid memory_type %r in preview, showing all", memory_type)
             return len(expired)
 
         count = asyncio.run(_preview())

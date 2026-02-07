@@ -9,11 +9,14 @@ Cache location: ~/.neuralmemory/.update_check
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import time
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 PYPI_URL = "https://pypi.org/pypi/neural-memory/json"
 CHECK_INTERVAL_SECONDS = 24 * 60 * 60  # 24 hours
@@ -34,6 +37,7 @@ def _read_cache() -> dict[str, Any]:
             return {}
         return json.loads(cache_path.read_text(encoding="utf-8"))
     except Exception:
+        logger.debug("Failed to read update cache", exc_info=True)
         return {}
 
 
@@ -44,7 +48,7 @@ def _write_cache(data: dict[str, Any]) -> None:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         cache_path.write_text(json.dumps(data), encoding="utf-8")
     except Exception:
-        pass
+        logger.debug("Failed to write update cache", exc_info=True)
 
 
 def _parse_version(version_str: str) -> tuple[int, ...]:
@@ -82,6 +86,7 @@ def _fetch_latest_version() -> str | None:
             data = json.loads(resp.read())
             return data.get("info", {}).get("version")
     except Exception:
+        logger.debug("Failed to fetch latest version from PyPI", exc_info=True)
         return None
 
 
@@ -120,7 +125,7 @@ def _check_and_notify() -> None:
         if _is_newer(latest, __version__):
             _print_update_notice(__version__, latest)
     except Exception:
-        pass
+        logger.debug("Update check failed", exc_info=True)
 
 
 def _print_update_notice(current: str, latest: str) -> None:

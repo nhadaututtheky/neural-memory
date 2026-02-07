@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,8 @@ from neural_memory.storage.sqlite_schema import (
 )
 from neural_memory.storage.sqlite_synapses import SQLiteSynapseMixin
 from neural_memory.storage.sqlite_typed import SQLiteTypedMemoryMixin
+
+logger = logging.getLogger(__name__)
 
 
 class SQLiteStorage(
@@ -120,6 +123,7 @@ class SQLiteStorage(
             await conn.execute("SELECT * FROM neurons_fts LIMIT 0")
             return True
         except Exception:
+            logger.debug("FTS5 table not available", exc_info=True)
             return False
 
     # ========== Statistics ==========

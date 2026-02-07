@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -12,6 +13,8 @@ from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.extraction.entities import EntityExtractor, EntityType
 from neural_memory.extraction.keywords import extract_keywords, extract_weighted_keywords
 from neural_memory.extraction.temporal import TemporalExtractor
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from neural_memory.core.brain import BrainConfig
@@ -415,7 +418,6 @@ class MemoryEncoder:
                 await self._storage.add_synapse(synapse)
                 linked.append(fiber.anchor_neuron_id)
             except ValueError:
-                # Synapse might already exist
-                pass
+                logger.debug("Synapse already exists, skipping")
 
         return linked

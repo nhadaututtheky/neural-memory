@@ -327,7 +327,7 @@ class HybridStorage:
         try:
             remote_snapshot = await self._remote.export_brain(self._brain_id)
         except Exception:
-            # Brain doesn't exist on remote, push our version
+            logger.debug("Remote brain not found, pushing local version", exc_info=True)
             await self._remote.import_brain(local_snapshot, self._brain_id)
             return {"pushed": True, "pulled": False, "merge_report": None}
 

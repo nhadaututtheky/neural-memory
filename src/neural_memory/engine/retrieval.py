@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 import time
 from datetime import datetime
@@ -16,6 +17,8 @@ from neural_memory.engine.reflex_activation import CoActivation, ReflexActivatio
 from neural_memory.engine.retrieval_context import format_context, reconstitute_answer
 from neural_memory.engine.retrieval_types import DepthLevel, RetrievalResult, Subgraph
 from neural_memory.extraction.parser import QueryIntent, QueryParser, Stimulus
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from neural_memory.core.brain import BrainConfig
@@ -171,7 +174,7 @@ class ReflexPipeline:
                 top_synapse_ids = subgraph.synapse_ids[:20] if subgraph.synapse_ids else None
                 await self._reinforcer.reinforce(self._storage, top_neuron_ids, top_synapse_ids)
             except Exception:
-                pass  # Never let reinforcement failure break retrieval
+                logger.debug("Reinforcement failed (non-critical)", exc_info=True)
 
         return RetrievalResult(
             answer=answer,
