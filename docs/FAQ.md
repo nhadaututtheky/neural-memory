@@ -114,20 +114,15 @@ Just use NeuralMemory normally — the right memories surface for the right proj
 
 ### Q: What if I want complete separation between projects?
 
-Think of a **brain** as a separate notebook. By default, everything goes into one notebook called `default`. If you want a completely separate notebook for a different project:
+Think of a **brain** as a separate notebook. By default, everything goes into one notebook called `default`. If you want a completely separate notebook for a different project, just tell the AI:
 
-```bash
-nmem brain create work-api       # new empty notebook
-nmem brain switch work-api       # now all memories go here
-```
+> "Create a new brain called work-api and switch to it"
 
-To switch back:
+To switch back later:
 
-```bash
-nmem brain switch default        # back to your main notebook
-```
+> "Switch to my default brain"
 
-That's it. Memories in `work-api` and `default` never mix.
+Memories in `work-api` and `default` never mix.
 
 ### Q: Can I make Claude Code auto-pick the right brain per project?
 
@@ -150,22 +145,19 @@ Now when you open that project in Claude Code, it automatically uses the `work-a
 
 ### Q: Can I save project rules that the AI always follows?
 
-Yes. Tell the AI to remember instructions:
+Yes. Just tell the AI in plain language:
 
-```
-nmem_remember(content="Use PostgreSQL, never SQLite", type="instruction", priority=9)
-nmem_remember(content="All API responses use {data, error, meta} format", type="instruction", priority=9)
-```
+> "Remember: this project uses PostgreSQL, never SQLite"
+>
+> "Remember: all API responses must use the {data, error, meta} format"
 
-These are saved in your current brain and automatically surface when relevant.
+These are saved in your current brain and automatically surface when relevant — you don't need to know any commands.
 
-For bigger project context (tech stack, key decisions), use Eternal Context:
+For bigger project context, just say:
 
-```
-nmem_eternal(action="save", project_name="work-api", tech_stack=["Python", "FastAPI", "PostgreSQL"])
-```
+> "Save this project context: name is work-api, tech stack is Python, FastAPI, PostgreSQL"
 
-Next session, call `nmem_recap()` to reload everything instantly.
+Next session, say "recap" or "what were we working on?" and everything reloads instantly.
 
 ## Data & Multi-tool Sharing
 
