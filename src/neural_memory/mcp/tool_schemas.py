@@ -65,6 +65,8 @@ def get_tool_schemas() -> list[dict[str, Any]]:
                     },
                     "max_tokens": {
                         "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000,
                         "description": "Maximum tokens in response (default: 500)",
                     },
                     "min_confidence": {
@@ -243,7 +245,7 @@ def get_tool_schemas() -> list[dict[str, Any]]:
                     },
                     "connection": {
                         "type": "string",
-                        "description": "Connection string/path (e.g., '/path/to/chroma', API key, graph URI, or index dir path)",
+                        "description": "Connection string/path (e.g., '/path/to/chroma', graph URI, or index dir path). For API keys, prefer env vars: MEM0_API_KEY, COGNEE_API_KEY.",
                     },
                     "collection": {
                         "type": "string",

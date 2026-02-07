@@ -672,6 +672,144 @@ class TestMCPToolCalls:
         assert "No active session" in result["message"]
 
 
+class TestMCPErrorPaths:
+    """Tests for error paths: no brain, missing storage, etc."""
+
+    def _make_server(self) -> MCPServer:
+        with patch("neural_memory.mcp.server.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(
+                current_brain="test-brain",
+                get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
+                auto=MagicMock(enabled=False),
+            )
+            return MCPServer()
+
+    @pytest.mark.asyncio
+    async def test_session_set_no_brain(self) -> None:
+        """Test nmem_session set when brain is missing."""
+        server = self._make_server()
+        mock_storage = AsyncMock()
+        mock_storage.get_brain = AsyncMock(return_value=None)
+        mock_storage._current_brain_id = "test-brain"
+        mock_storage.find_typed_memories = AsyncMock(return_value=[])
+
+        with patch.object(server, "get_storage", return_value=mock_storage):
+            result = await server.call_tool(
+                "nmem_session",
+                {"action": "set", "feature": "auth"},
+            )
+
+        assert "error" in result
+
+    @pytest.mark.asyncio
+    async def test_session_end_no_brain(self) -> None:
+        """Test nmem_session end when brain is missing."""
+        server = self._make_server()
+        mock_storage = AsyncMock()
+        mock_storage.get_brain = AsyncMock(return_value=None)
+        mock_storage._current_brain_id = "test-brain"
+
+        mock_existing = MagicMock(
+            metadata={
+                "feature": "auth",
+                "task": "test",
+                "progress": 0.5,
+                "started_at": "2026-01-01T00:00:00",
+            },
+        )
+        mock_storage.find_typed_memories = AsyncMock(return_value=[mock_existing])
+
+        mock_encoder = AsyncMock()
+        mock_encoder.encode = AsyncMock(
+            return_value=MagicMock(fiber=MagicMock(id="f-1"), neurons_created=[]),
+        )
+
+        with (
+            patch.object(server, "get_storage", return_value=mock_storage),
+            patch("neural_memory.mcp.server.MemoryEncoder", return_value=mock_encoder),
+        ):
+            result = await server.call_tool("nmem_session", {"action": "end"})
+
+        assert "error" in result
+
+    @pytest.mark.asyncio
+    async def test_eternal_save_no_brain(self) -> None:
+        """Test nmem_eternal save when brain is missing returns error."""
+        server = self._make_server()
+        mock_storage = AsyncMock()
+        mock_storage.get_brain = AsyncMock(return_value=None)
+        mock_storage._current_brain_id = "test-brain"
+
+        ctx = AsyncMock()
+
+        with (
+            patch.object(server, "get_eternal_context", return_value=ctx),
+            patch.object(server, "get_storage", return_value=mock_storage),
+        ):
+            result = await server.call_tool(
+                "nmem_eternal",
+                {"action": "save", "instruction": "Always use TypeScript"},
+            )
+
+        assert "error" in result
+        assert "No brain" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_recap_topic_no_brain(self) -> None:
+        """Test nmem_recap with topic when brain is missing."""
+        server = self._make_server()
+        ctx = AsyncMock()
+        ctx.get_injection = AsyncMock(return_value="context")
+
+        mock_storage = AsyncMock()
+        mock_storage.get_brain = AsyncMock(return_value=None)
+        mock_storage._current_brain_id = "test-brain"
+
+        with (
+            patch.object(server, "get_eternal_context", return_value=ctx),
+            patch.object(server, "get_storage", return_value=mock_storage),
+        ):
+            result = await server.call_tool("nmem_recap", {"topic": "auth"})
+
+        assert "error" in result
+
+    @pytest.mark.asyncio
+    async def test_recall_max_tokens_clamped(self) -> None:
+        """Test that max_tokens is clamped to 10000."""
+        server = self._make_server()
+        mock_storage = AsyncMock()
+        mock_brain = MagicMock(id="test-brain", config=MagicMock())
+        mock_storage.get_brain = AsyncMock(return_value=mock_brain)
+        mock_storage._current_brain_id = "test-brain"
+        mock_storage.find_typed_memories = AsyncMock(return_value=[])
+
+        mock_pipeline = AsyncMock()
+        mock_pipeline.query = AsyncMock(
+            return_value=MagicMock(
+                context="answer",
+                confidence=0.9,
+                depth_used=MagicMock(value=1),
+                neurons_activated=5,
+                fibers_matched=[],
+                latency_ms=10.0,
+                co_activations=[],
+                metadata={},
+            )
+        )
+
+        with (
+            patch.object(server, "get_storage", return_value=mock_storage),
+            patch("neural_memory.mcp.server.ReflexPipeline", return_value=mock_pipeline),
+        ):
+            await server.call_tool(
+                "nmem_recall",
+                {"query": "test", "max_tokens": 999999},
+            )
+
+        call_kwargs = mock_pipeline.query.call_args
+        assert call_kwargs.kwargs.get("max_tokens", call_kwargs[1].get("max_tokens", 0)) <= 10000
+
+
 class TestMCPProtocol:
     """Tests for MCP protocol message handling."""
 

@@ -204,7 +204,7 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
             depth = DepthLevel(args.get("depth", 1))
         except ValueError:
             return {"error": f"Invalid depth level: {args.get('depth')}. Must be 0-3."}
-        max_tokens = args.get("max_tokens", 500)
+        max_tokens = min(args.get("max_tokens", 500), 10_000)
         min_confidence = args.get("min_confidence", 0.0)
 
         # Inject session context for richer recall on vague queries

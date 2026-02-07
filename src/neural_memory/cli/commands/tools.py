@@ -359,50 +359,10 @@ def consolidate(
     asyncio.run(_consolidate())
 
 
-def hooks(
-    action: Annotated[
-        str,
-        typer.Argument(help="Action: install, uninstall, show"),
-    ] = "install",
-    path: Annotated[
-        str | None,
-        typer.Option("--path", "-p", help="Path to git repo (default: current dir)"),
-    ] = None,
-) -> None:
-    """Install or manage git hooks for automatic memory capture.
+_HOOK_MARKER = "# [neural-memory] auto-generated hook"
 
-    Installs a post-commit hook that suggests saving the commit
-    as a memory after each git commit.
-
-    Examples:
-        nmem hooks install          # Install in current repo
-        nmem hooks install -p .     # Explicit path
-        nmem hooks uninstall        # Remove hooks
-        nmem hooks show             # Show installed hooks
-    """
-    import os
-    import stat
-    from pathlib import Path
-
-    repo_path = Path(path) if path else Path.cwd()
-    git_dir = repo_path / ".git"
-
-    if not git_dir.is_dir():
-        typer.secho(
-            f"Not a git repository: {repo_path}",
-            fg=typer.colors.RED,
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    hooks_dir = git_dir / "hooks"
-    hooks_dir.mkdir(exist_ok=True)
-    post_commit = hooks_dir / "post-commit"
-
-    hook_marker = "# [neural-memory] auto-generated hook"
-
-    hook_script = f"""#!/bin/sh
-{hook_marker}
+_HOOK_SCRIPT = f"""#!/bin/sh
+{_HOOK_MARKER}
 # Suggest saving git commit as a memory.
 # Installed by: nmem hooks install
 # Remove with:  nmem hooks uninstall
@@ -417,63 +377,99 @@ if [ -n "$MSG" ]; then
 fi
 """
 
-    if action == "install":
-        # Check for existing non-nmem hook
-        if post_commit.exists():
-            existing = post_commit.read_text(encoding="utf-8")
-            if hook_marker in existing:
-                typer.secho(
-                    "Hook already installed.",
-                    fg=typer.colors.YELLOW,
-                )
-                return
-            # Existing hook from another tool — don't overwrite
-            typer.secho(
-                "A post-commit hook already exists (not from neural-memory).",
-                fg=typer.colors.RED,
-                err=True,
-            )
-            typer.echo("Manually merge or remove it, then try again.")
-            raise typer.Exit(1)
 
-        post_commit.write_text(hook_script, encoding="utf-8")
+def _hooks_install(post_commit: object) -> None:
+    """Install the post-commit hook."""
+    import os
+    import stat
 
-        # Make executable (Unix)
-        if os.name != "nt":
-            st = post_commit.stat()
-            post_commit.chmod(st.st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
-
-        typer.secho("Installed post-commit hook.", fg=typer.colors.GREEN)
-        typer.echo(f"  Location: {post_commit}")
-        typer.echo("  After each commit you'll see a reminder to save the commit message.")
-
-    elif action == "uninstall":
-        if not post_commit.exists():
-            typer.secho("No post-commit hook found.", fg=typer.colors.YELLOW)
-            return
-
+    if post_commit.exists():
         existing = post_commit.read_text(encoding="utf-8")
-        if hook_marker not in existing:
-            typer.secho(
-                "Post-commit hook exists but wasn't installed by neural-memory. Skipping.",
-                fg=typer.colors.YELLOW,
-            )
+        if _HOOK_MARKER in existing:
+            typer.secho("Hook already installed.", fg=typer.colors.YELLOW)
             return
+        typer.secho(
+            "A post-commit hook already exists (not from neural-memory).",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        typer.echo("Manually merge or remove it, then try again.")
+        raise typer.Exit(1)
 
-        post_commit.unlink()
-        typer.secho("Removed post-commit hook.", fg=typer.colors.GREEN)
+    post_commit.write_text(_HOOK_SCRIPT, encoding="utf-8")
+    if os.name != "nt":
+        st = post_commit.stat()
+        post_commit.chmod(st.st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
-    elif action == "show":
-        if post_commit.exists():
-            existing = post_commit.read_text(encoding="utf-8")
-            is_nmem = hook_marker in existing
-            typer.echo(
-                f"Post-commit hook: {'installed (neural-memory)' if is_nmem else 'exists (other)'}"
-            )
-            typer.echo(f"  Path: {post_commit}")
-        else:
-            typer.echo("Post-commit hook: not installed")
+    typer.secho("Installed post-commit hook.", fg=typer.colors.GREEN)
+    typer.echo(f"  Location: {post_commit}")
+    typer.echo("  After each commit you'll see a reminder to save the commit message.")
 
+
+def _hooks_uninstall(post_commit: object) -> None:
+    """Uninstall the post-commit hook."""
+    if not post_commit.exists():
+        typer.secho("No post-commit hook found.", fg=typer.colors.YELLOW)
+        return
+    existing = post_commit.read_text(encoding="utf-8")
+    if _HOOK_MARKER not in existing:
+        typer.secho(
+            "Post-commit hook exists but wasn't installed by neural-memory. Skipping.",
+            fg=typer.colors.YELLOW,
+        )
+        return
+    post_commit.unlink()
+    typer.secho("Removed post-commit hook.", fg=typer.colors.GREEN)
+
+
+def _hooks_show(post_commit: object) -> None:
+    """Show installed hook status."""
+    if post_commit.exists():
+        existing = post_commit.read_text(encoding="utf-8")
+        is_nmem = _HOOK_MARKER in existing
+        typer.echo(
+            f"Post-commit hook: {'installed (neural-memory)' if is_nmem else 'exists (other)'}"
+        )
+        typer.echo(f"  Path: {post_commit}")
+    else:
+        typer.echo("Post-commit hook: not installed")
+
+
+def hooks(
+    action: Annotated[
+        str,
+        typer.Argument(help="Action: install, uninstall, show"),
+    ] = "install",
+    path: Annotated[
+        str | None,
+        typer.Option("--path", "-p", help="Path to git repo (default: current dir)"),
+    ] = None,
+) -> None:
+    """Install or manage git hooks for automatic memory capture.
+
+    Examples:
+        nmem hooks install          # Install in current repo
+        nmem hooks install -p .     # Explicit path
+        nmem hooks uninstall        # Remove hooks
+        nmem hooks show             # Show installed hooks
+    """
+    from pathlib import Path
+
+    repo_path = Path(path) if path else Path.cwd()
+    git_dir = repo_path / ".git"
+
+    if not git_dir.is_dir():
+        typer.secho(f"Not a git repository: {repo_path}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
+
+    hooks_dir = git_dir / "hooks"
+    hooks_dir.mkdir(exist_ok=True)
+    post_commit = hooks_dir / "post-commit"
+
+    dispatch = {"install": _hooks_install, "uninstall": _hooks_uninstall, "show": _hooks_show}
+    handler = dispatch.get(action)
+    if handler:
+        handler(post_commit)
     else:
         typer.secho(
             f"Unknown action: {action}. Use: install, uninstall, show",

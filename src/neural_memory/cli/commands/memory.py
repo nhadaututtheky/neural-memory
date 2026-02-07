@@ -34,6 +34,95 @@ from neural_memory.safety.sensitive import (
 )
 
 
+def _validate_content(
+    content: str,
+    *,
+    force: bool,
+    redact: bool,
+) -> tuple[str, list]:
+    """Validate and optionally redact sensitive content. Returns (content, matches)."""
+    sensitive_matches = check_sensitive_content(content, min_severity=2)
+
+    if sensitive_matches and not force and not redact:
+        warning = format_sensitive_warning(sensitive_matches)
+        typer.echo(warning)
+        raise typer.Exit(1)
+
+    store_content = content
+    if redact and sensitive_matches:
+        store_content, _ = filter_sensitive_content(content)
+        typer.secho(f"Redacted {len(sensitive_matches)} sensitive item(s)", fg=typer.colors.YELLOW)
+
+    return store_content, sensitive_matches
+
+
+def _resolve_memory_type(
+    memory_type: str | None,
+    content: str,
+) -> MemoryType:
+    """Parse explicit memory type or auto-detect."""
+    if memory_type:
+        try:
+            return MemoryType(memory_type.lower())
+        except ValueError:
+            valid_types = ", ".join(t.value for t in MemoryType)
+            typer.secho(f"Invalid memory type. Valid types: {valid_types}", fg=typer.colors.RED)
+            raise typer.Exit(1)
+    return suggest_memory_type(content)
+
+
+async def _resolve_project_id(storage: object, project: str | None) -> str | None:
+    """Look up project by name, return ID or None."""
+    if not project:
+        return None
+    proj = await storage.get_project_by_name(project)
+    if not proj:
+        return None
+    return proj.id
+
+
+async def _encode_and_store(
+    storage: object,
+    brain_config: object,
+    content: str,
+    *,
+    tags: set[str] | None,
+    mem_type: MemoryType,
+    mem_priority: Priority,
+    expiry_days: int | None,
+    project_id: str | None,
+) -> dict:
+    """Encode content into neural graph and store typed memory metadata."""
+    encoder = MemoryEncoder(storage, brain_config)
+    storage.disable_auto_save()
+
+    result = await encoder.encode(
+        content=content,
+        timestamp=datetime.now(),
+        tags=tags,
+    )
+
+    typed_mem = TypedMemory.create(
+        fiber_id=result.fiber.id,
+        memory_type=mem_type,
+        priority=mem_priority,
+        source="user_input",
+        expires_in_days=expiry_days,
+        tags=tags,
+        project_id=project_id,
+    )
+    await storage.add_typed_memory(typed_mem)
+    await storage.batch_save()
+
+    return {
+        "fiber_id": result.fiber.id,
+        "typed_mem": typed_mem,
+        "neurons_created": len(result.neurons_created),
+        "neurons_linked": len(result.neurons_linked),
+        "synapses_created": len(result.synapses_created),
+    }
+
+
 def remember(
     content: Annotated[str, typer.Argument(help="Content to remember")],
     tags: Annotated[
@@ -78,37 +167,9 @@ def remember(
         nmem remember "Need to refactor auth module" --type todo --priority 7
         nmem remember "API_KEY=xxx" --redact
     """
-    # Check for sensitive content
-    sensitive_matches = check_sensitive_content(content, min_severity=2)
-
-    if sensitive_matches and not force and not redact:
-        warning = format_sensitive_warning(sensitive_matches)
-        typer.echo(warning)
-        raise typer.Exit(1)
-
-    # Redact if requested
-    store_content = content
-    if redact and sensitive_matches:
-        store_content, _ = filter_sensitive_content(content)
-        typer.secho(f"Redacted {len(sensitive_matches)} sensitive item(s)", fg=typer.colors.YELLOW)
-
-    # Determine memory type
-    if memory_type:
-        try:
-            mem_type = MemoryType(memory_type.lower())
-        except ValueError:
-            valid_types = ", ".join(t.value for t in MemoryType)
-            typer.secho(f"Invalid memory type. Valid types: {valid_types}", fg=typer.colors.RED)
-            raise typer.Exit(1)
-    else:
-        mem_type = suggest_memory_type(store_content)
-
-    # Determine expiry
-    expiry_days = expires
-    if expiry_days is None:
-        expiry_days = DEFAULT_EXPIRY_DAYS.get(mem_type)
-
-    # Determine priority
+    store_content, sensitive_matches = _validate_content(content, force=force, redact=redact)
+    mem_type = _resolve_memory_type(memory_type, store_content)
+    expiry_days = expires if expires is not None else DEFAULT_EXPIRY_DAYS.get(mem_type)
     mem_priority = Priority.from_int(priority) if priority is not None else Priority.NORMAL
 
     async def _remember() -> dict:
@@ -124,69 +185,40 @@ def remember(
         if not brain:
             return {"error": "No brain configured"}
 
-        # Look up project if specified
-        project_id = None
-        if project:
-            proj = await storage.get_project_by_name(project)
-            if not proj:
-                return {
-                    "error": f"Project '{project}' not found. Create it with: nmem project create \"{project}\""
-                }
-            project_id = proj.id
+        project_id = await _resolve_project_id(storage, project)
+        if project and project_id is None:
+            return {
+                "error": f"Project '{project}' not found. Create it with: nmem project create \"{project}\""
+            }
 
-        encoder = MemoryEncoder(storage, brain.config)
-
-        # Disable auto-save for batch operations during encoding
-        storage.disable_auto_save()
-
-        result = await encoder.encode(
-            content=store_content,
-            timestamp=datetime.now(),
+        enc = await _encode_and_store(
+            storage,
+            brain.config,
+            store_content,
             tags=set(tags) if tags else None,
-        )
-
-        # Create and store typed memory metadata
-        typed_mem = TypedMemory.create(
-            fiber_id=result.fiber.id,
-            memory_type=mem_type,
-            priority=mem_priority,
-            source="user_input",
-            expires_in_days=expiry_days,
-            tags=set(tags) if tags else None,
+            mem_type=mem_type,
+            mem_priority=mem_priority,
+            expiry_days=expiry_days,
             project_id=project_id,
         )
-        await storage.add_typed_memory(typed_mem)
-
-        # Save once after encoding
-        await storage.batch_save()
 
         response = {
             "message": f"Remembered: {store_content[:50]}{'...' if len(store_content) > 50 else ''}",
-            "fiber_id": result.fiber.id,
+            "fiber_id": enc["fiber_id"],
             "memory_type": mem_type.value,
             "priority": mem_priority.name.lower(),
-            "neurons_created": len(result.neurons_created),
-            "neurons_linked": len(result.neurons_linked),
-            "synapses_created": len(result.synapses_created),
+            "neurons_created": enc["neurons_created"],
+            "neurons_linked": enc["neurons_linked"],
+            "synapses_created": enc["synapses_created"],
         }
-
-        # Add project info
         if project_id:
             response["project"] = project
-
-        # Add expiry info
-        if typed_mem.expires_at:
-            response["expires_in_days"] = typed_mem.days_until_expiry
-
-        # Add warnings
-        warnings = []
+        if enc["typed_mem"].expires_at:
+            response["expires_in_days"] = enc["typed_mem"].days_until_expiry
         if force and sensitive_matches:
-            warnings.append(
+            response["warnings"] = [
                 f"[!] Stored with {len(sensitive_matches)} sensitive item(s) - consider using --redact"
-            )
-        if warnings:
-            response["warnings"] = warnings
-
+            ]
         return response
 
     result = asyncio.run(_remember())
@@ -282,6 +314,21 @@ def todo(
     output_result(result, json_output)
 
 
+async def _gather_freshness(storage: object, fiber_ids: list[str]) -> tuple[list[str], int]:
+    """Collect freshness warnings and oldest age from matched fibers."""
+    warnings: list[str] = []
+    oldest_age = 0
+    for fiber_id in fiber_ids:
+        fiber = await storage.get_fiber(fiber_id)
+        if fiber:
+            freshness = evaluate_freshness(fiber.created_at)
+            if freshness.warning:
+                warnings.append(freshness.warning)
+            if freshness.age_days > oldest_age:
+                oldest_age = freshness.age_days
+    return warnings, oldest_age
+
+
 def recall(
     query: Annotated[str, typer.Argument(help="Query to search memories")],
     depth: Annotated[
@@ -327,20 +374,15 @@ def recall(
         if not brain:
             return {"error": "No brain configured"}
 
-        # Parse and route query
         parser = QueryParser()
         router = QueryRouter()
         stimulus = parser.parse(query, reference_time=datetime.now())
         route = router.route(stimulus)
 
-        # Use router's suggested depth if not specified
-        if depth is not None:
-            depth_level = DepthLevel(depth)
-        else:
-            depth_level = DepthLevel(min(route.suggested_depth, 3))
-
+        depth_level = (
+            DepthLevel(depth) if depth is not None else DepthLevel(min(route.suggested_depth, 3))
+        )
         pipeline = ReflexPipeline(storage, brain.config)
-
         result = await pipeline.query(
             query=query,
             depth=depth_level,
@@ -348,7 +390,6 @@ def recall(
             reference_time=datetime.now(),
         )
 
-        # Check confidence threshold
         if result.confidence < min_confidence:
             return {
                 "answer": f"No memories found with confidence >= {min_confidence:.2f}",
@@ -357,19 +398,10 @@ def recall(
                 "below_threshold": True,
             }
 
-        # Gather freshness information from matched fibers
-        freshness_warnings: list[str] = []
-        oldest_age = 0
-
-        if result.fibers_matched:
-            for fiber_id in result.fibers_matched:
-                fiber = await storage.get_fiber(fiber_id)
-                if fiber:
-                    freshness = evaluate_freshness(fiber.created_at)
-                    if freshness.warning:
-                        freshness_warnings.append(freshness.warning)
-                    if freshness.age_days > oldest_age:
-                        oldest_age = freshness.age_days
+        freshness_warnings, oldest_age = await _gather_freshness(
+            storage,
+            result.fibers_matched or [],
+        )
 
         response = {
             "answer": result.context or "No relevant memories found.",
@@ -380,7 +412,6 @@ def recall(
             "latency_ms": result.latency_ms,
         }
 
-        # Add routing info if requested
         if show_routing:
             response["routing"] = {
                 "query_type": route.primary.value,
@@ -388,16 +419,12 @@ def recall(
                 "suggested_depth": route.suggested_depth,
                 "use_embeddings": route.use_embeddings,
                 "time_weighted": route.time_weighted,
-                "signals": list(route.signals)[:5],  # Limit signals shown
+                "signals": list(route.signals)[:5],
             }
-
         if show_age and oldest_age > 0:
             response["oldest_memory_age"] = format_age(oldest_age)
-
         if freshness_warnings:
-            # Deduplicate warnings
-            unique_warnings = list(dict.fromkeys(freshness_warnings))[:3]
-            response["freshness_warnings"] = unique_warnings
+            response["freshness_warnings"] = list(dict.fromkeys(freshness_warnings))[:3]
 
         return response
 

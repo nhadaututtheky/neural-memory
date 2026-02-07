@@ -125,21 +125,36 @@ class IndexHandler:
 
 
 def _build_adapter_kwargs(source: str, args: dict[str, Any]) -> dict[str, Any]:
-    """Build adapter-specific kwargs from tool args."""
+    """Build adapter-specific kwargs from tool args.
+
+    API keys are read from environment variables (never from tool parameters)
+    to prevent accidental logging/exposure:
+      - MEM0_API_KEY for Mem0
+      - COGNEE_API_KEY for Cognee
+    """
+    import os
+
     kwargs: dict[str, Any] = {}
     connection = args.get("connection")
 
     if source == "chromadb" and connection:
         kwargs["path"] = connection
     elif source == "mem0":
-        if connection:
+        api_key = os.environ.get("MEM0_API_KEY", "")
+        if api_key:
+            kwargs["api_key"] = api_key
+        elif connection:
             kwargs["api_key"] = connection
         if args.get("user_id"):
             kwargs["user_id"] = args["user_id"]
     elif source == "awf" and connection:
         kwargs["brain_dir"] = connection
-    elif source == "cognee" and connection:
-        kwargs["api_key"] = connection
+    elif source == "cognee":
+        api_key = os.environ.get("COGNEE_API_KEY", "")
+        if api_key:
+            kwargs["api_key"] = api_key
+        elif connection:
+            kwargs["api_key"] = connection
     elif source == "graphiti":
         if connection:
             kwargs["uri"] = connection

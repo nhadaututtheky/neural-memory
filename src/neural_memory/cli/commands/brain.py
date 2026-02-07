@@ -315,6 +315,83 @@ def brain_delete(
     typer.secho(f"Deleted brain: {name}", fg=typer.colors.GREEN)
 
 
+def _scan_sensitive_neurons(neurons: list) -> list[dict]:
+    """Scan neurons for sensitive content, return summary dicts."""
+    result = []
+    for neuron in neurons:
+        matches = check_sensitive_content(neuron.content, min_severity=2)
+        if matches:
+            result.append(
+                {
+                    "id": neuron.id,
+                    "type": neuron.type.value,
+                    "sensitive_types": [m.type.value for m in matches],
+                }
+            )
+    return result
+
+
+def _compute_health_score(sensitive_count: int, freshness_report: object) -> tuple[int, list[str]]:
+    """Compute health score (0-100) and list of issues."""
+    score = 100
+    issues: list[str] = []
+
+    if sensitive_count:
+        penalty = min(30, sensitive_count * 5)
+        score -= penalty
+        issues.append(f"{sensitive_count} neurons with sensitive content")
+
+    stale_ratio = (freshness_report.stale + freshness_report.ancient) / max(
+        1, freshness_report.total
+    )
+    if stale_ratio > 0.5:
+        score -= 20
+        issues.append(f"{stale_ratio * 100:.0f}% of memories are stale/ancient")
+    elif stale_ratio > 0.2:
+        score -= 10
+        issues.append(f"{stale_ratio * 100:.0f}% of memories are stale/ancient")
+
+    return max(0, score), issues
+
+
+def _display_health(result: dict) -> None:
+    """Pretty-print health report to terminal."""
+    if "error" in result:
+        typer.secho(result["error"], fg=typer.colors.RED)
+        return
+
+    score = result["health_score"]
+    color, indicator = (
+        (typer.colors.GREEN, "[OK]")
+        if score >= 80
+        else (typer.colors.YELLOW, "[~]")
+        if score >= 50
+        else (typer.colors.RED, "[!!]")
+    )
+
+    typer.echo(f"\nBrain: {result['brain']}")
+    typer.secho(f"Health Score: {indicator} {score}/100", fg=color)
+
+    if result["issues"]:
+        typer.echo("\nIssues:")
+        for issue in result["issues"]:
+            typer.secho(f"  [!] {issue}", fg=typer.colors.YELLOW)
+
+    if result["sensitive_content"]["count"] > 0:
+        typer.echo(f"\nSensitive content: {result['sensitive_content']['count']} neurons")
+        typer.secho(
+            "  Run 'nmem brain export --exclude-sensitive' for safe export",
+            fg=typer.colors.BRIGHT_BLACK,
+        )
+
+    f = result["freshness"]
+    if f["total"] > 0:
+        typer.echo(f"\nMemory freshness ({f['total']} total):")
+        typer.echo(f"  [+] Fresh/Recent: {f['fresh'] + f['recent']}")
+        typer.echo(f"  [~] Aging: {f['aging']}")
+        typer.echo(f"  [!!] Stale/Ancient: {f['stale'] + f['ancient']}")
+
+
 @brain_app.command("health")
 def brain_health(
     name: Annotated[
@@ -339,53 +416,15 @@ def brain_health(
 
         storage = await PersistentStorage.load(brain_path)
         brain = await storage.get_brain(storage._current_brain_id)
-
         if not brain:
             return {"error": "No brain configured"}
 
-        # Get all neurons to check
         neurons = list(storage._neurons[storage._current_brain_id].values())
         fibers = await storage.get_fibers(limit=10000)
 
-        # Check for sensitive content
-        sensitive_neurons = []
-        for neuron in neurons:
-            matches = check_sensitive_content(neuron.content, min_severity=2)
-            if matches:
-                sensitive_neurons.append(
-                    {
-                        "id": neuron.id,
-                        "type": neuron.type.value,
-                        "sensitive_types": [m.type.value for m in matches],
-                    }
-                )
-
-        # Analyze freshness
-        created_dates = [f.created_at for f in fibers]
-        freshness_report = analyze_freshness(created_dates)
-
-        # Calculate health score (0-100)
-        health_score = 100
-        issues = []
-
-        # Penalize for sensitive content
-        if sensitive_neurons:
-            penalty = min(30, len(sensitive_neurons) * 5)
-            health_score -= penalty
-            issues.append(f"{len(sensitive_neurons)} neurons with sensitive content")
-
-        # Penalize for stale memories
-        stale_ratio = (freshness_report.stale + freshness_report.ancient) / max(
-            1, freshness_report.total
-        )
-        if stale_ratio > 0.5:
-            health_score -= 20
-            issues.append(f"{stale_ratio * 100:.0f}% of memories are stale/ancient")
-        elif stale_ratio > 0.2:
-            health_score -= 10
-            issues.append(f"{stale_ratio * 100:.0f}% of memories are stale/ancient")
-
-        health_score = max(0, health_score)
+        sensitive_neurons = _scan_sensitive_neurons(neurons)
+        freshness_report = analyze_freshness([f.created_at for f in fibers])
+        health_score, issues = _compute_health_score(len(sensitive_neurons), freshness_report)
 
         return {
             "brain": brain_name,
@@ -393,7 +432,7 @@ def brain_health(
             "issues": issues,
             "sensitive_content": {
                 "count": len(sensitive_neurons),
-                "neurons": sensitive_neurons[:5],  # Show first 5
+                "neurons": sensitive_neurons[:5],
             },
             "freshness": {
                 "total": freshness_report.total,
@@ -410,39 +449,4 @@ def brain_health(
     if json_output:
         output_result(result, True)
     else:
-        if "error" in result:
-            typer.secho(result["error"], fg=typer.colors.RED)
-            return
-
-        score = result["health_score"]
-        if score >= 80:
-            color = typer.colors.GREEN
-            indicator = "[OK]"
-        elif score >= 50:
-            color = typer.colors.YELLOW
-            indicator = "[~]"
-        else:
-            color = typer.colors.RED
-            indicator = "[!!]"
-
-        typer.echo(f"\nBrain: {result['brain']}")
-        typer.secho(f"Health Score: {indicator} {score}/100", fg=color)
-
-        if result["issues"]:
-            typer.echo("\nIssues:")
-            for issue in result["issues"]:
-                typer.secho(f"  [!] {issue}", fg=typer.colors.YELLOW)
-
-        if result["sensitive_content"]["count"] > 0:
-            typer.echo(f"\nSensitive content: {result['sensitive_content']['count']} neurons")
-            typer.secho(
-                "  Run 'nmem brain export --exclude-sensitive' for safe export",
-                fg=typer.colors.BRIGHT_BLACK,
-            )
-
-        f = result["freshness"]
-        if f["total"] > 0:
-            typer.echo(f"\nMemory freshness ({f['total']} total):")
-            typer.echo(f"  [+] Fresh/Recent: {f['fresh'] + f['recent']}")
-            typer.echo(f"  [~] Aging: {f['aging']}")
-            typer.echo(f"  [!!] Stale/Ancient: {f['stale'] + f['ancient']}")
+        _display_health(result)
