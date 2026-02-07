@@ -264,27 +264,27 @@ def get_tool_schemas() -> list[dict[str, Any]]:
         },
         {
             "name": "nmem_eternal",
-            "description": "Manage eternal context persistence. Auto-saves project context, decisions, and session state across sessions so nothing is lost.",
+            "description": "Save project context, decisions, and instructions into neural memory for cross-session persistence. All data is stored in the neural graph and discoverable by recall.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "action": {
                         "type": "string",
-                        "enum": ["status", "save", "load", "compact"],
-                        "description": "status=view state, save=force save+snapshot, load=reload from files, compact=summarize context into session",
+                        "enum": ["status", "save"],
+                        "description": "status=view memory counts and session state, save=store project context/decisions/instructions",
                     },
                     "project_name": {
                         "type": "string",
-                        "description": "Set project name (Tier 1)",
+                        "description": "Set project name (saved as FACT)",
                     },
                     "tech_stack": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Set tech stack (Tier 1)",
+                        "description": "Set tech stack (saved as FACT)",
                     },
                     "decision": {
                         "type": "string",
-                        "description": "Add a key decision (Tier 1)",
+                        "description": "Add a key decision (saved as DECISION)",
                     },
                     "reason": {
                         "type": "string",
@@ -292,7 +292,7 @@ def get_tool_schemas() -> list[dict[str, Any]]:
                     },
                     "instruction": {
                         "type": "string",
-                        "description": "Add a user instruction (Tier 1)",
+                        "description": "Add a persistent instruction (saved as INSTRUCTION)",
                     },
                 },
                 "required": ["action"],

@@ -9,6 +9,9 @@ from typing import Any
 # Minimum text length to avoid false positives on tiny inputs
 _MIN_TEXT_LENGTH = 20
 
+# Maximum text length for regex processing — prevents ReDoS on huge inputs
+_MAX_REGEX_TEXT_LENGTH = 50_000
+
 # Type prefixes used for deduplication
 _TYPE_PREFIXES = ("decision: ", "error: ", "todo: ", "insight: ")
 
@@ -150,6 +153,10 @@ def analyze_text_for_memories(
     """
     if len(text.strip()) < _MIN_TEXT_LENGTH:
         return []
+
+    # Truncate to prevent ReDoS on very large inputs
+    if len(text) > _MAX_REGEX_TEXT_LENGTH:
+        text = text[:_MAX_REGEX_TEXT_LENGTH]
 
     detected: list[dict[str, Any]] = []
     text_lower = text.lower()

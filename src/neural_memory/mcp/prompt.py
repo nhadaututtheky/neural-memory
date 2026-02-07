@@ -151,12 +151,11 @@ nmem_recap(topic="auth") # Search: find context about a topic
 ```
 
 ### Manual Save
-Use `nmem_eternal(action="save")` for explicit checkpoints:
+Use `nmem_eternal(action="save")` to persist project context into the neural graph:
 ```
 nmem_eternal(action="save", project_name="MyApp", tech_stack=["Next.js", "Prisma"])
 nmem_eternal(action="save", decision="Use Redis for caching", reason="Low latency")
-nmem_eternal(action="status")   # View current state
-nmem_eternal(action="compact")  # Compress context into session
+nmem_eternal(action="status")   # View memory counts and session state
 ```
 
 ## Memory Types
@@ -182,7 +181,7 @@ COMPACT_PROMPT = """You have NeuralMemory for persistent memory across sessions.
 **Session** (nmem_session): Track task/feature/progress. `get` at start, `set` during, `end` when done.
 **Index** (nmem_index): Scan codebase into memory. `scan` once, then recall finds code.
 **Recap** (nmem_recap): Resume session context. `nmem_recap()` quick, `nmem_recap(level=2)` detailed, `nmem_recap(topic="X")` search.
-**Eternal** (nmem_eternal): Manual save/load. Context auto-saves on decisions, milestones, errors, user leaving, every 15 messages.
+**Eternal** (nmem_eternal): Save project context, decisions, instructions into neural graph. `status` to view, `save` to persist.
 
 **Auto**: Short recall queries get session context injected. Recall >=50 chars auto-captures patterns. Retrieved memories get reinforced. Context auto-saves on key events.
 

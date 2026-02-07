@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.7] - 2026-02-07
+
+### Security
+
+- Input validation: content length limits (100KB), enum validation, path boundary checks
+- ReDoS protection: text truncation before regex processing
+- Spreading activation queue cap to prevent memory exhaustion
+- Synced with NeuralMemory v0.9.2 security hardening
+
 ## [0.1.6] - 2026-02-07
 
 ### Added

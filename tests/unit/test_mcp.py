@@ -1122,7 +1122,6 @@ class TestMCPEternal:
         mock_eternal_config = MagicMock(
             enabled=True,
             notifications=True,
-            snapshot_retention_days=7,
             auto_save_interval=15,
             context_warning_threshold=0.8,
             max_context_tokens=128_000,
@@ -1140,43 +1139,43 @@ class TestMCPEternal:
             )
             return MCPServer()
 
-    def _mock_eternal_context(self) -> MagicMock:
-        """Create a mocked EternalContext."""
-        from neural_memory.core.eternal_context import BrainState, ContextSnapshot, SessionState
-
-        ctx = MagicMock()
-        ctx.is_loaded = True
-        ctx.brain = BrainState(
-            project_name="TestProject",
-            tech_stack=("Python", "FastAPI"),
-            key_decisions=({"decision": "Use Redis", "reason": "Speed", "date": "2026-01-01"},),
-            instructions=("Follow PEP 8",),
+    def _mock_eternal_context(self) -> AsyncMock:
+        """Create a mocked async EternalContext."""
+        ctx = AsyncMock()
+        ctx.message_count = 10
+        ctx.increment_message_count = MagicMock(return_value=11)
+        ctx.get_status = AsyncMock(
+            return_value={
+                "memory_counts": {
+                    "fact": 3,
+                    "decision": 2,
+                    "instruction": 1,
+                    "todo": 1,
+                    "error": 0,
+                    "context": 1,
+                    "preference": 0,
+                    "insight": 0,
+                    "workflow": 0,
+                    "reference": 0,
+                },
+                "session": {
+                    "feature": "auth",
+                    "task": "login form",
+                    "progress": 0.5,
+                    "branch": "feat/auth",
+                },
+                "message_count": 10,
+            }
         )
-        ctx.session = SessionState(
-            feature="auth",
-            task="login form",
-            progress=0.5,
-            errors_history=(),
-            pending_tasks=("write tests",),
-            branch="feat/auth",
+        ctx.estimate_context_usage = AsyncMock(return_value=0.042)
+        ctx.get_injection = AsyncMock(
+            return_value="## Project Context\n- Project: TestProject\n- Stack: Python, FastAPI"
         )
-        ctx.context = ContextSnapshot(
-            conversation_summary=("Worked on login",),
-            recent_files=("auth.py",),
-            recent_queries=("how does auth work?",),
-            message_count=10,
-            token_estimate=5000,
-        )
-        ctx.estimate_context_usage = MagicMock(return_value=0.042)
-        ctx.get_injection = MagicMock(
-            return_value="## Project: TestProject\nStack: Python, FastAPI"
-        )
-        ctx.compact = MagicMock(return_value="Compacted summary of tier 3")
         return ctx
 
     @pytest.mark.asyncio
     async def test_eternal_status(self) -> None:
-        """Test nmem_eternal status action."""
+        """Test nmem_eternal status returns memory counts and session."""
         server = self._make_server()
         ctx = self._mock_eternal_context()
 
@@ -1184,49 +1183,94 @@ class TestMCPEternal:
             result = await server.call_tool("nmem_eternal", {"action": "status"})
 
         assert result["enabled"] is True
-        assert result["loaded"] is True
-        assert result["brain"]["project_name"] == "TestProject"
-        assert result["brain"]["tech_stack"] == ["Python", "FastAPI"]
-        assert result["brain"]["decisions_count"] == 1
-        assert result["brain"]["instructions_count"] == 1
+        assert result["memory_counts"]["fact"] == 3
+        assert result["memory_counts"]["decision"] == 2
         assert result["session"]["feature"] == "auth"
         assert result["session"]["task"] == "login form"
         assert result["session"]["progress"] == 0.5
-        assert result["session"]["errors_count"] == 0
-        assert result["session"]["pending_tasks_count"] == 1
-        assert result["session"]["branch"] == "feat/auth"
-        assert result["context"]["message_count"] == 10
-        assert result["context"]["summaries_count"] == 1
-        assert result["context"]["recent_files_count"] == 1
-        assert result["context"]["token_estimate"] == 5000
+        assert result["message_count"] == 10
         assert result["context_usage"] == 0.042
 
     @pytest.mark.asyncio
-    async def test_eternal_save(self) -> None:
-        """Test nmem_eternal save action."""
+    async def test_eternal_save_empty(self) -> None:
+        """Test nmem_eternal save with no fields returns no changes."""
         server = self._make_server()
         ctx = self._mock_eternal_context()
+        mock_storage = AsyncMock()
+        mock_brain = MagicMock(id="test-brain", config=MagicMock())
+        mock_storage.get_brain = AsyncMock(return_value=mock_brain)
+        mock_storage._current_brain_id = "test-brain"
 
-        with patch.object(server, "get_eternal_context", return_value=ctx):
+        with (
+            patch.object(server, "get_eternal_context", return_value=ctx),
+            patch.object(server, "get_storage", return_value=mock_storage),
+        ):
             result = await server.call_tool("nmem_eternal", {"action": "save"})
 
         assert result["saved"] is True
-        ctx.save_with_snapshot.assert_called_once()
-        ctx.log.assert_called_once()
+        assert result["items"] == []
 
     @pytest.mark.asyncio
-    async def test_eternal_save_with_updates(self) -> None:
-        """Test nmem_eternal save with project_name, tech_stack, decision, instruction."""
+    async def test_eternal_save_project_context(self) -> None:
+        """Test nmem_eternal save with project_name and tech_stack."""
         server = self._make_server()
         ctx = self._mock_eternal_context()
+        mock_storage = AsyncMock()
+        mock_brain = MagicMock(id="test-brain", config=MagicMock())
+        mock_storage.get_brain = AsyncMock(return_value=mock_brain)
+        mock_storage._current_brain_id = "test-brain"
+        mock_storage.find_typed_memories = AsyncMock(return_value=[])
+        mock_remember = AsyncMock(return_value={"stored": True})
 
-        with patch.object(server, "get_eternal_context", return_value=ctx):
+        with (
+            patch.object(server, "get_eternal_context", return_value=ctx),
+            patch.object(server, "get_storage", return_value=mock_storage),
+            patch.object(server, "_remember", mock_remember),
+        ):
             result = await server.call_tool(
                 "nmem_eternal",
                 {
                     "action": "save",
                     "project_name": "NewProject",
                     "tech_stack": ["Go", "gRPC"],
+                },
+            )
+
+        assert result["saved"] is True
+        assert "project_context" in result["items"]
+        mock_remember.assert_called_once()
+        call_args = mock_remember.call_args[0][0]
+        assert "NewProject" in call_args["content"]
+        assert "Go" in call_args["content"]
+        assert call_args["type"] == "fact"
+        assert call_args["priority"] == 10
+        assert "project_context" in call_args["tags"]
+
+    @pytest.mark.asyncio
+    async def test_eternal_save_decision_and_instruction(self) -> None:
+        """Test nmem_eternal save with decision and instruction."""
+        server = self._make_server()
+        ctx = self._mock_eternal_context()
+        mock_storage = AsyncMock()
+        mock_brain = MagicMock(id="test-brain", config=MagicMock())
+        mock_storage.get_brain = AsyncMock(return_value=mock_brain)
+        mock_storage._current_brain_id = "test-brain"
+
+        remember_calls: list[dict] = []
+
+        async def track_remember(args: dict) -> dict:
+            remember_calls.append(args)
+            return {"stored": True}
+
+        with (
+            patch.object(server, "get_eternal_context", return_value=ctx),
+            patch.object(server, "get_storage", return_value=mock_storage),
+            patch.object(server, "_remember", side_effect=track_remember),
+        ):
+            result = await server.call_tool(
+                "nmem_eternal",
+                {
+                    "action": "save",
                     "decision": "Use gRPC",
                     "reason": "Performance",
                     "instruction": "Use proto3",
@@ -1234,37 +1278,41 @@ class TestMCPEternal:
             )
 
         assert result["saved"] is True
-        # update_brain called for project_name, tech_stack, and instruction
-        assert ctx.update_brain.call_count == 3
-        ctx.add_decision.assert_called_once_with("Use gRPC", "Performance")
+        assert "decision" in result["items"]
+        assert "instruction" in result["items"]
+        assert len(remember_calls) == 2
+        # Decision call
+        assert "gRPC" in remember_calls[0]["content"]
+        assert "Performance" in remember_calls[0]["content"]
+        assert remember_calls[0]["type"] == "decision"
+        # Instruction call
+        assert remember_calls[1]["content"] == "Use proto3"
+        assert remember_calls[1]["type"] == "instruction"
 
     @pytest.mark.asyncio
-    async def test_eternal_load(self) -> None:
-        """Test nmem_eternal load action."""
+    async def test_eternal_save_deduplicates_project_context(self) -> None:
+        """Test save deletes old project_context facts before encoding new."""
         server = self._make_server()
         ctx = self._mock_eternal_context()
+        mock_storage = AsyncMock()
+        mock_brain = MagicMock(id="test-brain", config=MagicMock())
+        mock_storage.get_brain = AsyncMock(return_value=mock_brain)
+        mock_storage._current_brain_id = "test-brain"
+        old_mem = MagicMock(fiber_id="old-fiber-1")
+        mock_storage.find_typed_memories = AsyncMock(return_value=[old_mem])
+        mock_storage.delete_typed_memory = AsyncMock()
 
-        with patch.object(server, "get_eternal_context", return_value=ctx):
-            result = await server.call_tool("nmem_eternal", {"action": "load"})
+        with (
+            patch.object(server, "get_eternal_context", return_value=ctx),
+            patch.object(server, "get_storage", return_value=mock_storage),
+            patch.object(server, "_remember", AsyncMock(return_value={"stored": True})),
+        ):
+            await server.call_tool(
+                "nmem_eternal",
+                {"action": "save", "project_name": "Updated"},
+            )
 
-        assert result["loaded"] is True
-        assert result["project_name"] == "TestProject"
-        assert result["feature"] == "auth"
-        ctx.load.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_eternal_compact(self) -> None:
-        """Test nmem_eternal compact action."""
-        server = self._make_server()
-        ctx = self._mock_eternal_context()
-
-        with patch.object(server, "get_eternal_context", return_value=ctx):
-            result = await server.call_tool("nmem_eternal", {"action": "compact"})
-
-        assert result["compacted"] is True
-        assert result["summary"] == "Compacted summary of tier 3"
-        ctx.compact.assert_called_once()
-        ctx.save.assert_called_once_with(tiers=(2, 3))
+        mock_storage.delete_typed_memory.assert_called_once_with("old-fiber-1")
 
     @pytest.mark.asyncio
     async def test_eternal_unknown_action(self) -> None:
@@ -1326,6 +1374,24 @@ class TestMCPEternal:
         assert "Welcome back!" in result["message"]
 
     @pytest.mark.asyncio
+    async def test_recap_no_welcome_without_feature(self) -> None:
+        """Test nmem_recap no welcome when no feature set."""
+        server = self._make_server()
+        ctx = self._mock_eternal_context()
+        ctx.get_status = AsyncMock(
+            return_value={
+                "memory_counts": {},
+                "session": {},
+                "message_count": 0,
+            }
+        )
+
+        with patch.object(server, "get_eternal_context", return_value=ctx):
+            result = await server.call_tool("nmem_recap", {"level": 1})
+
+        assert "Welcome back!" not in result["message"]
+
+    @pytest.mark.asyncio
     async def test_recap_topic(self) -> None:
         """Test nmem_recap with topic search."""
         server = self._make_server()
@@ -1354,18 +1420,6 @@ class TestMCPEternal:
         assert result["topic"] == "auth"
         assert result["confidence"] == 0.9
         assert "auth" in result["message"].lower()
-
-    @pytest.mark.asyncio
-    async def test_recap_loads_if_not_loaded(self) -> None:
-        """Test nmem_recap auto-loads if context not loaded."""
-        server = self._make_server()
-        ctx = self._mock_eternal_context()
-        ctx.is_loaded = False
-
-        with patch.object(server, "get_eternal_context", return_value=ctx):
-            await server.call_tool("nmem_recap", {"level": 1})
-
-        ctx.load.assert_called_once()
 
 
 class TestMCPImport:
@@ -1953,54 +2007,139 @@ class TestMCPFireTrigger:
         # Should not raise
         server._fire_eternal_trigger("test text")
 
-    def test_fire_trigger_saves_on_trigger(self) -> None:
-        """Test _fire_eternal_trigger saves when trigger fires."""
-        from neural_memory.core.trigger_engine import TriggerResult, TriggerType
-
+    def test_fire_trigger_increments_counter(self) -> None:
+        """Test _fire_eternal_trigger increments message count and calls check_triggers."""
         server = self._make_server(eternal_enabled=True)
         ctx = MagicMock()
         ctx.increment_message_count = MagicMock(return_value=15)
-        ctx.context = MagicMock(token_estimate=5000)
+        server._eternal_ctx = ctx
 
-        trigger_result = TriggerResult(
-            triggered=True,
-            trigger_type=TriggerType.CHECKPOINT,
-            message="15 messages",
-            save_tiers=(1, 2, 3),
-        )
-
-        with (
-            patch.object(server, "get_eternal_context", return_value=ctx),
-            patch("neural_memory.mcp.server.check_triggers", return_value=trigger_result),
-        ):
+        with patch("neural_memory.mcp.server.check_triggers") as mock_check:
+            mock_check.return_value = MagicMock(triggered=False)
             server._fire_eternal_trigger("Some text")
 
-        ctx.save.assert_called_once_with(tiers=(1, 2, 3))
-        ctx.log.assert_called_once()
+        ctx.increment_message_count.assert_called_once()
+        mock_check.assert_called_once()
 
-    def test_fire_trigger_no_save_when_not_triggered(self) -> None:
-        """Test _fire_eternal_trigger does not save when trigger not fired."""
-        from neural_memory.core.trigger_engine import TriggerResult
-
+    def test_fire_trigger_skips_when_ctx_not_initialized(self) -> None:
+        """Test _fire_eternal_trigger returns early if ctx is None."""
         server = self._make_server(eternal_enabled=True)
-        ctx = MagicMock()
-        ctx.increment_message_count = MagicMock(return_value=5)
-        ctx.context = MagicMock(token_estimate=1000)
+        assert server._eternal_ctx is None
 
-        trigger_result = TriggerResult(triggered=False)
+        with patch("neural_memory.mcp.server.check_triggers") as mock_check:
+            server._fire_eternal_trigger("Some text")
 
-        with (
-            patch.object(server, "get_eternal_context", return_value=ctx),
-            patch("neural_memory.mcp.server.check_triggers", return_value=trigger_result),
-        ):
-            server._fire_eternal_trigger("Normal text")
-
-        ctx.save.assert_not_called()
+        mock_check.assert_not_called()
 
     def test_fire_trigger_swallows_errors(self) -> None:
         """Test _fire_eternal_trigger swallows exceptions."""
         server = self._make_server(eternal_enabled=True)
+        ctx = MagicMock()
+        ctx.increment_message_count = MagicMock(side_effect=RuntimeError("boom"))
+        server._eternal_ctx = ctx
 
-        with patch.object(server, "get_eternal_context", side_effect=RuntimeError("boom")):
-            # Should not raise
-            server._fire_eternal_trigger("Some text")
+        # Should not raise
+        server._fire_eternal_trigger("Some text")
+
+
+class TestMCPInputValidation:
+    """Tests for security input validation guards."""
+
+    def _make_server(self) -> MCPServer:
+        with patch("neural_memory.mcp.server.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(
+                current_brain="test-brain",
+                get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
+                auto=MagicMock(enabled=True, min_confidence=0.7),
+                eternal=MagicMock(enabled=False),
+            )
+            return MCPServer()
+
+    @pytest.mark.asyncio
+    async def test_remember_rejects_oversized_content(self) -> None:
+        """Content over 100KB is rejected."""
+        server = self._make_server()
+        mock_storage = AsyncMock()
+        mock_brain = MagicMock(id="test-brain", config=MagicMock())
+        mock_storage.get_brain = AsyncMock(return_value=mock_brain)
+        mock_storage._current_brain_id = "test-brain"
+
+        with patch.object(server, "get_storage", return_value=mock_storage):
+            result = await server.call_tool("nmem_remember", {"content": "x" * 200_000})
+
+        assert "error" in result
+        assert "too long" in result["error"].lower()
+
+    @pytest.mark.asyncio
+    async def test_auto_analyze_rejects_oversized_text(self) -> None:
+        """Text over 100KB is rejected in analyze action."""
+        server = self._make_server()
+
+        result = await server.call_tool("nmem_auto", {"action": "analyze", "text": "x" * 200_000})
+
+        assert "error" in result
+        assert "too long" in result["error"].lower()
+
+    @pytest.mark.asyncio
+    async def test_auto_process_rejects_oversized_text(self) -> None:
+        """Text over 100KB is rejected in process action."""
+        server = self._make_server()
+
+        result = await server.call_tool("nmem_auto", {"action": "process", "text": "x" * 200_000})
+
+        assert "error" in result
+        assert "too long" in result["error"].lower()
+
+    @pytest.mark.asyncio
+    async def test_remember_rejects_invalid_type(self) -> None:
+        """Invalid memory type returns error, not crash."""
+        server = self._make_server()
+        mock_storage = AsyncMock()
+        mock_brain = MagicMock(id="test-brain", config=MagicMock())
+        mock_storage.get_brain = AsyncMock(return_value=mock_brain)
+        mock_storage._current_brain_id = "test-brain"
+
+        with patch.object(server, "get_storage", return_value=mock_storage):
+            result = await server.call_tool(
+                "nmem_remember", {"content": "test", "type": "invalid_type"}
+            )
+
+        assert "error" in result
+        assert "invalid" in result["error"].lower()
+
+    @pytest.mark.asyncio
+    async def test_recall_rejects_invalid_depth(self) -> None:
+        """Invalid depth level returns error, not crash."""
+        server = self._make_server()
+        mock_storage = AsyncMock()
+        mock_brain = MagicMock(id="test-brain", config=MagicMock())
+        mock_storage.get_brain = AsyncMock(return_value=mock_brain)
+        mock_storage._current_brain_id = "test-brain"
+
+        with patch.object(server, "get_storage", return_value=mock_storage):
+            result = await server.call_tool("nmem_recall", {"query": "test", "depth": 99})
+
+        assert "error" in result
+        assert "invalid" in result["error"].lower()
+
+    @pytest.mark.asyncio
+    async def test_suggest_rejects_invalid_type_filter(self) -> None:
+        """Invalid type_filter returns error, not crash."""
+        server = self._make_server()
+        mock_storage = AsyncMock()
+        mock_storage._current_brain_id = "test-brain"
+
+        with patch.object(server, "get_storage", return_value=mock_storage):
+            result = await server.call_tool(
+                "nmem_suggest", {"prefix": "test", "type_filter": "bogus"}
+            )
+
+        assert "error" in result
+        assert "invalid" in result["error"].lower()
+
+    def test_auto_capture_truncates_huge_text(self) -> None:
+        """Regex processing truncates text over 50KB."""
+        huge = "We decided to use Redis. " * 5000  # > 50KB
+        result = analyze_text_for_memories(huge)
+        # Should complete quickly without ReDoS, and still detect patterns
+        assert isinstance(result, list)

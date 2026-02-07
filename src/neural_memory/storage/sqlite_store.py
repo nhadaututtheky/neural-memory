@@ -249,14 +249,16 @@ class SQLiteStorage(
     async def clear(self, brain_id: str) -> None:
         conn = self._ensure_conn()
 
-        for table in [
+        brain_tables = (
             "typed_memories",
             "projects",
             "fibers",
             "synapses",
             "neuron_states",
             "neurons",
-        ]:
+        )
+        for table in brain_tables:
+            # Table name is from a hardcoded tuple — safe to interpolate.
             await conn.execute(f"DELETE FROM {table} WHERE brain_id = ?", (brain_id,))
 
         await conn.execute("DELETE FROM brains WHERE id = ?", (brain_id,))

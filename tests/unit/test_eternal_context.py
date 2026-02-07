@@ -1,182 +1,23 @@
 """Tests for the eternal context system.
 
 Tests cover:
-- BrainPersistence: file I/O for all 3 tiers, snapshots, log, cleanup
 - TriggerEngine: pattern detection for all trigger types
-- EternalContext: 3-tier lifecycle, injection formatting, capacity estimation
+- EternalContext: async query layer over neural graph
 """
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
+from datetime import datetime
 
-from neural_memory.core.brain_persistence import BrainPersistence
-from neural_memory.core.eternal_context import (
-    BrainState,
-    ContextSnapshot,
-    EternalContext,
-    SessionState,
-)
+import pytest
+
+from neural_memory.core.eternal_context import EternalContext
+from neural_memory.core.memory_types import MemoryType, Priority, TypedMemory
 from neural_memory.core.trigger_engine import (
     TriggerType,
     check_triggers,
     estimate_session_tokens,
 )
-
-# ──────────────────── BrainPersistence Tests ────────────────────
-
-
-class TestBrainPersistence:
-    """Tests for file-based persistence of eternal context state."""
-
-    def test_save_load_brain_state(self, tmp_path: Path) -> None:
-        """Round-trip save/load of Tier 1 (Critical) state."""
-        p = BrainPersistence("test-brain", base_dir=tmp_path)
-        state = BrainState(
-            project_name="MyApp",
-            tech_stack=("Next.js", "Prisma"),
-            key_decisions=(
-                {"decision": "Use PostgreSQL", "reason": "Team familiarity", "date": "2024-01-15"},
-            ),
-            instructions=("Always use type hints",),
-        )
-        p.save_brain_state(state)
-        loaded = p.load_brain_state()
-
-        assert loaded.project_name == "MyApp"
-        assert loaded.tech_stack == ("Next.js", "Prisma")
-        assert len(loaded.key_decisions) == 1
-        assert loaded.key_decisions[0]["decision"] == "Use PostgreSQL"
-        assert loaded.instructions == ("Always use type hints",)
-
-    def test_save_load_session_state(self, tmp_path: Path) -> None:
-        """Round-trip save/load of Tier 2 (Important) state."""
-        p = BrainPersistence("test-brain", base_dir=tmp_path)
-        state = SessionState(
-            feature="Authentication",
-            task="Login form",
-            progress=0.65,
-            errors_history=({"error": "CORS", "fixed": True, "date": "2024-01-15"},),
-            pending_tasks=("Add tests",),
-            branch="feat/auth",
-        )
-        p.save_session_state(state)
-        loaded = p.load_session_state()
-
-        assert loaded.feature == "Authentication"
-        assert loaded.task == "Login form"
-        assert loaded.progress == 0.65
-        assert len(loaded.errors_history) == 1
-        assert loaded.errors_history[0]["fixed"] is True
-        assert loaded.branch == "feat/auth"
-
-    def test_save_load_context(self, tmp_path: Path) -> None:
-        """Round-trip save/load of Tier 3 (Context) state."""
-        p = BrainPersistence("test-brain", base_dir=tmp_path)
-        snapshot = ContextSnapshot(
-            conversation_summary=("Discussed auth options",),
-            recent_files=("src/login.tsx",),
-            recent_queries=("how does auth work?",),
-            message_count=42,
-            token_estimate=15000,
-        )
-        p.save_context(snapshot)
-        loaded = p.load_context()
-
-        assert loaded.conversation_summary == ("Discussed auth options",)
-        assert loaded.recent_files == ("src/login.tsx",)
-        assert loaded.message_count == 42
-        assert loaded.token_estimate == 15000
-
-    def test_load_missing_files_returns_defaults(self, tmp_path: Path) -> None:
-        """Loading from non-existent files returns default states."""
-        p = BrainPersistence("nonexistent", base_dir=tmp_path)
-
-        brain = p.load_brain_state()
-        assert brain.project_name == ""
-        assert brain.tech_stack == ()
-
-        session = p.load_session_state()
-        assert session.feature == ""
-
-        context = p.load_context()
-        assert context.message_count == 0
-
-    def test_corrupted_json_returns_defaults(self, tmp_path: Path) -> None:
-        """Corrupted JSON files return defaults instead of raising."""
-        p = BrainPersistence("corrupt", base_dir=tmp_path)
-        p.ensure_dirs()
-
-        # Write invalid JSON
-        (p.directory / "brain.json").write_text("{invalid json", encoding="utf-8")
-        brain = p.load_brain_state()
-        assert brain.project_name == ""
-
-    def test_snapshot_create_and_load(self, tmp_path: Path) -> None:
-        """Create a snapshot and load it back."""
-        p = BrainPersistence("test-brain", base_dir=tmp_path)
-        brain = BrainState(project_name="TestProject")
-        session = SessionState(feature="Testing", task="Write tests")
-
-        path = p.create_snapshot(brain, session)
-        assert path.exists()
-
-        loaded_brain, loaded_session = p.load_snapshot(path)
-        assert loaded_brain.project_name == "TestProject"
-        assert loaded_session.feature == "Testing"
-
-    def test_snapshot_list(self, tmp_path: Path) -> None:
-        """List snapshots returns sorted paths."""
-        p = BrainPersistence("test-brain", base_dir=tmp_path)
-        brain = BrainState()
-        session = SessionState()
-
-        p.create_snapshot(brain, session)
-
-        snapshots = p.list_snapshots()
-        assert len(snapshots) >= 1
-        assert all(s.suffix == ".json" for s in snapshots)
-
-    def test_snapshot_cleanup(self, tmp_path: Path) -> None:
-        """Cleanup removes snapshots older than retention period."""
-        p = BrainPersistence("test-brain", base_dir=tmp_path)
-        p.ensure_dirs()
-
-        # Create an old snapshot manually
-        old_path = p._snapshots_dir / "2020-01-01_120000.json"
-        old_data = {
-            "created_at": "2020-01-01T12:00:00",
-            "brain_id": "test-brain",
-            "brain": {"project_name": ""},
-            "session": {"feature": ""},
-        }
-        with open(old_path, "w", encoding="utf-8") as f:
-            json.dump(old_data, f)
-
-        # Create a recent snapshot
-        p.create_snapshot(BrainState(), SessionState())
-
-        deleted = p.cleanup_snapshots(retention_days=7)
-        assert deleted == 1
-        assert not old_path.exists()
-
-    def test_session_log_append_and_read(self, tmp_path: Path) -> None:
-        """Append to session log and read back."""
-        p = BrainPersistence("test-brain", base_dir=tmp_path)
-        p.append_log("Started session")
-        p.append_log("Made a decision")
-
-        lines = p.read_log(tail=10)
-        assert len(lines) == 2
-        assert "Started session" in lines[0]
-        assert "Made a decision" in lines[1]
-
-    def test_read_log_empty(self, tmp_path: Path) -> None:
-        """Reading log from non-existent file returns empty list."""
-        p = BrainPersistence("test-brain", base_dir=tmp_path)
-        assert p.read_log() == []
-
 
 # ──────────────────── TriggerEngine Tests ────────────────────
 
@@ -281,238 +122,223 @@ class TestTriggerEngine:
         assert tokens == 7500
 
 
+# ──────────────────── Helper to populate storage ────────────────────
+
+
+async def _encode_typed_memory(
+    storage,
+    content: str,
+    memory_type: MemoryType,
+    priority: int = 5,
+    tags: set[str] | None = None,
+    metadata: dict | None = None,
+) -> str:
+    """Encode content as a fiber + typed memory. Returns fiber_id."""
+    from neural_memory.core.brain import BrainConfig
+    from neural_memory.engine.encoder import MemoryEncoder
+
+    brain = await storage.get_brain(storage._current_brain_id)
+    if brain is None:
+        msg = "No brain configured"
+        raise RuntimeError(msg)
+    encoder = MemoryEncoder(storage, brain.config if brain.config else BrainConfig())
+    result = await encoder.encode(
+        content=content,
+        timestamp=datetime.now(),
+        tags=tags or set(),
+    )
+    typed_mem = TypedMemory.create(
+        fiber_id=result.fiber.id,
+        memory_type=memory_type,
+        priority=Priority.from_int(priority),
+        source="test",
+        tags=tags,
+        metadata=metadata,
+    )
+    await storage.add_typed_memory(typed_mem)
+    return result.fiber.id
+
+
 # ──────────────────── EternalContext Tests ────────────────────
 
 
 class TestEternalContext:
-    """Tests for the 3-tier eternal context manager."""
+    """Tests for the async eternal context query layer."""
 
-    def test_load_save_roundtrip(self, tmp_path: Path) -> None:
-        """Load and save complete state round-trip."""
-        persistence = BrainPersistence("test", base_dir=tmp_path)
-        ctx = EternalContext("test", persistence)
+    @pytest.mark.asyncio
+    async def test_empty_injection_level1(self, storage) -> None:
+        """Level 1 injection on empty brain returns header."""
+        ctx = EternalContext(storage, "test")
+        injection = await ctx.get_injection(level=1)
+        assert "## Project Context" in injection
 
-        ctx.update_brain(project_name="TestApp", tech_stack=["Python", "FastAPI"])
-        ctx.update_session(feature="Auth", task="Login")
-        ctx.add_summary("Discussed auth options")
-
-        ctx.save()
-
-        # Create new context and load
-        ctx2 = EternalContext("test", persistence)
-        ctx2.load()
-
-        assert ctx2.brain.project_name == "TestApp"
-        assert ctx2.brain.tech_stack == ("Python", "FastAPI")
-        assert ctx2.session.feature == "Auth"
-        assert ctx2.session.task == "Login"
-        assert "Discussed auth options" in ctx2.context.conversation_summary
-
-    def test_add_decision(self, tmp_path: Path) -> None:
-        """Add a key decision to Tier 1."""
-        persistence = BrainPersistence("test", base_dir=tmp_path)
-        ctx = EternalContext("test", persistence)
-
-        ctx.add_decision("Use Redis", "Low latency")
-        assert len(ctx.brain.key_decisions) == 1
-        assert ctx.brain.key_decisions[0]["decision"] == "Use Redis"
-        assert ctx.brain.key_decisions[0]["reason"] == "Low latency"
-
-    def test_add_decision_dedup(self, tmp_path: Path) -> None:
-        """Duplicate decisions are not added twice."""
-        persistence = BrainPersistence("test", base_dir=tmp_path)
-        ctx = EternalContext("test", persistence)
-
-        ctx.add_decision("Use Redis", "Low latency")
-        ctx.add_decision("Use Redis", "Different reason")
-        assert len(ctx.brain.key_decisions) == 1
-
-    def test_add_error(self, tmp_path: Path) -> None:
-        """Add error to Tier 2 history."""
-        persistence = BrainPersistence("test", base_dir=tmp_path)
-        ctx = EternalContext("test", persistence)
-
-        ctx.add_error("CORS blocked", fixed=False)
-        assert len(ctx.session.errors_history) == 1
-        assert ctx.session.errors_history[0]["error"] == "CORS blocked"
-        assert ctx.session.errors_history[0]["fixed"] is False
-
-    def test_mark_error_fixed(self, tmp_path: Path) -> None:
-        """Mark an existing error as fixed."""
-        persistence = BrainPersistence("test", base_dir=tmp_path)
-        ctx = EternalContext("test", persistence)
-
-        ctx.add_error("CORS blocked", fixed=False)
-        ctx.add_error("404 not found", fixed=False)
-
-        found = ctx.mark_error_fixed("CORS")
-        assert found is True
-        assert ctx.session.errors_history[0]["fixed"] is True
-        assert ctx.session.errors_history[1]["fixed"] is False
-
-    def test_mark_error_fixed_not_found(self, tmp_path: Path) -> None:
-        """Marking non-existent error returns False."""
-        persistence = BrainPersistence("test", base_dir=tmp_path)
-        ctx = EternalContext("test", persistence)
-
-        found = ctx.mark_error_fixed("nonexistent")
-        assert found is False
-
-    def test_update_session_sets_timestamps(self, tmp_path: Path) -> None:
-        """Session updates set started_at and updated_at."""
-        persistence = BrainPersistence("test", base_dir=tmp_path)
-        ctx = EternalContext("test", persistence)
-
-        ctx.update_session(feature="Auth")
-        assert ctx.session.started_at != ""
-        assert ctx.session.updated_at != ""
-
-    def test_get_injection_level1(self, tmp_path: Path) -> None:
-        """Level 1 injection includes project + current task."""
-        persistence = BrainPersistence("test", base_dir=tmp_path)
-        ctx = EternalContext("test", persistence)
-
-        ctx.update_brain(project_name="MyApp", tech_stack=["Next.js"])
-        ctx.update_session(feature="Auth", task="Login", progress=0.65)
-
-        injection = ctx.get_injection(level=1)
+    @pytest.mark.asyncio
+    async def test_injection_with_project_context(self, storage) -> None:
+        """Level 1 shows project context FACT."""
+        await _encode_typed_memory(
+            storage,
+            "Project: MyApp. Tech stack: Python, FastAPI",
+            MemoryType.FACT,
+            priority=10,
+            tags={"project_context"},
+        )
+        ctx = EternalContext(storage, "test")
+        injection = await ctx.get_injection(level=1)
         assert "MyApp" in injection
-        assert "Next.js" in injection
-        assert "Auth" in injection
-        assert "Login" in injection
+
+    @pytest.mark.asyncio
+    async def test_injection_with_instructions(self, storage) -> None:
+        """Level 1 shows high-priority instructions."""
+        await _encode_typed_memory(
+            storage,
+            "Always use PostgreSQL, never SQLite",
+            MemoryType.INSTRUCTION,
+            priority=9,
+        )
+        ctx = EternalContext(storage, "test")
+        injection = await ctx.get_injection(level=1)
+        assert "PostgreSQL" in injection
+
+    @pytest.mark.asyncio
+    async def test_injection_with_session_state(self, storage) -> None:
+        """Level 1 shows current session feature/task."""
+        await _encode_typed_memory(
+            storage,
+            "Session: working on Authentication, task: Login form",
+            MemoryType.CONTEXT,
+            priority=7,
+            tags={"session_state"},
+            metadata={
+                "active": True,
+                "feature": "Authentication",
+                "task": "Login form",
+                "progress": 0.65,
+                "branch": "feat/auth",
+            },
+        )
+        ctx = EternalContext(storage, "test")
+        injection = await ctx.get_injection(level=1)
+        assert "Authentication" in injection
+        assert "Login form" in injection
         assert "65%" in injection
+        assert "feat/auth" in injection
 
-    def test_get_injection_level2(self, tmp_path: Path) -> None:
-        """Level 2 injection includes decisions and pending tasks."""
-        persistence = BrainPersistence("test", base_dir=tmp_path)
-        ctx = EternalContext("test", persistence)
-
-        ctx.update_brain(project_name="MyApp")
-        ctx.add_decision("Use NextAuth", "Simple setup")
-        ctx.update_session(pending_tasks=["Add tests", "Deploy"])
-
-        injection = ctx.get_injection(level=2)
+    @pytest.mark.asyncio
+    async def test_injection_level2_decisions(self, storage) -> None:
+        """Level 2 includes decisions."""
+        await _encode_typed_memory(
+            storage,
+            "Decision: Use NextAuth for authentication",
+            MemoryType.DECISION,
+            priority=7,
+        )
+        ctx = EternalContext(storage, "test")
+        injection = await ctx.get_injection(level=2)
         assert "NextAuth" in injection
-        assert "Add tests" in injection
-        assert "Deploy" in injection
+        assert "Key Decisions" in injection
 
-    def test_get_injection_level3(self, tmp_path: Path) -> None:
-        """Level 3 injection includes conversation summary and files."""
-        persistence = BrainPersistence("test", base_dir=tmp_path)
-        ctx = EternalContext("test", persistence)
+    @pytest.mark.asyncio
+    async def test_injection_level2_todos(self, storage) -> None:
+        """Level 2 includes pending todos."""
+        await _encode_typed_memory(
+            storage,
+            "Add unit tests for auth module",
+            MemoryType.TODO,
+            priority=5,
+        )
+        ctx = EternalContext(storage, "test")
+        injection = await ctx.get_injection(level=2)
+        assert "unit tests" in injection
+        assert "Pending Tasks" in injection
 
-        ctx.add_summary("Discussed auth options")
-        ctx.add_recent_file("src/login.tsx")
-        ctx.add_query("how does auth work?")
+    @pytest.mark.asyncio
+    async def test_injection_level3_summaries(self, storage) -> None:
+        """Level 3 includes session summaries."""
+        await _encode_typed_memory(
+            storage,
+            "Discussed auth options, picked NextAuth",
+            MemoryType.CONTEXT,
+            priority=5,
+            tags={"session_summary"},
+        )
+        ctx = EternalContext(storage, "test")
+        injection = await ctx.get_injection(level=3)
+        assert "Session History" in injection
 
-        injection = ctx.get_injection(level=3)
-        assert "Discussed auth options" in injection
-        assert "src/login.tsx" in injection
-        assert "how does auth work?" in injection
+    @pytest.mark.asyncio
+    async def test_injection_level1_does_not_include_decisions(self, storage) -> None:
+        """Level 1 should NOT include level 2 content."""
+        await _encode_typed_memory(
+            storage,
+            "Decision: Use Redis for caching",
+            MemoryType.DECISION,
+            priority=7,
+        )
+        ctx = EternalContext(storage, "test")
+        injection = await ctx.get_injection(level=1)
+        assert "Key Decisions" not in injection
 
-    def test_estimate_context_usage(self, tmp_path: Path) -> None:
-        """Context usage estimation returns reasonable values."""
-        persistence = BrainPersistence("test", base_dir=tmp_path)
-        ctx = EternalContext("test", persistence)
+    @pytest.mark.asyncio
+    async def test_get_status(self, storage) -> None:
+        """Status returns memory counts and session info."""
+        await _encode_typed_memory(storage, "Fact 1", MemoryType.FACT, priority=5)
+        await _encode_typed_memory(storage, "Fact 2", MemoryType.FACT, priority=5)
+        await _encode_typed_memory(
+            storage,
+            "Decision: Use X",
+            MemoryType.DECISION,
+            priority=7,
+        )
 
-        # With no content, usage should be very low
-        usage = ctx.estimate_context_usage(max_tokens=128_000)
+        ctx = EternalContext(storage, "test")
+        status = await ctx.get_status()
+        assert status["memory_counts"]["fact"] == 2
+        assert status["memory_counts"]["decision"] == 1
+        assert status["message_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_get_status_with_session(self, storage) -> None:
+        """Status includes active session info."""
+        await _encode_typed_memory(
+            storage,
+            "Session: working on Auth",
+            MemoryType.CONTEXT,
+            tags={"session_state"},
+            metadata={"active": True, "feature": "Auth", "task": "Login"},
+        )
+        ctx = EternalContext(storage, "test")
+        status = await ctx.get_status()
+        assert status["session"]["feature"] == "Auth"
+        assert status["session"]["task"] == "Login"
+
+    @pytest.mark.asyncio
+    async def test_estimate_context_usage_empty(self, storage) -> None:
+        """Empty context has near-zero usage."""
+        ctx = EternalContext(storage, "test")
+        usage = await ctx.estimate_context_usage(max_tokens=128_000)
         assert 0.0 <= usage <= 0.01
 
-        # With significant token estimate
-        ctx.update_context(token_estimate=100_000)
-        usage = ctx.estimate_context_usage(max_tokens=128_000)
-        assert usage > 0.7
+    @pytest.mark.asyncio
+    async def test_estimate_context_usage_zero_max(self, storage) -> None:
+        """Zero max_tokens returns 0."""
+        ctx = EternalContext(storage, "test")
+        usage = await ctx.estimate_context_usage(max_tokens=0)
+        assert usage == 0.0
 
-    def test_compact(self, tmp_path: Path) -> None:
-        """Compact moves Tier 3 summaries to Tier 2 and clears Tier 3."""
-        persistence = BrainPersistence("test", base_dir=tmp_path)
-        ctx = EternalContext("test", persistence)
-
-        ctx.add_summary("Discussed auth options")
-        ctx.add_summary("Implemented login form")
-        ctx.add_query("how does auth work?")
-
-        summary = ctx.compact()
-        assert "auth options" in summary.lower() or "login form" in summary.lower()
-        # Tier 3 should be cleared
-        assert ctx.context.conversation_summary == ()
-        assert ctx.context.message_count == 0
-        # Tier 2 should have gained a pending task note
-        assert len(ctx.session.pending_tasks) > 0
-
-    def test_add_recent_file_dedup(self, tmp_path: Path) -> None:
-        """Duplicate files are deduplicated, keeping most recent."""
-        persistence = BrainPersistence("test", base_dir=tmp_path)
-        ctx = EternalContext("test", persistence)
-
-        ctx.add_recent_file("src/a.ts")
-        ctx.add_recent_file("src/b.ts")
-        ctx.add_recent_file("src/a.ts")
-
-        assert ctx.context.recent_files == ("src/b.ts", "src/a.ts")
-
-    def test_add_recent_file_max_10(self, tmp_path: Path) -> None:
-        """Recent files capped at 10."""
-        persistence = BrainPersistence("test", base_dir=tmp_path)
-        ctx = EternalContext("test", persistence)
-
-        for i in range(15):
-            ctx.add_recent_file(f"src/file{i}.ts")
-
-        assert len(ctx.context.recent_files) == 10
-
-    def test_add_summary_max_20(self, tmp_path: Path) -> None:
-        """Conversation summaries capped at 20."""
-        persistence = BrainPersistence("test", base_dir=tmp_path)
-        ctx = EternalContext("test", persistence)
-
-        for i in range(25):
-            ctx.add_summary(f"Summary {i}")
-
-        assert len(ctx.context.conversation_summary) == 20
-
-    def test_increment_message_count(self, tmp_path: Path) -> None:
+    def test_increment_message_count(self) -> None:
         """Message counter increments correctly."""
-        persistence = BrainPersistence("test", base_dir=tmp_path)
-        ctx = EternalContext("test", persistence)
+        # EternalContext can be created without storage for counter-only ops
+        # but we need a mock. Use None and only test counter.
+        from unittest.mock import MagicMock
 
+        ctx = EternalContext(MagicMock(), "test")
         assert ctx.increment_message_count() == 1
         assert ctx.increment_message_count() == 2
-        assert ctx.context.message_count == 2
+        assert ctx.message_count == 2
 
-    def test_save_with_snapshot(self, tmp_path: Path) -> None:
-        """save_with_snapshot creates both files and snapshot."""
-        persistence = BrainPersistence("test", base_dir=tmp_path)
-        ctx = EternalContext("test", persistence)
-
-        ctx.update_brain(project_name="TestApp")
-        ctx.save_with_snapshot()
-
-        # Verify files exist
-        assert (persistence.directory / "brain.json").exists()
-        assert (persistence.directory / "session.json").exists()
-        assert (persistence.directory / "context.json").exists()
-        assert len(persistence.list_snapshots()) == 1
-
-    def test_log(self, tmp_path: Path) -> None:
-        """Log entries are written to session_log.txt."""
-        persistence = BrainPersistence("test", base_dir=tmp_path)
-        ctx = EternalContext("test", persistence)
-
-        ctx.log("Test entry")
-        lines = persistence.read_log()
-        assert len(lines) == 1
-        assert "Test entry" in lines[0]
-
-    def test_injection_with_active_errors(self, tmp_path: Path) -> None:
-        """Level 1 injection shows active (unfixed) errors."""
-        persistence = BrainPersistence("test", base_dir=tmp_path)
-        ctx = EternalContext("test", persistence)
-
-        ctx.add_error("CORS blocked", fixed=False)
-        ctx.add_error("404 not found", fixed=True)
-
-        injection = ctx.get_injection(level=1)
-        assert "CORS" in injection
-        assert "Active errors: 1" in injection
+    @pytest.mark.asyncio
+    async def test_get_memory_content_missing_fiber(self, storage) -> None:
+        """Missing fiber returns None."""
+        ctx = EternalContext(storage, "test")
+        content = await ctx._get_memory_content("nonexistent-id")
+        assert content is None

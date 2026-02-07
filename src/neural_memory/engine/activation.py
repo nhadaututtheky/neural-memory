@@ -13,6 +13,9 @@ if TYPE_CHECKING:
     from neural_memory.core.brain import BrainConfig
     from neural_memory.storage.base import NeuralStorage
 
+# Safety cap: maximum queue entries to prevent memory exhaustion on dense graphs
+_MAX_QUEUE_SIZE = 50_000
+
 
 @dataclass
 class ActivationResult:
@@ -138,8 +141,10 @@ class SpreadingActivation:
         # Visited tracking (neuron_id, source) to allow multiple paths
         visited: set[tuple[str, str]] = set()
 
-        # Spread activation
+        # Spread activation (capped to prevent memory exhaustion)
         while queue:
+            if len(queue) > _MAX_QUEUE_SIZE:
+                break
             current = heapq.heappop(queue)
 
             # Skip if we've visited this neuron from this source

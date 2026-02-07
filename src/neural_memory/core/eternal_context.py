@@ -1,439 +1,273 @@
-"""Three-tier eternal context system for NeuralMemory.
+"""Async query layer over the neural graph for session continuity.
 
-Manages persistent context across AI sessions using a 3-tier model:
+Queries TypedMemory entries in SQLiteStorage to assemble context
+injection strings. All persistence happens through the existing
+MemoryEncoder + TypedMemory pipeline, making eternal context
+data discoverable by spreading activation (ReflexPipeline).
 
-- **Tier 1 (Critical)**: Project identity, tech stack, key decisions.
-  Never deleted. ~200-500 tokens.
-
-- **Tier 2 (Important)**: Current feature, task, progress, errors.
-  Kept within session. ~300-800 tokens.
-
-- **Tier 3 (Context)**: Conversation summaries, recent files, queries.
-  Temporary. ~500-2000 tokens.
-
-All state is stored as lightweight JSON files, not in SQLite.
-Actual memory data stays in the neural graph via SQLite.
+Replaces the old 3-tier JSON file persistence (brain.json,
+session.json, context.json) with direct neural graph queries.
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, replace
-from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from neural_memory.core.brain_persistence import BrainPersistence
+from neural_memory.core.memory_types import MemoryType, Priority
+
+if TYPE_CHECKING:
+    from neural_memory.storage.base import NeuralStorage
 
 logger = logging.getLogger(__name__)
 
-# Token estimation ratio (words * ratio ≈ tokens)
 _TOKEN_RATIO = 1.3
 
 
-@dataclass(frozen=True)
-class BrainState:
-    """Tier 1 — CRITICAL. Never deleted. ~200-500 tokens.
-
-    Stores project identity and key decisions that must survive
-    across all sessions indefinitely.
-    """
-
-    project_name: str = ""
-    tech_stack: tuple[str, ...] = ()
-    key_decisions: tuple[dict[str, str], ...] = ()
-    instructions: tuple[str, ...] = ()
-    version: str = "1.0"
-
-
-@dataclass(frozen=True)
-class SessionState:
-    """Tier 2 — IMPORTANT. Kept within session. ~300-800 tokens.
-
-    Stores current working state: feature, task, progress, errors.
-    Saved on workflow events and session boundaries.
-    """
-
-    feature: str = ""
-    task: str = ""
-    progress: float = 0.0
-    errors_history: tuple[dict[str, Any], ...] = ()
-    pending_tasks: tuple[str, ...] = ()
-    branch: str = ""
-    commit: str = ""
-    started_at: str = ""
-    updated_at: str = ""
-
-
-@dataclass(frozen=True)
-class ContextSnapshot:
-    """Tier 3 — CONTEXT. Temporary. ~500-2000 tokens.
-
-    Stores ephemeral conversation state: summaries, recent files,
-    recent queries, counters.
-    """
-
-    conversation_summary: tuple[str, ...] = ()
-    recent_files: tuple[str, ...] = ()
-    recent_queries: tuple[str, ...] = ()
-    message_count: int = 0
-    token_estimate: int = 0
-
-
 class EternalContext:
-    """Orchestrates the 3-tier eternal context lifecycle.
+    """Async query layer over neural graph for session continuity.
 
-    Manages load/save, tier updates, injection formatting,
-    and context capacity estimation.
+    Instead of loading/saving JSON files, this class queries TypedMemory
+    entries in storage to assemble context injection strings. All data
+    lives in the neural graph as fibers + typed memories, making it
+    discoverable by spreading activation.
     """
 
-    def __init__(self, brain_id: str, persistence: BrainPersistence | None = None) -> None:
+    def __init__(self, storage: NeuralStorage, brain_id: str) -> None:
+        self._storage = storage
         self._brain_id = brain_id
-        self._persistence = persistence or BrainPersistence(brain_id)
-        self._brain: BrainState = BrainState()
-        self._session: SessionState = SessionState()
-        self._context: ContextSnapshot = ContextSnapshot()
-        self._loaded = False
+        self._message_count = 0
 
     @property
-    def brain(self) -> BrainState:
-        """Current Tier 1 (Critical) state."""
-        return self._brain
-
-    @property
-    def session(self) -> SessionState:
-        """Current Tier 2 (Important) state."""
-        return self._session
-
-    @property
-    def context(self) -> ContextSnapshot:
-        """Current Tier 3 (Context) state."""
-        return self._context
-
-    @property
-    def is_loaded(self) -> bool:
-        """Whether state has been loaded from persistence."""
-        return self._loaded
-
-    # ──────────────────── Load / Save ────────────────────
-
-    def load(self) -> None:
-        """Load all 3 tiers from file persistence."""
-        try:
-            self._brain = self._persistence.load_brain_state()
-            self._session = self._persistence.load_session_state()
-            self._context = self._persistence.load_context()
-            self._loaded = True
-        except Exception as e:
-            logger.warning("Failed to load eternal context: %s", e)
-            self._loaded = True  # Mark loaded even on failure (use defaults)
-
-    def save(self, tiers: tuple[int, ...] = (1, 2, 3)) -> None:
-        """Persist specified tiers to files.
-
-        Args:
-            tiers: Which tiers to save. (1, 2, 3) = all.
-        """
-        try:
-            if 1 in tiers:
-                self._persistence.save_brain_state(self._brain)
-            if 2 in tiers:
-                self._persistence.save_session_state(self._session)
-            if 3 in tiers:
-                self._persistence.save_context(self._context)
-        except Exception as e:
-            logger.error("Failed to save eternal context: %s", e)
-
-    def save_with_snapshot(self) -> None:
-        """Save all tiers and create a timestamped snapshot."""
-        self.save(tiers=(1, 2, 3))
-        try:
-            self._persistence.create_snapshot(self._brain, self._session)
-        except Exception as e:
-            logger.warning("Failed to create snapshot: %s", e)
-
-    # ──────────────────── Tier 1 updates ────────────────────
-
-    def update_brain(self, **kwargs: Any) -> None:
-        """Update Tier 1 (Critical) state immutably."""
-        updates: dict[str, Any] = {}
-        for key, value in kwargs.items():
-            if key == "tech_stack" and isinstance(value, (list, tuple)):
-                updates[key] = tuple(value)
-            elif key == "key_decisions" and isinstance(value, (list, tuple)):
-                updates[key] = tuple(dict(d) for d in value)
-            elif key == "instructions" and isinstance(value, (list, tuple)):
-                updates[key] = tuple(value)
-            elif hasattr(self._brain, key):
-                updates[key] = value
-        if updates:
-            self._brain = replace(self._brain, **updates)
-
-    def add_decision(self, decision: str, reason: str = "") -> None:
-        """Append a key decision to Tier 1."""
-        entry = {
-            "decision": decision,
-            "reason": reason,
-            "date": datetime.now().strftime("%Y-%m-%d"),
-        }
-        # Deduplicate: skip if same decision text already exists
-        existing = {d.get("decision", "").lower() for d in self._brain.key_decisions}
-        if decision.lower() in existing:
-            return
-        self._brain = replace(
-            self._brain,
-            key_decisions=(*self._brain.key_decisions, entry),
-        )
-
-    # ──────────────────── Tier 2 updates ────────────────────
-
-    def update_session(self, **kwargs: Any) -> None:
-        """Update Tier 2 (Important) state immutably."""
-        updates: dict[str, Any] = {}
-        for key, value in kwargs.items():
-            if key in ("errors_history", "pending_tasks") and isinstance(value, (list, tuple)):
-                updates[key] = tuple(value)
-            elif hasattr(self._session, key):
-                updates[key] = value
-        updates["updated_at"] = datetime.now().isoformat()
-        if not self._session.started_at:
-            updates["started_at"] = datetime.now().isoformat()
-        self._session = replace(self._session, **updates)
-
-    def add_error(self, error: str, fixed: bool = False) -> None:
-        """Append an error to Tier 2 history."""
-        entry: dict[str, Any] = {
-            "error": error,
-            "fixed": fixed,
-            "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        }
-        self._session = replace(
-            self._session,
-            errors_history=(*self._session.errors_history, entry),
-            updated_at=datetime.now().isoformat(),
-        )
-
-    def mark_error_fixed(self, error_substring: str) -> bool:
-        """Mark an existing error as fixed (by substring match).
-
-        Returns True if an error was found and marked.
-        """
-        error_lower = error_substring.lower()
-        updated = []
-        found = False
-        for entry in self._session.errors_history:
-            if (
-                not found
-                and error_lower in entry.get("error", "").lower()
-                and not entry.get("fixed", False)
-            ):
-                updated.append({**entry, "fixed": True})
-                found = True
-            else:
-                updated.append(dict(entry))
-        if found:
-            self._session = replace(
-                self._session,
-                errors_history=tuple(updated),
-                updated_at=datetime.now().isoformat(),
-            )
-        return found
-
-    # ──────────────────── Tier 3 updates ────────────────────
-
-    def update_context(self, **kwargs: Any) -> None:
-        """Update Tier 3 (Context) state immutably."""
-        updates: dict[str, Any] = {}
-        for key, value in kwargs.items():
-            if key in ("conversation_summary", "recent_files", "recent_queries") and isinstance(
-                value, (list, tuple)
-            ):
-                updates[key] = tuple(value)
-            elif hasattr(self._context, key):
-                updates[key] = value
-        if updates:
-            self._context = replace(self._context, **updates)
-
-    def add_summary(self, summary: str) -> None:
-        """Append a conversation summary to Tier 3 (max 20 entries)."""
-        entries = (*self._context.conversation_summary, summary)
-        if len(entries) > 20:
-            entries = entries[-20:]
-        self._context = replace(self._context, conversation_summary=entries)
-
-    def add_recent_file(self, filepath: str) -> None:
-        """Track a recently accessed file in Tier 3 (max 10)."""
-        # Deduplicate and keep recent
-        files = [f for f in self._context.recent_files if f != filepath]
-        files.append(filepath)
-        if len(files) > 10:
-            files = files[-10:]
-        self._context = replace(self._context, recent_files=tuple(files))
-
-    def add_query(self, query: str) -> None:
-        """Track a recent query in Tier 3 (max 10)."""
-        queries = (*self._context.recent_queries, query)
-        if len(queries) > 10:
-            queries = queries[-10:]
-        self._context = replace(
-            self._context,
-            recent_queries=queries,
-            message_count=self._context.message_count + 1,
-        )
+    def message_count(self) -> int:
+        """Current in-memory message count for this session."""
+        return self._message_count
 
     def increment_message_count(self) -> int:
-        """Increment message counter and return new count."""
-        new_count = self._context.message_count + 1
-        self._context = replace(self._context, message_count=new_count)
-        return new_count
+        """Increment in-memory message counter. Returns new count."""
+        self._message_count += 1
+        return self._message_count
 
-    # ──────────────────── Injection formatting ────────────────────
+    # ──────────────────── Context injection ────────────────────
 
-    def get_injection(self, level: int = 1) -> str:
-        """Format context for system prompt injection.
+    async def get_injection(self, level: int = 1) -> str:
+        """Query TypedMemory by type and format for context injection.
 
         Args:
-            level: Loading level (1=instant, 2=on-demand, 3=deep).
+            level: Loading level.
+                1 = instant (~500 tokens): project, instructions, session, errors
+                2 = on-demand (~1500 tokens): + decisions, todos
+                3 = deep (~3000+ tokens): + session summaries, recent facts
 
         Returns:
-            Formatted context string for injection.
+            Formatted context string for system prompt injection.
         """
         parts: list[str] = []
 
-        # Level 1: Always loaded (~500 tokens)
+        # ── Level 1: Always loaded ──
         parts.append("## Project Context")
-        if self._brain.project_name:
-            parts.append(f"- Project: {self._brain.project_name}")
-        if self._brain.tech_stack:
-            parts.append(f"- Stack: {', '.join(self._brain.tech_stack)}")
-        if self._session.feature:
-            parts.append(f"- Current: {self._session.feature}")
-        if self._session.task:
-            pct = int(self._session.progress * 100) if self._session.progress else 0
-            task_line = f"- Task: {self._session.task}"
-            if pct > 0:
-                task_line += f" ({pct}%)"
-            parts.append(task_line)
+
+        # Project context facts
+        project_facts = await self._storage.find_typed_memories(
+            memory_type=MemoryType.FACT,
+            tags={"project_context"},
+            limit=5,
+        )
+        for mem in project_facts:
+            content = await self._get_memory_content(mem.fiber_id)
+            if content:
+                parts.append(f"- {content}")
+
+        # Instructions (high priority)
+        instructions = await self._storage.find_typed_memories(
+            memory_type=MemoryType.INSTRUCTION,
+            min_priority=Priority.HIGH,
+            limit=5,
+        )
+        for mem in instructions:
+            content = await self._get_memory_content(mem.fiber_id)
+            if content:
+                parts.append(f"- {content}")
+
+        # Current session state
+        sessions = await self._storage.find_typed_memories(
+            memory_type=MemoryType.CONTEXT,
+            tags={"session_state"},
+            limit=1,
+        )
+        if sessions:
+            meta = sessions[0].metadata or {}
+            if meta.get("active", True):
+                feature = meta.get("feature", "")
+                task = meta.get("task", "")
+                progress = meta.get("progress", 0.0)
+                if feature:
+                    parts.append(f"- Current: {feature}")
+                if task:
+                    task_line = f"- Task: {task}"
+                    pct = int(progress * 100) if progress else 0
+                    if pct > 0:
+                        task_line += f" ({pct}%)"
+                    parts.append(task_line)
+                branch = meta.get("branch", "")
+                if branch:
+                    parts.append(f"- Branch: {branch}")
+
         # Active errors
-        active_errors = [e for e in self._session.errors_history if not e.get("fixed", False)]
+        errors = await self._storage.find_typed_memories(
+            memory_type=MemoryType.ERROR,
+            limit=10,
+        )
+        active_errors = [e for e in errors if not e.is_expired]
         if active_errors:
             parts.append(f"- Active errors: {len(active_errors)}")
             for err in active_errors[-3:]:
-                parts.append(f"  - {err.get('error', 'unknown')}")
+                content = await self._get_memory_content(err.fiber_id)
+                if content:
+                    parts.append(f"  - {content}")
 
         if level < 2:
             return "\n".join(parts)
 
-        # Level 2: On-demand (~1000 additional tokens)
-        if self._brain.key_decisions:
+        # ── Level 2: On-demand ──
+        decisions = await self._storage.find_typed_memories(
+            memory_type=MemoryType.DECISION,
+            limit=10,
+        )
+        if decisions:
             parts.append("\n## Key Decisions")
-            for d in self._brain.key_decisions[-5:]:
-                line = f"- {d.get('decision', '')}"
-                if d.get("reason"):
-                    line += f" — {d['reason']}"
-                parts.append(line)
+            for d in decisions[-5:]:
+                content = await self._get_memory_content(d.fiber_id)
+                if content:
+                    parts.append(f"- {content}")
 
-        if self._session.pending_tasks:
+        todos = await self._storage.find_typed_memories(
+            memory_type=MemoryType.TODO,
+            limit=10,
+        )
+        if todos:
             parts.append("\n## Pending Tasks")
-            for task in self._session.pending_tasks[-5:]:
-                parts.append(f"- {task}")
+            for t in todos[-5:]:
+                content = await self._get_memory_content(t.fiber_id)
+                if content:
+                    parts.append(f"- {content}")
 
-        if self._brain.instructions:
+        all_instructions = await self._storage.find_typed_memories(
+            memory_type=MemoryType.INSTRUCTION,
+            limit=10,
+        )
+        if all_instructions:
             parts.append("\n## Instructions")
-            for inst in self._brain.instructions[-5:]:
-                parts.append(f"- {inst}")
-
-        if self._session.branch:
-            parts.append(f"\n## Git: {self._session.branch}")
-            if self._session.commit:
-                parts.append(f"- Commit: {self._session.commit}")
+            for inst in all_instructions[-5:]:
+                content = await self._get_memory_content(inst.fiber_id)
+                if content:
+                    parts.append(f"- {content}")
 
         if level < 3:
             return "\n".join(parts)
 
-        # Level 3: Deep dive (~2000+ additional tokens)
-        if self._context.conversation_summary:
-            parts.append("\n## Conversation Summary")
-            for s in self._context.conversation_summary[-10:]:
-                parts.append(f"- {s}")
+        # ── Level 3: Deep dive ──
+        summaries = await self._storage.find_typed_memories(
+            memory_type=MemoryType.CONTEXT,
+            tags={"session_summary"},
+            limit=10,
+        )
+        if summaries:
+            parts.append("\n## Session History")
+            for s in summaries:
+                content = await self._get_memory_content(s.fiber_id)
+                if content:
+                    parts.append(f"- {content}")
 
-        if self._context.recent_files:
-            parts.append("\n## Recent Files")
-            for f in self._context.recent_files:
-                parts.append(f"- {f}")
+        recent_facts = await self._storage.find_typed_memories(
+            memory_type=MemoryType.FACT,
+            limit=10,
+        )
+        # Exclude project_context (already shown in L1)
+        project_ids = {m.fiber_id for m in project_facts}
+        for f in recent_facts[:5]:
+            if f.fiber_id not in project_ids:
+                content = await self._get_memory_content(f.fiber_id)
+                if content:
+                    parts.append(f"- {content}")
 
-        if self._context.recent_queries:
-            parts.append("\n## Recent Queries")
-            for q in self._context.recent_queries[-5:]:
-                parts.append(f"- {q}")
-
-        all_errors = self._session.errors_history
+        all_errors = await self._storage.find_typed_memories(
+            memory_type=MemoryType.ERROR,
+            limit=10,
+        )
         if all_errors:
             parts.append("\n## Error History")
             for err in all_errors[-10:]:
-                status = "fixed" if err.get("fixed") else "open"
-                parts.append(f"- [{status}] {err.get('error', '')} ({err.get('date', '')})")
+                content = await self._get_memory_content(err.fiber_id)
+                status = "open" if not err.is_expired else "resolved"
+                if content:
+                    parts.append(f"- [{status}] {content}")
 
         return "\n".join(parts)
 
+    # ──────────────────── Status ────────────────────
+
+    async def get_status(self) -> dict[str, Any]:
+        """Query TypedMemory counts by type for status display."""
+        counts: dict[str, int] = {}
+        for mem_type in MemoryType:
+            memories = await self._storage.find_typed_memories(
+                memory_type=mem_type,
+                limit=1000,
+            )
+            counts[mem_type.value] = len(memories)
+
+        # Current session info
+        sessions = await self._storage.find_typed_memories(
+            memory_type=MemoryType.CONTEXT,
+            tags={"session_state"},
+            limit=1,
+        )
+        session_info: dict[str, Any] = {}
+        if sessions:
+            meta = sessions[0].metadata or {}
+            if meta.get("active", True):
+                session_info = {
+                    "feature": meta.get("feature", ""),
+                    "task": meta.get("task", ""),
+                    "progress": meta.get("progress", 0.0),
+                    "branch": meta.get("branch", ""),
+                }
+
+        return {
+            "memory_counts": counts,
+            "session": session_info,
+            "message_count": self._message_count,
+        }
+
     # ──────────────────── Capacity estimation ────────────────────
 
-    def estimate_context_usage(self, max_tokens: int = 128_000) -> float:
-        """Estimate fraction of context window used (0.0 to 1.0).
-
-        Uses the stored token_estimate from Tier 3, plus estimates
-        of the eternal context overhead itself.
-        """
+    async def estimate_context_usage(self, max_tokens: int = 128_000) -> float:
+        """Estimate fraction of context window used (0.0 to 1.0)."""
         if max_tokens <= 0:
             return 0.0
-
-        # Overhead from eternal context injection
-        injection = self.get_injection(level=3)
+        injection = await self.get_injection(level=3)
         injection_tokens = int(len(injection.split()) * _TOKEN_RATIO)
+        session_tokens = self._message_count * 150
+        return min(1.0, (injection_tokens + session_tokens) / max_tokens)
 
-        # Session token estimate (from external tracking)
-        session_tokens = self._context.token_estimate
+    # ──────────────────── Internal helpers ────────────────────
 
-        total = injection_tokens + session_tokens
-        return min(1.0, total / max_tokens)
+    async def _get_memory_content(self, fiber_id: str) -> str | None:
+        """Get human-readable content from a fiber.
 
-    # ──────────────────── Compact ────────────────────
-
-    def compact(self) -> str:
-        """Summarize Tier 3 into Tier 2 and clear Tier 3.
-
-        Returns a compact summary of what was in Tier 3.
+        Tries fiber.summary first, then falls back to anchor neuron content.
         """
-        summaries = list(self._context.conversation_summary)
-        queries = list(self._context.recent_queries)
-
-        # Build compact summary
-        parts: list[str] = []
-        if summaries:
-            parts.append(f"Previous session ({len(summaries)} items): " + "; ".join(summaries[-5:]))
-        if queries:
-            parts.append("Recent queries: " + ", ".join(queries[-5:]))
-
-        compact_text = " | ".join(parts) if parts else "No context to compact."
-
-        # Add to pending tasks as a reference
-        if summaries:
-            note = f"Session summary: {'; '.join(summaries[-3:])}"
-            self._session = replace(
-                self._session,
-                pending_tasks=(*self._session.pending_tasks, note)[-10:],
-                updated_at=datetime.now().isoformat(),
-            )
-
-        # Clear Tier 3
-        self._context = ContextSnapshot()
-
-        return compact_text
-
-    # ──────────────────── Log ────────────────────
-
-    def log(self, entry: str) -> None:
-        """Append an entry to the session log."""
         try:
-            self._persistence.append_log(entry)
+            fiber = await self._storage.get_fiber(fiber_id)
+            if fiber is None:
+                return None
+            if fiber.summary:
+                return fiber.summary
+            if fiber.anchor_neuron_id:
+                neuron = await self._storage.get_neuron(fiber.anchor_neuron_id)
+                if neuron:
+                    return neuron.content
         except Exception as e:
-            logger.warning("Failed to write log: %s", e)
+            logger.debug("Failed to get content for fiber %s: %s", fiber_id, e)
+        return None

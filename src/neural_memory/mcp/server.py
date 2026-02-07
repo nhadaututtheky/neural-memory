@@ -32,7 +32,6 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from neural_memory import __version__
-from neural_memory.core.brain_persistence import BrainPersistence
 from neural_memory.core.eternal_context import EternalContext
 from neural_memory.core.memory_types import MemoryType, Priority, TypedMemory, suggest_memory_type
 from neural_memory.core.trigger_engine import check_triggers
@@ -47,6 +46,9 @@ from neural_memory.unified_config import get_config, get_shared_storage
 if TYPE_CHECKING:
     from neural_memory.storage.sqlite_store import SQLiteStorage
     from neural_memory.unified_config import UnifiedConfig
+
+
+_MAX_CONTENT_LENGTH = 100_000  # 100KB per field — prevents memory exhaustion
 
 
 class MCPServer:
@@ -67,13 +69,11 @@ class MCPServer:
             self._storage = await get_shared_storage()
         return self._storage
 
-    def get_eternal_context(self) -> EternalContext:
-        """Get or create the eternal context manager."""
+    async def get_eternal_context(self) -> EternalContext:
+        """Get or create the eternal context query layer."""
         if self._eternal_ctx is None:
-            brain_id = self.config.current_brain
-            persistence = BrainPersistence(brain_id)
-            self._eternal_ctx = EternalContext(brain_id, persistence)
-            self._eternal_ctx.load()
+            storage = await self.get_storage()
+            self._eternal_ctx = EternalContext(storage, self.config.current_brain)
         return self._eternal_ctx
 
     def get_resources(self) -> list[dict[str, Any]]:
@@ -142,6 +142,10 @@ class MCPServer:
             return {"error": "No brain configured"}
 
         content = args["content"]
+        if len(content) > _MAX_CONTENT_LENGTH:
+            return {
+                "error": f"Content too long ({len(content)} chars). Max: {_MAX_CONTENT_LENGTH}."
+            }
 
         # Check for sensitive content (high severity only)
         from neural_memory.safety.sensitive import check_sensitive_content
@@ -158,7 +162,10 @@ class MCPServer:
 
         # Determine memory type
         if "type" in args:
-            mem_type = MemoryType(args["type"])
+            try:
+                mem_type = MemoryType(args["type"])
+            except ValueError:
+                return {"error": f"Invalid memory type: {args['type']}"}
         else:
             mem_type = suggest_memory_type(content)
 
@@ -221,7 +228,10 @@ class MCPServer:
             return {"error": "No brain configured"}
 
         query = args["query"]
-        depth = DepthLevel(args.get("depth", 1))
+        try:
+            depth = DepthLevel(args.get("depth", 1))
+        except ValueError:
+            return {"error": f"Invalid depth level: {args.get('depth')}. Must be 0-3."}
         max_tokens = args.get("max_tokens", 500)
         min_confidence = args.get("min_confidence", 0.0)
 
@@ -416,6 +426,8 @@ class MCPServer:
             text = args.get("text", "")
             if not text:
                 return {"error": "Text required for analyze action"}
+            if len(text) > _MAX_CONTENT_LENGTH:
+                return {"error": f"Text too long ({len(text)} chars). Max: {_MAX_CONTENT_LENGTH}."}
 
             detected = analyze_text_for_memories(
                 text,
@@ -453,6 +465,8 @@ class MCPServer:
             text = args.get("text", "")
             if not text:
                 return {"error": "Text required for process action"}
+            if len(text) > _MAX_CONTENT_LENGTH:
+                return {"error": f"Text too long ({len(text)} chars). Max: {_MAX_CONTENT_LENGTH}."}
 
             detected = analyze_text_for_memories(
                 text,
@@ -490,7 +504,10 @@ class MCPServer:
         if "type_filter" in args:
             from neural_memory.core.neuron import NeuronType
 
-            type_filter = NeuronType(args["type_filter"])
+            try:
+                type_filter = NeuronType(args["type_filter"])
+            except ValueError:
+                return {"error": f"Invalid type_filter: {args['type_filter']}"}
 
         suggestions = await storage.suggest_neurons(
             prefix=prefix,
@@ -679,16 +696,6 @@ class MCPServer:
             await storage.add_typed_memory(summary_mem)
             await storage.batch_save()
 
-            # Auto-save eternal context on session end
-            try:
-                if self.config.eternal.enabled:
-                    ctx = self.get_eternal_context()
-                    ctx.add_summary(summary)
-                    ctx.save_with_snapshot()
-                    ctx.log(f"Session ended: {summary[:80]}")
-            except Exception:
-                pass
-
             return {
                 "active": False,
                 "summary": summary,
@@ -712,9 +719,12 @@ class MCPServer:
             if not brain:
                 return {"error": "No brain configured"}
 
+            cwd = Path(".").resolve()
             path = Path(args.get("path", ".")).resolve()
             if not path.is_dir():
                 return {"error": f"Not a directory: {path}"}
+            if not path.is_relative_to(cwd):
+                return {"error": f"Path must be within working directory: {cwd}"}
 
             extensions = set(args.get("extensions", [".py"]))
 
@@ -826,86 +836,92 @@ class MCPServer:
         }
 
     async def _eternal(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Manage eternal context persistence."""
+        """Manage eternal context — backed by neural graph."""
         action = args.get("action", "status")
-        ctx = self.get_eternal_context()
+        ctx = await self.get_eternal_context()
 
         if action == "status":
+            status = await ctx.get_status()
+            usage = await ctx.estimate_context_usage(self.config.eternal.max_context_tokens)
             return {
                 "enabled": self.config.eternal.enabled,
-                "loaded": ctx.is_loaded,
-                "brain": {
-                    "project_name": ctx.brain.project_name,
-                    "tech_stack": list(ctx.brain.tech_stack),
-                    "decisions_count": len(ctx.brain.key_decisions),
-                    "instructions_count": len(ctx.brain.instructions),
-                },
-                "session": {
-                    "feature": ctx.session.feature,
-                    "task": ctx.session.task,
-                    "progress": ctx.session.progress,
-                    "errors_count": len(ctx.session.errors_history),
-                    "pending_tasks_count": len(ctx.session.pending_tasks),
-                    "branch": ctx.session.branch,
-                },
-                "context": {
-                    "message_count": ctx.context.message_count,
-                    "summaries_count": len(ctx.context.conversation_summary),
-                    "recent_files_count": len(ctx.context.recent_files),
-                    "token_estimate": ctx.context.token_estimate,
-                },
-                "context_usage": round(
-                    ctx.estimate_context_usage(self.config.eternal.max_context_tokens), 3
-                ),
+                "memory_counts": status["memory_counts"],
+                "session": status["session"],
+                "message_count": status["message_count"],
+                "context_usage": round(usage, 3),
             }
 
         elif action == "save":
-            # Apply optional updates before saving
-            if "project_name" in args:
-                ctx.update_brain(project_name=args["project_name"])
-            if "tech_stack" in args:
-                ctx.update_brain(tech_stack=args["tech_stack"])
-            if "decision" in args:
-                ctx.add_decision(args["decision"], args.get("reason", ""))
-            if "instruction" in args:
-                instructions = (*ctx.brain.instructions, args["instruction"])
-                ctx.update_brain(instructions=instructions)
+            storage = await self.get_storage()
+            brain = await storage.get_brain(storage._current_brain_id)
+            if not brain:
+                return {"error": "No brain configured"}
 
-            ctx.save_with_snapshot()
-            ctx.log("Manual save triggered")
+            saved_items: list[str] = []
+
+            # Project context: dedup by deleting old, then encode new
+            if "project_name" in args or "tech_stack" in args:
+                old_facts = await storage.find_typed_memories(
+                    memory_type=MemoryType.FACT,
+                    tags={"project_context"},
+                    limit=100,
+                )
+                for old in old_facts:
+                    await storage.delete_typed_memory(old.fiber_id)
+
+                parts: list[str] = []
+                if args.get("project_name"):
+                    parts.append(f"Project: {args['project_name']}")
+                if args.get("tech_stack"):
+                    parts.append(f"Tech stack: {', '.join(args['tech_stack'])}")
+                if parts:
+                    await self._remember(
+                        {
+                            "content": ". ".join(parts),
+                            "type": "fact",
+                            "priority": 10,
+                            "tags": ["project_context", "eternal"],
+                        }
+                    )
+                    saved_items.append("project_context")
+
+            if "decision" in args:
+                content = f"Decision: {args['decision']}"
+                reason = args.get("reason", "")
+                if reason:
+                    content += f" — Reason: {reason}"
+                await self._remember(
+                    {
+                        "content": content,
+                        "type": "decision",
+                        "priority": 7,
+                        "tags": ["eternal"],
+                    }
+                )
+                saved_items.append("decision")
+
+            if "instruction" in args:
+                await self._remember(
+                    {
+                        "content": args["instruction"],
+                        "type": "instruction",
+                        "priority": 9,
+                        "tags": ["eternal"],
+                    }
+                )
+                saved_items.append("instruction")
+
             return {
                 "saved": True,
-                "message": "Eternal context saved with snapshot.",
-            }
-
-        elif action == "load":
-            ctx.load()
-            return {
-                "loaded": True,
-                "project_name": ctx.brain.project_name,
-                "feature": ctx.session.feature,
-                "task": ctx.session.task,
-                "message": "Eternal context reloaded from files.",
-            }
-
-        elif action == "compact":
-            summary = ctx.compact()
-            ctx.save(tiers=(2, 3))
-            ctx.log(f"Compacted: {summary[:100]}")
-            return {
-                "compacted": True,
-                "summary": summary,
-                "message": "Tier 3 compacted into Tier 2.",
+                "items": saved_items,
+                "message": f"Saved {', '.join(saved_items)}." if saved_items else "No changes.",
             }
 
         return {"error": f"Unknown eternal action: {action}"}
 
     async def _recap(self, args: dict[str, Any]) -> dict[str, Any]:
         """Load saved context for session resumption."""
-        ctx = self.get_eternal_context()
-        if not ctx.is_loaded:
-            ctx.load()
-
+        ctx = await self.get_eternal_context()
         topic = args.get("topic")
 
         # Topic-based search: query recall + format
@@ -920,8 +936,7 @@ class MCPServer:
                     max_tokens=500,
                     reference_time=datetime.now(),
                 )
-                # Combine recall results with eternal context
-                context_text = ctx.get_injection(level=1)
+                context_text = await ctx.get_injection(level=1)
                 if result.context:
                     context_text += f"\n\n## Topic: {topic}\n{result.context}"
                 return {
@@ -935,40 +950,46 @@ class MCPServer:
         level = args.get("level", 1)
         level = max(1, min(3, level))
 
-        context_text = ctx.get_injection(level=level)
+        context_text = await ctx.get_injection(level=level)
         token_est = int(len(context_text.split()) * 1.3)
+
+        # Check for active session for welcome message
+        has_feature = False
+        try:
+            status = await ctx.get_status()
+            has_feature = bool(status.get("session", {}).get("feature"))
+        except Exception:
+            pass
 
         return {
             "context": context_text,
             "level": level,
             "tokens_used": token_est,
-            "message": f"Level {level} recap loaded."
-            + (" Welcome back!" if ctx.session.feature else ""),
+            "message": f"Level {level} recap loaded." + (" Welcome back!" if has_feature else ""),
         }
 
     def _fire_eternal_trigger(self, text: str) -> None:
-        """Fire-and-forget: check auto-save triggers and save if needed.
+        """Fire-and-forget: check auto-save triggers.
 
+        Data is already persisted in SQLite by _remember()/_recall().
+        Triggers now only track message count and log events.
         Never blocks or raises. Swallows all errors.
         """
         if not self.config.eternal.enabled:
             return
         try:
-            ctx = self.get_eternal_context()
-            msg_count = ctx.increment_message_count()
+            if self._eternal_ctx is None:
+                return  # Not initialized yet
+            msg_count = self._eternal_ctx.increment_message_count()
 
-            result = check_triggers(
+            check_triggers(
                 text=text,
                 message_count=msg_count,
-                token_estimate=ctx.context.token_estimate,
+                token_estimate=0,
                 max_tokens=self.config.eternal.max_context_tokens,
                 checkpoint_interval=self.config.eternal.auto_save_interval,
                 warning_threshold=self.config.eternal.context_warning_threshold,
             )
-
-            if result.triggered:
-                ctx.save(tiers=result.save_tiers)
-                ctx.log(f"Auto-save [{result.trigger_type}]: {result.message}")
         except Exception:
             pass
 
