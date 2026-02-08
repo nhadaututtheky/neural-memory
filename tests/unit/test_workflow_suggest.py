@@ -145,9 +145,7 @@ class TestSuggestNextAction:
         assert result[0].confidence == 0.9
         assert result[0].sequential_count == 10
 
-    async def test_multiple_suggestions_sorted_by_confidence(
-        self, store: InMemoryStorage
-    ) -> None:
+    async def test_multiple_suggestions_sorted_by_confidence(self, store: InMemoryStorage) -> None:
         """Multiple valid suggestions are returned sorted by confidence descending."""
         recall = Neuron.create(type=NeuronType.ACTION, content="recall", neuron_id="n-recall")
         edit = Neuron.create(type=NeuronType.ACTION, content="edit", neuron_id="n-edit")

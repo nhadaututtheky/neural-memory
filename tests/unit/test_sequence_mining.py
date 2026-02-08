@@ -50,9 +50,23 @@ class TestMineSequentialPairs:
         """Three consecutive events in one session produce two pairs."""
         base = datetime(2026, 1, 1, 10, 0)
         events = [
-            ActionEvent(id="1", brain_id="b", session_id="s1", action_type="recall", created_at=base),
-            ActionEvent(id="2", brain_id="b", session_id="s1", action_type="remember", created_at=base + timedelta(seconds=5)),
-            ActionEvent(id="3", brain_id="b", session_id="s1", action_type="context", created_at=base + timedelta(seconds=10)),
+            ActionEvent(
+                id="1", brain_id="b", session_id="s1", action_type="recall", created_at=base
+            ),
+            ActionEvent(
+                id="2",
+                brain_id="b",
+                session_id="s1",
+                action_type="remember",
+                created_at=base + timedelta(seconds=5),
+            ),
+            ActionEvent(
+                id="3",
+                brain_id="b",
+                session_id="s1",
+                action_type="context",
+                created_at=base + timedelta(seconds=10),
+            ),
         ]
         pairs = mine_sequential_pairs(events, window_seconds=30.0)
 
@@ -67,8 +81,16 @@ class TestMineSequentialPairs:
         """Events separated by more than window_seconds are not counted."""
         base = datetime(2026, 1, 1, 10, 0)
         events = [
-            ActionEvent(id="1", brain_id="b", session_id="s1", action_type="recall", created_at=base),
-            ActionEvent(id="2", brain_id="b", session_id="s1", action_type="remember", created_at=base + timedelta(seconds=120)),
+            ActionEvent(
+                id="1", brain_id="b", session_id="s1", action_type="recall", created_at=base
+            ),
+            ActionEvent(
+                id="2",
+                brain_id="b",
+                session_id="s1",
+                action_type="remember",
+                created_at=base + timedelta(seconds=120),
+            ),
         ]
         pairs = mine_sequential_pairs(events, window_seconds=30.0)
 
@@ -78,10 +100,26 @@ class TestMineSequentialPairs:
         """Events in different sessions are mined independently."""
         base = datetime(2026, 1, 1, 10, 0)
         events = [
-            ActionEvent(id="1", brain_id="b", session_id="s1", action_type="recall", created_at=base),
-            ActionEvent(id="2", brain_id="b", session_id="s1", action_type="remember", created_at=base + timedelta(seconds=5)),
-            ActionEvent(id="3", brain_id="b", session_id="s2", action_type="recall", created_at=base),
-            ActionEvent(id="4", brain_id="b", session_id="s2", action_type="remember", created_at=base + timedelta(seconds=5)),
+            ActionEvent(
+                id="1", brain_id="b", session_id="s1", action_type="recall", created_at=base
+            ),
+            ActionEvent(
+                id="2",
+                brain_id="b",
+                session_id="s1",
+                action_type="remember",
+                created_at=base + timedelta(seconds=5),
+            ),
+            ActionEvent(
+                id="3", brain_id="b", session_id="s2", action_type="recall", created_at=base
+            ),
+            ActionEvent(
+                id="4",
+                brain_id="b",
+                session_id="s2",
+                action_type="remember",
+                created_at=base + timedelta(seconds=5),
+            ),
         ]
         pairs = mine_sequential_pairs(events, window_seconds=30.0)
 
@@ -101,9 +139,21 @@ class TestMineSequentialPairs:
         base = datetime(2026, 1, 1, 10, 0)
         events = [
             ActionEvent(id="1", brain_id="b", session_id="s1", action_type="A", created_at=base),
-            ActionEvent(id="2", brain_id="b", session_id="s1", action_type="B", created_at=base + timedelta(seconds=10)),
+            ActionEvent(
+                id="2",
+                brain_id="b",
+                session_id="s1",
+                action_type="B",
+                created_at=base + timedelta(seconds=10),
+            ),
             ActionEvent(id="3", brain_id="b", session_id="s2", action_type="A", created_at=base),
-            ActionEvent(id="4", brain_id="b", session_id="s2", action_type="B", created_at=base + timedelta(seconds=20)),
+            ActionEvent(
+                id="4",
+                brain_id="b",
+                session_id="s2",
+                action_type="B",
+                created_at=base + timedelta(seconds=20),
+            ),
         ]
         pairs = mine_sequential_pairs(events, window_seconds=60.0)
 
@@ -115,13 +165,37 @@ class TestMineSequentialPairs:
         base = datetime(2026, 1, 1, 10, 0)
         events = [
             # recall->remember appears twice
-            ActionEvent(id="1", brain_id="b", session_id="s1", action_type="recall", created_at=base),
-            ActionEvent(id="2", brain_id="b", session_id="s1", action_type="remember", created_at=base + timedelta(seconds=5)),
-            ActionEvent(id="3", brain_id="b", session_id="s2", action_type="recall", created_at=base),
-            ActionEvent(id="4", brain_id="b", session_id="s2", action_type="remember", created_at=base + timedelta(seconds=5)),
+            ActionEvent(
+                id="1", brain_id="b", session_id="s1", action_type="recall", created_at=base
+            ),
+            ActionEvent(
+                id="2",
+                brain_id="b",
+                session_id="s1",
+                action_type="remember",
+                created_at=base + timedelta(seconds=5),
+            ),
+            ActionEvent(
+                id="3", brain_id="b", session_id="s2", action_type="recall", created_at=base
+            ),
+            ActionEvent(
+                id="4",
+                brain_id="b",
+                session_id="s2",
+                action_type="remember",
+                created_at=base + timedelta(seconds=5),
+            ),
             # context->recall appears once
-            ActionEvent(id="5", brain_id="b", session_id="s3", action_type="context", created_at=base),
-            ActionEvent(id="6", brain_id="b", session_id="s3", action_type="recall", created_at=base + timedelta(seconds=5)),
+            ActionEvent(
+                id="5", brain_id="b", session_id="s3", action_type="context", created_at=base
+            ),
+            ActionEvent(
+                id="6",
+                brain_id="b",
+                session_id="s3",
+                action_type="recall",
+                created_at=base + timedelta(seconds=5),
+            ),
         ]
         pairs = mine_sequential_pairs(events, window_seconds=30.0)
 

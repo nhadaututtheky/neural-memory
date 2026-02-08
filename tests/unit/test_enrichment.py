@@ -47,8 +47,12 @@ class TestFindTransitiveClosures:
             await store.add_neuron(n)
 
         synapses = [
-            Synapse.create(source_id="n-a", target_id="n-b", type=SynapseType.CAUSED_BY, weight=0.8),
-            Synapse.create(source_id="n-b", target_id="n-c", type=SynapseType.CAUSED_BY, weight=0.9),
+            Synapse.create(
+                source_id="n-a", target_id="n-b", type=SynapseType.CAUSED_BY, weight=0.8
+            ),
+            Synapse.create(
+                source_id="n-b", target_id="n-c", type=SynapseType.CAUSED_BY, weight=0.9
+            ),
         ]
         for s in synapses:
             await store.add_synapse(s)
@@ -95,9 +99,15 @@ class TestFindTransitiveClosures:
             await store.add_neuron(n)
 
         synapses = [
-            Synapse.create(source_id="n-a", target_id="n-b", type=SynapseType.CAUSED_BY, weight=0.8),
-            Synapse.create(source_id="n-b", target_id="n-c", type=SynapseType.CAUSED_BY, weight=0.9),
-            Synapse.create(source_id="n-a", target_id="n-c", type=SynapseType.CAUSED_BY, weight=0.7),
+            Synapse.create(
+                source_id="n-a", target_id="n-b", type=SynapseType.CAUSED_BY, weight=0.8
+            ),
+            Synapse.create(
+                source_id="n-b", target_id="n-c", type=SynapseType.CAUSED_BY, weight=0.9
+            ),
+            Synapse.create(
+                source_id="n-a", target_id="n-c", type=SynapseType.CAUSED_BY, weight=0.7
+            ),
         ]
         for s in synapses:
             await store.add_synapse(s)
@@ -115,8 +125,12 @@ class TestFindTransitiveClosures:
             await store.add_neuron(n)
 
         synapses = [
-            Synapse.create(source_id="n-a", target_id="n-b", type=SynapseType.CAUSED_BY, weight=0.8),
-            Synapse.create(source_id="n-b", target_id="n-a", type=SynapseType.CAUSED_BY, weight=0.7),
+            Synapse.create(
+                source_id="n-a", target_id="n-b", type=SynapseType.CAUSED_BY, weight=0.8
+            ),
+            Synapse.create(
+                source_id="n-b", target_id="n-a", type=SynapseType.CAUSED_BY, weight=0.7
+            ),
         ]
         for s in synapses:
             await store.add_synapse(s)
@@ -137,14 +151,18 @@ class TestFindTransitiveClosures:
                 await store.add_neuron(n)
             await store.add_synapse(
                 Synapse.create(
-                    source_id=f"x-{i}", target_id=f"y-{i}",
-                    type=SynapseType.CAUSED_BY, weight=0.8,
+                    source_id=f"x-{i}",
+                    target_id=f"y-{i}",
+                    type=SynapseType.CAUSED_BY,
+                    weight=0.8,
                 )
             )
             await store.add_synapse(
                 Synapse.create(
-                    source_id=f"y-{i}", target_id=f"z-{i}",
-                    type=SynapseType.CAUSED_BY, weight=0.9,
+                    source_id=f"y-{i}",
+                    target_id=f"z-{i}",
+                    type=SynapseType.CAUSED_BY,
+                    weight=0.9,
                 )
             )
 
@@ -167,10 +185,14 @@ class TestFindTransitiveClosures:
             await store.add_neuron(n)
 
         await store.add_synapse(
-            Synapse.create(source_id="n-a", target_id="n-b", type=SynapseType.RELATED_TO, weight=0.8)
+            Synapse.create(
+                source_id="n-a", target_id="n-b", type=SynapseType.RELATED_TO, weight=0.8
+            )
         )
         await store.add_synapse(
-            Synapse.create(source_id="n-b", target_id="n-c", type=SynapseType.RELATED_TO, weight=0.9)
+            Synapse.create(
+                source_id="n-b", target_id="n-c", type=SynapseType.RELATED_TO, weight=0.9
+            )
         )
 
         result = await find_transitive_closures(store)
@@ -185,9 +207,15 @@ class TestFindCrossClusterLinks:
 
     async def test_shared_entity_creates_link(self, store: InMemoryStorage) -> None:
         """Two clusters sharing an entity neuron create a RELATED_TO synapse."""
-        shared_neuron = Neuron.create(type=NeuronType.ENTITY, content="shared", neuron_id="n-shared")
-        anchor_a = Neuron.create(type=NeuronType.CONCEPT, content="anchor-a", neuron_id="n-anchor-a")
-        anchor_b = Neuron.create(type=NeuronType.CONCEPT, content="anchor-b", neuron_id="n-anchor-b")
+        shared_neuron = Neuron.create(
+            type=NeuronType.ENTITY, content="shared", neuron_id="n-shared"
+        )
+        anchor_a = Neuron.create(
+            type=NeuronType.CONCEPT, content="anchor-a", neuron_id="n-anchor-a"
+        )
+        anchor_b = Neuron.create(
+            type=NeuronType.CONCEPT, content="anchor-b", neuron_id="n-anchor-b"
+        )
         for n in [shared_neuron, anchor_a, anchor_b]:
             await store.add_neuron(n)
 
