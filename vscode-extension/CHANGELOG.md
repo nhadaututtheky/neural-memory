@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.0] - 2026-02-08
+
+### Added
+
+- Synced with NeuralMemory v0.13.0: cognitive runtime upgrade
+- Formal Hebbian learning rule with novelty-adaptive learning rate and weight saturation
+- Activation stabilization: iterative dampening settles neural activations into stable patterns
+- Multi-neuron answer reconstruction: strategy-based synthesis (single, fiber-summary, multi-neuron)
+- Memory maturation lifecycle: STM → Working → Episodic → Semantic with stage-aware decay
+- Spacing effect: episodic→semantic promotion requires reinforcement across 3+ distinct days
+- Pattern extraction: recurring episodic memories auto-cluster into semantic concepts
+- Real-time conflict detection: factual contradictions and decision reversals detected at encode time
+- Disputed neuron deprioritization in retrieval (50% for disputed, 75% for superseded)
+- CONTRADICTS synapse type for linking contradictory memories
+- Evaluation benchmarks: Precision@K, Recall@K, MRR, NDCG@K with ground truth dataset
+- Naive keyword-overlap baseline for comparison
+- Long-horizon coherence test framework (5 sessions across 30 days)
+- 141 new tests (776 total)
+
 ## [0.2.1] - 2026-02-07
 
 ### Added
