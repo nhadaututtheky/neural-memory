@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Annotated
 
 import typer
 
-from neural_memory.cli._helpers import get_config, get_storage, output_result
+from neural_memory.cli._helpers import get_config, get_storage, output_result, run_async
 from neural_memory.core.project import Project
 
 project_app = typer.Typer(help="Project scoping for memory organization")
@@ -80,7 +79,7 @@ def project_create(
 
         return response
 
-    result = asyncio.run(_create())
+    result = run_async(_create())
 
     if json_output:
         output_result(result, True)
@@ -146,7 +145,7 @@ def project_list(
             "filter": "active" if active_only else "all",
         }
 
-    result = asyncio.run(_list())
+    result = run_async(_list())
 
     if json_output:
         output_result(result, True)
@@ -253,7 +252,7 @@ def project_show(
             "recent_memories": memories_data,
         }
 
-    result = asyncio.run(_show())
+    result = run_async(_show())
 
     if json_output:
         output_result(result, True)
@@ -351,7 +350,7 @@ def project_delete(
             memories = await storage.get_project_memories(proj.id)
             return len(memories)
 
-        count = asyncio.run(_preview())
+        count = run_async(_preview())
         if count < 0:
             typer.secho(f"Project '{name}' not found.", fg=typer.colors.RED)
             return
@@ -363,7 +362,7 @@ def project_delete(
             typer.echo("Cancelled.")
             return
 
-    result = asyncio.run(_delete())
+    result = run_async(_delete())
 
     if "error" in result:
         typer.secho(result["error"], fg=typer.colors.RED)
@@ -412,7 +411,7 @@ def project_extend(
         except ValueError as e:
             return {"error": str(e)}
 
-    result = asyncio.run(_extend())
+    result = run_async(_extend())
 
     if json_output:
         output_result(result, True)

@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime
 from typing import Annotated
 
 import typer
 
-from neural_memory.cli._helpers import get_config, get_storage, output_result
+from neural_memory.cli._helpers import get_config, get_storage, output_result, run_async
 from neural_memory.core.memory_types import (
     DEFAULT_EXPIRY_DAYS,
     MemoryType,
@@ -221,7 +220,7 @@ def remember(
             ]
         return response
 
-    result = asyncio.run(_remember())
+    result = run_async(_remember())
     output_result(result, json_output)
 
 
@@ -310,7 +309,7 @@ def todo(
 
         return response
 
-    result = asyncio.run(_todo())
+    result = run_async(_todo())
     output_result(result, json_output)
 
 
@@ -428,7 +427,7 @@ def recall(
 
         return response
 
-    result = asyncio.run(_recall())
+    result = run_async(_recall())
     output_result(result, json_output)
 
 
@@ -513,7 +512,7 @@ def context(
             },
         }
 
-    result = asyncio.run(_context())
+    result = run_async(_context())
     output_result(result, json_output)
 
 

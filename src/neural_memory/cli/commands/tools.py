@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Annotated
 
 import typer
 
-from neural_memory.cli._helpers import get_config, get_storage
+from neural_memory.cli._helpers import get_config, get_storage, run_async
 
 
 def mcp() -> None:
@@ -59,7 +58,7 @@ def dashboard() -> None:
         storage = await get_storage(config)
         await render_dashboard(storage)
 
-    asyncio.run(_dashboard())
+    run_async(_dashboard())
 
 
 def ui(
@@ -98,7 +97,7 @@ def ui(
             search=search,
         )
 
-    asyncio.run(_ui())
+    run_async(_ui())
 
 
 def graph(
@@ -127,7 +126,7 @@ def graph(
         storage = await get_storage(config)
         await render_graph(storage, query=query, depth=depth)
 
-    asyncio.run(_graph())
+    run_async(_graph())
 
 
 def init(
@@ -285,7 +284,7 @@ def decay(
                 f"{report.synapses_pruned} synapses below threshold {prune_threshold}"
             )
 
-    asyncio.run(_decay())
+    run_async(_decay())
 
 
 def consolidate(
@@ -356,7 +355,7 @@ def consolidate(
         typer.echo("")
         typer.echo(report.summary())
 
-    asyncio.run(_consolidate())
+    run_async(_consolidate())
 
 
 _HOOK_MARKER = "# [neural-memory] auto-generated hook"

@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime
 from typing import Annotated
 
 import typer
 
-from neural_memory.cli._helpers import get_config, get_storage, output_result
+from neural_memory.cli._helpers import get_config, get_storage, output_result, run_async
 from neural_memory.core.memory_types import MemoryType
 from neural_memory.safety.freshness import analyze_freshness, format_age
 from neural_memory.safety.sensitive import check_sensitive_content, format_sensitive_warning
@@ -86,7 +85,7 @@ def stats(
             "by_priority": priority_counts,
         }
 
-    result = asyncio.run(_stats())
+    result = run_async(_stats())
 
     if json_output:
         output_result(result, True)
@@ -283,7 +282,7 @@ def status(
             "suggestions": suggestions,
         }
 
-    result = asyncio.run(_status())
+    result = run_async(_status())
 
     if "error" in result:
         typer.secho(result["error"], fg=typer.colors.RED, err=True)

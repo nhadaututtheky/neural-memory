@@ -481,37 +481,45 @@ async def run_mcp_server() -> None:
     """Run the MCP server over stdio."""
     server = create_mcp_server()
 
-    while True:
-        try:
-            line = await asyncio.get_event_loop().run_in_executor(None, sys.stdin.readline)
-            if not line:
+    try:
+        while True:
+            try:
+                line = await asyncio.get_event_loop().run_in_executor(
+                    None, sys.stdin.readline
+                )
+                if not line:
+                    break
+
+                line = line.strip()
+                if not line:
+                    continue
+
+                if len(line) > _MAX_MESSAGE_SIZE:
+                    error_resp = {
+                        "jsonrpc": "2.0",
+                        "id": None,
+                        "error": {"code": -32000, "message": "Message too large"},
+                    }
+                    print(json.dumps(error_resp), flush=True)
+                    continue
+
+                message = json.loads(line)
+                response = await handle_message(server, message)
+
+                if response is not None:
+                    print(json.dumps(response), flush=True)
+
+            except json.JSONDecodeError:
+                continue
+            except EOFError:
                 break
-
-            line = line.strip()
-            if not line:
-                continue
-
-            if len(line) > _MAX_MESSAGE_SIZE:
-                error_resp = {
-                    "jsonrpc": "2.0",
-                    "id": None,
-                    "error": {"code": -32000, "message": "Message too large"},
-                }
-                print(json.dumps(error_resp), flush=True)
-                continue
-
-            message = json.loads(line)
-            response = await handle_message(server, message)
-
-            if response is not None:
-                print(json.dumps(response), flush=True)
-
-        except json.JSONDecodeError:
-            continue
-        except EOFError:
-            break
-        except KeyboardInterrupt:
-            break
+            except KeyboardInterrupt:
+                break
+    finally:
+        # Close aiosqlite connection before event loop exits to prevent
+        # "Event loop is closed" noise from the background thread.
+        if server._storage is not None:
+            await server._storage.close()
 
 
 def main() -> None:

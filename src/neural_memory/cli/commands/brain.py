@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from datetime import datetime
 from typing import Annotated
 
 import typer
 
-from neural_memory.cli._helpers import get_config, output_result
+from neural_memory.cli._helpers import get_config, output_result, run_async
 from neural_memory.cli.storage import PersistentStorage
 from neural_memory.safety.freshness import analyze_freshness
 from neural_memory.safety.sensitive import check_sensitive_content
@@ -101,7 +100,7 @@ def brain_create(
         if use:
             typer.echo(f"Now using: {name}")
 
-    asyncio.run(_create())
+    run_async(_create())
 
 
 @brain_app.command("export")
@@ -196,7 +195,7 @@ def brain_export(
         else:
             typer.echo(json.dumps(export_data, indent=2, default=str))
 
-    asyncio.run(_export())
+    run_async(_export())
 
 
 @brain_app.command("import")
@@ -278,7 +277,7 @@ def brain_import(
         typer.echo(f"  Synapses: {len(data['synapses'])}")
         typer.echo(f"  Fibers: {len(data['fibers'])}")
 
-    asyncio.run(_import())
+    run_async(_import())
 
 
 @brain_app.command("delete")
@@ -444,7 +443,7 @@ def brain_health(
             },
         }
 
-    result = asyncio.run(_health())
+    result = run_async(_health())
 
     if json_output:
         output_result(result, True)

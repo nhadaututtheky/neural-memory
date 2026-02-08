@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
-from neural_memory.cli._helpers import get_config, get_storage, output_result
+from neural_memory.cli._helpers import get_config, get_storage, output_result, run_async
 from neural_memory.engine.codebase_encoder import CodebaseEncoder
 
 
@@ -24,7 +23,7 @@ def index(
     json_output: Annotated[bool, typer.Option("--json", "-j", help="Output as JSON")] = False,
 ) -> None:
     """Index a codebase into neural memory for code-aware recall."""
-    asyncio.run(_index_async(path, extensions, status, json_output))
+    run_async(_index_async(path, extensions, status, json_output))
 
 
 async def _index_async(

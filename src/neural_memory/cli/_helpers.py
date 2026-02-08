@@ -2,17 +2,49 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+from collections.abc import Coroutine
+from typing import Any, TypeVar
 
 import typer
 
 from neural_memory.cli.config import CLIConfig
 from neural_memory.cli.storage import PersistentStorage
 
+T = TypeVar("T")
+
+# Track storages created during a CLI command so we can close them before
+# the event loop shuts down (prevents "Event loop is closed" noise from
+# aiosqlite's background thread).
+_active_storages: list[Any] = []
+
 
 def get_config() -> CLIConfig:
     """Get CLI configuration."""
     return CLIConfig.load()
+
+
+def run_async(coro: Coroutine[Any, Any, T]) -> T:
+    """Run an async CLI command with proper storage cleanup.
+
+    Replaces bare ``asyncio.run()`` to ensure aiosqlite connections are
+    closed *before* the event loop is torn down.
+    """
+
+    async def _with_cleanup() -> T:
+        try:
+            return await coro
+        finally:
+            for storage in _active_storages:
+                if hasattr(storage, "close"):
+                    try:
+                        await storage.close()
+                    except Exception:
+                        pass
+            _active_storages.clear()
+
+    return asyncio.run(_with_cleanup())
 
 
 async def get_storage(
@@ -46,13 +78,16 @@ async def get_storage(
             api_key=config.shared.api_key,
         )
         await storage.connect()
+        _active_storages.append(storage)
         return storage  # type: ignore[return-value]
 
     # SQLite mode (unified config - shared file-based storage)
     if config.use_sqlite or force_sqlite:
         from neural_memory.unified_config import get_shared_storage
 
-        return await get_shared_storage(config.current_brain)  # type: ignore[return-value]
+        storage = await get_shared_storage(config.current_brain)
+        _active_storages.append(storage)
+        return storage  # type: ignore[return-value]
 
     # Legacy JSON mode
     brain_path = config.get_brain_path()

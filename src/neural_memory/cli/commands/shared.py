@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import Annotated
 
 import typer
 
-from neural_memory.cli._helpers import get_config
+from neural_memory.cli._helpers import get_config, run_async
 from neural_memory.cli.storage import PersistentStorage
 
 shared_app = typer.Typer(help="Real-time brain sharing configuration")
@@ -147,7 +146,7 @@ def shared_test() -> None:
             return {"success": False, "error": str(e)}
 
     typer.echo(f"Testing connection to {config.shared.server_url}...")
-    result = asyncio.run(_test())
+    result = run_async(_test())
 
     if result["success"]:
         typer.secho("[OK] Connection successful!", fg=typer.colors.GREEN)
@@ -236,7 +235,7 @@ def shared_sync(
         return sync_result
 
     typer.echo(f"Syncing brain '{config.current_brain}' with {config.shared.server_url}...")
-    result = asyncio.run(_sync())
+    result = run_async(_sync())
 
     if json_output:
         typer.echo(json.dumps(result, indent=2))

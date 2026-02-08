@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from datetime import datetime
 from typing import Annotated
 
 import typer
 
-from neural_memory.cli._helpers import get_config, get_storage
+from neural_memory.cli._helpers import get_config, get_storage, run_async
 from neural_memory.core.memory_types import Priority, TypedMemory, suggest_memory_type
 
 
@@ -45,7 +44,7 @@ def quick_recall(
         typer.echo(result.context)
         typer.secho(f"\n[confidence: {result.confidence:.2f}]", fg=typer.colors.BRIGHT_BLACK)
 
-    asyncio.run(_recall())
+    run_async(_recall())
 
 
 def quick_add(
@@ -94,7 +93,7 @@ def quick_add(
         typer.secho(f"+ {content[:60]}{'...' if len(content) > 60 else ''}", fg=typer.colors.GREEN)
         typer.secho(f"  [{mem_type.value}]", fg=typer.colors.BRIGHT_BLACK)
 
-    asyncio.run(_add())
+    run_async(_add())
 
 
 def show_last(
@@ -131,7 +130,7 @@ def show_last(
             typer.echo(f"{i}. {display}")
             typer.secho(f"   [{format_age(freshness.age_days)}]", fg=typer.colors.BRIGHT_BLACK)
 
-    asyncio.run(_last())
+    run_async(_last())
 
 
 def show_today() -> None:
@@ -171,7 +170,7 @@ def show_today() -> None:
 
             typer.echo(f"  {time_str}  {display}")
 
-    asyncio.run(_today())
+    run_async(_today())
 
 
 def mcp_config(
@@ -296,7 +295,7 @@ def export_brain_cmd(
         typer.echo(f"  Synapses: {len(snapshot.synapses)}")
         typer.echo(f"  Fibers: {len(snapshot.fibers)}")
 
-    asyncio.run(_export())
+    run_async(_export())
 
 
 def import_brain_cmd(
@@ -385,7 +384,7 @@ def import_brain_cmd(
             typer.echo(f"  Synapses: {len(incoming_snapshot.synapses)}")
             typer.echo(f"  Fibers: {len(incoming_snapshot.fibers)}")
 
-    asyncio.run(_import())
+    run_async(_import())
 
 
 def register(app: typer.Typer) -> None:
