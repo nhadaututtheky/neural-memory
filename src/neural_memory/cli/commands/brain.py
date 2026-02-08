@@ -391,6 +391,95 @@ def _display_health(result: dict) -> None:
         typer.echo(f"  [!!] Stale/Ancient: {f['stale'] + f['ancient']}")
 
 
+@brain_app.command("transplant")
+def brain_transplant(
+    source: Annotated[str, typer.Argument(help="Source brain name to transplant from")],
+    tags: Annotated[list[str] | None, typer.Option("--tag", "-t", help="Filter by tags")] = None,
+    memory_types: Annotated[
+        list[str] | None, typer.Option("--type", help="Filter by memory types")
+    ] = None,
+    strategy: Annotated[
+        str, typer.Option("--strategy", "-s", help="Conflict resolution strategy")
+    ] = "prefer_local",
+    json_output: Annotated[bool, typer.Option("--json", "-j", help="Output as JSON")] = False,
+) -> None:
+    """Transplant memories from another brain into the current brain.
+
+    Examples:
+        nmem brain transplant expert-brain --tag python --tag api
+        nmem brain transplant work-brain --type fact --type decision
+        nmem brain transplant shared --strategy prefer_recent
+    """
+
+    async def _transplant() -> dict:
+        from neural_memory.engine.brain_transplant import TransplantFilter, transplant
+        from neural_memory.engine.merge import ConflictStrategy
+
+        config = get_config()
+        target_name = config.current_brain
+        target_path = config.get_brain_path(target_name)
+        source_path = config.get_brain_path(source)
+
+        if not source_path.exists():
+            return {"error": f"Source brain '{source}' not found."}
+        if not target_path.exists():
+            return {"error": f"Target brain '{target_name}' not found."}
+
+        source_storage = await PersistentStorage.load(source_path)
+        target_storage = await PersistentStorage.load(target_path)
+
+        source_brain = await source_storage.get_brain(source_storage._current_brain_id)
+        target_brain = await target_storage.get_brain(target_storage._current_brain_id)
+
+        if not source_brain:
+            return {"error": f"Source brain '{source}' has no data."}
+        if not target_brain:
+            return {"error": f"Target brain '{target_name}' has no data."}
+
+        try:
+            merge_strategy = ConflictStrategy(strategy)
+        except ValueError:
+            valid = [s.value for s in ConflictStrategy]
+            return {"error": f"Unknown strategy '{strategy}'. Use: {valid}"}
+
+        filt = TransplantFilter(
+            tags=frozenset(tags) if tags else None,
+            memory_types=frozenset(memory_types) if memory_types else None,
+        )
+
+        result = await transplant(
+            source_storage=source_storage,
+            target_storage=target_storage,
+            source_brain_id=source_brain.id,
+            target_brain_id=target_brain.id,
+            filt=filt,
+            strategy=merge_strategy,
+        )
+
+        return {
+            "success": True,
+            "neurons_transplanted": result.neurons_transplanted,
+            "synapses_transplanted": result.synapses_transplanted,
+            "fibers_transplanted": result.fibers_transplanted,
+            "source": source,
+            "target": target_name,
+        }
+
+    result = run_async(_transplant())
+    if json_output:
+        output_result(result, True)
+    elif "error" in result:
+        typer.secho(result["error"], fg=typer.colors.RED)
+    else:
+        typer.secho(
+            f"Transplanted from '{result['source']}' → '{result['target']}'",
+            fg=typer.colors.GREEN,
+        )
+        typer.echo(f"  Neurons: {result['neurons_transplanted']}")
+        typer.echo(f"  Synapses: {result['synapses_transplanted']}")
+        typer.echo(f"  Fibers: {result['fibers_transplanted']}")
+
+
 @brain_app.command("health")
 def brain_health(
     name: Annotated[

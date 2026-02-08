@@ -4,7 +4,7 @@
 > Every feature passes the VISION.md 4-question test + brain test.
 > ZERO LLM dependency — pure algorithmic, regex, graph-based.
 
-**Current state**: v0.20.0 (1105 tests, schema v10).
+**Current state**: v1.0.0 shipped (schema v11). All versions complete.
 v0.14.0 shipped: relation extraction, tag origin, confirmatory boost.
 v0.15.0 shipped: associative inference, co-activation persistence, tag normalization.
 v0.16.0 shipped: emotional valence, sentiment extraction, FELT synapses, emotional decay.
@@ -730,10 +730,11 @@ Enhance `extraction/router.py` to route:
 
 ---
 
-## v1.0.0 — Portable Consciousness v2
+## v1.0.0 — Portable Consciousness v2 ✅
 
 > Marketplace foundations: brains become products.
 
+**Status**: ✅ Shipped (2026-02-09). Schema v11, 16 MCP tools.
 **Depends on**: v0.17.0 (diagnostics for brain quality rating), all prior versions for stable API surface.
 
 ### Features
@@ -806,12 +807,12 @@ v0.14.0 ✅ (Relation Extraction)
 
 v0.16.0 ✅ (Emotional Valence)     ← shipped
 v0.17.0 ✅ (Brain Diagnostics)     ← shipped
-  └──→ v1.0.0 (Portable Consciousness v2)
+  └──→ v1.0.0 ✅ (Portable Consciousness v2)
 ```
 
-**All pre-v1.0 versions shipped.** Only v1.0.0 remains.
+**All versions shipped.** Roadmap complete.
 
-**Critical path**: v0.14.0 ✅ → v0.15.0 ✅ → v0.20.0 ✅ → v1.0.0
+**Critical path**: v0.14.0 ✅ → v0.15.0 ✅ → v0.20.0 ✅ → v1.0.0 ✅
 
 ---
 
@@ -827,7 +828,7 @@ v0.17.0 ✅ (Brain Diagnostics)     ← shipped
 | G4 | No brain health metrics or diagnostics | Flying blind | **v0.17.0** ✅ |
 | G5 | No enrichment or dream consolidation | Only PRUNE/MERGE/SUMMARIZE/MATURE/INFER | **v0.20.0** ✅ |
 | G6 | "Why?" and "When?" queries can't trace chains | Router detects intent, no traversal | **v0.19.0** ✅ |
-| G7 | No brain versioning or partial transplant | Export/import only (all-or-nothing) | **v1.0.0** |
+| G7 | No brain versioning or partial transplant | Export/import only (all-or-nothing) | **v1.0.0** ✅ |
 | G8 | No habit/workflow detection from repeated actions | Frequency tracked but sequences ignored | **v0.20.0** ✅ |
 
 ### Expert 4's 3 New Gaps
@@ -889,7 +890,7 @@ Ranked by impact × feasibility:
 | 4 | **v0.16.0** ✅ | Medium | High | Shipped. Emotional valence, sentiment extraction, FELT synapses, emotional decay. |
 | 5 | **v0.19.0** ✅ | High | Medium | Shipped. Temporal reasoning, causal/event traversal, pipeline integration. |
 | 6 | **v0.20.0** ✅ | High | Medium | Shipped. DREAM + ENRICH + habit learning + workflow suggestions + nmem update. |
-| 7 | **v1.0.0** | Critical | Low | Largest scope. Marketplace foundations. Needs everything else stable. |
+| 7 | **v1.0.0** ✅ | Critical | Low | Shipped. Brain versioning, transplant, quality badge, embedding layer, LLM extraction. |
 
 ### Recommended execution order
 
@@ -897,7 +898,7 @@ Ranked by impact × feasibility:
 v0.14.0 ✅ → v0.15.0 ✅ → v0.16.0 ✅ → v0.17.0 ✅ → v0.19.0 ✅ → v0.20.0 ✅ → v1.0.0
 ```
 
-All pre-v1.0 versions shipped. Only v1.0.0 remains.
+All versions shipped. Roadmap complete.
 
 ---
 
@@ -919,4 +920,4 @@ Starting from 1105 tests (v0.20.0) → targeting ~1,455+ tests at v1.0.0.
 ---
 
 *See [VISION.md](VISION.md) for the north star guiding all decisions.*
-*Last updated: 2026-02-09 (v0.20.0 shipped: habitual recall + nmem update)*
+*Last updated: 2026-02-09 (v1.0.0 shipped: brain versioning, transplant, quality badge, optional embeddings, optional LLM extraction)*

@@ -128,6 +128,8 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
             "nmem_recap": self._recap,
             "nmem_health": self._health,
             "nmem_habits": self._habits,
+            "nmem_version": self._version,
+            "nmem_transplant": self._transplant,
         }
         handler = dispatch.get(name)
         if handler:
@@ -501,6 +503,155 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
             return {"cleared": cleared, "message": f"Cleared {cleared} learned habits"}
 
         return {"error": f"Unknown action: {action}"}
+
+    async def _version(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Brain version control operations."""
+        storage = await self.get_storage()
+        brain = await storage.get_brain(storage._current_brain_id)
+        if not brain:
+            return {"error": "No brain configured"}
+
+        from neural_memory.engine.brain_versioning import VersioningEngine
+
+        engine = VersioningEngine(storage)
+        action = args.get("action", "list")
+
+        if action == "create":
+            name = args.get("name")
+            if not name:
+                return {"error": "Version name is required for create"}
+            description = args.get("description", "")
+            try:
+                version = await engine.create_version(brain.id, name, description)
+            except ValueError as e:
+                return {"error": str(e)}
+            return {
+                "success": True,
+                "version_id": version.id,
+                "version_name": version.version_name,
+                "version_number": version.version_number,
+                "neuron_count": version.neuron_count,
+                "synapse_count": version.synapse_count,
+                "fiber_count": version.fiber_count,
+                "message": f"Created version '{name}' (#{version.version_number})",
+            }
+
+        elif action == "list":
+            limit = args.get("limit", 20)
+            versions = await engine.list_versions(brain.id, limit=limit)
+            return {
+                "versions": [
+                    {
+                        "id": v.id,
+                        "name": v.version_name,
+                        "number": v.version_number,
+                        "description": v.description,
+                        "neuron_count": v.neuron_count,
+                        "synapse_count": v.synapse_count,
+                        "fiber_count": v.fiber_count,
+                        "created_at": v.created_at.isoformat(),
+                    }
+                    for v in versions
+                ],
+                "count": len(versions),
+            }
+
+        elif action == "rollback":
+            version_id = args.get("version_id")
+            if not version_id:
+                return {"error": "version_id is required for rollback"}
+            try:
+                rollback_v = await engine.rollback(brain.id, version_id)
+            except ValueError as e:
+                return {"error": str(e)}
+            return {
+                "success": True,
+                "rollback_version_id": rollback_v.id,
+                "rollback_version_name": rollback_v.version_name,
+                "neuron_count": rollback_v.neuron_count,
+                "synapse_count": rollback_v.synapse_count,
+                "fiber_count": rollback_v.fiber_count,
+                "message": f"Rolled back to '{rollback_v.version_name}'",
+            }
+
+        elif action == "diff":
+            from_id = args.get("from_version")
+            to_id = args.get("to_version")
+            if not from_id or not to_id:
+                return {"error": "from_version and to_version are required for diff"}
+            try:
+                diff = await engine.diff(brain.id, from_id, to_id)
+            except ValueError as e:
+                return {"error": str(e)}
+            return {
+                "summary": diff.summary,
+                "neurons_added": len(diff.neurons_added),
+                "neurons_removed": len(diff.neurons_removed),
+                "neurons_modified": len(diff.neurons_modified),
+                "synapses_added": len(diff.synapses_added),
+                "synapses_removed": len(diff.synapses_removed),
+                "synapses_weight_changed": len(diff.synapses_weight_changed),
+                "fibers_added": len(diff.fibers_added),
+                "fibers_removed": len(diff.fibers_removed),
+            }
+
+        return {"error": f"Unknown action: {action}"}
+
+    async def _transplant(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Transplant memories from another brain."""
+        storage = await self.get_storage()
+        brain = await storage.get_brain(storage._current_brain_id)
+        if not brain:
+            return {"error": "No brain configured"}
+
+        source_brain_name = args.get("source_brain")
+        if not source_brain_name:
+            return {"error": "source_brain is required"}
+
+        # Find source brain
+        source_brain = await storage.find_brain_by_name(source_brain_name)
+        if source_brain is None:
+            return {"error": f"Source brain '{source_brain_name}' not found"}
+
+        from neural_memory.engine.brain_transplant import TransplantFilter, transplant
+        from neural_memory.engine.merge import ConflictStrategy
+
+        tags = args.get("tags")
+        memory_types = args.get("memory_types")
+        strategy_str = args.get("strategy", "prefer_local")
+
+        try:
+            strategy = ConflictStrategy(strategy_str)
+        except ValueError:
+            return {"error": f"Invalid strategy: {strategy_str}"}
+
+        filt = TransplantFilter(
+            tags=frozenset(tags) if tags else None,
+            memory_types=frozenset(memory_types) if memory_types else None,
+        )
+
+        old_brain_id = storage._current_brain_id
+        try:
+            storage.set_brain(source_brain.id)
+            result = await transplant(
+                source_storage=storage,
+                target_storage=storage,
+                source_brain_id=source_brain.id,
+                target_brain_id=brain.id,
+                filt=filt,
+                strategy=strategy,
+            )
+        finally:
+            storage.set_brain(old_brain_id)
+
+        return {
+            "success": True,
+            "fibers_transplanted": result.fibers_transplanted,
+            "neurons_transplanted": result.neurons_transplanted,
+            "synapses_transplanted": result.synapses_transplanted,
+            "merge_summary": result.merge_report.summary(),
+            "message": f"Transplanted from '{source_brain_name}': {result.fibers_transplanted} fibers",
+        }
 
     async def _record_tool_action(self, action_type: str, context: str = "") -> None:
         """Record an action event for habit learning (fire-and-forget)."""

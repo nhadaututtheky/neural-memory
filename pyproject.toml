@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "neural-memory"
-version = "0.20.0"
+version = "1.0.0"
 description = "Reflex-based memory system for AI agents - retrieval through activation, not search"
 readme = "README.md"
 license = "MIT"
@@ -22,7 +22,7 @@ keywords = [
     "llm",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
@@ -75,6 +75,12 @@ graphiti = [
 ]
 llamaindex = [
     "llama-index-core>=0.10.0",
+]
+embeddings = [
+    "sentence-transformers>=2.0",
+]
+embeddings-openai = [
+    "openai>=1.0",
 ]
 integration = [
     "neural-memory[chromadb,mem0]",

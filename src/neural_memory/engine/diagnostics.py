@@ -43,6 +43,22 @@ class DiagnosticWarning:
 
 
 @dataclass(frozen=True)
+class QualityBadge:
+    """Quality badge for marketplace eligibility.
+
+    Computed from brain health diagnostics.
+    Stored in Brain.metadata["_quality_badge"] when computed.
+    """
+
+    grade: str
+    purity_score: float
+    marketplace_eligible: bool
+    badge_label: str
+    computed_at: datetime
+    component_summary: dict[str, float]
+
+
+@dataclass(frozen=True)
 class BrainHealthReport:
     """Complete brain health diagnostics report.
 
@@ -383,6 +399,46 @@ class DiagnosticsEngine:
                 recommendations.append("Normalize tags to reduce semantic drift.")
 
         return warnings, recommendations
+
+    # ── Quality badge ────────────────────────────────────────────
+
+    async def compute_quality_badge(self, brain_id: str) -> QualityBadge:
+        """Compute a quality badge for the brain.
+
+        Runs full diagnostics and maps the result to a marketplace-ready badge.
+
+        Args:
+            brain_id: ID of the brain to evaluate
+
+        Returns:
+            QualityBadge with grade, purity score, and eligibility
+        """
+        report = await self.analyze(brain_id)
+
+        badge_labels = {
+            "A": "A - Excellent",
+            "B": "B - Good",
+            "C": "C - Fair",
+            "D": "D - Poor",
+            "F": "F - Failing",
+        }
+
+        return QualityBadge(
+            grade=report.grade,
+            purity_score=report.purity_score,
+            marketplace_eligible=report.grade in ("A", "B"),
+            badge_label=badge_labels.get(report.grade, f"{report.grade} - Unknown"),
+            computed_at=datetime.now(),
+            component_summary={
+                "connectivity": report.connectivity,
+                "diversity": report.diversity,
+                "freshness": report.freshness,
+                "consolidation_ratio": report.consolidation_ratio,
+                "orphan_rate": report.orphan_rate,
+                "activation_efficiency": report.activation_efficiency,
+                "recall_confidence": report.recall_confidence,
+            },
+        )
 
     # ── Empty brain helper ───────────────────────────────────────
 

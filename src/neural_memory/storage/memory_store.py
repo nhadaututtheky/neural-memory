@@ -15,6 +15,7 @@ from neural_memory.core.memory_types import TypedMemory
 from neural_memory.core.neuron import Neuron, NeuronState, NeuronType
 from neural_memory.core.project import Project
 from neural_memory.core.synapse import Synapse, SynapseType
+from neural_memory.engine.brain_versioning import BrainVersion
 from neural_memory.storage.base import NeuralStorage
 from neural_memory.storage.memory_brain_ops import InMemoryBrainMixin
 from neural_memory.storage.memory_collections import InMemoryCollectionsMixin
@@ -37,6 +38,7 @@ class InMemoryStorage(InMemoryCollectionsMixin, InMemoryBrainMixin, NeuralStorag
         self._brains: dict[str, Brain] = {}
         self._co_activations: dict[str, list[dict[str, Any]]] = defaultdict(list)
         self._action_events: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        self._versions: dict[str, dict[str, tuple[BrainVersion, str]]] = defaultdict(dict)
         self._current_brain_id: str | None = None
 
     def set_brain(self, brain_id: str) -> None:
@@ -594,6 +596,50 @@ class InMemoryStorage(InMemoryCollectionsMixin, InMemoryBrainMixin, NeuralStorag
         ]
         return original_count - len(self._action_events[brain_id])
 
+    # ========== Version Operations ==========
+
+    async def save_version(
+        self,
+        brain_id: str,
+        version: BrainVersion,
+        snapshot_json: str,
+    ) -> None:
+        # Check unique name constraint
+        for existing_version, _ in self._versions[brain_id].values():
+            if existing_version.version_name == version.version_name:
+                raise ValueError(
+                    f"Version name '{version.version_name}' already exists for brain {brain_id}"
+                )
+        self._versions[brain_id][version.id] = (version, snapshot_json)
+
+    async def get_version(
+        self,
+        brain_id: str,
+        version_id: str,
+    ) -> tuple[BrainVersion, str] | None:
+        return self._versions[brain_id].get(version_id)
+
+    async def list_versions(
+        self,
+        brain_id: str,
+        limit: int = 20,
+    ) -> list[BrainVersion]:
+        versions = [v for v, _ in self._versions[brain_id].values()]
+        versions.sort(key=lambda v: v.version_number, reverse=True)
+        return versions[:limit]
+
+    async def get_next_version_number(self, brain_id: str) -> int:
+        if not self._versions[brain_id]:
+            return 1
+        max_num = max(v.version_number for v, _ in self._versions[brain_id].values())
+        return max_num + 1
+
+    async def delete_version(self, brain_id: str, version_id: str) -> bool:
+        if version_id in self._versions[brain_id]:
+            del self._versions[brain_id][version_id]
+            return True
+        return False
+
     # ========== Cleanup ==========
 
     async def clear(self, brain_id: str) -> None:
@@ -611,3 +657,4 @@ class InMemoryStorage(InMemoryCollectionsMixin, InMemoryBrainMixin, NeuralStorag
         self._co_activations[brain_id].clear()
         self._action_events[brain_id].clear()
         self._brains.pop(brain_id, None)
+        # Note: versions are NOT cleared — they survive rollbacks (matches SQLite behavior)

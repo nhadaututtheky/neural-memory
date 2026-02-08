@@ -5,6 +5,48 @@ All notable changes to NeuralMemory are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-02-09
+
+### Added
+
+- **Brain Versioning** — Snapshot, rollback, and diff brain state (schema v11)
+  - `BrainVersion` and `VersionDiff` frozen dataclasses
+  - `VersioningEngine` with create, list, rollback, diff operations
+  - `brain_versions` table with composite PK (brain_id, id), version numbering, SHA-256 snapshot hash
+  - SQLiteVersioningMixin + InMemoryStorage support
+  - `nmem version create|list|rollback|diff` CLI commands
+  - `nmem_version` MCP tool (actions: create, list, rollback, diff)
+- **Partial Brain Transplant** — Extract and merge filtered subgraphs between brains
+  - `TransplantFilter` (tags, memory_types, neuron_types, min_salience)
+  - `extract_subgraph()` pure function: filter fibers → collect neurons → filter synapses (both endpoints required)
+  - `transplant()` async function: export → extract → merge → reimport with conflict resolution
+  - `nmem brain transplant` CLI command with `--tag`, `--type`, `--strategy` options
+  - `nmem_transplant` MCP tool
+- **Brain Quality Badge** — Grade A-F derived from BrainHealthReport
+  - `QualityBadge` frozen dataclass (grade, purity_score, marketplace_eligible, badge_label)
+  - `compute_quality_badge()` method on `DiagnosticsEngine`
+  - Marketplace eligibility threshold: grade B or above
+- **Optional Embedding Layer** — Semantic similarity without mandatory LLM dependency (OFF by default)
+  - `EmbeddingProvider` ABC with embed, embed_batch, dimension, cosine similarity
+  - `SentenceTransformerEmbedding` — lazy-import, `all-MiniLM-L6-v2` default (384 dims)
+  - `OpenAIEmbedding` — `text-embedding-3-small` default (1536 dims)
+  - `EmbeddingConfig` frozen dataclass
+  - 5 new BrainConfig fields: `embedding_enabled`, `embedding_provider`, `embedding_model`, `embedding_similarity_threshold`, `embedding_activation_boost`
+  - Optional deps: `pip install neural-memory[embeddings]` or `neural-memory[embeddings-openai]`
+- **Optional LLM Extraction** — Enhanced relation extraction beyond regex (OFF by default)
+  - `ExtractionProvider` ABC with extract_relations, extract_entities
+  - `ExtractionConfig` frozen dataclass (enabled=False, fallback_to_regex=True)
+  - `RelationCandidate` frozen dataclass for extracted relations
+  - `deduplicate_relations()` — case-insensitive dedup of LLM results against regex results
+
+### Changed
+
+- Version bumped to 1.0.0 — Production/Stable
+- SQLite schema version 10 → 11
+- `__all__` now exports `BrainVersion`, `VersionDiff`, `VersioningEngine`, `TransplantFilter`, `TransplantResult`
+- MCP tools expanded from 14 to 16 (nmem_version, nmem_transplant)
+- Classifier updated to "Development Status :: 5 - Production/Stable"
+
 ## [0.20.0] - 2026-02-09
 
 ### Added
@@ -368,6 +410,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.0.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v1.0.0
+[0.20.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v0.20.0
 [0.19.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v0.19.0
 [0.17.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v0.17.0
 [0.16.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v0.16.0

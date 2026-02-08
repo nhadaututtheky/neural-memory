@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 # ── Migrations ──────────────────────────────────────────────────────
 # Each entry maps (from_version -> to_version) with a list of SQL statements.
@@ -151,6 +151,27 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
         "CREATE INDEX IF NOT EXISTS idx_action_events_type ON action_events(brain_id, action_type)",
         "CREATE INDEX IF NOT EXISTS idx_action_events_session ON action_events(brain_id, session_id)",
         "CREATE INDEX IF NOT EXISTS idx_action_events_created ON action_events(brain_id, created_at)",
+    ],
+    (10, 11): [
+        # Brain versioning — point-in-time snapshots
+        """CREATE TABLE IF NOT EXISTS brain_versions (
+            id TEXT NOT NULL,
+            brain_id TEXT NOT NULL,
+            version_name TEXT NOT NULL,
+            version_number INTEGER NOT NULL,
+            description TEXT DEFAULT '',
+            neuron_count INTEGER DEFAULT 0,
+            synapse_count INTEGER DEFAULT 0,
+            fiber_count INTEGER DEFAULT 0,
+            snapshot_hash TEXT NOT NULL,
+            snapshot_data TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            metadata TEXT DEFAULT '{}',
+            PRIMARY KEY (brain_id, id),
+            UNIQUE (brain_id, version_name)
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_brain_versions_number ON brain_versions(brain_id, version_number DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_brain_versions_created ON brain_versions(brain_id, created_at DESC)",
     ],
 }
 
@@ -401,4 +422,24 @@ CREATE TABLE IF NOT EXISTS action_events (
 CREATE INDEX IF NOT EXISTS idx_action_events_type ON action_events(brain_id, action_type);
 CREATE INDEX IF NOT EXISTS idx_action_events_session ON action_events(brain_id, session_id);
 CREATE INDEX IF NOT EXISTS idx_action_events_created ON action_events(brain_id, created_at);
+
+-- Brain versioning snapshots
+CREATE TABLE IF NOT EXISTS brain_versions (
+    id TEXT NOT NULL,
+    brain_id TEXT NOT NULL,
+    version_name TEXT NOT NULL,
+    version_number INTEGER NOT NULL,
+    description TEXT DEFAULT '',
+    neuron_count INTEGER DEFAULT 0,
+    synapse_count INTEGER DEFAULT 0,
+    fiber_count INTEGER DEFAULT 0,
+    snapshot_hash TEXT NOT NULL,
+    snapshot_data TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    metadata TEXT DEFAULT '{}',
+    PRIMARY KEY (brain_id, id),
+    UNIQUE (brain_id, version_name)
+);
+CREATE INDEX IF NOT EXISTS idx_brain_versions_number ON brain_versions(brain_id, version_number DESC);
+CREATE INDEX IF NOT EXISTS idx_brain_versions_created ON brain_versions(brain_id, created_at DESC);
 """

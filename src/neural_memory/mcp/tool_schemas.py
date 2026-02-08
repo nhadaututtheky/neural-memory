@@ -347,4 +347,79 @@ def get_tool_schemas() -> list[dict[str, Any]]:
                 "required": ["action"],
             },
         },
+        {
+            "name": "nmem_version",
+            "description": "Brain version control — create snapshots, list versions, rollback, and diff. Use to checkpoint brain state before changes or restore previous states.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["create", "list", "rollback", "diff"],
+                        "description": "create=snapshot current state, list=show versions, rollback=restore version, diff=compare versions",
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Version name (required for create)",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Version description (optional for create)",
+                    },
+                    "version_id": {
+                        "type": "string",
+                        "description": "Version ID (required for rollback)",
+                    },
+                    "from_version": {
+                        "type": "string",
+                        "description": "Source version ID (required for diff)",
+                    },
+                    "to_version": {
+                        "type": "string",
+                        "description": "Target version ID (required for diff)",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100,
+                        "description": "Max versions to list (default: 20)",
+                    },
+                },
+                "required": ["action"],
+            },
+        },
+        {
+            "name": "nmem_transplant",
+            "description": "Transplant memories from one brain to another. Extract a filtered subgraph (by tags, memory types) and merge into the current brain.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "source_brain": {
+                        "type": "string",
+                        "description": "Name of the source brain to extract from",
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Tags to filter — fibers matching ANY tag will be included",
+                    },
+                    "memory_types": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Memory types to filter (fact, decision, etc.)",
+                    },
+                    "strategy": {
+                        "type": "string",
+                        "enum": [
+                            "prefer_local",
+                            "prefer_remote",
+                            "prefer_recent",
+                            "prefer_stronger",
+                        ],
+                        "description": "Conflict resolution strategy (default: prefer_local)",
+                    },
+                },
+                "required": ["source_brain"],
+            },
+        },
     ]

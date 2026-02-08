@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from neural_memory.core.fiber import Fiber
     from neural_memory.core.neuron import Neuron, NeuronState, NeuronType
     from neural_memory.core.synapse import Synapse, SynapseType
+    from neural_memory.engine.brain_versioning import BrainVersion
     from neural_memory.engine.memory_stages import MaturationRecord, MemoryStage
 
 
@@ -687,6 +688,78 @@ class NeuralStorage(ABC):
 
         Returns:
             Number of events pruned
+        """
+        raise NotImplementedError
+
+    # ========== Version Operations ==========
+
+    async def save_version(
+        self,
+        brain_id: str,
+        version: BrainVersion,
+        snapshot_json: str,
+    ) -> None:
+        """Save a brain version with its snapshot data.
+
+        Args:
+            brain_id: Brain ID
+            version: The version metadata
+            snapshot_json: Serialized snapshot JSON
+        """
+        raise NotImplementedError
+
+    async def get_version(
+        self,
+        brain_id: str,
+        version_id: str,
+    ) -> tuple[BrainVersion, str] | None:
+        """Get a version and its snapshot JSON by ID.
+
+        Args:
+            brain_id: Brain ID
+            version_id: Version ID
+
+        Returns:
+            Tuple of (BrainVersion, snapshot_json) or None
+        """
+        raise NotImplementedError
+
+    async def list_versions(
+        self,
+        brain_id: str,
+        limit: int = 20,
+    ) -> list[BrainVersion]:
+        """List versions for a brain, most recent first.
+
+        Args:
+            brain_id: Brain ID
+            limit: Maximum versions to return
+
+        Returns:
+            List of BrainVersion, newest first
+        """
+        raise NotImplementedError
+
+    async def get_next_version_number(self, brain_id: str) -> int:
+        """Get the next version number for a brain.
+
+        Args:
+            brain_id: Brain ID
+
+        Returns:
+            Next auto-incrementing version number
+        """
+        raise NotImplementedError
+
+    async def delete_version(self, brain_id: str, version_id: str) -> bool:
+        """Delete a specific version.
+
+        Args:
+            brain_id: Brain ID
+            version_id: Version ID
+
+        Returns:
+            True if deleted, False if not found
         """
         raise NotImplementedError
 

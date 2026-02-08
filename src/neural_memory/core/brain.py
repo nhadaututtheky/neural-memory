@@ -54,6 +54,11 @@ class BrainConfig:
     habit_min_frequency: int = 3
     habit_suggestion_min_weight: float = 0.8
     habit_suggestion_min_count: int = 5
+    embedding_enabled: bool = False
+    embedding_provider: str = "sentence_transformer"
+    embedding_model: str = "all-MiniLM-L6-v2"
+    embedding_similarity_threshold: float = 0.7
+    embedding_activation_boost: float = 0.15
 
     def with_updates(self, **kwargs: Any) -> BrainConfig:
         """Create a new config with updated values."""
@@ -123,6 +128,15 @@ class BrainConfig:
             ),
             habit_suggestion_min_count=kwargs.get(
                 "habit_suggestion_min_count", self.habit_suggestion_min_count
+            ),
+            embedding_enabled=kwargs.get("embedding_enabled", self.embedding_enabled),
+            embedding_provider=kwargs.get("embedding_provider", self.embedding_provider),
+            embedding_model=kwargs.get("embedding_model", self.embedding_model),
+            embedding_similarity_threshold=kwargs.get(
+                "embedding_similarity_threshold", self.embedding_similarity_threshold
+            ),
+            embedding_activation_boost=kwargs.get(
+                "embedding_activation_boost", self.embedding_activation_boost
             ),
         )
 

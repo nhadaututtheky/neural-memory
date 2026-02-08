@@ -28,11 +28,13 @@ from neural_memory.cli.commands.brain import brain_app  # noqa: E402
 from neural_memory.cli.commands.habits import habits_app  # noqa: E402
 from neural_memory.cli.commands.project import project_app  # noqa: E402
 from neural_memory.cli.commands.shared import shared_app  # noqa: E402
+from neural_memory.cli.commands.version import version_app  # noqa: E402
 
 app.add_typer(brain_app, name="brain")
 app.add_typer(project_app, name="project")
 app.add_typer(shared_app, name="shared")
 app.add_typer(habits_app, name="habits")
+app.add_typer(version_app, name="version")
 
 # Register top-level commands
 from neural_memory.cli.commands import (  # noqa: E402

@@ -24,6 +24,7 @@ from neural_memory.storage.sqlite_schema import (
 )
 from neural_memory.storage.sqlite_synapses import SQLiteSynapseMixin
 from neural_memory.storage.sqlite_typed import SQLiteTypedMemoryMixin
+from neural_memory.storage.sqlite_versioning import SQLiteVersioningMixin
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ class SQLiteStorage(
     SQLiteMaturationMixin,
     SQLiteActionLogMixin,
     SQLiteCoActivationMixin,
+    SQLiteVersioningMixin,
     SQLiteBrainMixin,
     NeuralStorage,
 ):
