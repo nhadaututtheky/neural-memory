@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime
 from typing import Any, Literal
+from uuid import uuid4
 
 import networkx as nx
 
@@ -34,6 +35,7 @@ class InMemoryStorage(InMemoryCollectionsMixin, InMemoryBrainMixin, NeuralStorag
         self._typed_memories: dict[str, dict[str, TypedMemory]] = defaultdict(dict)
         self._projects: dict[str, dict[str, Project]] = defaultdict(dict)
         self._brains: dict[str, Brain] = {}
+        self._co_activations: dict[str, list[dict[str, Any]]] = defaultdict(list)
         self._current_brain_id: str | None = None
 
     def set_brain(self, brain_id: str) -> None:
@@ -467,6 +469,60 @@ class InMemoryStorage(InMemoryCollectionsMixin, InMemoryBrainMixin, NeuralStorag
             "newest_memory": newest_memory,
         }
 
+    # ========== Co-Activation Operations ==========
+
+    async def record_co_activation(
+        self,
+        neuron_a: str,
+        neuron_b: str,
+        binding_strength: float,
+        source_anchor: str | None = None,
+    ) -> str:
+        brain_id = self._get_brain_id()
+        event_id = str(uuid4())
+        a, b = (neuron_a, neuron_b) if neuron_a < neuron_b else (neuron_b, neuron_a)
+        self._co_activations[brain_id].append({
+            "id": event_id,
+            "neuron_a": a,
+            "neuron_b": b,
+            "binding_strength": binding_strength,
+            "source_anchor": source_anchor,
+            "created_at": datetime.utcnow(),
+        })
+        return event_id
+
+    async def get_co_activation_counts(
+        self,
+        since: datetime | None = None,
+        min_count: int = 1,
+    ) -> list[tuple[str, str, int, float]]:
+        brain_id = self._get_brain_id()
+        pair_counts: dict[tuple[str, str], list[float]] = defaultdict(list)
+
+        for event in self._co_activations[brain_id]:
+            if since is not None and event["created_at"] < since:
+                continue
+            pair = (event["neuron_a"], event["neuron_b"])
+            pair_counts[pair].append(event["binding_strength"])
+
+        results: list[tuple[str, str, int, float]] = []
+        for (a, b), strengths in pair_counts.items():
+            count = len(strengths)
+            if count >= min_count:
+                avg_strength = sum(strengths) / count
+                results.append((a, b, count, avg_strength))
+
+        results.sort(key=lambda x: x[2], reverse=True)
+        return results
+
+    async def prune_co_activations(self, older_than: datetime) -> int:
+        brain_id = self._get_brain_id()
+        original_count = len(self._co_activations[brain_id])
+        self._co_activations[brain_id] = [
+            e for e in self._co_activations[brain_id] if e["created_at"] >= older_than
+        ]
+        return original_count - len(self._co_activations[brain_id])
+
     # ========== Cleanup ==========
 
     async def clear(self, brain_id: str) -> None:
@@ -481,4 +537,5 @@ class InMemoryStorage(InMemoryCollectionsMixin, InMemoryBrainMixin, NeuralStorag
         self._states[brain_id].clear()
         self._typed_memories[brain_id].clear()
         self._projects[brain_id].clear()
+        self._co_activations[brain_id].clear()
         self._brains.pop(brain_id, None)

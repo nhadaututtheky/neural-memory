@@ -586,6 +586,57 @@ class NeuralStorage(ABC):
         """
         return []
 
+    # ========== Co-Activation Operations ==========
+
+    async def record_co_activation(
+        self,
+        neuron_a: str,
+        neuron_b: str,
+        binding_strength: float,
+        source_anchor: str | None = None,
+    ) -> str:
+        """Record a co-activation event between two neurons.
+
+        Implementations must store pairs in canonical order (a < b).
+
+        Args:
+            neuron_a: First neuron ID
+            neuron_b: Second neuron ID
+            binding_strength: Strength of the co-activation (0.0-1.0)
+            source_anchor: Optional anchor neuron that triggered this
+
+        Returns:
+            The event ID
+        """
+        raise NotImplementedError
+
+    async def get_co_activation_counts(
+        self,
+        since: datetime | None = None,
+        min_count: int = 1,
+    ) -> list[tuple[str, str, int, float]]:
+        """Get aggregated co-activation counts for neuron pairs.
+
+        Args:
+            since: Only count events after this time
+            min_count: Minimum co-activation count to include
+
+        Returns:
+            List of (neuron_a, neuron_b, count, avg_binding_strength) tuples
+        """
+        raise NotImplementedError
+
+    async def prune_co_activations(self, older_than: datetime) -> int:
+        """Remove co-activation events older than the given time.
+
+        Args:
+            older_than: Remove events created before this time
+
+        Returns:
+            Number of events pruned
+        """
+        raise NotImplementedError
+
     # ========== Cleanup ==========
 
     @abstractmethod

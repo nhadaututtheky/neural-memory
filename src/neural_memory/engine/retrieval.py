@@ -395,6 +395,12 @@ class ReflexPipeline:
                         post_act,
                     )
 
+                    # Persist co-activation event for associative inference
+                    source_anchor = co.source_anchors[0] if co.source_anchors else None
+                    self._write_queue.defer_co_activation(
+                        a, b, co.binding_strength, source_anchor
+                    )
+
     async def _defer_reinforce_or_create(
         self,
         neuron_a: str,

@@ -30,6 +30,7 @@ class ConsolidationStrategy(StrEnum):
     MERGE = "merge"
     SUMMARIZE = "summarize"
     MATURE = "mature"
+    INFER = "infer"
     ALL = "all"
 
 
@@ -44,6 +45,9 @@ class ConsolidationConfig:
     merge_max_fiber_size: int = 50
     summarize_min_cluster_size: int = 3
     summarize_tag_overlap_threshold: float = 0.4
+    infer_co_activation_threshold: int = 3
+    infer_window_days: int = 7
+    infer_max_per_run: int = 50
 
 
 @dataclass(frozen=True)
@@ -70,6 +74,8 @@ class ConsolidationReport:
     summaries_created: int = 0
     stages_advanced: int = 0
     patterns_extracted: int = 0
+    synapses_inferred: int = 0
+    co_activations_pruned: int = 0
     merge_details: list[MergeDetail] = field(default_factory=list)
     dry_run: bool = False
 
@@ -83,6 +89,8 @@ class ConsolidationReport:
             f"  Fibers merged: {self.fibers_merged} -> {self.fibers_created} new",
             f"  Fibers removed: {self.fibers_removed}",
             f"  Summaries created: {self.summaries_created}",
+            f"  Synapses inferred: {self.synapses_inferred}",
+            f"  Co-activations pruned: {self.co_activations_pruned}",
             f"  Duration: {self.duration_ms:.1f}ms",
         ]
         if self.merge_details:
@@ -149,6 +157,9 @@ class ConsolidationEngine:
         if run_all or ConsolidationStrategy.MATURE in strategies:
             await self._mature(report, reference_time, dry_run)
 
+        if run_all or ConsolidationStrategy.INFER in strategies:
+            await self._infer(report, reference_time, dry_run)
+
         report.duration_ms = (time.perf_counter() - start) * 1000
         return report
 
@@ -169,6 +180,12 @@ class ConsolidationEngine:
         for synapse in all_synapses:
             # Apply time-based decay before checking weight threshold
             decayed = synapse.time_decay(reference_time=reference_time)
+
+            # Inferred synapses with low reinforcement decay 2x faster
+            is_inferred = synapse.metadata.get("_inferred", False)
+            if is_inferred and synapse.reinforced_count < 2:
+                decayed = decayed.decay(factor=0.5)
+
             should_prune = decayed.weight < self._config.prune_weight_threshold
 
             # Check inactivity
@@ -530,3 +547,146 @@ class ConsolidationEngine:
             await self._storage.add_neuron(pattern.concept_neuron)
             for synapse in pattern.synapses:
                 await self._storage.add_synapse(synapse)
+
+    async def _infer(
+        self,
+        report: ConsolidationReport,
+        reference_time: datetime,
+        dry_run: bool,
+    ) -> None:
+        """Run associative inference from co-activation data.
+
+        1. Query co-activation counts within the time window
+        2. Identify new + reinforcement candidates
+        3. Create CO_OCCURS synapses for new candidates
+        4. Reinforce existing synapses for reinforce candidates
+        5. Generate + apply associative tags
+        6. Prune old co-activation events
+        """
+        import logging
+
+        from neural_memory.engine.associative_inference import (
+            InferenceConfig,
+            create_inferred_synapse,
+            generate_associative_tags,
+            identify_candidates,
+        )
+        from neural_memory.utils.tag_normalizer import TagNormalizer
+
+        logger = logging.getLogger(__name__)
+
+        config = InferenceConfig(
+            co_activation_threshold=self._config.infer_co_activation_threshold,
+            co_activation_window_days=self._config.infer_window_days,
+            max_inferences_per_run=self._config.infer_max_per_run,
+        )
+
+        # 1. Query co-activation counts within time window
+        from datetime import timedelta
+
+        window_start = reference_time - timedelta(days=config.co_activation_window_days)
+        counts = await self._storage.get_co_activation_counts(
+            since=window_start,
+            min_count=config.co_activation_threshold,
+        )
+
+        if not counts:
+            return
+
+        # 2. Build existing synapse pairs set
+        all_synapses = await self._storage.get_synapses()
+        existing_pairs: set[tuple[str, str]] = set()
+        for syn in all_synapses:
+            existing_pairs.add((syn.source_id, syn.target_id))
+            existing_pairs.add((syn.target_id, syn.source_id))
+
+        new_candidates, reinforce_candidates = identify_candidates(
+            counts, existing_pairs, config
+        )
+
+        if dry_run:
+            report.synapses_inferred = len(new_candidates) + len(reinforce_candidates)
+            return
+
+        # 3. Create CO_OCCURS synapses for new candidates
+        for candidate in new_candidates:
+            synapse = create_inferred_synapse(candidate)
+            try:
+                await self._storage.add_synapse(synapse)
+                report.synapses_inferred += 1
+            except ValueError:
+                logger.debug("Inferred synapse already exists, skipping")
+
+        # 4. Reinforce existing synapses for reinforce candidates
+        for candidate in reinforce_candidates:
+            a, b = candidate.neuron_a, candidate.neuron_b
+            forward = await self._storage.get_synapses(source_id=a, target_id=b)
+            reverse = await self._storage.get_synapses(source_id=b, target_id=a)
+            existing = forward or reverse
+
+            if existing:
+                reinforced = existing[0].reinforce(delta=0.05)
+                try:
+                    await self._storage.update_synapse(reinforced)
+                    report.synapses_inferred += 1
+                except ValueError:
+                    logger.debug("Synapse reinforcement failed")
+
+        # 5. Generate and apply associative tags
+        all_candidates = new_candidates + reinforce_candidates
+        if all_candidates:
+            neuron_ids = set()
+            for c in all_candidates:
+                neuron_ids.add(c.neuron_a)
+                neuron_ids.add(c.neuron_b)
+
+            neurons = await self._storage.get_neurons_batch(list(neuron_ids))
+            content_map = {nid: n.content for nid, n in neurons.items()}
+
+            fibers = await self._storage.get_fibers(limit=10000)
+            existing_tags: set[str] = set()
+            for f in fibers:
+                existing_tags |= f.tags
+
+            assoc_tags = generate_associative_tags(all_candidates, content_map, existing_tags)
+
+            normalizer = TagNormalizer()
+            for atag in assoc_tags:
+                normalized_tag = normalizer.normalize(atag.tag)
+                # Find fibers containing source neurons and add tag
+                for fiber in fibers:
+                    if fiber.neuron_ids & atag.source_neuron_ids:
+                        updated_auto_tags = fiber.auto_tags | {normalized_tag}
+                        if updated_auto_tags != fiber.auto_tags:
+                            updated_fiber = Fiber(
+                                id=fiber.id,
+                                neuron_ids=fiber.neuron_ids,
+                                synapse_ids=fiber.synapse_ids,
+                                anchor_neuron_id=fiber.anchor_neuron_id,
+                                pathway=fiber.pathway,
+                                conductivity=fiber.conductivity,
+                                last_conducted=fiber.last_conducted,
+                                time_start=fiber.time_start,
+                                time_end=fiber.time_end,
+                                coherence=fiber.coherence,
+                                salience=fiber.salience,
+                                frequency=fiber.frequency,
+                                summary=fiber.summary,
+                                auto_tags=updated_auto_tags,
+                                agent_tags=fiber.agent_tags,
+                                metadata=fiber.metadata,
+                                created_at=fiber.created_at,
+                            )
+                            try:
+                                await self._storage.update_fiber(updated_fiber)
+                            except Exception:
+                                logger.debug("Associative tag update failed", exc_info=True)
+
+            # Log drift detection
+            drift_reports = normalizer.detect_drift(existing_tags)
+            for dr in drift_reports:
+                logger.info("Tag drift detected: %s → %s", dr.variants, dr.canonical)
+
+        # 6. Prune old co-activation events
+        pruned = await self._storage.prune_co_activations(older_than=window_start)
+        report.co_activations_pruned = pruned

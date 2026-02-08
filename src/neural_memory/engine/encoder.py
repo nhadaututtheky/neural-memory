@@ -16,6 +16,7 @@ from neural_memory.extraction.keywords import extract_keywords, extract_weighted
 from neural_memory.extraction.relations import RelationExtractor
 from neural_memory.extraction.temporal import TemporalExtractor
 from neural_memory.utils.simhash import is_near_duplicate, simhash
+from neural_memory.utils.tag_normalizer import TagNormalizer
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,7 @@ class MemoryEncoder:
         self._temporal = temporal_extractor or TemporalExtractor()
         self._entity = entity_extractor or EntityExtractor()
         self._relation = relation_extractor or RelationExtractor()
+        self._tag_normalizer = TagNormalizer()
 
     async def encode(
         self,
@@ -125,7 +127,7 @@ class MemoryEncoder:
             content=content,
             language=language,
         )
-        agent_tags = tags or set()
+        agent_tags = self._tag_normalizer.normalize_set(tags) if tags else set()
         merged_tags = auto_tags | agent_tags
 
         # 4b. Auto-infer memory type if not provided
@@ -327,7 +329,7 @@ class MemoryEncoder:
             if len(tag) >= 2:
                 auto_tags.add(tag)
 
-        return auto_tags
+        return self._tag_normalizer.normalize_set(auto_tags)
 
     async def _extract_relation_synapses(
         self,

@@ -27,6 +27,7 @@ class DeferredWriteQueue:
         self._synapse_updates: list[Synapse] = []
         self._synapse_creates: list[Synapse] = []
         self._state_updates: list[NeuronState] = []
+        self._co_activation_records: list[tuple[str, str, float, str | None]] = []
 
     def defer_fiber_update(self, fiber: Fiber) -> None:
         """Queue a fiber update for later flush."""
@@ -44,6 +45,16 @@ class DeferredWriteQueue:
         """Queue a neuron state update for later flush."""
         self._state_updates.append(state)
 
+    def defer_co_activation(
+        self,
+        neuron_a: str,
+        neuron_b: str,
+        binding_strength: float,
+        source_anchor: str | None = None,
+    ) -> None:
+        """Queue a co-activation event for later flush."""
+        self._co_activation_records.append((neuron_a, neuron_b, binding_strength, source_anchor))
+
     @property
     def pending_count(self) -> int:
         """Number of pending writes."""
@@ -52,6 +63,7 @@ class DeferredWriteQueue:
             + len(self._synapse_updates)
             + len(self._synapse_creates)
             + len(self._state_updates)
+            + len(self._co_activation_records)
         )
 
     async def flush(self, storage: NeuralStorage) -> int:
@@ -93,6 +105,13 @@ class DeferredWriteQueue:
             except Exception:
                 logger.debug("Deferred state update failed", exc_info=True)
 
+        for neuron_a, neuron_b, strength, anchor in self._co_activation_records:
+            try:
+                await storage.record_co_activation(neuron_a, neuron_b, strength, anchor)
+                count += 1
+            except Exception:
+                logger.debug("Deferred co-activation record failed", exc_info=True)
+
         self.clear()
         return count
 
@@ -102,3 +121,4 @@ class DeferredWriteQueue:
         self._synapse_updates.clear()
         self._synapse_creates.clear()
         self._state_updates.clear()
+        self._co_activation_records.clear()

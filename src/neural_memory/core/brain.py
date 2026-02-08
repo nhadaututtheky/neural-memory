@@ -43,6 +43,9 @@ class BrainConfig:
     weight_normalization_budget: float = 5.0
     novelty_boost_max: float = 3.0
     novelty_decay_rate: float = 0.06
+    co_activation_threshold: int = 3
+    co_activation_window_days: int = 7
+    max_inferences_per_run: int = 50
 
     def with_updates(self, **kwargs: Any) -> BrainConfig:
         """Create a new config with updated values."""
@@ -84,6 +87,15 @@ class BrainConfig:
             ),
             novelty_boost_max=kwargs.get("novelty_boost_max", self.novelty_boost_max),
             novelty_decay_rate=kwargs.get("novelty_decay_rate", self.novelty_decay_rate),
+            co_activation_threshold=kwargs.get(
+                "co_activation_threshold", self.co_activation_threshold
+            ),
+            co_activation_window_days=kwargs.get(
+                "co_activation_window_days", self.co_activation_window_days
+            ),
+            max_inferences_per_run=kwargs.get(
+                "max_inferences_per_run", self.max_inferences_per_run
+            ),
         )
 
 

@@ -10,6 +10,7 @@ import aiosqlite
 
 from neural_memory.storage.base import NeuralStorage
 from neural_memory.storage.sqlite_brain_ops import SQLiteBrainMixin
+from neural_memory.storage.sqlite_coactivation import SQLiteCoActivationMixin
 from neural_memory.storage.sqlite_fibers import SQLiteFiberMixin
 from neural_memory.storage.sqlite_maturation import SQLiteMaturationMixin
 from neural_memory.storage.sqlite_neurons import SQLiteNeuronMixin
@@ -33,6 +34,7 @@ class SQLiteStorage(
     SQLiteTypedMemoryMixin,
     SQLiteProjectMixin,
     SQLiteMaturationMixin,
+    SQLiteCoActivationMixin,
     SQLiteBrainMixin,
     NeuralStorage,
 ):
@@ -259,6 +261,7 @@ class SQLiteStorage(
         conn = self._ensure_conn()
 
         brain_tables = (
+            "co_activation_events",
             "typed_memories",
             "projects",
             "fibers",

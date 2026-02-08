@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 # ── Migrations ──────────────────────────────────────────────────────
 # Each entry maps (from_version -> to_version) with a list of SQL statements.
@@ -117,6 +117,22 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
         "ALTER TABLE fibers ADD COLUMN agent_tags TEXT DEFAULT '[]'",
         # Backfill: existing tags → agent_tags (conservative — can't determine origin retroactively)
         "UPDATE fibers SET agent_tags = tags WHERE tags != '[]'",
+    ],
+    (8, 9): [
+        # Co-activation event persistence for associative inference
+        """CREATE TABLE IF NOT EXISTS co_activation_events (
+            id TEXT NOT NULL,
+            brain_id TEXT NOT NULL,
+            neuron_a TEXT NOT NULL,
+            neuron_b TEXT NOT NULL,
+            binding_strength REAL NOT NULL,
+            source_anchor TEXT,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (brain_id, id),
+            FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_co_activation_pair ON co_activation_events(brain_id, neuron_a, neuron_b)",
+        "CREATE INDEX IF NOT EXISTS idx_co_activation_created ON co_activation_events(brain_id, created_at)",
     ],
 }
 
@@ -335,4 +351,19 @@ CREATE TABLE IF NOT EXISTS memory_maturations (
     FOREIGN KEY (brain_id, fiber_id) REFERENCES fibers(brain_id, id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_maturations_stage ON memory_maturations(brain_id, stage);
+
+-- Co-activation events for associative inference
+CREATE TABLE IF NOT EXISTS co_activation_events (
+    id TEXT NOT NULL,
+    brain_id TEXT NOT NULL,
+    neuron_a TEXT NOT NULL,  -- canonical: a < b
+    neuron_b TEXT NOT NULL,
+    binding_strength REAL NOT NULL,
+    source_anchor TEXT,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (brain_id, id),
+    FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_co_activation_pair ON co_activation_events(brain_id, neuron_a, neuron_b);
+CREATE INDEX IF NOT EXISTS idx_co_activation_created ON co_activation_events(brain_id, created_at);
 """
