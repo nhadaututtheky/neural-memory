@@ -637,6 +637,59 @@ class NeuralStorage(ABC):
         """
         raise NotImplementedError
 
+    # ========== Action Event Operations ==========
+
+    async def record_action(
+        self,
+        action_type: str,
+        action_context: str = "",
+        tags: tuple[str, ...] | list[str] = (),
+        session_id: str | None = None,
+        fiber_id: str | None = None,
+    ) -> str:
+        """Record an action event for habit learning.
+
+        Args:
+            action_type: Type of action (e.g., "remember", "recall")
+            action_context: Optional context string
+            tags: Tags for categorization
+            session_id: Optional session grouping
+            fiber_id: Optional associated fiber
+
+        Returns:
+            The action event ID
+        """
+        raise NotImplementedError
+
+    async def get_action_sequences(
+        self,
+        session_id: str | None = None,
+        since: datetime | None = None,
+        limit: int = 1000,
+    ) -> list:
+        """Get action events ordered by time.
+
+        Args:
+            session_id: Filter by session
+            since: Only events after this time
+            limit: Maximum events to return
+
+        Returns:
+            List of ActionEvent objects ordered by created_at
+        """
+        raise NotImplementedError
+
+    async def prune_action_events(self, older_than: datetime) -> int:
+        """Remove action events older than the given time.
+
+        Args:
+            older_than: Remove events created before this time
+
+        Returns:
+            Number of events pruned
+        """
+        raise NotImplementedError
+
     # ========== Cleanup ==========
 
     @abstractmethod

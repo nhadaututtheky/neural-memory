@@ -48,6 +48,12 @@ class BrainConfig:
     max_inferences_per_run: int = 50
     emotional_decay_factor: float = 0.5
     emotional_weight_scale: float = 0.8
+    sequential_window_seconds: float = 30.0
+    dream_neuron_count: int = 5
+    dream_decay_multiplier: float = 10.0
+    habit_min_frequency: int = 3
+    habit_suggestion_min_weight: float = 0.8
+    habit_suggestion_min_count: int = 5
 
     def with_updates(self, **kwargs: Any) -> BrainConfig:
         """Create a new config with updated values."""
@@ -103,6 +109,20 @@ class BrainConfig:
             ),
             emotional_weight_scale=kwargs.get(
                 "emotional_weight_scale", self.emotional_weight_scale
+            ),
+            sequential_window_seconds=kwargs.get(
+                "sequential_window_seconds", self.sequential_window_seconds
+            ),
+            dream_neuron_count=kwargs.get("dream_neuron_count", self.dream_neuron_count),
+            dream_decay_multiplier=kwargs.get(
+                "dream_decay_multiplier", self.dream_decay_multiplier
+            ),
+            habit_min_frequency=kwargs.get("habit_min_frequency", self.habit_min_frequency),
+            habit_suggestion_min_weight=kwargs.get(
+                "habit_suggestion_min_weight", self.habit_suggestion_min_weight
+            ),
+            habit_suggestion_min_count=kwargs.get(
+                "habit_suggestion_min_count", self.habit_suggestion_min_count
             ),
         )
 

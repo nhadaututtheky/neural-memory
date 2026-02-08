@@ -36,6 +36,7 @@ class InMemoryStorage(InMemoryCollectionsMixin, InMemoryBrainMixin, NeuralStorag
         self._projects: dict[str, dict[str, Project]] = defaultdict(dict)
         self._brains: dict[str, Brain] = {}
         self._co_activations: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        self._action_events: dict[str, list[dict[str, Any]]] = defaultdict(list)
         self._current_brain_id: str | None = None
 
     def set_brain(self, brain_id: str) -> None:
@@ -525,6 +526,74 @@ class InMemoryStorage(InMemoryCollectionsMixin, InMemoryBrainMixin, NeuralStorag
         ]
         return original_count - len(self._co_activations[brain_id])
 
+    # ========== Action Event Operations ==========
+
+    async def record_action(
+        self,
+        action_type: str,
+        action_context: str = "",
+        tags: tuple[str, ...] | list[str] = (),
+        session_id: str | None = None,
+        fiber_id: str | None = None,
+    ) -> str:
+        brain_id = self._get_brain_id()
+        event_id = str(uuid4())
+        self._action_events[brain_id].append(
+            {
+                "id": event_id,
+                "brain_id": brain_id,
+                "session_id": session_id,
+                "action_type": action_type,
+                "action_context": action_context,
+                "tags": tuple(tags),
+                "fiber_id": fiber_id,
+                "created_at": datetime.utcnow(),
+            }
+        )
+        return event_id
+
+    async def get_action_sequences(
+        self,
+        session_id: str | None = None,
+        since: datetime | None = None,
+        limit: int = 1000,
+    ) -> list:
+        from neural_memory.core.action_event import ActionEvent
+
+        brain_id = self._get_brain_id()
+        results: list[ActionEvent] = []
+
+        for event in self._action_events[brain_id]:
+            if session_id is not None and event["session_id"] != session_id:
+                continue
+            if since is not None and event["created_at"] < since:
+                continue
+            results.append(
+                ActionEvent(
+                    id=event["id"],
+                    brain_id=event["brain_id"],
+                    session_id=event["session_id"],
+                    action_type=event["action_type"],
+                    action_context=event["action_context"],
+                    tags=event["tags"],
+                    fiber_id=event["fiber_id"],
+                    created_at=event["created_at"],
+                )
+            )
+            if len(results) >= limit:
+                break
+
+        results.sort(key=lambda e: e.created_at)
+        return results
+
+    async def prune_action_events(self, older_than: datetime) -> int:
+        brain_id = self._get_brain_id()
+        original_count = len(self._action_events[brain_id])
+        self._action_events[brain_id] = [
+            e for e in self._action_events[brain_id] if e["created_at"] >= older_than
+        ]
+        return original_count - len(self._action_events[brain_id])
+
     # ========== Cleanup ==========
 
     async def clear(self, brain_id: str) -> None:
@@ -540,4 +609,5 @@ class InMemoryStorage(InMemoryCollectionsMixin, InMemoryBrainMixin, NeuralStorag
         self._typed_memories[brain_id].clear()
         self._projects[brain_id].clear()
         self._co_activations[brain_id].clear()
+        self._action_events[brain_id].clear()
         self._brains.pop(brain_id, None)

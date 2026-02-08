@@ -244,6 +244,27 @@ class ReflexPipeline:
             },
         )
 
+        # Optionally attach workflow suggestions (non-critical)
+        try:
+            from neural_memory.engine.workflow_suggest import suggest_next_action
+
+            suggestions = await suggest_next_action(
+                self._storage,
+                stimulus.intent.value,
+                self._config,
+            )
+            if suggestions:
+                result.metadata["workflow_suggestions"] = [
+                    {
+                        "action": s.action_type,
+                        "confidence": round(s.confidence, 4),
+                        "source_habit": s.source_habit,
+                    }
+                    for s in suggestions[:3]
+                ]
+        except Exception:
+            logger.debug("Workflow suggestion failed (non-critical)", exc_info=True)
+
         # Flush deferred writes (fiber conductivity, Hebbian strengthening)
         if self._write_queue.pending_count > 0:
             try:

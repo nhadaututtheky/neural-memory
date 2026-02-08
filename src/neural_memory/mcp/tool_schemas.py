@@ -328,4 +328,23 @@ def get_tool_schemas() -> list[dict[str, Any]]:
             "description": "Get brain health diagnostics including purity score, grade, component metrics, and actionable warnings.",
             "inputSchema": {"type": "object", "properties": {}},
         },
+        {
+            "name": "nmem_habits",
+            "description": "Manage learned workflow habits. Suggest next actions, list learned habits, or clear habit data.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["suggest", "list", "clear"],
+                        "description": "suggest=get next action suggestions, list=show learned habits, clear=remove all habits",
+                    },
+                    "current_action": {
+                        "type": "string",
+                        "description": "Current action type for suggestions (required for suggest action)",
+                    },
+                },
+                "required": ["action"],
+            },
+        },
     ]

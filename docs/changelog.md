@@ -5,6 +5,32 @@ All notable changes to NeuralMemory are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0] - 2026-02-09
+
+### Added
+
+- **Habitual Recall** — Knowledge creation, habit learning, and proactive workflow suggestions
+  - **ENRICH consolidation strategy** — Transitive closure (A→B→C infers A→C) and cross-cluster linking via tag Jaccard similarity
+  - **DREAM consolidation strategy** — Random exploration via spreading activation to discover hidden connections; dream synapses decay 10× faster
+  - **LEARN_HABITS consolidation strategy** — Sequence mining on action event history to detect repeated workflows
+  - **Action Event Log** — Lightweight hippocampal buffer (`action_events` table) for recording tool usage without graph bloat
+  - **Sequence Mining Engine** — `mine_sequential_pairs()`, `extract_habit_candidates()`, `learn_habits()` for frequency-based pattern detection
+  - **Workflow Suggestion Engine** — `suggest_next_action()` with dual threshold (weight + sequential_count) for proactive recommendations
+  - **MCP tool `nmem_habits`** — suggest/list/clear actions for learned workflow habits
+  - **CLI `nmem habits`** — list/show/clear subcommands for habit management
+  - **Action recording** — Tool calls (remember, recall, context) automatically record action events
+  - **Prune enhancements** — Dream synapses decay N× faster; high-salience fibers resist pruning
+- Schema v10: `action_events` table with indexes on (brain_id, action_type), (brain_id, session_id), (brain_id, created_at)
+- 6 new BrainConfig fields: `sequential_window_seconds`, `dream_neuron_count`, `dream_decay_multiplier`, `habit_min_frequency`, `habit_suggestion_min_weight`, `habit_suggestion_min_count`
+- `EnrichmentResult`, `DreamResult`, `SequencePair`, `HabitCandidate`, `LearnedHabit`, `HabitReport`, `WorkflowSuggestion`, `ActionEvent` data structures
+
+### Changed
+
+- `ConsolidationStrategy` enum now includes `ENRICH`, `DREAM`, `LEARN_HABITS`
+- `ConsolidationReport` now includes `synapses_enriched`, `dream_synapses_created`, `habits_learned`, `action_events_pruned`
+- `ReflexPipeline.query()` optionally attaches `workflow_suggestions` to result metadata
+- Schema version 9 → 10
+
 ## [0.19.0] - 2026-02-08
 
 ### Added

@@ -127,6 +127,7 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
             "nmem_eternal": self._eternal,
             "nmem_recap": self._recap,
             "nmem_health": self._health,
+            "nmem_habits": self._habits,
         }
         handler = dispatch.get(name)
         if handler:
@@ -208,6 +209,8 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
         await storage.batch_save()
 
         self._fire_eternal_trigger(content)
+
+        await self._record_tool_action("remember", content[:100])
 
         return {
             "success": True,
@@ -296,6 +299,8 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
                 "frequency_boost": round(result.score_breakdown.frequency_boost, 4),
             }
 
+        await self._record_tool_action("recall", query[:100])
+
         return response
 
     async def _context(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -332,6 +337,9 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
                 context_parts.append(f"- {content}")
 
         context_text = "\n".join(context_parts) if context_parts else "No context available."
+
+        await self._record_tool_action("context")
+
         return {
             "context": context_text,
             "count": len(context_parts),
@@ -435,6 +443,75 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
             "count": len(formatted),
             "tokens_used": sum(len(s["content"].split()) for s in formatted),
         }
+
+    async def _habits(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Manage learned workflow habits."""
+        storage = await self.get_storage()
+        brain = await storage.get_brain(storage._current_brain_id)
+        if not brain:
+            return {"error": "No brain configured"}
+
+        action = args.get("action", "list")
+
+        if action == "suggest":
+            current_action = args.get("current_action", "")
+            if not current_action:
+                return {"error": "current_action is required for suggest"}
+
+            from neural_memory.engine.workflow_suggest import suggest_next_action
+
+            suggestions = await suggest_next_action(storage, current_action, brain.config)
+            return {
+                "suggestions": [
+                    {
+                        "action": s.action_type,
+                        "confidence": round(s.confidence, 4),
+                        "source_habit": s.source_habit,
+                        "sequential_count": s.sequential_count,
+                    }
+                    for s in suggestions
+                ],
+                "count": len(suggestions),
+            }
+
+        elif action == "list":
+            fibers = await storage.get_fibers(limit=10000)
+            habits = [f for f in fibers if f.metadata.get("_habit_pattern")]
+            return {
+                "habits": [
+                    {
+                        "name": h.summary or "unnamed",
+                        "steps": h.metadata.get("_workflow_actions", []),
+                        "frequency": h.metadata.get("_habit_frequency", 0),
+                        "confidence": h.metadata.get("_habit_confidence", 0.0),
+                        "fiber_id": h.id,
+                    }
+                    for h in habits
+                ],
+                "count": len(habits),
+            }
+
+        elif action == "clear":
+            fibers = await storage.get_fibers(limit=10000)
+            habits = [f for f in fibers if f.metadata.get("_habit_pattern")]
+            cleared = 0
+            for h in habits:
+                await storage.delete_fiber(h.id)
+                cleared += 1
+            return {"cleared": cleared, "message": f"Cleared {cleared} learned habits"}
+
+        return {"error": f"Unknown action: {action}"}
+
+    async def _record_tool_action(self, action_type: str, context: str = "") -> None:
+        """Record an action event for habit learning (fire-and-forget)."""
+        try:
+            storage = await self.get_storage()
+            await storage.record_action(
+                action_type=action_type,
+                action_context=context[:200] if context else "",
+            )
+        except Exception:
+            logger.debug("Action recording failed (non-critical)", exc_info=True)
 
 
 # ──────────────────── Module-level functions ────────────────────

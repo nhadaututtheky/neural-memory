@@ -31,6 +31,9 @@ class ConsolidationStrategy(StrEnum):
     SUMMARIZE = "summarize"
     MATURE = "mature"
     INFER = "infer"
+    ENRICH = "enrich"
+    DREAM = "dream"
+    LEARN_HABITS = "learn_habits"
     ALL = "all"
 
 
@@ -76,6 +79,10 @@ class ConsolidationReport:
     patterns_extracted: int = 0
     synapses_inferred: int = 0
     co_activations_pruned: int = 0
+    synapses_enriched: int = 0
+    dream_synapses_created: int = 0
+    habits_learned: int = 0
+    action_events_pruned: int = 0
     merge_details: list[MergeDetail] = field(default_factory=list)
     dry_run: bool = False
 
@@ -91,6 +98,10 @@ class ConsolidationReport:
             f"  Summaries created: {self.summaries_created}",
             f"  Synapses inferred: {self.synapses_inferred}",
             f"  Co-activations pruned: {self.co_activations_pruned}",
+            f"  Synapses enriched: {self.synapses_enriched}",
+            f"  Dream synapses created: {self.dream_synapses_created}",
+            f"  Habits learned: {self.habits_learned}",
+            f"  Action events pruned: {self.action_events_pruned}",
             f"  Duration: {self.duration_ms:.1f}ms",
         ]
         if self.merge_details:
@@ -116,9 +127,11 @@ class ConsolidationEngine:
         self,
         storage: NeuralStorage,
         config: ConsolidationConfig | None = None,
+        dream_decay_multiplier: float = 10.0,
     ) -> None:
         self._storage = storage
         self._config = config or ConsolidationConfig()
+        self._dream_decay_multiplier = dream_decay_multiplier
 
     async def run(
         self,
@@ -160,6 +173,15 @@ class ConsolidationEngine:
         if run_all or ConsolidationStrategy.INFER in strategies:
             await self._infer(report, reference_time, dry_run)
 
+        if run_all or ConsolidationStrategy.ENRICH in strategies:
+            await self._enrich(report, dry_run)
+
+        if run_all or ConsolidationStrategy.DREAM in strategies:
+            await self._dream(report, dry_run)
+
+        if run_all or ConsolidationStrategy.LEARN_HABITS in strategies:
+            await self._learn_habits(report, reference_time, dry_run)
+
         report.duration_ms = (time.perf_counter() - start) * 1000
         return report
 
@@ -177,6 +199,14 @@ class ConsolidationEngine:
         all_synapses = await self._storage.get_synapses()
         pruned_synapse_ids: set[str] = set()
 
+        # Build fiber salience cache for high-salience protection
+        fibers_for_salience = await self._storage.get_fibers(limit=10000)
+        fiber_salience_cache: dict[str, list[Fiber]] = {}
+        for fib in fibers_for_salience:
+            if fib.salience > 0.8:
+                for nid in fib.neuron_ids:
+                    fiber_salience_cache.setdefault(nid, []).append(fib)
+
         for synapse in all_synapses:
             # Apply time-based decay before checking weight threshold
             decayed = synapse.time_decay(reference_time=reference_time)
@@ -185,6 +215,12 @@ class ConsolidationEngine:
             is_inferred = synapse.metadata.get("_inferred", False)
             if is_inferred and synapse.reinforced_count < 2:
                 decayed = decayed.decay(factor=0.5)
+
+            # Dream synapses decay Nx faster (default 10x)
+            is_dream = synapse.metadata.get("_dream", False)
+            if is_dream and synapse.reinforced_count < 2:
+                dream_factor = 1.0 / self._dream_decay_multiplier
+                decayed = decayed.decay(factor=dream_factor)
 
             should_prune = decayed.weight < self._config.prune_weight_threshold
 
@@ -199,6 +235,14 @@ class ConsolidationEngine:
                 should_prune = (
                     should_prune and days_since_creation >= self._config.prune_min_inactive_days
                 )
+
+            if should_prune:
+                # High-salience fibers resist pruning
+                source_fibers = fiber_salience_cache.get(synapse.source_id, [])
+                for fib in source_fibers:
+                    if fib.salience > 0.8:
+                        should_prune = False
+                        break
 
             if should_prune:
                 # Protect bridge synapses (only connection between source and target)
@@ -688,3 +732,85 @@ class ConsolidationEngine:
         # 6. Prune old co-activation events
         pruned = await self._storage.prune_co_activations(older_than=window_start)
         report.co_activations_pruned = pruned
+
+    async def _enrich(
+        self,
+        report: ConsolidationReport,
+        dry_run: bool,
+    ) -> None:
+        """Run enrichment: transitive closure + cross-cluster linking."""
+        import logging
+
+        from neural_memory.engine.enrichment import enrich
+
+        logger = logging.getLogger(__name__)
+
+        result = await enrich(self._storage)
+
+        all_synapses = result.transitive_synapses + result.cross_cluster_synapses
+        if dry_run:
+            report.synapses_enriched = len(all_synapses)
+            return
+
+        for synapse in all_synapses:
+            try:
+                await self._storage.add_synapse(synapse)
+                report.synapses_enriched += 1
+            except ValueError:
+                logger.debug("Enriched synapse already exists, skipping")
+
+    async def _dream(
+        self,
+        report: ConsolidationReport,
+        dry_run: bool,
+    ) -> None:
+        """Run dream exploration for hidden connections."""
+        import logging
+
+        from neural_memory.engine.dream import dream
+
+        logger = logging.getLogger(__name__)
+
+        brain = await self._storage.get_brain(self._storage._current_brain_id)
+        if not brain:
+            return
+
+        result = await dream(self._storage, brain.config)
+
+        if dry_run:
+            report.dream_synapses_created = len(result.synapses_created)
+            return
+
+        for synapse in result.synapses_created:
+            try:
+                await self._storage.add_synapse(synapse)
+                report.dream_synapses_created += 1
+            except ValueError:
+                logger.debug("Dream synapse already exists, skipping")
+
+    async def _learn_habits(
+        self,
+        report: ConsolidationReport,
+        reference_time: datetime,
+        dry_run: bool,
+    ) -> None:
+        """Learn habits from action event sequences."""
+        import logging
+
+        from neural_memory.engine.sequence_mining import learn_habits
+
+        logger = logging.getLogger(__name__)
+
+        brain = await self._storage.get_brain(self._storage._current_brain_id)
+        if not brain:
+            return
+
+        if dry_run:
+            return
+
+        try:
+            learned, habit_report = await learn_habits(self._storage, brain.config, reference_time)
+            report.habits_learned = habit_report.habits_learned
+            report.action_events_pruned = habit_report.action_events_pruned
+        except Exception:
+            logger.debug("Habit learning failed (non-critical)", exc_info=True)

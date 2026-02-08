@@ -9,6 +9,7 @@ from typing import Any
 import aiosqlite
 
 from neural_memory.storage.base import NeuralStorage
+from neural_memory.storage.sqlite_action_log import SQLiteActionLogMixin
 from neural_memory.storage.sqlite_brain_ops import SQLiteBrainMixin
 from neural_memory.storage.sqlite_coactivation import SQLiteCoActivationMixin
 from neural_memory.storage.sqlite_fibers import SQLiteFiberMixin
@@ -34,6 +35,7 @@ class SQLiteStorage(
     SQLiteTypedMemoryMixin,
     SQLiteProjectMixin,
     SQLiteMaturationMixin,
+    SQLiteActionLogMixin,
     SQLiteCoActivationMixin,
     SQLiteBrainMixin,
     NeuralStorage,

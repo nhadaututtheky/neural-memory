@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 # ── Migrations ──────────────────────────────────────────────────────
 # Each entry maps (from_version -> to_version) with a list of SQL statements.
@@ -133,6 +133,24 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
         )""",
         "CREATE INDEX IF NOT EXISTS idx_co_activation_pair ON co_activation_events(brain_id, neuron_a, neuron_b)",
         "CREATE INDEX IF NOT EXISTS idx_co_activation_created ON co_activation_events(brain_id, created_at)",
+    ],
+    (9, 10): [
+        # Action event log — hippocampal buffer for habit learning
+        """CREATE TABLE IF NOT EXISTS action_events (
+            id TEXT NOT NULL,
+            brain_id TEXT NOT NULL,
+            session_id TEXT,
+            action_type TEXT NOT NULL,
+            action_context TEXT DEFAULT '',
+            tags TEXT DEFAULT '[]',
+            fiber_id TEXT,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (brain_id, id),
+            FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_action_events_type ON action_events(brain_id, action_type)",
+        "CREATE INDEX IF NOT EXISTS idx_action_events_session ON action_events(brain_id, session_id)",
+        "CREATE INDEX IF NOT EXISTS idx_action_events_created ON action_events(brain_id, created_at)",
     ],
 }
 
@@ -366,4 +384,21 @@ CREATE TABLE IF NOT EXISTS co_activation_events (
 );
 CREATE INDEX IF NOT EXISTS idx_co_activation_pair ON co_activation_events(brain_id, neuron_a, neuron_b);
 CREATE INDEX IF NOT EXISTS idx_co_activation_created ON co_activation_events(brain_id, created_at);
+
+-- Action event log for habit learning
+CREATE TABLE IF NOT EXISTS action_events (
+    id TEXT NOT NULL,
+    brain_id TEXT NOT NULL,
+    session_id TEXT,
+    action_type TEXT NOT NULL,
+    action_context TEXT DEFAULT '',
+    tags TEXT DEFAULT '[]',  -- JSON array
+    fiber_id TEXT,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (brain_id, id),
+    FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_action_events_type ON action_events(brain_id, action_type);
+CREATE INDEX IF NOT EXISTS idx_action_events_session ON action_events(brain_id, session_id);
+CREATE INDEX IF NOT EXISTS idx_action_events_created ON action_events(brain_id, created_at);
 """

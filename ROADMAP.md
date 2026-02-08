@@ -414,11 +414,23 @@ Recommendations:
 
 ---
 
-## v0.18.0 — Advanced Consolidation + Workflow Detection
+## v0.18.0 — Habitual Recall
 
 > The brain sleeps, dreams, learns habits, and wakes up smarter.
+> "A workflow in NeuralMemory is not stored. It is a stabilized activation path
+> that may optionally be reified as a WORKFLOW fiber for interaction."
 
-**Depends on**: v0.14.0 (relation extraction), v0.15.0 (associative inference + co-activation data).
+**Depends on**: v0.14.0 ✅ (relation extraction), v0.15.0 ✅ (associative inference + co-activation data).
+
+### Design Philosophy (refined through 3 rounds of expert feedback)
+
+1. **Same substrate** — workflows are neurons + synapses + fibers in the SAME graph, not a separate layer
+2. **Hebbian sequence learning** — repeated use strengthens BEFORE/AFTER synapses (online + batch)
+3. **Success bias** — only promote completed, non-interrupted sequences
+4. **Cognitive patterns** — not just CLI commands, but activation patterns (debug = root_cause → fix → test)
+5. **Spreading activation = suggestion engine** — no separate matcher needed
+6. **Detect + Store + Suggest ONLY** — NM does not execute or orchestrate workflows
+7. **Activation energy decreases with repetition** — existing `synapse.weight` + `fiber.conductivity` already model this
 
 ### The Gaps
 
@@ -435,7 +447,8 @@ Add to `ConsolidationStrategy`:
 ENRICH = "enrich"  # Create new synapses via transitive inference
 ```
 
-**Transitive closure**: If A→CAUSED_BY→B and B→CAUSED_BY→C, infer A→CAUSED_BY→C with reduced weight (0.5 × min(w_AB, w_BC)).
+**Transitive closure** ("myelination" — shortcut synapses for well-worn paths):
+If A→CAUSED_BY→B and B→CAUSED_BY→C, infer A→CAUSED_BY→C with reduced weight (0.5 × min(w_AB, w_BC)).
 
 **Cross-cluster links**: Find fibers in different tag clusters that share entity neurons → create `RELATED_TO` synapses between their anchors.
 
@@ -459,17 +472,21 @@ This is E1's Layer 3 (semantic) tag generation via emergent concept discovery.
 During PRUNE strategy:
 - High-salience fibers (salience > 0.8) resist pruning even if inactive
 - Fibers with many inbound synapses (hub neurons) get decay protection
-- Emotional fibers (from v0.16.0, if available) decay slower
+- Emotional fibers (from v0.16.0) decay slower
 
-### Solution — Part B: Workflow Detection
+### Solution — Part B: Habit Formation
 
 > "Actions that sequence together template together."
+> Workflows emerge as **stable activation attractors** — not stored templates.
 
-Transform repeated user behavior patterns into named workflow templates with proactive suggestions.
+Zero new synapse types. Zero new neuron types. Zero LLM.
+Everything through existing neurons, synapses, fibers, spreading activation.
 
-#### 4. Action event log (`storage/action_log.py`)
+#### 4. Action event log — hippocampal buffer (`storage/action_log.py`)
 
-Persistent, ordered log of user actions within sessions:
+Lightweight, temporary log of user actions (NOT neurons — raw events are too numerous
+and low-value for permanent graph storage). Analogous to the hippocampal buffer that holds
+recent events before consolidation promotes significant patterns to long-term memory.
 
 ```python
 @dataclass(frozen=True)
@@ -484,70 +501,76 @@ class ActionEvent:
     created_at: datetime
 ```
 
-Schema migration adds `action_events` table. Storage interface: `record_action()`, `get_action_sequences()`, `prune_action_events()`.
+- Schema migration v9→v10 adds `action_events` table
+- Storage interface: `record_action()`, `get_action_sequences()`, `prune_action_events()`
+- 30-day retention, auto-prune during consolidation
+- Hooks into CLI + MCP tools to record every action
 
-#### 5. Sequence mining engine (`engine/sequence_mining.py`)
+#### 5. Sequential Hebbian — online strengthening
 
-Detects repeated ordered subsequences across sessions:
+Real-time Hebbian learning for action sequences during normal usage:
 
 ```python
-@dataclass(frozen=True)
-class WorkflowCandidate:
-    steps: tuple[str, ...]       # Ordered action types: ("recall", "encode", "consolidate")
-    frequency: int               # Number of sessions containing this sequence
-    avg_duration_seconds: float  # Avg time from first to last step
-    context_tags: frozenset[str] # Common tags across occurrences
-    confidence: float            # 0.0–1.0 based on frequency + consistency
-
-@dataclass(frozen=True)
-class WorkflowTemplate:
-    id: str
-    name: str                    # Auto-generated: "dev-cycle", "debug-fix-verify"
-    steps: tuple[str, ...]
-    trigger_context: frozenset[str]  # Tags/actions that trigger suggestion
-    frequency: int
-    confidence: float
+# BrainConfig extension
+sequential_window_seconds: float = 30.0  # Configurable (30s default for coding workflows)
 ```
 
-**Algorithm**: Sliding-window subsequence extraction → frequency counting → filter by min_frequency (default: 3 sessions) → rank by confidence → deduplicate overlapping sequences.
+When action B follows action A within the temporal window:
+- Find or create BEFORE synapse between ACTION neurons for A and B
+- Strengthen weight (Hebbian: `weight += reinforcement_delta`, capped at 1.0)
+- Increment `synapse.metadata.sequential_count`
+- Combined with existing `fiber.conductivity` increase via `conduct()`: activation energy
+  for the path naturally decreases with repetition (STDP-like mechanism)
 
-- **No LLM dependency**: Pure frequency-based pattern mining (inspired by PrefixSpan but simplified for action sequences)
-- **Naming heuristic**: Join action types with "-" → "recall-encode-consolidate" → shorten common patterns ("dev-cycle", "debug-fix", etc.)
+No batch processing needed — happens incrementally during usage.
 
-#### 6. `LEARN_HABITS` consolidation strategy
+#### 6. `LEARN_HABITS` consolidation strategy — batch mining
 
 ```python
-LEARN_HABITS = "learn_habits"  # Extract workflow templates from action logs
+LEARN_HABITS = "learn_habits"  # Extract workflow patterns from action logs
 ```
 
 Run during consolidation alongside ENRICH/DREAM:
-1. Query action sequences from last N days (configurable window)
-2. Run sequence mining → workflow candidates
-3. Promote candidates above confidence threshold to `WorkflowTemplate`
-4. Store templates as special WORKFLOW-typed fibers with `_workflow_template: True` metadata
-5. Prune old action events outside the window
+1. Query action sequences from last N days (configurable window, default 30)
+2. N-gram frequency counting across sessions → find repeated subsequences
+3. **Success bias**: only promote sequences that completed without interruption (freq ≥ 3 sessions)
+4. Strengthen BEFORE/AFTER synapses between existing ACTION concept neurons
+5. Create WORKFLOW-typed fibers for recognized patterns (minimal reification of activation attractors)
+6. **User confirmation for naming**: heuristic default (join action types: "recall-edit-test") + prompt user to override with semantic name ("dev-cycle")
+7. Prune old action events outside the retention window
 
-#### 7. Proactive workflow suggestion
+No new synapse types (uses existing BEFORE/AFTER). No new neuron types (uses existing ACTION/CONCEPT).
 
-During retrieval, after assembling the response:
-1. Check current action context (what the user just did)
-2. Match against stored workflow templates by trigger_context overlap
-3. If match found with confidence > 0.7: include suggestion in retrieval metadata
+#### 7. Proactive suggestion via spreading activation
+
+No separate matcher engine. Spreading activation IS the suggestion engine:
+
+1. When user performs action A → ACTION neuron for A activates
+2. Spreading activation flows through strong BEFORE synapses to B
+3. **Dual threshold**: only suggest when `synapse.weight > 0.8 AND sequential_count > 5`
+4. Surface B as the predicted next step
 
 ```python
 @dataclass(frozen=True)
 class WorkflowSuggestion:
-    template_id: str
-    template_name: str
-    next_steps: tuple[str, ...]   # Remaining steps in the workflow
-    confidence: float
-    message: str                  # "You usually do X next. Continue?"
+    workflow_fiber_id: str | None  # WORKFLOW fiber if reified, None if pure attractor
+    workflow_name: str             # User-named or heuristic
+    next_steps: tuple[str, ...]    # Remaining steps in the detected pattern
+    confidence: float              # Synapse weight of the next transition
+    message: str                   # "You usually do X next. Continue?"
 ```
 
 Exposed via:
 - **MCP tool**: `nmem_suggest` → returns active workflow suggestions
 - **CLI**: `nmem suggest` → show current workflow suggestions
 - **Retrieval metadata**: `RetrievalResult.workflow_suggestions: list[WorkflowSuggestion]`
+
+#### 8. Privacy controls
+
+User control over habit data:
+- `nmem habits list` — show learned workflow patterns with confidence scores
+- `nmem habits clear` — wipe action_events table + WORKFLOW fibers
+- `nmem habits show <name>` — detail of a specific habit pattern
 
 ### Files
 
@@ -556,15 +579,17 @@ Exposed via:
 | **Modified** | `engine/consolidation.py` | ENRICH + DREAM + LEARN_HABITS strategies (~350 lines) |
 | **Modified** | `engine/pattern_extraction.py` | Transitive closure helper (~100 lines) |
 | **New** | `storage/action_log.py` | ActionEvent storage mixin (~80 lines) |
-| **New** | `engine/sequence_mining.py` | Sequence mining + WorkflowTemplate (~250 lines) |
-| **New** | `engine/workflow_suggest.py` | Proactive suggestion engine (~100 lines) |
+| **New** | `engine/sequence_mining.py` | Sequence mining + habit formation (~250 lines) |
+| **New** | `engine/workflow_suggest.py` | Proactive suggestion via activation (~100 lines) |
 | **Modified** | `engine/retrieval.py` | Attach workflow suggestions to results (~30 lines) |
-| **Modified** | `storage/sqlite_schema.py` | action_events table migration (~20 lines) |
+| **Modified** | `storage/sqlite_schema.py` | action_events table migration v9→v10 (~20 lines) |
 | **Modified** | `storage/base.py` | Action log abstract methods (~20 lines) |
+| **Modified** | `core/brain.py` | BrainConfig: `sequential_window_seconds` (~5 lines) |
 | **Modified** | `mcp/tool_schemas.py` | `nmem_suggest` tool schema (~15 lines) |
 | **Modified** | `mcp/server.py` | `nmem_suggest` handler (~20 lines) |
+| **Modified** | `cli/commands/` | `habits` subcommand group (~60 lines) |
 | **New** | `tests/unit/test_enrichment.py` | Transitive inference + dream tests (~200 lines) |
-| **New** | `tests/unit/test_sequence_mining.py` | Sequence extraction + workflow template tests (~200 lines) |
+| **New** | `tests/unit/test_sequence_mining.py` | Sequence mining + habit formation tests (~200 lines) |
 | **New** | `tests/unit/test_workflow_suggest.py` | Proactive suggestion tests (~150 lines) |
 
 ### Scope
@@ -575,11 +600,11 @@ Exposed via:
 
 | Question | Answer |
 |----------|--------|
-| Activation or Search? | Activation — DREAM uses spreading activation; workflow templates create new activation shortcuts |
-| Spreading activation still central? | Yes — DREAM literally uses it; workflow suggestions augment retrieval results |
-| Works without embeddings? | Yes — graph traversal + frequency-based sequence mining |
-| More detailed query = faster? | Yes — enrichment creates shortcuts; workflows predict next action |
-| Brain test? | Yes — dreaming, transitive inference, and habit formation are core brain functions |
+| Activation or Search? | Activation — DREAM uses spreading activation; habits emerge as stable activation attractors |
+| Spreading activation still central? | Yes — DREAM uses it; suggestions flow through it; no separate matcher engine |
+| Works without embeddings? | Yes — graph traversal + frequency-based n-gram mining + Hebbian strengthening |
+| More detailed query = faster? | Yes — enrichment creates shortcuts; strong BEFORE synapses predict next action |
+| Brain test? | Yes — dreaming, transitive inference, habit formation, and myelination are core brain functions |
 
 ---
 
