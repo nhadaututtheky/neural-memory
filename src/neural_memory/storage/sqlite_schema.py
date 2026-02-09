@@ -21,7 +21,7 @@ SCHEMA_VERSION = 12
 # NOT executescript(), because trigger bodies contain semicolons inside
 # BEGIN...END blocks that executescript() would incorrectly split on.
 FTS_SETUP_STATEMENTS: list[str] = [
-    # FTS5 virtual table (external content â†’ neurons table).
+    # FTS5 virtual table (external content -> neurons table).
     # Only index 'content' for searching; 'brain_id' is UNINDEXED (filter only).
     # We join on rowid to retrieve the full neuron row, so no neuron_id column needed.
     """CREATE VIRTUAL TABLE IF NOT EXISTS neurons_fts USING fts5(
@@ -98,7 +98,7 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
         "ALTER TABLE neuron_states ADD COLUMN homeostatic_target REAL DEFAULT 0.5",
     ],
     (6, 7): [
-        # Memory maturation lifecycle: STM â†’ Working â†’ Episodic â†’ Semantic
+        # Memory maturation lifecycle: STM -> Working -> Episodic -> Semantic
         """CREATE TABLE IF NOT EXISTS memory_maturations (
             fiber_id TEXT NOT NULL,
             brain_id TEXT NOT NULL,
@@ -115,7 +115,7 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
         # Tag origin tracking: separate auto-generated tags from agent-provided tags
         "ALTER TABLE fibers ADD COLUMN auto_tags TEXT DEFAULT '[]'",
         "ALTER TABLE fibers ADD COLUMN agent_tags TEXT DEFAULT '[]'",
-        # Backfill: existing tags â†’ agent_tags (conservative â€” can't determine origin retroactively)
+        # Backfill: existing tags -> agent_tags (conservative -- cannot determine origin retroactively)
         "UPDATE fibers SET agent_tags = tags WHERE tags != '[]'",
     ],
     (8, 9): [
@@ -204,7 +204,7 @@ async def run_migrations(conn: aiosqlite.Connection, current_version: int) -> in
         next_version = version + 1
         key = (version, next_version)
 
-        # FTS tables must exist before the v2â†’v3 backfill INSERT runs
+        # FTS tables must exist before the v2->v3 backfill INSERT runs
         if key == (2, 3):
             await ensure_fts_tables(conn)
 
