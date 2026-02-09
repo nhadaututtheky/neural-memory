@@ -246,7 +246,7 @@ class SQLiteSynapseMixin:
                    s.reinforced_count, s.last_activated as s_last_activated,
                    s.created_at as s_created_at
             FROM synapses s
-            JOIN neurons n ON s.target_id = n.id
+            JOIN neurons n ON s.target_id = n.id AND s.brain_id = n.brain_id
             WHERE {where_clause}
         """
         results: list[tuple[Neuron, Synapse]] = []
@@ -277,7 +277,7 @@ class SQLiteSynapseMixin:
                    s.reinforced_count, s.last_activated as s_last_activated,
                    s.created_at as s_created_at
             FROM synapses s
-            JOIN neurons n ON s.source_id = n.id
+            JOIN neurons n ON s.source_id = n.id AND s.brain_id = n.brain_id
             WHERE {where_clause}
         """
         results: list[tuple[Neuron, Synapse]] = []

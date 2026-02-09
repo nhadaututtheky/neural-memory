@@ -49,12 +49,12 @@ def _lazy_load_adapter(name: str) -> type | None:
 
             register_adapter("chromadb", ChromaDBAdapter)
             return ChromaDBAdapter
-        except ImportError:
+        except ImportError as e:
             msg = (
                 "ChromaDB adapter requires 'chromadb' package. "
                 "Install with: pip install neural-memory[chromadb]"
             )
-            raise ValueError(msg)
+            raise ValueError(msg) from e
 
     if name == "mem0":
         try:
@@ -62,12 +62,12 @@ def _lazy_load_adapter(name: str) -> type | None:
 
             register_adapter("mem0", Mem0Adapter)
             return Mem0Adapter
-        except ImportError:
+        except ImportError as e:
             msg = (
                 "Mem0 adapter requires 'mem0ai' package. "
                 "Install with: pip install neural-memory[mem0]"
             )
-            raise ValueError(msg)
+            raise ValueError(msg) from e
 
     if name == "awf":
         from neural_memory.integration.adapters.awf_adapter import AWFAdapter
@@ -81,12 +81,12 @@ def _lazy_load_adapter(name: str) -> type | None:
 
             register_adapter("cognee", CogneeAdapter)
             return CogneeAdapter
-        except ImportError:
+        except ImportError as e:
             msg = (
                 "Cognee adapter requires 'cognee' package. "
                 "Install with: pip install neural-memory[cognee]"
             )
-            raise ValueError(msg)
+            raise ValueError(msg) from e
 
     if name == "graphiti":
         try:
@@ -94,12 +94,12 @@ def _lazy_load_adapter(name: str) -> type | None:
 
             register_adapter("graphiti", GraphitiAdapter)
             return GraphitiAdapter
-        except ImportError:
+        except ImportError as e:
             msg = (
                 "Graphiti adapter requires 'graphiti-core' package. "
                 "Install with: pip install neural-memory[graphiti]"
             )
-            raise ValueError(msg)
+            raise ValueError(msg) from e
 
     if name == "llamaindex":
         try:
@@ -107,12 +107,12 @@ def _lazy_load_adapter(name: str) -> type | None:
 
             register_adapter("llamaindex", LlamaIndexAdapter)
             return LlamaIndexAdapter
-        except ImportError:
+        except ImportError as e:
             msg = (
                 "LlamaIndex adapter requires 'llama-index-core' package. "
                 "Install with: pip install neural-memory[llamaindex]"
             )
-            raise ValueError(msg)
+            raise ValueError(msg) from e
 
     return None
 

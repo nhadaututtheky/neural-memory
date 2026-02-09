@@ -192,12 +192,13 @@ class SQLiteNeuronMixin:
         brain_id = self._get_brain_id()
 
         cursor = await conn.execute(
-            """UPDATE neurons SET type = ?, content = ?, metadata = ?
+            """UPDATE neurons SET type = ?, content = ?, metadata = ?, content_hash = ?
                WHERE id = ? AND brain_id = ?""",
             (
                 neuron.type.value,
                 neuron.content,
                 json.dumps(neuron.metadata),
+                neuron.content_hash,
                 neuron.id,
                 brain_id,
             ),

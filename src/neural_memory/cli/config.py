@@ -17,9 +17,10 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from neural_memory.utils.timeutils import utcnow
 
 
 def get_default_data_dir() -> Path:
@@ -135,7 +136,7 @@ class CLIConfig:
             "default_max_tokens": self.default_max_tokens,
             "json_output": self.json_output,
             "shared": self.shared.to_dict(),
-            "updated_at": datetime.now().isoformat(),
+            "updated_at": utcnow().isoformat(),
         }
 
         with open(config_file, "w", encoding="utf-8") as f:

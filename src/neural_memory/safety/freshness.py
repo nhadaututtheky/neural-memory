@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
+from neural_memory.utils.timeutils import utcnow
+
 
 class FreshnessLevel(StrEnum):
     """Freshness levels for memories."""
@@ -58,7 +60,7 @@ def evaluate_freshness(
         FreshnessResult with level, warning, and score
     """
     if reference_time is None:
-        reference_time = datetime.now()
+        reference_time = utcnow()
 
     if thresholds is None:
         thresholds = DEFAULT_THRESHOLDS

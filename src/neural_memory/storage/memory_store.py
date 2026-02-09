@@ -415,7 +415,7 @@ class InMemoryStorage(InMemoryCollectionsMixin, InMemoryBrainMixin, NeuralStorag
                 )
 
         # Today's fibers
-        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         today_fibers_count = sum(
             1 for f in self._fibers[brain_id].values() if f.created_at >= today
         )

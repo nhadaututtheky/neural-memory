@@ -76,7 +76,10 @@ async def consolidate_brain(
 
     storage.set_brain(brain_id)
 
-    strategies = [ConsolidationStrategy(s) for s in request.strategies]
+    try:
+        strategies = [ConsolidationStrategy(s) for s in request.strategies]
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid consolidation strategy: {e}")
     config = ConsolidationConfig(
         prune_weight_threshold=request.prune_weight_threshold,
         merge_overlap_threshold=request.merge_overlap_threshold,

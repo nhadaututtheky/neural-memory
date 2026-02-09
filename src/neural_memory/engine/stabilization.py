@@ -119,7 +119,8 @@ def stabilize(
             scale = 1.0 + config.homeostatic_strength * (
                 config.homeostatic_target / mean_level - 1.0
             )
-            levels = {nid: lv * scale for nid, lv in levels.items()}
+            scale = min(scale, 3.0)  # Cap homeostatic boost
+            levels = {nid: max(0.0, min(1.0, lv * scale)) for nid, lv in levels.items()}
 
         # Step 4: Convergence check
         max_delta = 0.0

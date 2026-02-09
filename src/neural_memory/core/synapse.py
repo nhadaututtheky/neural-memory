@@ -252,6 +252,8 @@ class Synapse:
         else:
             hours_since = (reference_time - self.created_at).total_seconds() / 3600
 
+        hours_since = max(0, hours_since)
+
         # Sigmoid decay: center at 1440h (60 days), spread 720h
         factor = 1.0 / (1.0 + math.exp((hours_since - 1440) / 720))
         factor = max(0.3, factor)  # Floor: never decay below 30% of original

@@ -30,7 +30,7 @@ class DecayReport:
     synapses_decayed: int = 0
     synapses_pruned: int = 0
     duration_ms: float = 0.0
-    reference_time: datetime = field(default_factory=datetime.now)
+    reference_time: datetime = field(default_factory=utcnow)
 
     def summary(self) -> str:
         """Generate human-readable summary."""
@@ -89,7 +89,7 @@ class DecayManager:
         import time
 
         start_time = time.perf_counter()
-        reference_time = reference_time or datetime.now()
+        reference_time = reference_time or utcnow()
         report = DecayReport(reference_time=reference_time)
 
         # Get all neuron states
@@ -97,11 +97,16 @@ class DecayManager:
         report.neurons_processed = len(states)
 
         for state in states:
+            # Use last_activated if available, otherwise fall back to created_at
             if state.last_activated is None:
-                continue
+                reference_activated = (
+                    state.created_at if hasattr(state, "created_at") else reference_time
+                )
+            else:
+                reference_activated = state.last_activated
 
-            # Calculate time since last activation
-            time_diff = reference_time - state.last_activated
+            # Calculate time since last activation (or creation)
+            time_diff = reference_time - reference_activated
             days_elapsed = time_diff.total_seconds() / 86400
 
             # Skip if too recent
@@ -142,10 +147,15 @@ class DecayManager:
         report.synapses_processed = len(synapses)
 
         for synapse in synapses:
+            # Use last_activated if available, otherwise fall back to created_at
             if synapse.last_activated is None:
-                continue
+                synapse_reference = (
+                    synapse.created_at if hasattr(synapse, "created_at") else reference_time
+                )
+            else:
+                synapse_reference = synapse.last_activated
 
-            time_diff = reference_time - synapse.last_activated
+            time_diff = reference_time - synapse_reference
             days_elapsed = time_diff.total_seconds() / 86400
 
             if days_elapsed < self.min_age_days:

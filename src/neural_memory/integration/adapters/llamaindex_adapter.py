@@ -87,7 +87,7 @@ class LlamaIndexAdapter:
         limit: int | None = None,
     ) -> list[ExternalRecord]:
         """Fetch all nodes from the LlamaIndex index."""
-        index = await asyncio.get_event_loop().run_in_executor(None, self._get_index)
+        index = await asyncio.get_running_loop().run_in_executor(None, self._get_index)
 
         docstore = index.docstore
         all_docs = docstore.docs
@@ -178,7 +178,7 @@ class LlamaIndexAdapter:
     async def health_check(self) -> dict[str, Any]:
         """Check LlamaIndex index accessibility."""
         try:
-            index = await asyncio.get_event_loop().run_in_executor(None, self._get_index)
+            index = await asyncio.get_running_loop().run_in_executor(None, self._get_index)
             doc_count = len(index.docstore.docs)
             return {
                 "healthy": True,

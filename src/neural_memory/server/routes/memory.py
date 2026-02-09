@@ -162,7 +162,12 @@ async def list_neurons(
     """List neurons with optional filters."""
     from neural_memory.core.neuron import NeuronType
 
-    neuron_type = NeuronType(type) if type else None
+    neuron_type = None
+    if type:
+        try:
+            neuron_type = NeuronType(type)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid neuron type: {type}")
 
     neurons = await storage.find_neurons(
         type=neuron_type,
@@ -200,7 +205,12 @@ async def suggest_neurons(
     """Get prefix-based neuron suggestions."""
     from neural_memory.core.neuron import NeuronType
 
-    type_filter = NeuronType(type) if type else None
+    type_filter = None
+    if type:
+        try:
+            type_filter = NeuronType(type)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid neuron type: {type}")
     suggestions = await storage.suggest_neurons(
         prefix=prefix,
         type_filter=type_filter,
@@ -225,7 +235,10 @@ async def index_codebase(
     if request.action == "scan":
         from neural_memory.engine.codebase_encoder import CodebaseEncoder
 
+        cwd = Path(".").resolve()
         path = Path(request.path or ".").resolve()
+        if not path.is_relative_to(cwd):
+            raise HTTPException(status_code=400, detail="Path must be within working directory")
         if not path.is_dir():
             raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
 

@@ -18,6 +18,7 @@ from uuid import uuid4
 from neural_memory.core.fiber import Fiber
 from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
+from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
@@ -67,7 +68,7 @@ class MergeDetail:
 class ConsolidationReport:
     """Report of consolidation operation results."""
 
-    started_at: datetime = field(default_factory=datetime.now)
+    started_at: datetime = field(default_factory=utcnow)
     duration_ms: float = 0.0
     synapses_pruned: int = 0
     neurons_pruned: int = 0
@@ -152,7 +153,7 @@ class ConsolidationEngine:
         if strategies is None:
             strategies = [ConsolidationStrategy.ALL]
 
-        reference_time = reference_time or datetime.now()
+        reference_time = reference_time or utcnow()
         report = ConsolidationReport(started_at=reference_time, dry_run=dry_run)
         start = time.perf_counter()
 
@@ -248,7 +249,7 @@ class ConsolidationEngine:
                 # Protect bridge synapses (only connection between source and target)
                 if synapse.weight >= 0.02:
                     neighbors = await self._storage.get_neighbors(synapse.source_id)
-                    neighbor_ids = {n.id for n in neighbors}
+                    neighbor_ids = {n.id for n, _syn in neighbors}
                     if synapse.target_id in neighbor_ids and len(neighbor_ids) <= 1:
                         continue  # Bridge synapse — don't prune
 

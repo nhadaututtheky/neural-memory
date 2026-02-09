@@ -11,6 +11,7 @@ from neural_memory.cli._helpers import get_config, get_storage, output_result, r
 from neural_memory.core.memory_types import MemoryType
 from neural_memory.safety.freshness import analyze_freshness, format_age
 from neural_memory.safety.sensitive import check_sensitive_content, format_sensitive_warning
+from neural_memory.utils.timeutils import utcnow
 
 
 def stats(
@@ -247,14 +248,14 @@ def status(
 
         # Today's activity
         all_recent = await storage.get_fibers(limit=100)
-        today = datetime.now().date()
+        today = utcnow().date()
         today_count = sum(1 for f in all_recent if f.created_at.date() == today)
 
         # Build suggestions
         suggestions: list[str] = []
 
         if last_memory_at is not None:
-            hours_since = (datetime.now() - last_memory_at).total_seconds() / 3600
+            hours_since = (utcnow() - last_memory_at).total_seconds() / 3600
             if hours_since > 4:
                 suggestions.append(
                     f"Last save was {format_age(hours_since / 24)} ago — consider saving progress"
@@ -305,7 +306,7 @@ def status(
     typer.echo(f"  Today: {result['today_count']} memories")
     if result["last_memory_at"]:
         last_dt = datetime.fromisoformat(result["last_memory_at"])
-        hours_ago = (datetime.now() - last_dt).total_seconds() / 3600
+        hours_ago = (utcnow() - last_dt).total_seconds() / 3600
         if hours_ago < 1:
             age_str = f"{int(hours_ago * 60)}m ago"
         elif hours_ago < 24:

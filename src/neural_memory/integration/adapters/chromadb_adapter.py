@@ -86,7 +86,7 @@ class ChromaDBAdapter:
         collection_name = collection or self._default_collection
 
         if collection_name is None:
-            collections = await asyncio.get_event_loop().run_in_executor(
+            collections = await asyncio.get_running_loop().run_in_executor(
                 None,
                 client.list_collections,
             )
@@ -109,7 +109,7 @@ class ChromaDBAdapter:
         client = self._get_client()
 
         try:
-            coll = await asyncio.get_event_loop().run_in_executor(
+            coll = await asyncio.get_running_loop().run_in_executor(
                 None,
                 client.get_collection,
                 collection_name,
@@ -122,7 +122,7 @@ class ChromaDBAdapter:
         if limit:
             kwargs["limit"] = limit
 
-        result = await asyncio.get_event_loop().run_in_executor(
+        result = await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: coll.get(**kwargs),
         )
@@ -194,7 +194,7 @@ class ChromaDBAdapter:
         """Check ChromaDB connectivity."""
         try:
             client = self._get_client()
-            heartbeat = await asyncio.get_event_loop().run_in_executor(
+            heartbeat = await asyncio.get_running_loop().run_in_executor(
                 None,
                 client.heartbeat,
             )

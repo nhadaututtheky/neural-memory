@@ -74,8 +74,6 @@ class NMRememberTool(BaseNMTool):
         }
 
     async def execute(self, **kwargs: Any) -> str:
-        from datetime import datetime
-
         from neural_memory.core.memory_types import (
             MemoryType,
             Priority,
@@ -86,6 +84,7 @@ class NMRememberTool(BaseNMTool):
         from neural_memory.core.neuron import NeuronState
         from neural_memory.engine.encoder import MemoryEncoder
         from neural_memory.safety.sensitive import check_sensitive_content
+        from neural_memory.utils.timeutils import utcnow
 
         content = kwargs.get("content", "")
         if not content:
@@ -114,41 +113,47 @@ class NMRememberTool(BaseNMTool):
 
         storage = self._ctx.storage
         encoder = MemoryEncoder(storage, self._ctx.config)
+        auto_save_disabled = False
         if hasattr(storage, "disable_auto_save"):
             storage.disable_auto_save()
+            auto_save_disabled = True
 
-        result = await encoder.encode(
-            content=content,
-            timestamp=datetime.now(),
-            tags=tags if tags else None,
-        )
+        try:
+            result = await encoder.encode(
+                content=content,
+                timestamp=utcnow(),
+                tags=tags if tags else None,
+            )
 
-        typed_mem = TypedMemory.create(
-            fiber_id=result.fiber.id,
-            memory_type=mem_type,
-            priority=priority,
-            source="nanobot_tool",
-            expires_in_days=kwargs.get("expires_days"),
-            tags=tags if tags else None,
-        )
-        await storage.add_typed_memory(typed_mem)
+            typed_mem = TypedMemory.create(
+                fiber_id=result.fiber.id,
+                memory_type=mem_type,
+                priority=priority,
+                source="nanobot_tool",
+                expires_in_days=kwargs.get("expires_days"),
+                tags=tags if tags else None,
+            )
+            await storage.add_typed_memory(typed_mem)
 
-        type_decay_rate = get_decay_rate(mem_type.value)
-        for neuron in result.neurons_created:
-            state = await storage.get_neuron_state(neuron.id)
-            if state and state.decay_rate != type_decay_rate:
-                updated = NeuronState(
-                    neuron_id=state.neuron_id,
-                    activation_level=state.activation_level,
-                    access_frequency=state.access_frequency,
-                    last_activated=state.last_activated,
-                    decay_rate=type_decay_rate,
-                    created_at=state.created_at,
-                )
-                await storage.update_neuron_state(updated)
+            type_decay_rate = get_decay_rate(mem_type.value)
+            for neuron in result.neurons_created:
+                state = await storage.get_neuron_state(neuron.id)
+                if state and state.decay_rate != type_decay_rate:
+                    updated = NeuronState(
+                        neuron_id=state.neuron_id,
+                        activation_level=state.activation_level,
+                        access_frequency=state.access_frequency,
+                        last_activated=state.last_activated,
+                        decay_rate=type_decay_rate,
+                        created_at=state.created_at,
+                    )
+                    await storage.update_neuron_state(updated)
 
-        if hasattr(storage, "batch_save"):
-            await storage.batch_save()
+            if hasattr(storage, "batch_save"):
+                await storage.batch_save()
+        finally:
+            if auto_save_disabled and hasattr(storage, "enable_auto_save"):
+                storage.enable_auto_save()
 
         return self._json(
             {
@@ -209,9 +214,8 @@ class NMRecallTool(BaseNMTool):
         }
 
     async def execute(self, **kwargs: Any) -> str:
-        from datetime import datetime
-
         from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline
+        from neural_memory.utils.timeutils import utcnow
 
         query = kwargs.get("query", "")
         if not query:
@@ -230,7 +234,7 @@ class NMRecallTool(BaseNMTool):
             query=query,
             depth=depth,
             max_tokens=max_tokens,
-            reference_time=datetime.now(),
+            reference_time=utcnow(),
         )
 
         if result.confidence < min_confidence:
@@ -285,8 +289,6 @@ class NMContextTool(BaseNMTool):
         }
 
     async def execute(self, **kwargs: Any) -> str:
-        from datetime import datetime
-
         limit = kwargs.get("limit", 10)
         fresh_only = kwargs.get("fresh_only", False)
 
@@ -299,8 +301,9 @@ class NMContextTool(BaseNMTool):
 
         if fresh_only:
             from neural_memory.safety.freshness import FreshnessLevel, evaluate_freshness
+            from neural_memory.utils.timeutils import utcnow
 
-            now = datetime.now()
+            now = utcnow()
             fibers = [
                 f
                 for f in fibers

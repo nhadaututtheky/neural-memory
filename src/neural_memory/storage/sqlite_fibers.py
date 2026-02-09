@@ -228,6 +228,9 @@ class SQLiteFiberMixin:
         brain_id = self._get_brain_id()
 
         order_dir = "DESC" if descending else "ASC"
+        _allowed_order = {"created_at", "salience", "frequency"}
+        if order_by not in _allowed_order:
+            order_by = "created_at"
         query = f"SELECT * FROM fibers WHERE brain_id = ? ORDER BY {order_by} {order_dir} LIMIT ?"
 
         async with conn.execute(query, (brain_id, limit)) as cursor:

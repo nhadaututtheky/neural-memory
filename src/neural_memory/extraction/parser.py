@@ -9,6 +9,7 @@ from enum import StrEnum
 from neural_memory.extraction.entities import Entity, EntityExtractor
 from neural_memory.extraction.keywords import extract_keywords
 from neural_memory.extraction.temporal import TemporalExtractor, TimeHint
+from neural_memory.utils.timeutils import utcnow
 
 
 class QueryIntent(StrEnum):
@@ -249,7 +250,7 @@ class QueryParser:
             Stimulus containing all extracted signals
         """
         if reference_time is None:
-            reference_time = datetime.now()
+            reference_time = utcnow()
 
         # Detect language if auto
         if language == "auto":

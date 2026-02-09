@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from neural_memory.core.memory_types import MemoryType, Priority, TypedMemory
 from neural_memory.engine.encoder import MemoryEncoder
 from neural_memory.git_context import detect_git_context
+from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
     from neural_memory.storage.sqlite_store import SQLiteStorage
@@ -71,7 +72,7 @@ class SessionHandler:
 
     async def _session_set(self, args: dict[str, Any], storage: SQLiteStorage) -> dict[str, Any]:
         """Update session state with new metadata."""
-        now = datetime.now()
+        now = utcnow()
         existing = await self._find_current_session(storage)
         git_ctx = detect_git_context()
 
@@ -89,18 +90,21 @@ class SessionHandler:
         encoder = MemoryEncoder(storage, brain.config)
         storage.disable_auto_save()
 
-        result = await encoder.encode(content=content, timestamp=now, tags=session_tags)
-        typed_mem = TypedMemory.create(
-            fiber_id=result.fiber.id,
-            memory_type=MemoryType.CONTEXT,
-            priority=Priority.from_int(7),
-            source="mcp_session",
-            expires_in_days=1,
-            tags=session_tags,
-            metadata=metadata,
-        )
-        await storage.add_typed_memory(typed_mem)
-        await storage.batch_save()
+        try:
+            result = await encoder.encode(content=content, timestamp=now, tags=session_tags)
+            typed_mem = TypedMemory.create(
+                fiber_id=result.fiber.id,
+                memory_type=MemoryType.CONTEXT,
+                priority=Priority.from_int(7),
+                source="mcp_session",
+                expires_in_days=1,
+                tags=session_tags,
+                metadata=metadata,
+            )
+            await storage.add_typed_memory(typed_mem)
+            await storage.batch_save()
+        finally:
+            storage.enable_auto_save()
 
         return {
             "active": True,
@@ -138,37 +142,40 @@ class SessionHandler:
 
         encoder = MemoryEncoder(storage, brain.config)
         storage.disable_auto_save()
-        now = datetime.now()
+        now = utcnow()
 
-        # Tombstone so GET returns inactive
-        tombstone_result = await encoder.encode(
-            content=summary, timestamp=now, tags={"session_state"}
-        )
-        tombstone_mem = TypedMemory.create(
-            fiber_id=tombstone_result.fiber.id,
-            memory_type=MemoryType.CONTEXT,
-            priority=Priority.from_int(7),
-            source="mcp_session",
-            expires_in_days=1,
-            tags={"session_state"},
-            metadata={"active": False, "ended_at": now.isoformat()},
-        )
-        await storage.add_typed_memory(tombstone_mem)
+        try:
+            # Tombstone so GET returns inactive
+            tombstone_result = await encoder.encode(
+                content=summary, timestamp=now, tags={"session_state"}
+            )
+            tombstone_mem = TypedMemory.create(
+                fiber_id=tombstone_result.fiber.id,
+                memory_type=MemoryType.CONTEXT,
+                priority=Priority.from_int(7),
+                source="mcp_session",
+                expires_in_days=1,
+                tags={"session_state"},
+                metadata={"active": False, "ended_at": now.isoformat()},
+            )
+            await storage.add_typed_memory(tombstone_mem)
 
-        # Longer-lived summary for future recall
-        summary_result = await encoder.encode(
-            content=summary, timestamp=now, tags={"session_summary"}
-        )
-        summary_mem = TypedMemory.create(
-            fiber_id=summary_result.fiber.id,
-            memory_type=MemoryType.CONTEXT,
-            priority=Priority.from_int(5),
-            source="mcp_session",
-            expires_in_days=7,
-            tags={"session_summary"},
-        )
-        await storage.add_typed_memory(summary_mem)
-        await storage.batch_save()
+            # Longer-lived summary for future recall
+            summary_result = await encoder.encode(
+                content=summary, timestamp=now, tags={"session_summary"}
+            )
+            summary_mem = TypedMemory.create(
+                fiber_id=summary_result.fiber.id,
+                memory_type=MemoryType.CONTEXT,
+                priority=Priority.from_int(5),
+                source="mcp_session",
+                expires_in_days=7,
+                tags={"session_summary"},
+            )
+            await storage.add_typed_memory(summary_mem)
+            await storage.batch_save()
+        finally:
+            storage.enable_auto_save()
 
         return {"active": False, "summary": summary, "message": "Session ended and summary saved"}
 

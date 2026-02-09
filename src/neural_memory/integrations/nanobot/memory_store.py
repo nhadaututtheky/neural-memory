@@ -18,9 +18,11 @@ callers must await these methods when using NMMemoryStore.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
     from neural_memory.integrations.nanobot.context import NMContext
@@ -42,12 +44,12 @@ class NMMemoryStore:
 
     def get_today_file(self) -> Path:
         """Return synthetic path for today's memory file."""
-        today = datetime.now().strftime("%Y-%m-%d")
+        today = utcnow().strftime("%Y-%m-%d")
         return self._workspace / "memory" / f"{today}.md"
 
     async def read_today(self) -> str:
         """Read today's memories as timestamped markdown lines."""
-        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         fibers = await self._ctx.storage.get_fibers(limit=200)
 
         today_fibers = [f for f in fibers if f.created_at >= today_start]
@@ -74,24 +76,30 @@ class NMMemoryStore:
 
         storage = self._ctx.storage
         encoder = MemoryEncoder(storage, self._ctx.config)
+        auto_save_disabled = False
         if hasattr(storage, "disable_auto_save"):
             storage.disable_auto_save()
+            auto_save_disabled = True
 
-        result = await encoder.encode(
-            content=content,
-            timestamp=datetime.now(),
-        )
+        try:
+            result = await encoder.encode(
+                content=content,
+                timestamp=utcnow(),
+            )
 
-        mem_type = suggest_memory_type(content)
-        typed_mem = TypedMemory.create(
-            fiber_id=result.fiber.id,
-            memory_type=mem_type,
-            priority=Priority.NORMAL,
-            source="nanobot_store",
-        )
-        await storage.add_typed_memory(typed_mem)
-        if hasattr(storage, "batch_save"):
-            await storage.batch_save()
+            mem_type = suggest_memory_type(content)
+            typed_mem = TypedMemory.create(
+                fiber_id=result.fiber.id,
+                memory_type=mem_type,
+                priority=Priority.NORMAL,
+                source="nanobot_store",
+            )
+            await storage.add_typed_memory(typed_mem)
+            if hasattr(storage, "batch_save"):
+                await storage.batch_save()
+        finally:
+            if auto_save_disabled and hasattr(storage, "enable_auto_save"):
+                storage.enable_auto_save()
 
     async def read_long_term(self) -> str:
         """Read long-term memories via spreading activation recall."""
@@ -102,7 +110,7 @@ class NMMemoryStore:
             query="important long-term knowledge, key decisions, persistent instructions",
             depth=DepthLevel.CONTEXT,
             max_tokens=self._ctx.config.max_context_tokens,
-            reference_time=datetime.now(),
+            reference_time=utcnow(),
         )
         return result.context or ""
 
@@ -117,29 +125,35 @@ class NMMemoryStore:
 
         storage = self._ctx.storage
         encoder = MemoryEncoder(storage, self._ctx.config)
+        auto_save_disabled = False
         if hasattr(storage, "disable_auto_save"):
             storage.disable_auto_save()
+            auto_save_disabled = True
 
-        result = await encoder.encode(
-            content=content,
-            timestamp=datetime.now(),
-            tags={"long-term", "persistent"},
-        )
+        try:
+            result = await encoder.encode(
+                content=content,
+                timestamp=utcnow(),
+                tags={"long-term", "persistent"},
+            )
 
-        typed_mem = TypedMemory.create(
-            fiber_id=result.fiber.id,
-            memory_type=MemoryType.FACT,
-            priority=Priority.HIGH,
-            source="nanobot_store",
-            tags={"long-term", "persistent"},
-        )
-        await storage.add_typed_memory(typed_mem)
-        if hasattr(storage, "batch_save"):
-            await storage.batch_save()
+            typed_mem = TypedMemory.create(
+                fiber_id=result.fiber.id,
+                memory_type=MemoryType.FACT,
+                priority=Priority.HIGH,
+                source="nanobot_store",
+                tags={"long-term", "persistent"},
+            )
+            await storage.add_typed_memory(typed_mem)
+            if hasattr(storage, "batch_save"):
+                await storage.batch_save()
+        finally:
+            if auto_save_disabled and hasattr(storage, "enable_auto_save"):
+                storage.enable_auto_save()
 
     async def get_recent_memories(self, days: int = 7) -> str:
         """Get memories from the last N days as markdown."""
-        cutoff = datetime.now() - timedelta(days=days)
+        cutoff = utcnow() - timedelta(days=days)
         fibers = await self._ctx.storage.get_fibers(limit=200)
 
         recent = [f for f in fibers if f.created_at >= cutoff]

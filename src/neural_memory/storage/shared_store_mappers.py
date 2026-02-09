@@ -9,6 +9,7 @@ from neural_memory.core.brain import Brain, BrainConfig
 from neural_memory.core.fiber import Fiber
 from neural_memory.core.neuron import Neuron, NeuronState, NeuronType
 from neural_memory.core.synapse import Direction, Synapse, SynapseType
+from neural_memory.utils.timeutils import utcnow
 
 
 def dict_to_neuron(data: dict[str, Any]) -> Neuron:
@@ -40,7 +41,7 @@ def dict_to_neuron_state(data: dict[str, Any]) -> NeuronState:
         decay_rate=data.get("decay_rate", 0.1),
         created_at=datetime.fromisoformat(data["created_at"])
         if data.get("created_at")
-        else datetime.now(),
+        else utcnow(),
         firing_threshold=data.get("firing_threshold", 0.3),
         refractory_until=refractory_until,
         refractory_period_ms=data.get("refractory_period_ms", 500.0),
@@ -64,7 +65,7 @@ def dict_to_synapse(data: dict[str, Any]) -> Synapse:
         else None,
         created_at=datetime.fromisoformat(data["created_at"])
         if data.get("created_at")
-        else datetime.now(),
+        else utcnow(),
     )
 
 
@@ -91,7 +92,7 @@ def dict_to_fiber(data: dict[str, Any]) -> Fiber:
         agent_tags=agent_tags,
         created_at=datetime.fromisoformat(data["created_at"])
         if data.get("created_at")
-        else datetime.now(),
+        else utcnow(),
     )
 
 
@@ -131,8 +132,8 @@ def dict_to_brain(data: dict[str, Any]) -> Brain:
         shared_with=data.get("shared_with", []),
         created_at=datetime.fromisoformat(data["created_at"])
         if data.get("created_at")
-        else datetime.now(),
+        else utcnow(),
         updated_at=datetime.fromisoformat(data["updated_at"])
         if data.get("updated_at")
-        else datetime.now(),
+        else utcnow(),
     )

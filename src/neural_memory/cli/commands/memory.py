@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Annotated
 
 import typer
@@ -31,6 +30,7 @@ from neural_memory.safety.sensitive import (
     filter_sensitive_content,
     format_sensitive_warning,
 )
+from neural_memory.utils.timeutils import utcnow
 
 
 def _validate_content(
@@ -97,7 +97,7 @@ async def _encode_and_store(
 
     result = await encoder.encode(
         content=content,
-        timestamp=datetime.now(),
+        timestamp=utcnow(),
         tags=tags,
     )
 
@@ -279,7 +279,7 @@ def todo(
 
         result = await encoder.encode(
             content=task,
-            timestamp=datetime.now(),
+            timestamp=utcnow(),
             tags=set(tags) if tags else None,
         )
 
@@ -375,7 +375,7 @@ def recall(
 
         parser = QueryParser()
         router = QueryRouter()
-        stimulus = parser.parse(query, reference_time=datetime.now())
+        stimulus = parser.parse(query, reference_time=utcnow())
         route = router.route(stimulus)
 
         depth_level = (
@@ -386,7 +386,7 @@ def recall(
             query=query,
             depth=depth_level,
             max_tokens=max_tokens,
-            reference_time=datetime.now(),
+            reference_time=utcnow(),
         )
 
         if result.confidence < min_confidence:
@@ -457,7 +457,7 @@ def context(
             return {"context": "No memories stored yet.", "count": 0}
 
         # Filter by freshness if requested
-        now = datetime.now()
+        now = utcnow()
         if fresh_only:
             fresh_fibers = []
             for fiber in fibers:

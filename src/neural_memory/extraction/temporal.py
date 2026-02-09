@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 
+from neural_memory.utils.timeutils import utcnow
+
 logger = logging.getLogger(__name__)
 
 
@@ -321,7 +323,7 @@ class TemporalExtractor:
             List of TimeHint objects for found time references
         """
         if reference_time is None:
-            reference_time = datetime.now()
+            reference_time = utcnow()
 
         results: list[TimeHint] = []
 

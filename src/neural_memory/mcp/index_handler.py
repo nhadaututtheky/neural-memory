@@ -42,8 +42,11 @@ class IndexHandler:
         extensions = set(args.get("extensions", [".py"]))
         encoder = CodebaseEncoder(storage, brain.config)
         storage.disable_auto_save()
-        results = await encoder.index_directory(path, extensions=extensions)
-        await storage.batch_save()
+        try:
+            results = await encoder.index_directory(path, extensions=extensions)
+            await storage.batch_save()
+        finally:
+            storage.enable_auto_save()
 
         total_neurons = sum(len(r.neurons_created) for r in results)
         total_synapses = sum(len(r.synapses_created) for r in results)
@@ -106,6 +109,8 @@ class IndexHandler:
         except Exception as e:
             logger.warning("Import from %s failed: %s", source, e)
             return {"error": f"Import failed: {e}"}
+        finally:
+            storage.enable_auto_save()
 
         return {
             "success": True,

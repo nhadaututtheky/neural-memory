@@ -252,33 +252,46 @@ class ReflexActivation:
             for neuron_id in activation_set:
                 neuron_sources[neuron_id].append(i)
 
-        # Find neurons activated by multiple sources
-        co_activations: list[CoActivation] = []
+        # Find neurons activated by multiple sources and group them
+        co_activated_neurons: list[str] = []
+        max_source_count = 0
 
         for neuron_id, sources in neuron_sources.items():
             if len(sources) < 2:
                 continue
+            co_activated_neurons.append(neuron_id)
+            max_source_count = max(max_source_count, len(sources))
 
-            # Weight binding by activation levels from each source
-            source_activations = [
-                activation_sets[i][neuron_id].activation_level
-                for i in sources
-                if neuron_id in activation_sets[i]
-            ]
-            binding_strength = sum(source_activations) / len(activation_sets)
+        if not co_activated_neurons:
+            return []
 
-            co_activations.append(
-                CoActivation(
-                    neuron_ids=frozenset([neuron_id]),
-                    temporal_window_ms=temporal_window_ms,
-                    co_fire_count=len(sources),
-                    binding_strength=min(1.0, binding_strength),
-                    source_anchors=[],
-                )
+        # Group all co-activated neurons into a single CoActivation
+        # (they all fired within the same query/context temporal window)
+        source_activations: list[float] = []
+        for neuron_id in co_activated_neurons:
+            neuron_total = 0.0
+            neuron_count = 0
+            for i in neuron_sources[neuron_id]:
+                if neuron_id in activation_sets[i]:
+                    neuron_total += activation_sets[i][neuron_id].activation_level
+                    neuron_count += 1
+            if neuron_count > 0:
+                # Average activation per neuron across its sources
+                source_activations.append(neuron_total / len(activation_sets))
+
+        binding_strength = (
+            sum(source_activations) / len(co_activated_neurons) if source_activations else 0.0
+        )
+
+        co_activations: list[CoActivation] = [
+            CoActivation(
+                neuron_ids=frozenset(co_activated_neurons),
+                temporal_window_ms=temporal_window_ms,
+                co_fire_count=max_source_count,
+                binding_strength=min(1.0, binding_strength),
+                source_anchors=[],
             )
-
-        # Sort by binding strength descending
-        co_activations.sort(key=lambda c: c.binding_strength, reverse=True)
+        ]
 
         return co_activations
 

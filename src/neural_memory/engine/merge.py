@@ -7,9 +7,10 @@ conflict resolution strategies and provenance tracking.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
 from enum import StrEnum
 from typing import Any
+
+from neural_memory.utils.timeutils import utcnow
 
 
 class ConflictStrategy(StrEnum):
@@ -143,7 +144,7 @@ def _add_provenance(
     """Add merge provenance to entity metadata."""
     metadata = dict(data.get("metadata", {}))
     metadata["_merge_source_brain"] = source_brain_id
-    metadata["_merge_timestamp"] = datetime.now().isoformat()
+    metadata["_merge_timestamp"] = utcnow().isoformat()
     metadata["_merge_resolution"] = resolution
     return {**data, "metadata": metadata}
 
@@ -363,7 +364,7 @@ def merge_snapshots(
     merged_snapshot = BrainSnapshot(
         brain_id=local.brain_id,
         brain_name=local.brain_name,
-        exported_at=datetime.now(),
+        exported_at=utcnow(),
         version=local.version,
         neurons=merged_neurons,
         synapses=merged_synapses,

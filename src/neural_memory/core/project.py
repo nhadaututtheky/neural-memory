@@ -246,7 +246,11 @@ class MemoryScope:
         boost = 1.0
 
         # Recency boost (exponential decay within window)
-        if self.time_window_days is not None and created_at is not None:
+        if (
+            self.time_window_days is not None
+            and self.time_window_days > 0
+            and created_at is not None
+        ):
             days_ago = (utcnow() - created_at).days
             if days_ago <= self.time_window_days:
                 # Linear decay: 1.5 at day 0, 1.0 at window edge

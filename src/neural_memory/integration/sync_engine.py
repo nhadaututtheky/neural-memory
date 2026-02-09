@@ -98,8 +98,10 @@ class SyncEngine:
         )
 
         # Enable batch mode if supported
+        auto_save_disabled = False
         if hasattr(self._storage, "disable_auto_save"):
             self._storage.disable_auto_save()
+            auto_save_disabled = True
 
         imported_count = 0
         skipped_count = 0
@@ -109,52 +111,56 @@ class SyncEngine:
         record_to_fiber: dict[str, str] = {}
         all_relationships: list[ExternalRelationship] = []
 
-        for i, record in enumerate(records):
-            try:
-                if not record.content or not record.content.strip():
-                    skipped_count += 1
-                    continue
+        try:
+            for i, record in enumerate(records):
+                try:
+                    if not record.content or not record.content.strip():
+                        skipped_count += 1
+                        continue
 
-                if await self._is_already_imported(record):
-                    skipped_count += 1
-                    continue
+                    if await self._is_already_imported(record):
+                        skipped_count += 1
+                        continue
 
-                result = await self._mapper.map_record(record)
+                    result = await self._mapper.map_record(record)
 
-                fibers_created.append(result.encoding_result.fiber.id)
-                record_to_fiber[record.id] = result.encoding_result.fiber.id
-                imported_count += 1
+                    fibers_created.append(result.encoding_result.fiber.id)
+                    record_to_fiber[record.id] = result.encoding_result.fiber.id
+                    imported_count += 1
 
-                if record.relationships:
-                    all_relationships.extend(record.relationships)
+                    if record.relationships:
+                        all_relationships.extend(record.relationships)
 
-                if progress_callback is not None:
-                    progress_callback(i + 1, total_records, record.id)
+                    if progress_callback is not None:
+                        progress_callback(i + 1, total_records, record.id)
 
-                # Batch commit
-                if (i + 1) % self._batch_size == 0 and hasattr(self._storage, "batch_save"):
-                    await self._storage.batch_save()
+                    # Batch commit
+                    if (i + 1) % self._batch_size == 0 and hasattr(self._storage, "batch_save"):
+                        await self._storage.batch_save()
 
-            except Exception as e:
-                failed_count += 1
-                error_msg = f"Failed to import record {record.id}: {e}"
-                errors.append(error_msg)
-                logger.warning(error_msg)
+                except Exception as e:
+                    failed_count += 1
+                    error_msg = f"Failed to import record {record.id}: {e}"
+                    errors.append(error_msg)
+                    logger.warning(error_msg)
 
-        # Second pass: create relationship synapses
-        if all_relationships:
-            try:
-                await self._mapper.create_relationship_synapses(
-                    record_to_fiber=record_to_fiber,
-                    relationships=all_relationships,
-                )
-            except Exception as e:
-                errors.append(f"Failed to create relationship synapses: {e}")
-                logger.warning("Relationship synapse creation failed: %s", e)
+            # Second pass: create relationship synapses
+            if all_relationships:
+                try:
+                    await self._mapper.create_relationship_synapses(
+                        record_to_fiber=record_to_fiber,
+                        relationships=all_relationships,
+                    )
+                except Exception as e:
+                    errors.append(f"Failed to create relationship synapses: {e}")
+                    logger.warning("Relationship synapse creation failed: %s", e)
 
-        # Final commit
-        if hasattr(self._storage, "batch_save"):
-            await self._storage.batch_save()
+            # Final commit
+            if hasattr(self._storage, "batch_save"):
+                await self._storage.batch_save()
+        finally:
+            if auto_save_disabled and hasattr(self._storage, "enable_auto_save"):
+                self._storage.enable_auto_save()
 
         duration = time.monotonic() - start_time
 

@@ -258,7 +258,10 @@ async def merge_brain(
     )
 
     # Merge
-    conflict_strategy = ConflictStrategy(request.strategy)
+    try:
+        conflict_strategy = ConflictStrategy(request.strategy)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid strategy: {request.strategy}")
     merged_snapshot, merge_report = merge_snapshots(
         local=local_snapshot,
         incoming=incoming_snapshot,

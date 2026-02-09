@@ -50,6 +50,7 @@ from neural_memory.mcp.prompt import get_system_prompt
 from neural_memory.mcp.session_handler import SessionHandler
 from neural_memory.mcp.tool_schemas import get_tool_schemas
 from neural_memory.unified_config import get_config, get_shared_storage
+from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
     from neural_memory.storage.sqlite_store import SQLiteStorage
@@ -176,39 +177,42 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
         encoder = MemoryEncoder(storage, brain.config)
         storage.disable_auto_save()
 
-        tags = set(args.get("tags", []))
-        result = await encoder.encode(
-            content=content, timestamp=datetime.now(), tags=tags if tags else None
-        )
+        try:
+            tags = set(args.get("tags", []))
+            result = await encoder.encode(
+                content=content, timestamp=utcnow(), tags=tags if tags else None
+            )
 
-        typed_mem = TypedMemory.create(
-            fiber_id=result.fiber.id,
-            memory_type=mem_type,
-            priority=priority,
-            source="mcp_tool",
-            expires_in_days=args.get("expires_days"),
-            tags=tags if tags else None,
-        )
-        await storage.add_typed_memory(typed_mem)
+            typed_mem = TypedMemory.create(
+                fiber_id=result.fiber.id,
+                memory_type=mem_type,
+                priority=priority,
+                source="mcp_tool",
+                expires_in_days=args.get("expires_days"),
+                tags=tags if tags else None,
+            )
+            await storage.add_typed_memory(typed_mem)
 
-        # Set type-specific decay rate on neuron states
-        type_decay_rate = get_decay_rate(mem_type.value)
-        for neuron in result.neurons_created:
-            state = await storage.get_neuron_state(neuron.id)
-            if state and state.decay_rate != type_decay_rate:
-                from neural_memory.core.neuron import NeuronState
+            # Set type-specific decay rate on neuron states
+            type_decay_rate = get_decay_rate(mem_type.value)
+            for neuron in result.neurons_created:
+                state = await storage.get_neuron_state(neuron.id)
+                if state and state.decay_rate != type_decay_rate:
+                    from neural_memory.core.neuron import NeuronState
 
-                updated_state = NeuronState(
-                    neuron_id=state.neuron_id,
-                    activation_level=state.activation_level,
-                    access_frequency=state.access_frequency,
-                    last_activated=state.last_activated,
-                    decay_rate=type_decay_rate,
-                    created_at=state.created_at,
-                )
-                await storage.update_neuron_state(updated_state)
+                    updated_state = NeuronState(
+                        neuron_id=state.neuron_id,
+                        activation_level=state.activation_level,
+                        access_frequency=state.access_frequency,
+                        last_activated=state.last_activated,
+                        decay_rate=type_decay_rate,
+                        created_at=state.created_at,
+                    )
+                    await storage.update_neuron_state(updated_state)
 
-        await storage.batch_save()
+            await storage.batch_save()
+        finally:
+            storage.enable_auto_save()
 
         self._fire_eternal_trigger(content)
 
@@ -267,7 +271,7 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
             query=effective_query,
             depth=depth,
             max_tokens=max_tokens,
-            reference_time=datetime.now(),
+            reference_time=utcnow(),
             valid_at=valid_at,
         )
 
@@ -319,7 +323,7 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
         if fresh_only:
             from neural_memory.safety.freshness import FreshnessLevel, evaluate_freshness
 
-            now = datetime.now()
+            now = utcnow()
             fresh_fibers = [
                 f
                 for f in fibers

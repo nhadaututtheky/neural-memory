@@ -69,10 +69,11 @@ def create_app(
     if cors_origins is None:
         cors_origins = ["*"]
 
+    is_wildcard = cors_origins == ["*"]
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
-        allow_credentials=True,
+        allow_credentials=not is_wildcard,  # Don't allow creds with wildcard
         allow_methods=["*"],
         allow_headers=["*"],
     )

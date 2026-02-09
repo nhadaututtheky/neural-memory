@@ -187,6 +187,9 @@ class NeuronState:
         Returns:
             New NeuronState with decayed activation
         """
+        if time_delta_seconds <= 0:
+            return self  # No decay for non-positive time deltas
+
         days_elapsed = time_delta_seconds / 86400  # Convert to days
         decay_factor = math.exp(-self.decay_rate * days_elapsed)
         new_level = self.activation_level * decay_factor

@@ -32,6 +32,7 @@ from neural_memory.engine.stabilization import StabilizationConfig, stabilize
 from neural_memory.engine.write_queue import DeferredWriteQueue
 from neural_memory.extraction.parser import QueryIntent, QueryParser, Stimulus
 from neural_memory.extraction.router import QueryRouter
+from neural_memory.utils.timeutils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -122,11 +123,14 @@ class ReflexPipeline:
         """
         start_time = time.perf_counter()
 
+        # Clear stale writes from any previous failed query
+        self._write_queue.clear()
+
         if max_tokens is None:
             max_tokens = self._config.max_context_tokens
 
         if reference_time is None:
-            reference_time = datetime.now()
+            reference_time = utcnow()
 
         # 1. Parse query into stimulus
         stimulus = self._parser.parse(query, reference_time)
@@ -895,7 +899,7 @@ class ReflexPipeline:
         def _fiber_score(fiber: Fiber) -> float:
             freshness = 0.5
             if fiber.last_conducted:
-                hours_ago = (datetime.now() - fiber.last_conducted).total_seconds() / 3600
+                hours_ago = (utcnow() - fiber.last_conducted).total_seconds() / 3600
                 freshness = max(0.1, 1.0 / (1.0 + math.exp((hours_ago - 72) / 36)))
             return fiber.salience * freshness * fiber.conductivity
 

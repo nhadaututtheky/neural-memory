@@ -10,6 +10,7 @@ import typer
 
 from neural_memory.cli._helpers import get_config, get_storage, run_async
 from neural_memory.core.memory_types import Priority, TypedMemory, suggest_memory_type
+from neural_memory.utils.timeutils import utcnow
 
 
 def quick_recall(
@@ -78,7 +79,7 @@ def quick_add(
 
         result = await encoder.encode(
             content=content,
-            timestamp=datetime.now(),
+            timestamp=utcnow(),
         )
 
         # Create typed memory
@@ -146,7 +147,7 @@ def show_today() -> None:
 
         # Get recent fibers and filter for today
         fibers = await storage.get_fibers(limit=100)
-        today = datetime.now().date()
+        today = utcnow().date()
         today_fibers = [f for f in fibers if f.created_at.date() == today]
 
         if not today_fibers:

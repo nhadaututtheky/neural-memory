@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from typing import Any
 
 from neural_memory.core.eternal_context import EternalContext
 from neural_memory.core.memory_types import MemoryType
 from neural_memory.core.trigger_engine import check_triggers
 from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline
+from neural_memory.utils.timeutils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +130,7 @@ class EternalHandler:
 
         pipeline = ReflexPipeline(storage, brain.config)
         result = await pipeline.query(
-            query=topic, depth=DepthLevel(1), max_tokens=500, reference_time=datetime.now()
+            query=topic, depth=DepthLevel(1), max_tokens=500, reference_time=utcnow()
         )
         context_text = await ctx.get_injection(level=1)
         if result.context:

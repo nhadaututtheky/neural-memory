@@ -9,6 +9,7 @@ from typing import Any
 
 from neural_memory.core.brain import Brain, BrainConfig, BrainSnapshot
 from neural_memory.storage.memory_store import InMemoryStorage
+from neural_memory.utils.timeutils import utcnow
 
 
 class PersistentStorage(InMemoryStorage):
@@ -122,7 +123,7 @@ class PersistentStorage(InMemoryStorage):
                 "config": snapshot.config,
                 "metadata": snapshot.metadata,
             },
-            "saved_at": datetime.now().isoformat(),
+            "saved_at": utcnow().isoformat(),
         }
 
         self._file_path.parent.mkdir(parents=True, exist_ok=True)

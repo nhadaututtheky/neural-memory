@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -25,6 +24,7 @@ from neural_memory.core.neuron import NeuronType
 from neural_memory.core.synapse import SynapseType
 from neural_memory.engine.activation import ActivationResult
 from neural_memory.engine.retrieval_types import ScoreBreakdown
+from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
     from neural_memory.core.fiber import Fiber
@@ -192,7 +192,7 @@ async def _compute_score_breakdown(
     top_state = await storage.get_neuron_state(top_id)
     if top_state:
         if top_state.last_activated:
-            hours_since = (datetime.now() - top_state.last_activated).total_seconds() / 3600
+            hours_since = (utcnow() - top_state.last_activated).total_seconds() / 3600
             freshness_boost = 0.15 / (1.0 + math.exp((hours_since - 72) / 36))
         if top_state.access_frequency > 0:
             frequency_boost = min(0.1, 0.03 * math.log1p(top_state.access_frequency))

@@ -86,7 +86,7 @@ class Mem0Adapter:
         if self._agent_id:
             kwargs["agent_id"] = self._agent_id
 
-        memories = await asyncio.get_event_loop().run_in_executor(
+        memories = await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: client.get_all(**kwargs),
         )
@@ -163,7 +163,7 @@ class Mem0Adapter:
         """Check Mem0 connectivity."""
         try:
             client = self._get_client()
-            await asyncio.get_event_loop().run_in_executor(
+            await asyncio.get_running_loop().run_in_executor(
                 None,
                 lambda: client.get_all(user_id=self._user_id or "healthcheck", limit=1),
             )

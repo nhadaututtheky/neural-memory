@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import math
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 from neural_memory.core.neuron import NeuronType
 from neural_memory.engine.activation import ActivationResult
 from neural_memory.engine.retrieval_types import ScoreBreakdown
+from neural_memory.utils.timeutils import utcnow
 
 # Average tokens per whitespace-separated word (accounts for subword tokenization)
 _TOKEN_RATIO = 1.3
@@ -78,7 +78,7 @@ async def reconstitute_answer(
     if top_state:
         # Freshness: sigmoid decay — ~0.15 at <1h, ~0.08 at 3d, ~0.02 at 7d
         if top_state.last_activated:
-            hours_since = (datetime.now() - top_state.last_activated).total_seconds() / 3600
+            hours_since = (utcnow() - top_state.last_activated).total_seconds() / 3600
             freshness_boost = 0.15 / (1.0 + math.exp((hours_since - 72) / 36))
 
         # Frequency: logarithmic — diminishing returns past ~10 accesses
