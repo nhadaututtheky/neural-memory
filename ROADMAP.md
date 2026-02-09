@@ -4,8 +4,8 @@
 > Every feature passes the VISION.md 4-question test + brain test.
 > ZERO LLM dependency — pure algorithmic, regex, graph-based.
 
-**Current state**: v1.0.2 shipped (schema v11). Post-v1.0 roadmap active.
-**Next milestone**: v1.1.0 — Community Foundations (ClawHub SKILL + OpenClaw engagement).
+**Current state**: v1.0.2 shipped (schema v11). v1.1.0 in progress.
+**Next milestone**: v1.2.0 — Dashboard Foundation (Alpine.js SPA + Cytoscape.js).
 
 ---
 
@@ -937,7 +937,7 @@ Starting from 1105 tests (v0.20.0) → targeting ~1,455+ tests at v1.0.0.
 >
 > **Three pillars**: Dashboard + Integrations + Community
 >
-> **Current state**: v1.0.2 shipped. 1,340 tests. 16 MCP tools. Nanobot integration done.
+> **Current state**: v1.0.2 shipped. 1,340 tests. 16 MCP tools. Nanobot integration done. ClawHub SKILL published.
 
 ## Strategic Context
 
@@ -988,59 +988,54 @@ Both replace the exclusive memory slot. NM needs to enter this space with a stro
 
 > Get noticed. Minimal code, maximum visibility.
 
-**Target**: 1 week after v1.0.2
+**Status**: In progress. SKILL published, blog written, PR research done.
 
-### 1.1 ClawHub SKILL.md
+### 1.1 ClawHub SKILL.md ✅
 
-Publish a `SKILL.md` to [ClawHub](https://github.com/openclaw/clawhub) — OpenClaw's official skill registry (2,999+ curated skills, 60k Discord users browse it).
+Published `neural-memory@1.0.0` to [ClawHub](https://clawhub.ai/skills/neural-memory) — OpenClaw's official skill registry (2,999+ curated skills, 60k Discord users browse it).
 
 **What it does**: Instructs OpenClaw's agent to use NM via the existing MCP server.
+**Shipped**: Commit `8d661cb`, verified live via `clawhub inspect neural-memory`.
 
-```yaml
-# SKILL.md frontmatter
-name: neural-memory
-version: 1.0.0
-description: "Associative memory with spreading activation, decay, and temporal reasoning"
-tags: [memory, neural, recall, knowledge-graph]
-```
+### 1.2 OpenClaw Issue #7273 Fix PR
 
-**Content**: How to install NM, configure MCP, and use the 16 tools.
+Issue #8921 was **closed as duplicate** of [#7273](https://github.com/openclaw/openclaw/issues/7273) — `openclaw status` reports memory as unavailable for third-party plugins.
 
-**Why SKILL first**: Zero TypeScript code. Leverages NM's existing MCP server. Gets immediate vector-search visibility on ClawHub.
+**Current state**: Existing [PR #7289](https://github.com/openclaw/openclaw/pulls/7289) is stalled (confidence 2/5, SQL injection + cross-platform bugs flagged by Greptile review).
 
-### 1.2 OpenClaw Issue #8921 Fix PR
+**Opportunity**: Submit a smaller, cleaner PR (~20 lines, 2 files: `status.scan.ts` + `status.command.ts`) that just fixes the rendering without the 32-file scope creep of PR #7289.
 
-Contribute a fix for [Issue #8921](https://github.com/openclaw/openclaw/issues/8921) — third-party memory plugins not detected by `status` command.
+**Why**: Builds credibility as contributor. Directly unblocks NM status display. Gets NM's name in OpenClaw's commit history.
 
-**Why**: Builds credibility as contributor. Directly unblocks NM (and all third-party memory plugins). Gets NM's name in OpenClaw's commit history.
+### 1.3 Blog Post: "Neural Memory for OpenClaw" ✅
 
-### 1.3 Blog Post: "Neural Memory for OpenClaw"
+Written in Vietnamese at `docs/blog/neural-memory-openclaw.md`.
+Updated to v1.0.2: 1,340 tests, 16 MCP tools, 10 feature sections, full comparison table.
 
-Publish on Dev.to / Medium / GitHub blog:
-- Side-by-side comparison: flat-file memory vs neural graph
-- Demo GIF/video showing recall quality difference
-- Install instructions (one command)
+**Pending**: Publish to Dev.to / Viblo.asia / Medium.
 
 ### 1.4 Community Launch
 
-| Action | Channel | Timing |
+| Action | Channel | Status |
 |--------|---------|--------|
-| Post SKILL + demo | OpenClaw Discord #showcase | Day 1 |
-| Tag @openclaw on X | Twitter | Day 1 |
-| Submit to awesome-openclaw-skills | GitHub PR | Day 2 |
-| Post blog | Dev.to + Medium | Day 3 |
+| Publish SKILL | ClawHub | ✅ Done |
+| Post blog | Dev.to + Viblo.asia | Pending |
+| Post SKILL + demo | OpenClaw Discord #showcase | Pending |
+| Tag @openclaw on X | Twitter | Pending |
+| Submit to awesome-openclaw-skills | GitHub PR | Pending |
+| Submit clean PR for #7273 | OpenClaw repo | Pending |
 
 ### Files
 
-| Action | File | Description |
-|--------|------|-------------|
-| **New** | `integrations/openclaw/SKILL.md` | ClawHub skill definition |
-| **New** | `integrations/openclaw/README.md` | OpenClaw integration guide |
-| **New** | `docs/blog/neural-memory-openclaw.md` | Blog post |
+| Action | File | Status |
+|--------|------|--------|
+| ✅ | `integrations/neural-memory/SKILL.md` | Published to ClawHub |
+| ✅ | `docs/blog/neural-memory-openclaw.md` | Written, needs publishing |
+| ✅ | `docs/ARCHITECTURE_V1_EXTENDED.md` | Committed |
 
 ### Scope
 
-~200 lines docs. No code changes.
+~500 lines docs shipped. Remaining: external publishing + OpenClaw PR.
 
 ---
 
@@ -1477,4 +1472,4 @@ Do v1.4.0 before v1.3.0 because OpenClaw plugin provides the real-world integrat
 ---
 
 *See [VISION.md](VISION.md) for the north star guiding all decisions.*
-*Last updated: 2026-02-09 (Post-v1.0 roadmap: Dashboard + OpenClaw + Community strategy)*
+*Last updated: 2026-02-09 (v1.1.0 in progress: SKILL published, blog written, #7273 PR pending)*
