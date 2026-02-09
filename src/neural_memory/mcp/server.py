@@ -613,6 +613,12 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
         if source_brain is None:
             return {"error": f"Source brain '{source_brain_name}' not found"}
 
+        if source_brain.id == brain.id:
+            return {
+                "error": "Source brain and target brain are the same. "
+                "Transplanting a brain into itself is a destructive no-op."
+            }
+
         from neural_memory.engine.brain_transplant import TransplantFilter, transplant
         from neural_memory.engine.merge import ConflictStrategy
 
@@ -746,7 +752,7 @@ async def run_mcp_server() -> None:
     try:
         while True:
             try:
-                line = await asyncio.get_event_loop().run_in_executor(None, sys.stdin.readline)
+                line = await asyncio.get_running_loop().run_in_executor(None, sys.stdin.readline)
                 if not line:
                     break
 

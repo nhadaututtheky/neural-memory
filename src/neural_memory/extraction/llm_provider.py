@@ -23,6 +23,13 @@ class ExtractionConfig:
     model: str = ""
     fallback_to_regex: bool = True
 
+    def __post_init__(self) -> None:
+        if self.enabled:
+            if self.provider == "none":
+                raise ValueError("provider must not be 'none' when extraction is enabled")
+            if not self.model:
+                raise ValueError("model must not be empty when extraction is enabled")
+
 
 @dataclass(frozen=True)
 class RelationCandidate:

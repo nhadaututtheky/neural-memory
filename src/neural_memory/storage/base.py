@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Literal
 if TYPE_CHECKING:
     from neural_memory.core.brain import Brain, BrainSnapshot
     from neural_memory.core.fiber import Fiber
+    from neural_memory.core.memory_types import MemoryType, Priority, TypedMemory
     from neural_memory.core.neuron import Neuron, NeuronState, NeuronType
     from neural_memory.core.synapse import Synapse, SynapseType
     from neural_memory.engine.brain_versioning import BrainVersion
@@ -162,6 +163,14 @@ class NeuralStorage(ABC):
         """
         ...
 
+    async def get_all_neuron_states(self) -> list[NeuronState]:
+        """Get all neuron states for the current brain.
+
+        Returns:
+            List of all neuron states
+        """
+        raise NotImplementedError
+
     async def get_neuron_states_batch(self, neuron_ids: list[str]) -> dict[str, NeuronState]:
         """Get activation states for multiple neurons in one call.
 
@@ -259,6 +268,14 @@ class NeuralStorage(ABC):
             True if deleted, False if not found
         """
         ...
+
+    async def get_all_synapses(self) -> list[Synapse]:
+        """Get all synapses for the current brain.
+
+        Returns:
+            List of all synapses
+        """
+        raise NotImplementedError
 
     async def get_synapses_for_neurons(
         self,
@@ -484,6 +501,17 @@ class NeuralStorage(ABC):
         """
         ...
 
+    async def find_brain_by_name(self, name: str) -> Brain | None:
+        """Find a brain by its name.
+
+        Args:
+            name: The brain name to search for
+
+        Returns:
+            The brain if found, None otherwise
+        """
+        raise NotImplementedError
+
     @abstractmethod
     async def export_brain(self, brain_id: str) -> BrainSnapshot:
         """
@@ -548,6 +576,84 @@ class NeuralStorage(ABC):
             Dict with enhanced statistics
         """
         ...
+
+    # ========== Typed Memory Operations ==========
+
+    async def add_typed_memory(self, typed_memory: TypedMemory) -> str:
+        """Add a typed memory to storage.
+
+        Args:
+            typed_memory: The typed memory to add
+
+        Returns:
+            The fiber ID used as the typed memory key
+        """
+        raise NotImplementedError
+
+    async def get_typed_memory(self, fiber_id: str) -> TypedMemory | None:
+        """Get a typed memory by its fiber ID.
+
+        Args:
+            fiber_id: The fiber ID
+
+        Returns:
+            The typed memory if found, None otherwise
+        """
+        raise NotImplementedError
+
+    async def find_typed_memories(
+        self,
+        memory_type: MemoryType | None = None,
+        min_priority: Priority | None = None,
+        include_expired: bool = False,
+        project_id: str | None = None,
+        tags: set[str] | None = None,
+        limit: int = 100,
+    ) -> list[TypedMemory]:
+        """Find typed memories matching criteria.
+
+        Args:
+            memory_type: Filter by memory type
+            min_priority: Filter by minimum priority
+            include_expired: Include expired memories
+            project_id: Filter by project ID
+            tags: Filter by having all these tags
+            limit: Maximum results to return
+
+        Returns:
+            List of matching typed memories
+        """
+        raise NotImplementedError
+
+    async def update_typed_memory(self, typed_memory: TypedMemory) -> None:
+        """Update an existing typed memory.
+
+        Args:
+            typed_memory: The updated typed memory
+
+        Raises:
+            ValueError: If typed memory doesn't exist
+        """
+        raise NotImplementedError
+
+    async def delete_typed_memory(self, fiber_id: str) -> bool:
+        """Delete a typed memory by its fiber ID.
+
+        Args:
+            fiber_id: The fiber ID to delete
+
+        Returns:
+            True if deleted, False if not found
+        """
+        raise NotImplementedError
+
+    async def get_expired_memories(self) -> list[TypedMemory]:
+        """Get all expired typed memories for the current brain.
+
+        Returns:
+            List of expired typed memories
+        """
+        raise NotImplementedError
 
     # ========== Maturation Operations ==========
 

@@ -285,3 +285,283 @@ class TestTransplantDataStructures:
         assert f.neuron_types is None
         assert f.min_salience == 0.0
         assert f.include_orphan_neurons is False
+
+
+# ── Neuron types filter tests ────────────────────────────────────
+
+
+class TestNeuronTypesFilter:
+    """Test neuron_types filtering in extract_subgraph."""
+
+    @pytest.mark.asyncio
+    async def test_filter_by_entity_type(self, source_storage: InMemoryStorage) -> None:
+        """Only neurons matching neuron_types should be in the extracted subgraph."""
+        snapshot = await source_storage.export_brain("src-1")
+        filtered = extract_subgraph(
+            snapshot,
+            TransplantFilter(neuron_types=frozenset({"entity"})),
+        )
+
+        # Only entity neurons should be present
+        for neuron in filtered.neurons:
+            assert neuron["type"] == "entity"
+
+        # Source has 3 entity neurons: Redis, PostgreSQL, Nginx
+        entity_contents = {n["content"] for n in filtered.neurons}
+        assert "Redis" in entity_contents
+        assert "PostgreSQL" in entity_contents
+        assert "Nginx" in entity_contents
+
+    @pytest.mark.asyncio
+    async def test_filter_by_concept_type(self, source_storage: InMemoryStorage) -> None:
+        """Only CONCEPT neurons should appear when filtered by concept."""
+        snapshot = await source_storage.export_brain("src-1")
+        filtered = extract_subgraph(
+            snapshot,
+            TransplantFilter(neuron_types=frozenset({"concept"})),
+        )
+
+        for neuron in filtered.neurons:
+            assert neuron["type"] == "concept"
+
+    @pytest.mark.asyncio
+    async def test_filter_by_multiple_types(self, source_storage: InMemoryStorage) -> None:
+        """Multiple neuron_types should allow neurons of any listed type."""
+        snapshot = await source_storage.export_brain("src-1")
+        filtered = extract_subgraph(
+            snapshot,
+            TransplantFilter(neuron_types=frozenset({"entity", "action"})),
+        )
+
+        for neuron in filtered.neurons:
+            assert neuron["type"] in {"entity", "action"}
+
+        # Should include entity (Redis, PostgreSQL, Nginx) + action (deploy)
+        assert len(filtered.neurons) == 4
+
+
+# ── Include orphan neurons tests ─────────────────────────────────
+
+
+class TestIncludeOrphanNeurons:
+    """Test include_orphan_neurons flag in extract_subgraph."""
+
+    @pytest.mark.asyncio
+    async def test_orphan_included_when_flag_set(self, source_storage: InMemoryStorage) -> None:
+        """Orphan neurons matching neuron_types should be included."""
+        # Add an orphan neuron (not in any fiber)
+        orphan = Neuron.create(
+            type=NeuronType.ENTITY,
+            content="OrphanEntity",
+            neuron_id="n-orphan",
+        )
+        await source_storage.add_neuron(orphan)
+
+        snapshot = await source_storage.export_brain("src-1")
+
+        # Without orphan flag, filter by tag to get subset + entity type
+        filtered_no_orphan = extract_subgraph(
+            snapshot,
+            TransplantFilter(
+                tags=frozenset({"caching"}),
+                neuron_types=frozenset({"entity"}),
+                include_orphan_neurons=False,
+            ),
+        )
+        orphan_ids_no = {n["id"] for n in filtered_no_orphan.neurons}
+        assert "n-orphan" not in orphan_ids_no
+
+        # With orphan flag, orphan entity should be included
+        filtered_with_orphan = extract_subgraph(
+            snapshot,
+            TransplantFilter(
+                tags=frozenset({"caching"}),
+                neuron_types=frozenset({"entity"}),
+                include_orphan_neurons=True,
+            ),
+        )
+        orphan_ids_yes = {n["id"] for n in filtered_with_orphan.neurons}
+        assert "n-orphan" in orphan_ids_yes
+
+    @pytest.mark.asyncio
+    async def test_orphan_excluded_by_default(self, source_storage: InMemoryStorage) -> None:
+        """Orphan neurons should NOT be included when flag is False."""
+        orphan = Neuron.create(
+            type=NeuronType.CONCEPT,
+            content="LonelyConcept",
+            neuron_id="n-lonely",
+        )
+        await source_storage.add_neuron(orphan)
+
+        snapshot = await source_storage.export_brain("src-1")
+        filtered = extract_subgraph(
+            snapshot,
+            TransplantFilter(
+                tags=frozenset({"caching"}),
+                neuron_types=frozenset({"concept"}),
+            ),
+        )
+
+        neuron_ids = {n["id"] for n in filtered.neurons}
+        assert "n-lonely" not in neuron_ids
+
+
+# ── Combined AND filter tests ────────────────────────────────────
+
+
+class TestCombinedAndFilter:
+    """Test combined AND filter logic: tags AND min_salience."""
+
+    @pytest.mark.asyncio
+    async def test_combined_tags_and_salience(self, source_storage: InMemoryStorage) -> None:
+        """Both tags AND min_salience must match (AND logic)."""
+        snapshot = await source_storage.export_brain("src-1")
+
+        # All fibers have salience=0.0 by default, so with min_salience=0.5
+        # nothing should pass even though tags match
+        filtered = extract_subgraph(
+            snapshot,
+            TransplantFilter(
+                tags=frozenset({"caching"}),
+                min_salience=0.5,
+            ),
+        )
+        assert len(filtered.fibers) == 0
+
+    @pytest.mark.asyncio
+    async def test_combined_passes_when_both_criteria_met(
+        self, source_storage: InMemoryStorage
+    ) -> None:
+        """Fibers should pass when both tags and salience criteria are met."""
+        # Update f-cache fiber's salience
+        fiber = await source_storage.get_fiber("f-cache")
+        assert fiber is not None
+        updated_fiber = fiber.with_salience(0.8)
+        await source_storage.update_fiber(updated_fiber)
+
+        snapshot = await source_storage.export_brain("src-1")
+        filtered = extract_subgraph(
+            snapshot,
+            TransplantFilter(
+                tags=frozenset({"caching"}),
+                min_salience=0.5,
+            ),
+        )
+        assert len(filtered.fibers) == 1
+        assert filtered.fibers[0]["id"] == "f-cache"
+
+
+# ── Conflict strategy tests ──────────────────────────────────────
+
+
+class TestConflictStrategyPreferRemote:
+    """Test transplant with PREFER_REMOTE conflict strategy."""
+
+    @pytest.mark.asyncio
+    async def test_prefer_remote_overwrites_local(
+        self,
+        source_storage: InMemoryStorage,
+        target_storage: InMemoryStorage,
+    ) -> None:
+        """PREFER_REMOTE should let source (remote) data win on conflict."""
+        from neural_memory.engine.merge import ConflictStrategy
+
+        # Add a neuron to target with the same fingerprint (type + content)
+        # as one in source to create a conflict
+        local_neuron = Neuron.create(
+            type=NeuronType.ENTITY,
+            content="Redis",
+            neuron_id="n-local-redis",
+            metadata={"origin": "local"},
+        )
+        await target_storage.add_neuron(local_neuron)
+        local_fiber = Fiber.create(
+            neuron_ids={"n-local-redis"},
+            synapse_ids=set(),
+            anchor_neuron_id="n-local-redis",
+            fiber_id="f-local",
+        )
+        await target_storage.add_fiber(local_fiber)
+
+        result = await transplant(
+            source_storage=source_storage,
+            target_storage=target_storage,
+            source_brain_id="src-1",
+            target_brain_id="tgt-1",
+            filt=TransplantFilter(tags=frozenset({"caching"})),
+            strategy=ConflictStrategy.PREFER_REMOTE,
+        )
+
+        # The merge should have resolved the conflict
+        assert result.merge_report.neurons_updated >= 1
+
+        # Verify conflict was recorded as kept_incoming (remote wins)
+        neuron_conflicts = [c for c in result.merge_report.conflicts if c.entity_type == "neuron"]
+        assert len(neuron_conflicts) >= 1
+        assert any(c.resolution == "kept_incoming" for c in neuron_conflicts)
+
+    @pytest.mark.asyncio
+    async def test_prefer_local_keeps_local(
+        self,
+        source_storage: InMemoryStorage,
+        target_storage: InMemoryStorage,
+    ) -> None:
+        """PREFER_LOCAL should keep local data on conflict (default behavior)."""
+        from neural_memory.engine.merge import ConflictStrategy
+
+        # Add a conflicting neuron
+        local_neuron = Neuron.create(
+            type=NeuronType.ENTITY,
+            content="Redis",
+            neuron_id="n-local-redis",
+            metadata={"origin": "local"},
+        )
+        await target_storage.add_neuron(local_neuron)
+        local_fiber = Fiber.create(
+            neuron_ids={"n-local-redis"},
+            synapse_ids=set(),
+            anchor_neuron_id="n-local-redis",
+            fiber_id="f-local",
+        )
+        await target_storage.add_fiber(local_fiber)
+
+        result = await transplant(
+            source_storage=source_storage,
+            target_storage=target_storage,
+            source_brain_id="src-1",
+            target_brain_id="tgt-1",
+            filt=TransplantFilter(tags=frozenset({"caching"})),
+            strategy=ConflictStrategy.PREFER_LOCAL,
+        )
+
+        # The merge should have skipped the neuron (local wins)
+        neuron_conflicts = [c for c in result.merge_report.conflicts if c.entity_type == "neuron"]
+        assert len(neuron_conflicts) >= 1
+        assert any(c.resolution == "kept_local" for c in neuron_conflicts)
+
+
+# ── Delete version tests ─────────────────────────────────────────
+
+
+class TestDeleteVersion:
+    """Test delete_version on InMemoryStorage."""
+
+    @pytest.mark.asyncio
+    async def test_delete_existing_version(self, source_storage: InMemoryStorage) -> None:
+        """Deleting an existing version should return True."""
+        from neural_memory.engine.brain_versioning import VersioningEngine
+
+        engine = VersioningEngine(source_storage)
+        v = await engine.create_version("src-1", "deletable")
+
+        result = await source_storage.delete_version("src-1", v.id)
+        assert result is True
+
+        # Verify it is gone
+        assert await source_storage.get_version("src-1", v.id) is None
+
+    @pytest.mark.asyncio
+    async def test_delete_nonexistent_version(self, source_storage: InMemoryStorage) -> None:
+        """Deleting a nonexistent version should return False."""
+        result = await source_storage.delete_version("src-1", "nonexistent-id")
+        assert result is False

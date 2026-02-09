@@ -34,27 +34,30 @@ def version_create(
             return {"error": f"Brain '{brain_name}' not found."}
 
         storage = await PersistentStorage.load(brain_path)
-        brain = await storage.get_brain(storage._current_brain_id)
-        if not brain:
-            return {"error": "No brain configured"}
-
-        from neural_memory.engine.brain_versioning import VersioningEngine
-
-        engine = VersioningEngine(storage)
         try:
-            version = await engine.create_version(brain.id, name, description)
-        except ValueError as e:
-            return {"error": str(e)}
+            brain = await storage.get_brain(storage._current_brain_id)
+            if not brain:
+                return {"error": "No brain configured"}
 
-        return {
-            "success": True,
-            "version_id": version.id,
-            "version_name": version.version_name,
-            "version_number": version.version_number,
-            "neuron_count": version.neuron_count,
-            "synapse_count": version.synapse_count,
-            "fiber_count": version.fiber_count,
-        }
+            from neural_memory.engine.brain_versioning import VersioningEngine
+
+            engine = VersioningEngine(storage)
+            try:
+                version = await engine.create_version(brain.id, name, description)
+            except ValueError as e:
+                return {"error": str(e)}
+
+            return {
+                "success": True,
+                "version_id": version.id,
+                "version_name": version.version_name,
+                "version_number": version.version_number,
+                "neuron_count": version.neuron_count,
+                "synapse_count": version.synapse_count,
+                "fiber_count": version.fiber_count,
+            }
+        finally:
+            await storage.close()
 
     result = run_async(_create())
     if json_output:
@@ -92,31 +95,34 @@ def version_list(
             return {"error": f"Brain '{brain_name}' not found."}
 
         storage = await PersistentStorage.load(brain_path)
-        brain = await storage.get_brain(storage._current_brain_id)
-        if not brain:
-            return {"error": "No brain configured"}
+        try:
+            brain = await storage.get_brain(storage._current_brain_id)
+            if not brain:
+                return {"error": "No brain configured"}
 
-        from neural_memory.engine.brain_versioning import VersioningEngine
+            from neural_memory.engine.brain_versioning import VersioningEngine
 
-        engine = VersioningEngine(storage)
-        versions = await engine.list_versions(brain.id, limit=limit)
+            engine = VersioningEngine(storage)
+            versions = await engine.list_versions(brain.id, limit=limit)
 
-        return {
-            "versions": [
-                {
-                    "id": v.id,
-                    "name": v.version_name,
-                    "number": v.version_number,
-                    "description": v.description,
-                    "neurons": v.neuron_count,
-                    "synapses": v.synapse_count,
-                    "fibers": v.fiber_count,
-                    "created_at": v.created_at.isoformat(),
-                }
-                for v in versions
-            ],
-            "count": len(versions),
-        }
+            return {
+                "versions": [
+                    {
+                        "id": v.id,
+                        "name": v.version_name,
+                        "number": v.version_number,
+                        "description": v.description,
+                        "neurons": v.neuron_count,
+                        "synapses": v.synapse_count,
+                        "fibers": v.fiber_count,
+                        "created_at": v.created_at.isoformat(),
+                    }
+                    for v in versions
+                ],
+                "count": len(versions),
+            }
+        finally:
+            await storage.close()
 
     result = run_async(_list())
     if json_output:
@@ -157,25 +163,28 @@ def version_rollback(
             return {"error": f"Brain '{brain_name}' not found."}
 
         storage = await PersistentStorage.load(brain_path)
-        brain = await storage.get_brain(storage._current_brain_id)
-        if not brain:
-            return {"error": "No brain configured"}
-
-        from neural_memory.engine.brain_versioning import VersioningEngine
-
-        engine = VersioningEngine(storage)
         try:
-            rollback_v = await engine.rollback(brain.id, version_id)
-        except ValueError as e:
-            return {"error": str(e)}
+            brain = await storage.get_brain(storage._current_brain_id)
+            if not brain:
+                return {"error": "No brain configured"}
 
-        return {
-            "success": True,
-            "version_name": rollback_v.version_name,
-            "neuron_count": rollback_v.neuron_count,
-            "synapse_count": rollback_v.synapse_count,
-            "fiber_count": rollback_v.fiber_count,
-        }
+            from neural_memory.engine.brain_versioning import VersioningEngine
+
+            engine = VersioningEngine(storage)
+            try:
+                rollback_v = await engine.rollback(brain.id, version_id)
+            except ValueError as e:
+                return {"error": str(e)}
+
+            return {
+                "success": True,
+                "version_name": rollback_v.version_name,
+                "neuron_count": rollback_v.neuron_count,
+                "synapse_count": rollback_v.synapse_count,
+                "fiber_count": rollback_v.fiber_count,
+            }
+        finally:
+            await storage.close()
 
     result = run_async(_rollback())
     if json_output:
@@ -207,29 +216,32 @@ def version_diff(
             return {"error": f"Brain '{brain_name}' not found."}
 
         storage = await PersistentStorage.load(brain_path)
-        brain = await storage.get_brain(storage._current_brain_id)
-        if not brain:
-            return {"error": "No brain configured"}
-
-        from neural_memory.engine.brain_versioning import VersioningEngine
-
-        engine = VersioningEngine(storage)
         try:
-            diff = await engine.diff(brain.id, from_version, to_version)
-        except ValueError as e:
-            return {"error": str(e)}
+            brain = await storage.get_brain(storage._current_brain_id)
+            if not brain:
+                return {"error": "No brain configured"}
 
-        return {
-            "summary": diff.summary,
-            "neurons_added": len(diff.neurons_added),
-            "neurons_removed": len(diff.neurons_removed),
-            "neurons_modified": len(diff.neurons_modified),
-            "synapses_added": len(diff.synapses_added),
-            "synapses_removed": len(diff.synapses_removed),
-            "synapses_weight_changed": len(diff.synapses_weight_changed),
-            "fibers_added": len(diff.fibers_added),
-            "fibers_removed": len(diff.fibers_removed),
-        }
+            from neural_memory.engine.brain_versioning import VersioningEngine
+
+            engine = VersioningEngine(storage)
+            try:
+                diff = await engine.diff(brain.id, from_version, to_version)
+            except ValueError as e:
+                return {"error": str(e)}
+
+            return {
+                "summary": diff.summary,
+                "neurons_added": len(diff.neurons_added),
+                "neurons_removed": len(diff.neurons_removed),
+                "neurons_modified": len(diff.neurons_modified),
+                "synapses_added": len(diff.synapses_added),
+                "synapses_removed": len(diff.synapses_removed),
+                "synapses_weight_changed": len(diff.synapses_weight_changed),
+                "fibers_added": len(diff.fibers_added),
+                "fibers_removed": len(diff.fibers_removed),
+            }
+        finally:
+            await storage.close()
 
     result = run_async(_diff())
     if json_output:

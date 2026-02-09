@@ -167,3 +167,11 @@ class PersistentStorage(InMemoryStorage):
     def enable_auto_save(self) -> None:
         """Enable auto-save."""
         self._auto_save = True
+
+    async def close(self) -> None:
+        """Flush pending data and release the storage instance.
+
+        Safe to call multiple times. Ensures any unsaved state is persisted
+        before the storage reference is discarded.
+        """
+        await self._save_to_file()

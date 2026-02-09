@@ -52,14 +52,14 @@ class SentenceTransformerEmbedding(EmbeddingProvider):
         thread-pool executor so it does not block the event loop.
         """
         model = self._ensure_model()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         vector = await loop.run_in_executor(None, lambda: model.encode(text, convert_to_numpy=True))
         return vector.tolist()
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Encode a batch of texts using the model's native batching."""
         model = self._ensure_model()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         vectors = await loop.run_in_executor(
             None, lambda: model.encode(texts, convert_to_numpy=True)
         )

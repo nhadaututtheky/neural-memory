@@ -98,10 +98,21 @@ def _compute_hash(snapshot_json: str) -> str:
     return hashlib.sha256(snapshot_json.encode("utf-8")).hexdigest()
 
 
-def _compute_diff(from_snapshot: BrainSnapshot, to_snapshot: BrainSnapshot) -> VersionDiff:
+def _compute_diff(
+    from_snapshot: BrainSnapshot,
+    to_snapshot: BrainSnapshot,
+    from_version_id: str = "",
+    to_version_id: str = "",
+) -> VersionDiff:
     """Compute diff between two snapshots.
 
     Compares neurons by ID, synapses by ID, fibers by ID.
+
+    Args:
+        from_snapshot: Source snapshot to compare from.
+        to_snapshot: Target snapshot to compare to.
+        from_version_id: Version ID for the source snapshot.
+        to_version_id: Version ID for the target snapshot.
     """
     # Neuron diff
     from_neurons = {n["id"]: n for n in from_snapshot.neurons}
@@ -167,8 +178,8 @@ def _compute_diff(from_snapshot: BrainSnapshot, to_snapshot: BrainSnapshot) -> V
     summary = ", ".join(parts) if parts else "No changes"
 
     return VersionDiff(
-        from_version="",
-        to_version="",
+        from_version=from_version_id,
+        to_version=to_version_id,
         neurons_added=neurons_added,
         neurons_removed=neurons_removed,
         neurons_modified=neurons_modified_tuple,
@@ -213,8 +224,8 @@ class VersioningEngine:
         Raises:
             ValueError: If version_name already exists for this brain
         """
-        # Check name uniqueness
-        existing = await self._storage.list_versions(brain_id)
+        # Check name uniqueness — fetch ALL versions, not just the default page
+        existing = await self._storage.list_versions(brain_id, limit=999999)
         for v in existing:
             if v.version_name == version_name:
                 raise ValueError(
@@ -309,8 +320,10 @@ class VersioningEngine:
 
         # Create a rollback version entry for the current state first
         rollback_name = f"rollback-to-{target_version.version_name}"
-        # Ensure unique name
-        existing_names = {v.version_name for v in await self._storage.list_versions(brain_id)}
+        # Ensure unique name — fetch ALL versions, not just the default page
+        existing_names = {
+            v.version_name for v in await self._storage.list_versions(brain_id, limit=999999)
+        }
         if rollback_name in existing_names:
             suffix = 1
             while f"{rollback_name}-{suffix}" in existing_names:
@@ -386,19 +399,9 @@ class VersioningEngine:
         from_snapshot = _json_to_snapshot(from_json)
         to_snapshot = _json_to_snapshot(to_json)
 
-        diff = _compute_diff(from_snapshot, to_snapshot)
-
-        # Replace empty version IDs with actual IDs
-        return VersionDiff(
-            from_version=from_version_id,
-            to_version=to_version_id,
-            neurons_added=diff.neurons_added,
-            neurons_removed=diff.neurons_removed,
-            neurons_modified=diff.neurons_modified,
-            synapses_added=diff.synapses_added,
-            synapses_removed=diff.synapses_removed,
-            synapses_weight_changed=diff.synapses_weight_changed,
-            fibers_added=diff.fibers_added,
-            fibers_removed=diff.fibers_removed,
-            summary=diff.summary,
+        return _compute_diff(
+            from_snapshot,
+            to_snapshot,
+            from_version_id=from_version_id,
+            to_version_id=to_version_id,
         )

@@ -251,3 +251,229 @@ class TestTransplantTool:
         assert "version_id" in props
         assert "from_version" in props
         assert "to_version" in props
+
+
+class TestVersionDiffWithData:
+    """Test nmem_version diff action with actual data."""
+
+    @pytest.fixture
+    def server(self) -> MCPServer:
+        """Create an MCP server instance."""
+        with patch("neural_memory.mcp.server.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(
+                current_brain="test-brain",
+                get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
+            )
+            return MCPServer()
+
+    @pytest.mark.asyncio
+    async def test_version_diff_with_data(self, server: MCPServer) -> None:
+        """Diff should return correct change counts."""
+        from neural_memory.core.brain import Brain, BrainConfig
+        from neural_memory.core.neuron import Neuron, NeuronType
+        from neural_memory.storage.memory_store import InMemoryStorage
+
+        storage = InMemoryStorage()
+        brain = Brain.create(name="test-brain", config=BrainConfig(), brain_id="test-brain")
+        await storage.save_brain(brain)
+        storage.set_brain(brain.id)
+
+        # Add initial neurons
+        n1 = Neuron.create(type=NeuronType.ENTITY, content="Redis", neuron_id="n-1")
+        n2 = Neuron.create(type=NeuronType.CONCEPT, content="caching", neuron_id="n-2")
+        await storage.add_neuron(n1)
+        await storage.add_neuron(n2)
+
+        with patch.object(server, "get_storage", return_value=storage):
+            # Create version v1
+            v1_result = await server.call_tool(
+                "nmem_version",
+                {"action": "create", "name": "v1-baseline"},
+            )
+            assert v1_result.get("success") is True
+            v1_id = v1_result["version_id"]
+
+            # Add a new neuron
+            n3 = Neuron.create(type=NeuronType.ACTION, content="deploy", neuron_id="n-3")
+            await storage.add_neuron(n3)
+
+            # Create version v2
+            v2_result = await server.call_tool(
+                "nmem_version",
+                {"action": "create", "name": "v2-with-deploy"},
+            )
+            assert v2_result.get("success") is True
+            v2_id = v2_result["version_id"]
+
+            # Diff v1 -> v2
+            diff_result = await server.call_tool(
+                "nmem_version",
+                {"action": "diff", "from_version": v1_id, "to_version": v2_id},
+            )
+
+        assert "error" not in diff_result
+        assert diff_result["neurons_added"] == 1
+        assert diff_result["neurons_removed"] == 0
+        assert "n-3" in diff_result["summary"] or "+1 neurons" in diff_result["summary"]
+
+
+class TestVersionRollbackWithData:
+    """Test nmem_version rollback action with actual data."""
+
+    @pytest.fixture
+    def server(self) -> MCPServer:
+        """Create an MCP server instance."""
+        with patch("neural_memory.mcp.server.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(
+                current_brain="test-brain",
+                get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
+            )
+            return MCPServer()
+
+    @pytest.mark.asyncio
+    async def test_version_rollback_with_data(self, server: MCPServer) -> None:
+        """Rollback should restore brain state."""
+        from neural_memory.core.brain import Brain, BrainConfig
+        from neural_memory.core.neuron import Neuron, NeuronType
+        from neural_memory.core.synapse import Synapse, SynapseType
+        from neural_memory.storage.memory_store import InMemoryStorage
+
+        storage = InMemoryStorage()
+        brain = Brain.create(name="test-brain", config=BrainConfig(), brain_id="test-brain")
+        await storage.save_brain(brain)
+        storage.set_brain(brain.id)
+
+        # Create 3 neurons with synapses
+        n1 = Neuron.create(type=NeuronType.ENTITY, content="Redis", neuron_id="n-1")
+        n2 = Neuron.create(type=NeuronType.CONCEPT, content="caching", neuron_id="n-2")
+        n3 = Neuron.create(type=NeuronType.ACTION, content="deploy", neuron_id="n-3")
+        await storage.add_neuron(n1)
+        await storage.add_neuron(n2)
+        await storage.add_neuron(n3)
+
+        s1 = Synapse.create(
+            source_id="n-1",
+            target_id="n-2",
+            type=SynapseType.RELATED_TO,
+            weight=0.7,
+            synapse_id="s-1",
+        )
+        await storage.add_synapse(s1)
+
+        with patch.object(server, "get_storage", return_value=storage):
+            # Create version v1 with 3 neurons
+            v1_result = await server.call_tool(
+                "nmem_version",
+                {"action": "create", "name": "v1-three-neurons"},
+            )
+            assert v1_result.get("success") is True
+            assert v1_result["neuron_count"] == 3
+            v1_id = v1_result["version_id"]
+
+            # Add neuron n-4
+            n4 = Neuron.create(type=NeuronType.ENTITY, content="PostgreSQL", neuron_id="n-4")
+            await storage.add_neuron(n4)
+
+            # Verify 4 neurons now
+            stats = await storage.get_stats("test-brain")
+            assert stats["neuron_count"] == 4
+
+            # Rollback to v1
+            rollback_result = await server.call_tool(
+                "nmem_version",
+                {"action": "rollback", "version_id": v1_id},
+            )
+
+        assert "error" not in rollback_result
+        assert rollback_result.get("success") is True
+        assert rollback_result["neuron_count"] == 3
+
+        # Verify actual state was restored
+        stats = await storage.get_stats("test-brain")
+        assert stats["neuron_count"] == 3
+
+
+class TestTransplantWithData:
+    """Test nmem_transplant with actual data between brains."""
+
+    @pytest.fixture
+    def server(self) -> MCPServer:
+        """Create an MCP server instance."""
+        with patch("neural_memory.mcp.server.get_config") as mock_get_config:
+            mock_get_config.return_value = MagicMock(
+                current_brain="target-brain",
+                get_brain_db_path=MagicMock(return_value="/tmp/target-brain.db"),
+            )
+            return MCPServer()
+
+    @pytest.mark.asyncio
+    async def test_transplant_with_data(self, server: MCPServer) -> None:
+        """Transplant should move data between brains."""
+        from neural_memory.core.brain import Brain, BrainConfig
+        from neural_memory.core.fiber import Fiber
+        from neural_memory.core.neuron import Neuron, NeuronType
+        from neural_memory.core.synapse import Synapse, SynapseType
+        from neural_memory.storage.memory_store import InMemoryStorage
+
+        storage = InMemoryStorage()
+
+        # Create source brain with data
+        source_brain = Brain.create(
+            name="source-brain", config=BrainConfig(), brain_id="source-brain"
+        )
+        await storage.save_brain(source_brain)
+        storage.set_brain(source_brain.id)
+
+        n1 = Neuron.create(type=NeuronType.ENTITY, content="Redis", neuron_id="n-src-1")
+        n2 = Neuron.create(type=NeuronType.CONCEPT, content="caching", neuron_id="n-src-2")
+        await storage.add_neuron(n1)
+        await storage.add_neuron(n2)
+
+        s1 = Synapse.create(
+            source_id="n-src-1",
+            target_id="n-src-2",
+            type=SynapseType.RELATED_TO,
+            weight=0.8,
+            synapse_id="s-src-1",
+        )
+        await storage.add_synapse(s1)
+
+        f1 = Fiber.create(
+            neuron_ids={"n-src-1", "n-src-2"},
+            synapse_ids={"s-src-1"},
+            anchor_neuron_id="n-src-1",
+            fiber_id="f-src-1",
+            tags={"redis", "cache"},
+        )
+        await storage.add_fiber(f1)
+
+        # Create target brain with existing data
+        target_brain = Brain.create(
+            name="target-brain", config=BrainConfig(), brain_id="target-brain"
+        )
+        await storage.save_brain(target_brain)
+        storage.set_brain(target_brain.id)
+
+        nt1 = Neuron.create(type=NeuronType.ENTITY, content="PostgreSQL", neuron_id="n-tgt-1")
+        await storage.add_neuron(nt1)
+
+        # Set context back to target brain for the MCP call
+        storage.set_brain("target-brain")
+
+        with patch.object(server, "get_storage", return_value=storage):
+            result = await server.call_tool(
+                "nmem_transplant",
+                {"source_brain": "source-brain", "tags": ["redis"]},
+            )
+
+        assert "error" not in result
+        assert result.get("success") is True
+        assert result["fibers_transplanted"] == 1
+        assert result["neurons_transplanted"] == 2
+
+        # Verify target brain now has both original and transplanted data
+        storage.set_brain("target-brain")
+        stats = await storage.get_stats("target-brain")
+        # Target should have the original neuron plus transplanted neurons
+        assert stats["neuron_count"] >= 2
+        assert stats["fiber_count"] >= 1

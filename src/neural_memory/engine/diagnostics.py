@@ -243,7 +243,7 @@ class DiagnosticsEngine:
         if not fibers:
             return 0.0
 
-        now = datetime.now()
+        now = datetime.utcnow()
         cutoff = now - timedelta(days=7)
         fresh_count = sum(1 for f in fibers if (f.last_conducted or f.created_at) >= cutoff)
         return fresh_count / len(fibers)
@@ -428,7 +428,7 @@ class DiagnosticsEngine:
             purity_score=report.purity_score,
             marketplace_eligible=report.grade in ("A", "B"),
             badge_label=badge_labels.get(report.grade, f"{report.grade} - Unknown"),
-            computed_at=datetime.now(),
+            computed_at=datetime.utcnow(),
             component_summary={
                 "connectivity": report.connectivity,
                 "diversity": report.diversity,

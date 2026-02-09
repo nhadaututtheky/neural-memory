@@ -427,43 +427,46 @@ def brain_transplant(
 
         source_storage = await PersistentStorage.load(source_path)
         target_storage = await PersistentStorage.load(target_path)
-
-        source_brain = await source_storage.get_brain(source_storage._current_brain_id)
-        target_brain = await target_storage.get_brain(target_storage._current_brain_id)
-
-        if not source_brain:
-            return {"error": f"Source brain '{source}' has no data."}
-        if not target_brain:
-            return {"error": f"Target brain '{target_name}' has no data."}
-
         try:
-            merge_strategy = ConflictStrategy(strategy)
-        except ValueError:
-            valid = [s.value for s in ConflictStrategy]
-            return {"error": f"Unknown strategy '{strategy}'. Use: {valid}"}
+            source_brain = await source_storage.get_brain(source_storage._current_brain_id)
+            target_brain = await target_storage.get_brain(target_storage._current_brain_id)
 
-        filt = TransplantFilter(
-            tags=frozenset(tags) if tags else None,
-            memory_types=frozenset(memory_types) if memory_types else None,
-        )
+            if not source_brain:
+                return {"error": f"Source brain '{source}' has no data."}
+            if not target_brain:
+                return {"error": f"Target brain '{target_name}' has no data."}
 
-        result = await transplant(
-            source_storage=source_storage,
-            target_storage=target_storage,
-            source_brain_id=source_brain.id,
-            target_brain_id=target_brain.id,
-            filt=filt,
-            strategy=merge_strategy,
-        )
+            try:
+                merge_strategy = ConflictStrategy(strategy)
+            except ValueError:
+                valid = [s.value for s in ConflictStrategy]
+                return {"error": f"Unknown strategy '{strategy}'. Use: {valid}"}
 
-        return {
-            "success": True,
-            "neurons_transplanted": result.neurons_transplanted,
-            "synapses_transplanted": result.synapses_transplanted,
-            "fibers_transplanted": result.fibers_transplanted,
-            "source": source,
-            "target": target_name,
-        }
+            filt = TransplantFilter(
+                tags=frozenset(tags) if tags else None,
+                memory_types=frozenset(memory_types) if memory_types else None,
+            )
+
+            result = await transplant(
+                source_storage=source_storage,
+                target_storage=target_storage,
+                source_brain_id=source_brain.id,
+                target_brain_id=target_brain.id,
+                filt=filt,
+                strategy=merge_strategy,
+            )
+
+            return {
+                "success": True,
+                "neurons_transplanted": result.neurons_transplanted,
+                "synapses_transplanted": result.synapses_transplanted,
+                "fibers_transplanted": result.fibers_transplanted,
+                "source": source,
+                "target": target_name,
+            }
+        finally:
+            await source_storage.close()
+            await target_storage.close()
 
     result = run_async(_transplant())
     if json_output:

@@ -45,6 +45,10 @@ class TransplantFilter:
     min_salience: float = 0.0
     include_orphan_neurons: bool = False
 
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.min_salience <= 1.0:
+            raise ValueError(f"min_salience must be in [0.0, 1.0], got {self.min_salience}")
+
 
 @dataclass(frozen=True)
 class TransplantResult:
@@ -175,14 +179,27 @@ def _filter_neurons(
 def _filter_synapses(
     synapses: list[dict[str, Any]],
     allowed_neuron_ids: set[str],
+    allowed_synapse_ids: set[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Return synapses whose *both* endpoints are in the allowed neuron set."""
-    return [
-        s
-        for s in synapses
-        if s.get("source_id", "") in allowed_neuron_ids
-        and s.get("target_id", "") in allowed_neuron_ids
-    ]
+    """Return synapses referenced by fibers OR whose both endpoints are in the allowed neuron set.
+
+    When *allowed_synapse_ids* is provided, a synapse is included if it appears
+    in that set **or** if both of its endpoint neurons are in *allowed_neuron_ids*.
+    When *allowed_synapse_ids* is ``None``, only the endpoint check is applied
+    (preserving backward compatibility).
+    """
+    result: list[dict[str, Any]] = []
+    for s in synapses:
+        sid = s.get("id", "")
+        both_endpoints = (
+            s.get("source_id", "") in allowed_neuron_ids
+            and s.get("target_id", "") in allowed_neuron_ids
+        )
+        in_fiber_refs = allowed_synapse_ids is not None and sid in allowed_synapse_ids
+
+        if both_endpoints or in_fiber_refs:
+            result.append(s)
+    return result
 
 
 def _filter_metadata(
@@ -250,8 +267,10 @@ def extract_subgraph(
     )
     final_neuron_ids = {n.get("id", "") for n in matched_neurons}
 
-    # Phase 4: Filter synapses — both endpoints must be in final neuron set
-    matched_synapses = _filter_synapses(snapshot.synapses, final_neuron_ids)
+    # Phase 4: Filter synapses — referenced by fibers or both endpoints in neuron set
+    matched_synapses = _filter_synapses(
+        snapshot.synapses, final_neuron_ids, allowed_synapse_ids=fiber_synapse_ids
+    )
 
     # Phase 5: Trim metadata
     filtered_metadata = _filter_metadata(snapshot.metadata, matched_fiber_ids)

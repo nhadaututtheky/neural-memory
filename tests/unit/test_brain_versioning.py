@@ -435,3 +435,187 @@ class TestVersionDiff:
         )
         with pytest.raises(AttributeError):
             version.version_name = "changed"  # type: ignore[misc]
+
+
+# ── Diff neurons modified tests ───────────────────────────────────
+
+
+class TestDiffNeuronsModified:
+    """Test neuron modification detection in diff."""
+
+    @pytest.mark.asyncio
+    async def test_diff_modified_neurons(
+        self,
+        engine: VersioningEngine,
+        storage: InMemoryStorage,
+    ) -> None:
+        """Diff should detect neurons whose content changed."""
+        v1 = await engine.create_version("brain-1", "v1")
+
+        # Modify neuron content
+        n1 = await storage.get_neuron("n-1")
+        assert n1 is not None
+        modified = Neuron(
+            id=n1.id,
+            type=n1.type,
+            content="Redis-Modified",
+            metadata=n1.metadata,
+            content_hash=n1.content_hash,
+            created_at=n1.created_at,
+        )
+        await storage.update_neuron(modified)
+
+        v2 = await engine.create_version("brain-1", "v2")
+        diff = await engine.diff("brain-1", v1.id, v2.id)
+        assert "n-1" in diff.neurons_modified
+
+
+# ── Rollback data verification tests ─────────────────────────────
+
+
+class TestRollbackDataVerification:
+    """Test rollback actually restores correct data, not just counts."""
+
+    @pytest.mark.asyncio
+    async def test_rollback_restores_neuron_content(
+        self,
+        engine: VersioningEngine,
+        storage: InMemoryStorage,
+    ) -> None:
+        """Rollback should restore actual neuron content."""
+        v1 = await engine.create_version("brain-1", "v1-baseline")
+
+        # Modify neuron
+        n1 = await storage.get_neuron("n-1")
+        assert n1 is not None
+        modified = Neuron(
+            id=n1.id,
+            type=n1.type,
+            content="CHANGED",
+            metadata=n1.metadata,
+            content_hash=n1.content_hash,
+            created_at=n1.created_at,
+        )
+        await storage.update_neuron(modified)
+
+        # Verify changed
+        check = await storage.get_neuron("n-1")
+        assert check is not None
+        assert check.content == "CHANGED"
+
+        # Rollback
+        await engine.rollback("brain-1", v1.id)
+
+        # Verify restored
+        restored = await storage.get_neuron("n-1")
+        assert restored is not None
+        assert restored.content == "Redis"
+
+    @pytest.mark.asyncio
+    async def test_rollback_restores_synapses(
+        self,
+        engine: VersioningEngine,
+        storage: InMemoryStorage,
+    ) -> None:
+        """Rollback should restore synapse weights."""
+        v1 = await engine.create_version("brain-1", "v1-syn")
+
+        # Change synapse weight
+        s1 = await storage.get_synapse("s-1")
+        assert s1 is not None
+        modified = Synapse(
+            id=s1.id,
+            source_id=s1.source_id,
+            target_id=s1.target_id,
+            type=s1.type,
+            weight=0.99,
+            direction=s1.direction,
+            metadata=s1.metadata,
+            reinforced_count=s1.reinforced_count,
+            created_at=s1.created_at,
+        )
+        await storage.update_synapse(modified)
+
+        await engine.rollback("brain-1", v1.id)
+
+        restored = await storage.get_synapse("s-1")
+        assert restored is not None
+        assert abs(restored.weight - 0.7) < 0.01
+
+
+# ── Diff fibers tests ────────────────────────────────────────────
+
+
+class TestDiffFibers:
+    """Test fiber add/remove detection in diff."""
+
+    @pytest.mark.asyncio
+    async def test_diff_added_fibers(
+        self,
+        engine: VersioningEngine,
+        storage: InMemoryStorage,
+    ) -> None:
+        """Diff should detect added fibers."""
+        v1 = await engine.create_version("brain-1", "v1")
+
+        f2 = Fiber.create(
+            neuron_ids={"n-1"},
+            synapse_ids=set(),
+            anchor_neuron_id="n-1",
+            fiber_id="f-2",
+            tags={"new"},
+        )
+        await storage.add_fiber(f2)
+
+        v2 = await engine.create_version("brain-1", "v2")
+        diff = await engine.diff("brain-1", v1.id, v2.id)
+        assert "f-2" in diff.fibers_added
+
+    @pytest.mark.asyncio
+    async def test_diff_removed_fibers(
+        self,
+        engine: VersioningEngine,
+        storage: InMemoryStorage,
+    ) -> None:
+        """Diff should detect removed fibers."""
+        v1 = await engine.create_version("brain-1", "v1")
+
+        await storage.delete_fiber("f-1")
+
+        v2 = await engine.create_version("brain-1", "v2")
+        diff = await engine.diff("brain-1", v1.id, v2.id)
+        assert "f-1" in diff.fibers_removed
+
+
+# ── Diff edge cases tests ────────────────────────────────────────
+
+
+class TestDiffEdgeCases:
+    """Test diff edge cases."""
+
+    @pytest.mark.asyncio
+    async def test_diff_nonexistent_from_version(
+        self,
+        engine: VersioningEngine,
+    ) -> None:
+        """Diff with nonexistent from_version should raise ValueError."""
+        v1 = await engine.create_version("brain-1", "v1")
+        with pytest.raises(ValueError, match="not found"):
+            await engine.diff("brain-1", "nonexistent", v1.id)
+
+
+# ── Rollback metadata tests ──────────────────────────────────────
+
+
+class TestRollbackMetadata:
+    """Test rollback metadata."""
+
+    @pytest.mark.asyncio
+    async def test_rollback_has_metadata(
+        self,
+        engine: VersioningEngine,
+    ) -> None:
+        """Rollback version should include rollback_from metadata."""
+        v1 = await engine.create_version("brain-1", "v1-meta")
+        rb = await engine.rollback("brain-1", v1.id)
+        assert rb.metadata.get("rollback_from") == v1.id
