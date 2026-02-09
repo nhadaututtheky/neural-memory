@@ -1,6 +1,6 @@
 /**
  * NeuralMemory Dashboard — Core Alpine.js application
- * Orchestrates tabs, stats, health, brain management, i18n, toasts.
+ * Orchestrates tabs, stats, health, integrations status, brain management, i18n, toasts.
  */
 
 /** Global toast dispatch — usable from any module */
@@ -14,7 +14,6 @@ function dashboardApp() {
     version: '',
     locale: 'en',
     activeTab: 'overview',
-    integrationTab: 'oauth',
     activeBrain: null,
     brains: [],
     stats: { total_brains: 0, total_neurons: 0, total_synapses: 0, total_fibers: 0 },
@@ -22,32 +21,24 @@ function dashboardApp() {
     purityScore: 0,
     healthWarnings: [],
     healthRecommendations: [],
+    integrations: [],
     selectedNode: null,
     graphSearch: '',
     graphFilter: '',
     graphEmpty: false,
     toasts: [],
-    loading: { stats: true, health: true, graph: false },
+    loading: { stats: true, health: true, graph: false, integrations: false },
     _radarChart: null,
     _graphLoaded: false,
     _healthData: null,
 
-    // Tab definitions (5 tabs — user mental model)
+    // Tab definitions (5 tabs)
     tabs: [
       { id: 'overview', label: 'overview', icon: 'layout-dashboard' },
       { id: 'graph', label: 'neural_graph', icon: 'share-2' },
       { id: 'integrations', label: 'integrations', icon: 'puzzle' },
       { id: 'health', label: 'brain_health', icon: 'heart-pulse' },
       { id: 'settings', label: 'settings', icon: 'sliders-horizontal' },
-    ],
-
-    // Integration sub-tabs
-    integrationTabs: [
-      { id: 'oauth', label: 'oauth_providers', icon: 'key' },
-      { id: 'apikeys', label: 'api_keys', icon: 'lock' },
-      { id: 'functions', label: 'functions', icon: 'puzzle' },
-      { id: 'channels', label: 'channels', icon: 'message-circle' },
-      { id: 'security', label: 'security', icon: 'shield' },
     ],
 
     // Initialize
@@ -73,7 +64,6 @@ function dashboardApp() {
 
       // Watch tab changes
       this.$watch('activeTab', (tab) => this.onTabChange(tab));
-      this.$watch('integrationTab', (tab) => this.onIntegrationTabChange(tab));
 
       // Init Lucide icons
       this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
@@ -121,25 +111,13 @@ function dashboardApp() {
         }
       }
 
-      if (tab === 'integrations') {
-        await this.onIntegrationTabChange(this.integrationTab);
+      if (tab === 'integrations' && this.integrations.length === 0) {
+        await this.loadIntegrations();
       }
 
       if (tab === 'health') {
         this.$nextTick(() => this.renderRadar());
       }
-    },
-
-    async onIntegrationTabChange(tab) {
-      await NM_OPENCLAW.init();
-      this.$nextTick(() => {
-        if (tab === 'oauth') NM_OAUTH.init();
-        if (tab === 'apikeys') NM_OPENCLAW.renderApiKeys();
-        if (tab === 'functions') NM_OPENCLAW.renderFunctions();
-        if (tab === 'channels') NM_OPENCLAW.renderChannels();
-        if (tab === 'security') NM_OPENCLAW.renderSecurity();
-        if (window.lucide) lucide.createIcons();
-      });
     },
 
     // ── i18n ───────────────────────────────────────────
@@ -155,10 +133,6 @@ function dashboardApp() {
     async setLocale(locale) {
       await NM_I18N.setLocale(locale);
       this.locale = locale;
-      // Re-render dynamic modules
-      if (this.activeTab === 'integrations') {
-        await this.onIntegrationTabChange(this.integrationTab);
-      }
     },
 
     // ── Data loading ───────────────────────────────────
@@ -197,6 +171,76 @@ function dashboardApp() {
         // Health data optional — don't show error
       }
       this.loading = { ...this.loading, health: false };
+    },
+
+    async loadIntegrations() {
+      this.loading = { ...this.loading, integrations: true };
+
+      const [oauthResult, openclawResult] = await Promise.allSettled([
+        fetch('/api/oauth/providers').then(r => r.ok ? r.json() : []),
+        fetch('/api/openclaw/config').then(r => r.ok ? r.json() : null),
+      ]);
+
+      const providers = oauthResult.status === 'fulfilled' && Array.isArray(oauthResult.value) ? oauthResult.value : [];
+      const config = openclawResult.status === 'fulfilled' ? openclawResult.value : null;
+
+      const authCount = providers.filter(p => p.authenticated).length;
+      const keyCount = config ? (config.api_keys || []).filter(k => k.enabled).length : 0;
+      const tgEnabled = config?.telegram?.enabled || false;
+      const dcEnabled = config?.discord?.enabled || false;
+
+      this.integrations = [
+        {
+          id: 'mcp', name: 'MCP Server', icon: 'server',
+          active: true,
+          detail: this.version ? `v${this.version} — 16 tools` : '16 tools',
+          color: '#22C55E', link: null, linkLabel: null,
+        },
+        {
+          id: 'nanobot', name: 'Nanobot', icon: 'bot',
+          active: true,
+          detail: this.t('int_nanobot_detail'),
+          color: '#3B82F6', link: null, linkLabel: null,
+        },
+        {
+          id: 'cliproxy', name: 'CLIProxyAPI', icon: 'key',
+          active: authCount > 0,
+          detail: providers.length > 0
+            ? `${authCount}/${providers.length} ` + this.t('int_providers_auth')
+            : this.t('int_not_reachable'),
+          color: '#D97757',
+          link: 'http://127.0.0.1:8317',
+          linkLabel: this.t('int_open_dashboard'),
+        },
+        {
+          id: 'openclaw', name: 'OpenClaw', icon: 'terminal',
+          active: keyCount > 0,
+          detail: keyCount > 0
+            ? `${keyCount} ` + this.t('int_api_keys_configured')
+            : this.t('int_not_configured'),
+          color: '#F59E0B',
+          link: null, linkLabel: null,
+        },
+        {
+          id: 'telegram', name: 'Telegram', icon: 'send',
+          active: tgEnabled,
+          detail: tgEnabled ? this.t('connected') : this.t('int_not_configured'),
+          color: '#0088CC',
+          link: tgEnabled ? null : 'http://127.0.0.1:8317',
+          linkLabel: tgEnabled ? null : this.t('int_configure'),
+        },
+        {
+          id: 'discord', name: 'Discord', icon: 'hash',
+          active: dcEnabled,
+          detail: dcEnabled ? this.t('connected') : this.t('int_not_configured'),
+          color: '#5865F2',
+          link: dcEnabled ? null : 'http://127.0.0.1:8317',
+          linkLabel: dcEnabled ? null : this.t('int_configure'),
+        },
+      ];
+
+      this.loading = { ...this.loading, integrations: false };
+      this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
     },
 
     // ── Brain management ───────────────────────────────
@@ -302,6 +346,14 @@ function dashboardApp() {
       if (cy) {
         NM_GRAPH.onNodeClick((node) => { this.selectedNode = node; });
       }
+    },
+
+    // ── Integrations refresh ───────────────────────────
+
+    async refreshIntegrations() {
+      this.integrations = [];
+      await this.loadIntegrations();
+      this.toast(this.t('int_status_refreshed'), 'success');
     },
 
     // ── Health radar chart ─────────────────────────────

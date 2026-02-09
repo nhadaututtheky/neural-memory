@@ -4,8 +4,8 @@
 > Every feature passes the VISION.md 4-question test + brain test.
 > ZERO LLM dependency — pure algorithmic, regex, graph-based.
 
-**Current state**: v1.2.0 shipped (schema v11). Dashboard with OAuth, OpenClaw config, channels.
-**Next milestone**: v1.3.0 — Integration Dashboard + v1.4.0 — OpenClaw Plugin.
+**Current state**: v1.2.0 shipped to PyPI (schema v11). Dashboard with OAuth, OpenClaw config, channels, UX overhaul.
+**Next milestone**: v1.4.0 — OpenClaw Memory Plugin (in progress) → v1.3.0 — Deep Integration Status.
 
 ---
 
@@ -937,7 +937,7 @@ Starting from 1105 tests (v0.20.0) → targeting ~1,455+ tests at v1.0.0.
 >
 > **Three pillars**: Dashboard + Integrations + Community
 >
-> **Current state**: v1.0.2 shipped. 1,340 tests. 16 MCP tools. Nanobot integration done. ClawHub SKILL published.
+> **Current state**: v1.2.0 shipped to PyPI. 1,340+ tests. 16 MCP tools. Dashboard live. Nanobot integration done. ClawHub SKILL published.
 
 ## Strategic Context
 
@@ -984,11 +984,11 @@ Both replace the exclusive memory slot. NM needs to enter this space with a stro
 
 ---
 
-## Phase 1: v1.1.0 — Community Foundations
+## Phase 1: v1.1.0 — Community Foundations ✅
 
 > Get noticed. Minimal code, maximum visibility.
 
-**Status**: In progress. SKILL published, blog written, PR research done.
+**Status**: ✅ Complete. SKILL published, blog written, PR submitted, Issue #1 fixed.
 
 ### 1.1 ClawHub SKILL.md ✅
 
@@ -1033,7 +1033,7 @@ Updated to v1.0.2: 1,340 tests, 16 MCP tools, 10 feature sections, full comparis
 
 ### Scope
 
-~500 lines docs shipped. Remaining: external publishing + OpenClaw PR.
+~500 lines docs shipped. PR #12596 submitted. Remaining: external publishing (blog to Dev.to/Viblo).
 
 ---
 
@@ -1041,35 +1041,52 @@ Updated to v1.0.2: 1,340 tests, 16 MCP tools, 10 feature sections, full comparis
 
 > Full-featured dashboard with OAuth, OpenClaw config, channel setup, neural graph.
 
-**Status**: ✅ Shipped (2026-02-09). ~2,800 new lines across 15 files.
+**Status**: ✅ Shipped to PyPI (2026-02-09). ~2,800 new lines across 15 files. UX overhaul post-expert review. CI green. Tag `v1.2.0` → PyPI published.
 
 ### What shipped
 
 | Feature | Description |
 |---------|-------------|
 | **Alpine.js + Tailwind SPA** | Zero-build dashboard at `/dashboard` (CDN-loaded, ships with pip install) |
-| **7 tab sections** | Overview, Neural Graph, OAuth Providers, OpenClaw Config, Channels, Health, Settings |
+| **5 tab sections** | Overview, Neural Graph, Integrations (status-only), Health, Settings |
 | **Cytoscape.js graph** | COSE force-directed layout, 8 neuron type colors, node click → detail panel |
-| **OAuth proxy** | Proxy to CLIProxyAPI (Claude, Gemini, OpenAI Codex, Qwen, iFlow, AntiGravity) |
-| **OpenClaw config UI** | API key management, function toggles, security restrictions (sandbox, domains, rate limits) |
-| **Channel setup** | Telegram bot token + chat IDs, Discord bot token + guild + channels |
+| **Graph toolbar** | Search nodes, filter by type, zoom in/out, fit to view, reload |
+| **Integration status** | Status cards for MCP, Nanobot, CLIProxyAPI, OpenClaw, Telegram, Discord with deep links |
 | **Health radar chart** | Chart.js radar with 7 diagnostics metrics, warnings, recommendations |
 | **Brain management** | Switch brains, export/import JSON, health grade sidebar badge |
-| **EN/VI i18n** | Auto-detect browser locale, toggle in settings, full Vietnamese translation |
+| **EN/VI i18n** | Auto-detect browser locale, toggle in settings, full Vietnamese translation (68 keys) |
 | **Design system** | Dark mode (#0F172A), Fira Code/Sans fonts, #22C55E CTA green, Lucide icons |
+| **Toast notifications** | Global `nmToast()` system, 4s auto-dismiss, success/error/warning/info types |
+| **Loading states** | Skeleton shimmer for stats, spinner for graph/health, proper empty states |
+| **ARIA accessibility** | `aria-label` on icon buttons, `role="tabpanel"/"tablist"`, `aria-live="polite"` on toasts |
+| **Mobile touch targets** | 44px minimum touch targets, responsive nav buttons |
+
+### UX overhaul (post-expert review)
+
+4 UI/UX experts reviewed the initial dashboard. Actionable feedback implemented:
+
+| Fix | Before | After |
+|-----|--------|-------|
+| **Tab restructure** | 7 separate tabs | 5 tabs — Integrations is status-only with deep links to service dashboards |
+| **Loading states** | No loading feedback | Skeleton shimmer for stats, spinner for graph/health |
+| **Toast system** | `alert()` for errors | Global `nmToast()` via CustomEvent, auto-dismiss, 4 severity types |
+| **Graph toolbar** | No search/filter/zoom | Search + type filter + zoom in/out + fit + reload buttons |
+| **Quick Actions** | None | Health Check, Export Brain, View Warnings on Overview |
+| **Health summary** | Only in Health tab | Grade + purity score card on Overview |
+| **Empty states** | Blank when no data | Placeholder UI for 0 brains, empty graph, no warnings |
+| **ARIA labels** | Missing | All icon buttons, tabs, toast container |
+| **Mobile** | Small touch targets | 44px min height, proper font size on mobile nav |
 
 ### Architecture
 
 ```
 Browser (SPA — Alpine.js + Tailwind CDN)
   ├── /dashboard ─── dashboard.html (entry point)
-  │     ├── Overview    — stats, health grade, brain cards
-  │     ├── Graph       — Cytoscape.js neural graph explorer
-  │     ├── OAuth       — Provider login cards via CLIProxyAPI proxy
-  │     ├── OpenClaw    — API keys, functions, security config
-  │     ├── Channels    — Telegram/Discord connection setup
-  │     ├── Health      — Radar chart, warnings, recommendations
-  │     └── Settings    — Language (EN/VI), brain export/import
+  │     ├── Overview       — stats, quick actions, health summary, brain list
+  │     ├── Graph          — Cytoscape.js explorer + search/filter/zoom toolbar
+  │     ├── Integrations   — Status cards + deep links (config via each service's own dashboard)
+  │     ├── Health         — Radar chart, warnings, recommendations
+  │     └── Settings       — Language (EN/VI), brain export/import
   │
   FastAPI Backend (existing server at :8000)
   ├── /api/dashboard/*    — Stats, brain list, health (dashboard_api.py)
@@ -1077,6 +1094,11 @@ Browser (SPA — Alpine.js + Tailwind CDN)
   ├── /api/openclaw/*     — Config CRUD from ~/.neuralmemory/openclaw.json (openclaw_api.py)
   └── /api/graph          — Existing graph endpoint
 ```
+
+### Bugfixes
+
+- **Issue #1**: `ModuleNotFoundError: typing_extensions` on fresh Python 3.12 installs. Root cause: `aiohttp` internal import — environment issue, not NM bug. Defensive fix: added `typing_extensions>=4.0` to dependencies.
+- **CI lint**: Fixed `ruff` F821/I001 errors in `test_nanobot_integration.py` (missing `Any` import, unsorted imports).
 
 ### Files shipped
 
@@ -1087,56 +1109,79 @@ Browser (SPA — Alpine.js + Tailwind CDN)
 | NEW | `server/routes/openclaw_api.py` — OpenClaw config CRUD |
 | NEW | `integrations/openclaw_config.py` — Pydantic models + JSON persistence |
 | NEW | `server/static/dashboard.html` — Main SPA (Alpine.js tabs + CDN imports) |
-| NEW | `server/static/js/app.js` — Core Alpine component |
-| NEW | `server/static/js/graph.js` — Cytoscape.js graph |
-| NEW | `server/static/js/oauth.js` — OAuth provider cards |
-| NEW | `server/static/js/openclaw.js` — OpenClaw config + channel UI |
+| NEW | `server/static/js/app.js` — Core Alpine component (toast, tabs, loading, integrations status, quick actions) |
+| NEW | `server/static/js/graph.js` — Cytoscape.js graph (search, filter, zoom) |
+| NEW | `server/static/js/oauth.js` — Stub (OAuth managed by CLIProxyAPI) |
+| NEW | `server/static/js/openclaw.js` — Stub (config managed by OpenClaw) |
 | NEW | `server/static/js/i18n.js` — Locale detection + translation |
-| NEW | `server/static/css/dashboard.css` — Custom styles |
-| NEW | `server/static/locales/en.json` — English strings |
-| NEW | `server/static/locales/vi.json` — Vietnamese strings |
+| NEW | `server/static/css/dashboard.css` — Custom styles (toast, skeleton, spinner, mobile) |
+| NEW | `server/static/locales/en.json` — English strings (68 keys) |
+| NEW | `server/static/locales/vi.json` — Vietnamese strings (68 keys) |
 | MOD | `server/app.py` — Mount new routers + `/dashboard` endpoint |
 | MOD | `server/routes/__init__.py` — Export new routers |
-| MOD | `pyproject.toml` — Add httpx dependency, version → 1.2.0 |
+| MOD | `pyproject.toml` — Add httpx + typing_extensions deps, version → 1.2.0 |
 
 ---
 
-## Phase 3: v1.3.0 — Integration Dashboard
+## Architectural Decision: Dashboard Roles (Option B)
 
-> Dashboard becomes the control center for all integrations.
+> **Decided 2026-02-09**: NM Dashboard is a specialist tool, not a hub.
+
+### Problem
+
+Three dashboards exist:
+1. **CLIProxyAPI** (:8317) — OAuth session management, token management
+2. **NeuralMemory** (:8000/dashboard) — Brain management, graph, health
+3. **OpenClaw** (CLI) — Agent config, memory settings, extensions
+
+The initial v1.2.0 dashboard tried to be a hub: managing OAuth, OpenClaw config, and channel setup inside NM. This creates duplicate UIs and confusing responsibility boundaries.
+
+### Decision
+
+**NM Dashboard = specialist tool for what ONLY NM can do:**
+- Neural graph visualization
+- Brain health / diagnostics / radar chart
+- Brain switching, versioning, transplant, export/import
+- Integration **status** (read-only) with deep links to the right dashboard
+
+**NM Dashboard does NOT manage:**
+- OAuth sessions → CLIProxyAPI's dashboard
+- OpenClaw config → OpenClaw's own settings
+- Channel setup (Telegram/Discord) → CLIProxyAPI or bot platform
+- API keys → environment variables or CLIProxyAPI
+
+**Integrations tab = status dashboard**, not config editor:
+```
+Integrations (read-only status + deep links)
+├── MCP Server    ✅ Running — v1.2.0, 16 tools
+├── Nanobot       ✅ Available — 4 tools
+├── CLIProxyAPI   ✅ 3/6 providers    [Open Dashboard →]
+├── OpenClaw      ⬚ Not configured
+├── Telegram      ⬚ Not configured    [Configure →]
+└── Discord       ⬚ Not configured    [Configure →]
+```
+
+### Rationale
+
+- OpenClaw (178k stars) is the user's primary tool — NM is a component inside it
+- CLIProxyAPI handles OAuth complexity — NM shouldn't duplicate it
+- Specialist dashboards > monolith dashboards
+- Deep links to the right place > duplicated config forms
+
+---
+
+## Phase 3: v1.3.0 — Deep Integration Status
+
+> Richer integration status with activity logs and setup wizards.
 
 **Target**: 2 weeks after v1.2.0
 
-### 3.1 Integration Management Panel
+### 3.1 Enhanced Status Cards
 
-```
-┌─────────────────────────────────────────────────┐
-│  Integrations                                    │
-├─────────────────────────────────────────────────┤
-│                                                  │
-│  ✅ MCP Server          Running on stdio         │
-│     Tools: 16 active    Clients: 1 connected     │
-│     Last call: 2 min ago                         │
-│                                                  │
-│  ✅ Nanobot             Connected                │
-│     Brain: nanobot      Tools: 4 registered      │
-│     Memories today: 23  Recalls today: 47        │
-│                                                  │
-│  ⬚ OpenClaw            Not configured            │
-│     [Setup Guide] [Install SKILL]                │
-│                                                  │
-│  ⬚ THOR NEXUS          Not configured            │
-│     [Setup Guide]                                │
-│                                                  │
-│  Import Sources                                  │
-│  ├── ChromaDB    [Import]                        │
-│  ├── Mem0        [Import]                        │
-│  ├── Cognee      [Import]                        │
-│  ├── Graphiti    [Import]                        │
-│  └── LlamaIndex  [Import]                        │
-│                                                  │
-└──────────────────────────────────────────────────┘
-```
+Extend the v1.2.0 status-only cards with:
+- **Live metrics**: memories today, recalls today, last call timestamp
+- **Error indicators**: red badge + last error message
+- **THOR NEXUS**: add status card when detected
 
 ### 3.2 Integration Activity Log
 
@@ -1147,147 +1192,157 @@ Browser (SPA — Alpine.js + Tailwind CDN)
 
 ### 3.3 One-Click Setup Wizards
 
-- **Nanobot**: Generate `setup_neural_memory()` code snippet
-- **OpenClaw**: Generate MCP config + SKILL.md installation
+Deep-link-based setup (not config forms — config lives in each service):
+- **Nanobot**: Generate `setup_neural_memory()` code snippet, copy to clipboard
+- **OpenClaw**: Generate MCP config + SKILL.md installation instructions
 - **Claude Code**: Generate `mcp_servers.json` entry
 - **Cursor**: Generate `mcp.json` entry
+
+### 3.4 Import Sources Panel
+
+One-directional import from competing memory systems into NM:
+- ChromaDB, Mem0, Cognee, Graphiti, LlamaIndex
+- Each shows status (importable/not detected) + [Import] button
 
 ### Files
 
 | Action | File | Description |
 |--------|------|-------------|
-| **New** | `server/static/dashboard/integrations.js` | Integration panel logic |
-| **New** | `server/api/integrations.py` | Integration status endpoints |
-| **Modified** | `server/static/dashboard/index.html` | Add integration page |
-| **New** | `tests/e2e/test_integration_api.py` | Integration API tests |
+| **Modified** | `server/static/js/app.js` | Enhanced loadIntegrations with live metrics |
+| **New** | `server/routes/integration_status.py` | Backend status aggregation endpoint |
+| **Modified** | `server/static/dashboard.html` | Activity log + setup wizard sections |
+| **New** | `tests/unit/test_integration_status.py` | Status endpoint tests |
 
 ### Scope
 
-~800 lines (HTML/JS) + ~200 lines (Python API) + ~100 test lines
+~400 lines (HTML/JS) + ~200 lines (Python API) + ~100 test lines
 
 ---
 
-## Phase 4: v1.4.0 — OpenClaw Memory Plugin
+## Phase 4: v1.4.0 — OpenClaw Memory Plugin (IN PROGRESS)
 
-> Replace OpenClaw's default memory with NeuralMemory.
+> NM becomes the memory layer inside OpenClaw (the hub).
 
-**Target**: 3-4 weeks after v1.3.0
+**Target**: 2 weeks (can start immediately — independent of v1.3.0)
+**Status**: Core plugin implemented — 7 files, ~400 lines TypeScript, zero npm dependencies.
+
+### Why This Is P1
+
+Option B says OpenClaw is the hub. For that to work, NM must plug into OpenClaw seamlessly. This is the highest-impact integration: 178k-star ecosystem, exclusive memory slot, every OpenClaw user becomes a potential NM user.
 
 ### Architecture
 
 ```
-OpenClaw Gateway (TypeScript)
+OpenClaw (the hub — user's primary interface)
   │
-  ├── Memory Slot (exclusive)
-  │   └── @neuralmemory/openclaw-plugin (TypeScript)
-  │       ├── registerTool("nmem_remember")
-  │       ├── registerTool("nmem_recall")
-  │       ├── memory.search() → MCP recall
-  │       ├── memory.index() → MCP remember
-  │       └── MCP Client (stdio) → python -m neural_memory.mcp
+  ├── Memory Slot (exclusive — kind: "memory")
+  │   └── @neuralmemory/openclaw-plugin (TypeScript, zero deps)
+  │       ├── openclaw.plugin.json  — manifest with configSchema + uiHints
+  │       ├── src/index.ts          — plugin entry, registers tools/hooks/service
+  │       ├── src/mcp-client.ts     — JSON-RPC 2.0 over stdio (Content-Length framing)
+  │       ├── src/tools.ts          — 6 core tools with zod schemas
+  │       └── src/types.ts          — minimal OpenClaw type stubs
   │
-  └── Agent uses NM memory transparently
+  ├── Service: neuralmemory-mcp
+  │   └── Spawns `python -m neural_memory.mcp` as subprocess
+  │
+  ├── Hooks (configurable):
+  │   ├── before_agent_start → nmem_recall(prompt) → prependContext
+  │   └── agent_end → nmem_auto(process, text) → auto-capture
+  │
+  └── Config via uiHints:
+      pythonPath, brain, autoContext, autoCapture, contextDepth, maxContextTokens
 ```
 
-### 4.1 TypeScript MCP Client
+### 4.1 MCP stdio Client ✅
 
-Lightweight TypeScript client that spawns NM's MCP server as a subprocess and communicates via JSON-RPC 2.0 over stdio.
+Zero-dependency JSON-RPC 2.0 client implementing MCP protocol with Content-Length framing. Handles initialize handshake, tool calls, timeouts, process lifecycle.
 
-```typescript
-// @neuralmemory/openclaw-plugin
-export default {
-  name: "neural-memory",
-  version: "1.0.0",
-  openclaw: {
-    extensions: {
-      memory: {
-        slot: "memory",
-        type: "memory"
-      }
-    }
-  }
-}
-```
+Key design:
+- Manual protocol implementation (no `@modelcontextprotocol/sdk` dependency)
+- `connect()` → spawns Python process + MCP initialize handshake
+- `callTool(name, args)` → JSON-RPC request with timeout
+- `close()` → SIGTERM + pending request cleanup
+- Buffer-based response parsing with Content-Length header extraction
 
-### 4.2 Memory Slot Implementation
+### 4.2 Tools Registered ✅
 
-Map OpenClaw's memory interface to NM's MCP tools:
+6 core tools registered via `api.registerTool()` with zod parameter schemas:
 
-| OpenClaw Method | NM MCP Tool |
-|----------------|-------------|
-| `memory.search(query)` | `nmem_recall` (depth=1) |
-| `memory.index(content)` | `nmem_remember` |
-| `memory.getContext()` | `nmem_context` |
-| `memory.getRecentMemories()` | `nmem_context` (fresh_only=true) |
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `nmem_remember` | Store a memory | content, type?, priority?, tags?, expires_days? |
+| `nmem_recall` | Query/search memories | query, depth?, max_tokens?, min_confidence? |
+| `nmem_context` | Get recent context | limit?, fresh_only? |
+| `nmem_todo` | Quick TODO shortcut | task, priority? |
+| `nmem_stats` | Brain statistics | (none) |
+| `nmem_health` | Brain health diagnostics | (none) |
 
-### 4.3 Contribute Fix for Issue #8921
+Each tool proxies to MCP via `callTool()` with JSON parse of response.
 
-Submit PR to OpenClaw repo fixing third-party memory plugin detection in `status` command. This directly benefits NM and all other memory plugins.
+### 4.3 OpenClaw Status Fix ✅
+
+[PR #12596](https://github.com/openclaw/openclaw/pull/12596) submitted — fixes `openclaw status` to probe non-core memory plugins via gateway RPC. 2-file fix, 5/5 tests pass. Competing PR #7289 had 32 files.
+
+### 4.4 NM Dashboard Integration Card ✅
+
+When OpenClaw plugin is active, NM dashboard's Integrations status card shows:
+- "OpenClaw: ✅ Connected — N API keys configured"
+- No config UI (Option B — config lives in OpenClaw's settings via uiHints)
 
 ### Files
 
-| Action | File | Description |
-|--------|------|-------------|
-| **New** | `integrations/openclaw/plugin/` | TypeScript plugin package |
-| **New** | `integrations/openclaw/plugin/package.json` | npm manifest |
-| **New** | `integrations/openclaw/plugin/src/index.ts` | Plugin entry point |
-| **New** | `integrations/openclaw/plugin/src/mcp-client.ts` | MCP stdio client |
-| **New** | `integrations/openclaw/plugin/src/memory-provider.ts` | Memory slot adapter |
-| **New** | `integrations/openclaw/plugin/README.md` | Installation guide |
+| Status | File | Lines | Description |
+|--------|------|-------|-------------|
+| ✅ | `integrations/openclaw-plugin/openclaw.plugin.json` | 57 | Plugin manifest: id, kind, configSchema, uiHints |
+| ✅ | `integrations/openclaw-plugin/package.json` | 33 | npm package (zero runtime deps, zod as peer) |
+| ✅ | `integrations/openclaw-plugin/tsconfig.json` | 15 | TypeScript config (ES2022, bundler resolution) |
+| ✅ | `integrations/openclaw-plugin/src/index.ts` | 156 | Plugin entry: register tools, service, hooks |
+| ✅ | `integrations/openclaw-plugin/src/mcp-client.ts` | 198 | MCP stdio client: JSON-RPC 2.0, Content-Length framing |
+| ✅ | `integrations/openclaw-plugin/src/tools.ts` | 152 | 6 core tools with zod schemas |
+| ✅ | `integrations/openclaw-plugin/src/types.ts` | 73 | Minimal OpenClaw plugin type stubs |
 
-### Scope
+### Remaining
 
-~600 lines TypeScript + ~200 lines docs
-
-### External
-
-- PR to openclaw/openclaw fixing Issue #8921
-- Publish to npm as `@neuralmemory/openclaw-plugin`
-- Update ClawHub SKILL.md with plugin instructions
+- [ ] Integration test: install plugin in OpenClaw, verify tools work end-to-end
+- [ ] Publish to npm as `@neuralmemory/openclaw-plugin`
+- [ ] Update ClawHub SKILL.md with plugin installation instructions
+- [ ] Add to `~/.openclaw/extensions/` discovery path documentation
 
 ---
 
 ## Phase 5: v1.5.0 — Ecosystem Expansion
 
-> Widen the net. More integrations, more languages, marketplace.
+> Marketplace, storage backends, more languages.
 
 **Target**: 1-2 months after v1.4.0
 
-### 5.1 THOR NEXUS Integration (D:\Antigravity\OmniAI)
+### 5.1 Brain Marketplace (Preview)
 
-Integrate NM into the local THOR NEXUS project for cross-session Solana forensics memory:
-
-| THOR Agent | NM Value |
-|------------|----------|
-| Zeus (orchestrator) | Persistent decision history |
-| Athena (analysis) | Pattern memory across sessions |
-| Hermes (trading) | Trade outcome learning |
-| Apollo (sentiment) | Sentiment correlation memory |
-| Hephaestus (infra) | Error pattern detection |
-| Artemis (risk) | Risk assessment history |
-
-### 5.2 Brain Marketplace (Preview)
-
-- Public brain gallery on NM website
-- Upload/download brains with quality badges
+NM dashboard gains a "Marketplace" tab (6th tab — the exception where NM IS the hub):
+- Public brain gallery
+- Upload/download brains with quality badges (grade A/B required)
 - Categories: programming, devops, security, data-science, vietnamese-dev
 - Search by tags, language, grade
+- Brain transplant from marketplace → local brain
 
-### 5.3 Neo4j Storage Backend
+### 5.2 Neo4j Storage Backend
 
 For users with large-scale graph requirements:
 - `Neo4jStorage` implementing `BaseStorage` ABC
 - Native graph queries (Cypher) for complex traversals
 - Horizontal scaling for enterprise use
 - Optional — SQLite remains default
+- Dashboard graph tab auto-detects Neo4j and uses native traversal
 
-### 5.4 Multi-Language Expansion
+### 5.3 Multi-Language Expansion
 
 Beyond EN/VI:
 - Japanese (large AI dev community)
 - Korean
 - Chinese (simplified)
 - Extraction patterns + lexicons per language
+- Dashboard i18n keys for JA/KO/ZH
 
 ---
 
@@ -1298,39 +1353,46 @@ Beyond EN/VI:
 ### Vision
 
 ```
-Any AI Agent → NM Protocol (MCP/REST/SDK) → Neural Graph → Intelligent Recall
-                                                 ↑
-                                          Dashboard (visual management)
-                                                 ↑
-                                          Brain Marketplace (shared knowledge)
+Any AI Agent (OpenClaw, Claude Code, Cursor, THOR, Nanobot, custom)
+  │
+  └── NM Protocol (MCP/REST/SDK) → Neural Graph → Intelligent Recall
+                                        │
+                                   NM Dashboard (specialist tool)
+                                   ├── Brain management + health
+                                   ├── Neural graph explorer
+                                   ├── Integration status
+                                   └── Brain Marketplace
 ```
+
+**Dashboard role at v2.0**: Still a specialist tool (Option B). But now with marketplace, it becomes the place where brains are browsed, traded, transplanted. Agents configure their own memory via MCP — dashboard is for humans observing and managing the neural graphs.
 
 ### 2.0 Features
 
-- **NM Protocol**: Standardized memory protocol beyond MCP
+- **NM Protocol**: Standardized memory protocol beyond MCP (REST + WebSocket + SDK)
 - **Multi-brain reasoning**: Query across multiple brains simultaneously
 - **Federated memory**: Distributed brains across machines
 - **Real-time collaboration**: Multiple agents sharing one brain with conflict resolution
 - **Memory compression**: Lossy summarization for very old fibers (save storage)
 - **Adaptive recall**: Learn which depth level works best per query pattern
+- **Dashboard real-time**: WebSocket-powered live graph updates as agents remember/recall
 
 ---
 
 ## Dependency Graph (Post-v1.0)
 
 ```
-v1.1.0 (Community Foundations)
-  ├──→ v1.2.0 (Dashboard Foundation)
-  │       └──→ v1.3.0 (Integration Dashboard)
-  │               └──→ v1.5.0 (Ecosystem Expansion)
-  └──→ v1.4.0 (OpenClaw Memory Plugin)
+v1.1.0 ✅ (Community Foundations)
+  ├──→ v1.2.0 ✅ (Dashboard — specialist tool + status-only integrations)
+  │       └──→ v1.3.0 (Deep Integration Status + activity logs)
+  │               └──→ v1.5.0 (Ecosystem — THOR, Marketplace, Neo4j, i18n)
+  └──→ v1.4.0 (OpenClaw Memory Plugin — NM inside the hub)
               └──→ v1.5.0 (Ecosystem Expansion)
-                        └──→ v2.0.0 (Platform)
+                        └──→ v2.0.0 (Platform — protocol, federation, real-time)
 ```
 
-**Critical path**: v1.1.0 → v1.2.0 → v1.3.0 → v1.5.0
+**Critical path**: v1.1.0 ✅ → v1.2.0 ✅ → v1.4.0 → v1.3.0 → v1.5.0
 
-**Parallel track**: v1.4.0 (OpenClaw plugin) can run independently after v1.1.0
+**Parallel track**: v1.4.0 starts immediately — highest impact, independent of v1.3.0
 
 ---
 
@@ -1338,20 +1400,20 @@ v1.1.0 (Community Foundations)
 
 | Phase | Impact | Effort | Priority | Rationale |
 |-------|--------|--------|----------|-----------|
-| **v1.1.0** | High | Low | **P0** | Community visibility, zero code |
-| **v1.2.0** | High | High | **P1** | Dashboard is the face of NM |
-| **v1.3.0** | Medium | Medium | **P2** | Builds on dashboard, integration UX |
-| **v1.4.0** | High | Medium | **P1** | 178k-star ecosystem access |
-| **v1.5.0** | Medium | High | **P3** | Expansion, can be incremental |
-| **v2.0.0** | Critical | Very High | **P4** | Long-term platform vision |
+| **v1.1.0** ✅ | High | Low | **P0** | Community visibility, zero code |
+| **v1.2.0** ✅ | High | High | **P1** | Dashboard is the face of NM |
+| **v1.3.0** | Medium | Low | **P2** | Richer status + activity logs, low effort since v1.2.0 did the hard work |
+| **v1.4.0** | Critical | Medium | **P1** | 178k-star ecosystem — NM inside the hub (Option B) |
+| **v1.5.0** | High | High | **P3** | THOR + Marketplace + Neo4j, can be incremental |
+| **v2.0.0** | Critical | Very High | **P4** | Protocol + federation + real-time, long-term vision |
 
 ### Recommended Execution Order
 
 ```
-v1.1.0 (1 week) → v1.2.0 (3 weeks) → v1.4.0 (2 weeks) → v1.3.0 (2 weeks) → v1.5.0 (ongoing)
+v1.1.0 ✅ → v1.2.0 ✅ → v1.4.0 (2 weeks, P1) → v1.3.0 (1 week, P2) → v1.5.0 (ongoing)
 ```
 
-Do v1.4.0 before v1.3.0 because OpenClaw plugin provides the real-world integration data that makes the Integration Dashboard useful.
+v1.4.0 first: OpenClaw plugin is the highest-impact integration (Option B — NM inside the hub). Real-world plugin data then makes v1.3.0 status cards meaningful. v1.3.0 is now low-effort since v1.2.0 already built the status card UI.
 
 ---
 
@@ -1386,4 +1448,4 @@ Do v1.4.0 before v1.3.0 because OpenClaw plugin provides the real-world integrat
 ---
 
 *See [VISION.md](VISION.md) for the north star guiding all decisions.*
-*Last updated: 2026-02-09 (v1.2.0 shipped: Dashboard with OAuth, OpenClaw config, channels, neural graph)*
+*Last updated: 2026-02-09 (v1.2.0 shipped to PyPI: Dashboard with status-only integrations, neural graph, UX overhaul, Option B architecture)*

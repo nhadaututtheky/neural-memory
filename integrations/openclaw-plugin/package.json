@@ -1,0 +1,35 @@
+{
+  "name": "@neuralmemory/openclaw-plugin",
+  "version": "1.4.0",
+  "description": "NeuralMemory plugin for OpenClaw — brain-inspired persistent memory for AI agents",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "zod": ">=3.0.0"
+  },
+  "keywords": [
+    "openclaw",
+    "openclaw-plugin",
+    "memory",
+    "neuralmemory",
+    "ai-agent",
+    "persistent-memory"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pinkponk/NeuralMemory"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.2",
+    "typescript": "^5.9.3",
+    "zod": "^4.3.6"
+  }
+}

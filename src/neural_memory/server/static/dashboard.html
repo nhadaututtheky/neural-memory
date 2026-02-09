@@ -396,30 +396,62 @@
         </div>
       </section>
 
-      <!-- ═══ Integrations Tab ══════════════════════════ -->
+      <!-- ═══ Integrations Tab (status-only) ═════════════ -->
       <section x-show="activeTab === 'integrations'" x-transition role="tabpanel" aria-label="Integrations">
-        <h2 class="text-2xl font-code font-bold mb-6" x-text="t('integrations')"></h2>
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-2xl font-code font-bold" x-text="t('integrations')"></h2>
+          <button @click="refreshIntegrations()"
+                  aria-label="Refresh integration status"
+                  class="bg-nm-secondary hover:bg-nm-border px-3 py-1.5 rounded-lg font-code text-xs transition-colors duration-200 cursor-pointer flex items-center gap-1.5">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            <span x-text="t('reload')"></span>
+          </button>
+        </div>
+        <p class="text-nm-muted text-sm mb-6" x-text="t('int_desc')"></p>
 
-        <!-- Integration sub-tabs -->
-        <div class="flex gap-2 mb-6 border-b border-nm-border pb-3 overflow-x-auto" role="tablist" aria-label="Integration sections">
-          <template x-for="itab in integrationTabs" :key="itab.id">
-            <button @click="integrationTab = itab.id"
-                    role="tab"
-                    :aria-selected="integrationTab === itab.id"
-                    :class="integrationTab === itab.id ? 'bg-nm-cta/10 text-nm-cta' : 'text-nm-muted hover:text-nm-text'"
-                    class="px-4 py-2 rounded-t-lg font-code text-sm cursor-pointer transition-colors duration-200 whitespace-nowrap flex items-center gap-2">
-              <i :data-lucide="itab.icon" class="w-4 h-4"></i>
-              <span x-text="t(itab.label)"></span>
-            </button>
+        <!-- Loading -->
+        <div x-show="loading.integrations" class="space-y-3 max-w-3xl">
+          <div class="skeleton skeleton-card"></div>
+          <div class="skeleton skeleton-card"></div>
+          <div class="skeleton skeleton-card"></div>
+        </div>
+
+        <!-- Integration status cards -->
+        <div x-show="!loading.integrations" class="space-y-3 max-w-3xl">
+          <template x-for="int in integrations" :key="int.id">
+            <div class="bg-nm-primary border border-nm-border rounded-xl p-5 flex items-center gap-4">
+              <!-- Icon -->
+              <div class="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
+                   :style="`background: ${int.color}15`">
+                <i :data-lucide="int.icon" class="w-6 h-6" :style="`color: ${int.color}`"></i>
+              </div>
+
+              <!-- Info -->
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="font-code font-semibold" x-text="int.name"></span>
+                  <span class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        :class="int.active ? 'bg-nm-cta pulse-dot' : 'bg-nm-secondary'"></span>
+                </div>
+                <div class="text-sm text-nm-muted mt-0.5" x-text="int.detail"></div>
+              </div>
+
+              <!-- Deep link -->
+              <a x-show="int.link"
+                 :href="int.link" target="_blank" rel="noopener"
+                 class="bg-nm-secondary hover:bg-nm-border px-3 py-1.5 rounded-lg font-code text-xs transition-colors duration-200 cursor-pointer flex items-center gap-1.5 flex-shrink-0">
+                <span x-text="int.linkLabel"></span>
+                <i data-lucide="external-link" class="w-3 h-3"></i>
+              </a>
+            </div>
           </template>
         </div>
 
-        <!-- Integration panels -->
-        <div x-show="integrationTab === 'oauth'" id="int-oauth" role="tabpanel"></div>
-        <div x-show="integrationTab === 'apikeys'" id="int-apikeys" role="tabpanel"></div>
-        <div x-show="integrationTab === 'functions'" id="int-functions" role="tabpanel"></div>
-        <div x-show="integrationTab === 'channels'" id="int-channels" role="tabpanel"></div>
-        <div x-show="integrationTab === 'security'" id="int-security" role="tabpanel"></div>
+        <!-- Empty state -->
+        <div x-show="!loading.integrations && integrations.length === 0" class="empty-state">
+          <i data-lucide="puzzle"></i>
+          <p class="text-sm text-nm-muted" x-text="t('loading')"></p>
+        </div>
       </section>
 
       <!-- ═══ Health Tab ════════════════════════════════ -->

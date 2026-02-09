@@ -1,0 +1,76 @@
+{
+  "id": "neuralmemory",
+  "kind": "memory",
+  "name": "NeuralMemory",
+  "description": "Brain-inspired persistent memory for AI agents — neurons, synapses, and fibers",
+  "version": "1.4.0",
+  "configSchema": {
+    "jsonSchema": {
+      "type": "object",
+      "properties": {
+        "pythonPath": {
+          "type": "string",
+          "description": "Path to Python executable with neural-memory installed",
+          "default": "python"
+        },
+        "brain": {
+          "type": "string",
+          "description": "Brain name to use for this workspace",
+          "default": "default"
+        },
+        "autoContext": {
+          "type": "boolean",
+          "description": "Inject relevant memory context before each agent run",
+          "default": true
+        },
+        "autoCapture": {
+          "type": "boolean",
+          "description": "Auto-extract and store memories after each agent run",
+          "default": true
+        },
+        "contextDepth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3,
+          "description": "Recall depth for auto-context: 0=instant, 1=context, 2=habit, 3=deep",
+          "default": 1
+        },
+        "maxContextTokens": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 10000,
+          "description": "Maximum tokens for auto-context injection",
+          "default": 500
+        }
+      }
+    },
+    "uiHints": {
+      "pythonPath": {
+        "label": "Python Path",
+        "placeholder": "python",
+        "help": "Path to Python executable that has neural-memory installed (pip install neural-memory)"
+      },
+      "brain": {
+        "label": "Brain Name",
+        "placeholder": "default",
+        "help": "Which brain to use — each workspace can have its own brain"
+      },
+      "autoContext": {
+        "label": "Auto-inject Context",
+        "help": "Automatically query relevant memories and inject them before each agent run"
+      },
+      "autoCapture": {
+        "label": "Auto-capture Memories",
+        "help": "Automatically extract facts, decisions, and insights after each agent run"
+      },
+      "contextDepth": {
+        "label": "Context Depth",
+        "help": "How deep to search: 0=instant lookup, 1=contextual, 2=habit patterns, 3=full graph traversal"
+      },
+      "maxContextTokens": {
+        "label": "Max Context Tokens",
+        "help": "Maximum tokens to inject as context (higher = more context but uses more prompt space)"
+      }
+    }
+  }
+}
