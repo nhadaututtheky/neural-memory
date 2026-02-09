@@ -1,10 +1,17 @@
-# NeuralMemory Roadmap: v0.14.0 → v1.0.0
+# NeuralMemory Roadmap
 
-> From associative reflex engine to portable consciousness platform.
+> From associative reflex engine to universal memory platform.
 > Every feature passes the VISION.md 4-question test + brain test.
 > ZERO LLM dependency — pure algorithmic, regex, graph-based.
 
-**Current state**: v1.0.0 shipped (schema v11). All versions complete.
+**Current state**: v1.0.2 shipped (schema v11). Post-v1.0 roadmap active.
+**Next milestone**: v1.1.0 — Community Foundations (ClawHub SKILL + OpenClaw engagement).
+
+---
+
+# Part I: v0.14.0 → v1.0.0 (COMPLETE)
+
+**Status**: All versions shipped.
 v0.14.0 shipped: relation extraction, tag origin, confirmatory boost.
 v0.15.0 shipped: associative inference, co-activation persistence, tag normalization.
 v0.16.0 shipped: emotional valence, sentiment extraction, FELT synapses, emotional decay.
@@ -920,4 +927,554 @@ Starting from 1105 tests (v0.20.0) → targeting ~1,455+ tests at v1.0.0.
 ---
 
 *See [VISION.md](VISION.md) for the north star guiding all decisions.*
-*Last updated: 2026-02-09 (v1.0.0 shipped: brain versioning, transplant, quality badge, optional embeddings, optional LLM extraction)*
+
+---
+---
+
+# Post-v1.0 Roadmap: v1.1.0 → v2.0.0
+
+> From library to platform. From CLI to visual. From single-user to ecosystem.
+>
+> **Three pillars**: Dashboard + Integrations + Community
+>
+> **Current state**: v1.0.2 shipped. 1,340 tests. 16 MCP tools. Nanobot integration done.
+
+## Strategic Context
+
+### Market Position (Feb 2026)
+
+| Project | Stars | Language | Memory Approach | LLM Required |
+|---------|-------|----------|----------------|--------------|
+| **OpenClaw** | 178k | TypeScript | SQLite + FTS5 + sqlite-vec flat files | Yes (embeddings) |
+| **Mem0** | 47k | Python | Vector DB + LLM extraction | Yes (2+ calls/write) |
+| **LlamaIndex** | 47k | Python | Document chunking + vector | Yes |
+| **Graphiti** | 23k | Python | Bi-temporal knowledge graph | Yes (LLM extraction) |
+| **claude-mem** | 26k | TypeScript | sqlite-vec + FTS5 | Yes (embeddings) |
+| **Cognee** | 12k | Python | ECL pipeline + KuzuDB | Yes (LLM ingestion) |
+| **NeuralMemory** | <1k | Python | Neural graph + spreading activation | **No** |
+
+### NM's Unique Differentiators
+
+1. **Zero LLM dependency** — pure algorithmic (regex, graph, Hebbian)
+2. **Spreading activation** — associative recall, not search
+3. **Self-improving** — Hebbian learning strengthens used paths
+4. **Contradiction detection** — auto-detects conflicting memories
+5. **Memory lifecycle** — STM → Working → Episodic → Semantic with decay
+6. **Temporal reasoning** — causal chains, event sequences
+7. **Brain versioning + transplant** — no competitor has this
+
+### OpenClaw Memory Weaknesses (documented in issues)
+
+| Issue | Problem | NM Solves |
+|-------|---------|-----------|
+| [#9143](https://github.com/openclaw/openclaw/issues/9143) | Embedding API failures permanently disable memory search | No embedding required |
+| [#5696](https://github.com/openclaw/openclaw/issues/5696) | Token limit exceeded, no truncation | Neuron-level chunking |
+| [#7776](https://github.com/openclaw/openclaw/issues/7776) | Cross-project noise in search | Brain isolation per project |
+| [#8921](https://github.com/openclaw/openclaw/issues/8921) | Third-party memory plugins not detected by status | Contribution opportunity |
+| No issue | No semantic relationships | 20 typed synapses |
+| No issue | No decay/retention | Ebbinghaus curve + type-aware decay |
+| No issue | Returns contradictory results | Auto-contradiction detection |
+
+### Competitors Already Inside OpenClaw
+
+- **Mem0**: Published [blog post + integration guide](https://mem0.ai/blog/mem0-memory-for-openclaw)
+- **Cognee**: Published [blog post + integration](https://www.cognee.ai/blog/integrations/what-is-openclaw-ai-and-how-we-give-it-memory-with-cognee)
+
+Both replace the exclusive memory slot. NM needs to enter this space with a stronger value proposition.
+
+---
+
+## Phase 1: v1.1.0 — Community Foundations
+
+> Get noticed. Minimal code, maximum visibility.
+
+**Target**: 1 week after v1.0.2
+
+### 1.1 ClawHub SKILL.md
+
+Publish a `SKILL.md` to [ClawHub](https://github.com/openclaw/clawhub) — OpenClaw's official skill registry (2,999+ curated skills, 60k Discord users browse it).
+
+**What it does**: Instructs OpenClaw's agent to use NM via the existing MCP server.
+
+```yaml
+# SKILL.md frontmatter
+name: neural-memory
+version: 1.0.0
+description: "Associative memory with spreading activation, decay, and temporal reasoning"
+tags: [memory, neural, recall, knowledge-graph]
+```
+
+**Content**: How to install NM, configure MCP, and use the 16 tools.
+
+**Why SKILL first**: Zero TypeScript code. Leverages NM's existing MCP server. Gets immediate vector-search visibility on ClawHub.
+
+### 1.2 OpenClaw Issue #8921 Fix PR
+
+Contribute a fix for [Issue #8921](https://github.com/openclaw/openclaw/issues/8921) — third-party memory plugins not detected by `status` command.
+
+**Why**: Builds credibility as contributor. Directly unblocks NM (and all third-party memory plugins). Gets NM's name in OpenClaw's commit history.
+
+### 1.3 Blog Post: "Neural Memory for OpenClaw"
+
+Publish on Dev.to / Medium / GitHub blog:
+- Side-by-side comparison: flat-file memory vs neural graph
+- Demo GIF/video showing recall quality difference
+- Install instructions (one command)
+
+### 1.4 Community Launch
+
+| Action | Channel | Timing |
+|--------|---------|--------|
+| Post SKILL + demo | OpenClaw Discord #showcase | Day 1 |
+| Tag @openclaw on X | Twitter | Day 1 |
+| Submit to awesome-openclaw-skills | GitHub PR | Day 2 |
+| Post blog | Dev.to + Medium | Day 3 |
+
+### Files
+
+| Action | File | Description |
+|--------|------|-------------|
+| **New** | `integrations/openclaw/SKILL.md` | ClawHub skill definition |
+| **New** | `integrations/openclaw/README.md` | OpenClaw integration guide |
+| **New** | `docs/blog/neural-memory-openclaw.md` | Blog post |
+
+### Scope
+
+~200 lines docs. No code changes.
+
+---
+
+## Phase 2: v1.2.0 — Dashboard Foundation
+
+> Replace the vis.js prototype with a production dashboard.
+
+**Target**: 2-3 weeks after v1.1.0
+
+### The Problem
+
+Current UI is a single `index.html` with vis.js — no navigation, no filtering, no management, no analytics. The VS Code extension is richer but locked inside VS Code. Users need a standalone browser dashboard.
+
+### Architecture
+
+```
+Browser (SPA)
+  ├── Dashboard    — Overview, stats, health grade
+  ├── Explorer     — Interactive graph (Cytoscape.js)
+  ├── Timeline     — Memory creation over time
+  ├── Search       — Query + recall with preview
+  ├── Brain Mgmt   — Create, switch, export, import, transplant
+  ├── Health       — Diagnostics, warnings, recommendations
+  ├── Integrations — MCP status, Nanobot/OpenClaw config
+  └── Settings     — Config, language (EN/VI)
+        │
+  FastAPI Backend (existing)
+  + WebSocket (real-time updates)
+  + New endpoints for dashboard data
+```
+
+### Tech Stack Decision
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **Vanilla HTML/JS + Alpine.js** | Zero build, ships with NM, lightweight | Limited component reuse |
+| **React + Vite** | Rich ecosystem, component library | Separate build, npm dependency |
+| **Vue 3 + Vite** | Lighter than React, good DX | Still separate build |
+| **Svelte** | Smallest bundle, fast | Smaller ecosystem |
+
+**Recommendation**: **Vanilla HTML/JS + Alpine.js + Tailwind CSS (CDN)**
+
+Rationale:
+- Zero build step — dashboard ships as static files inside NM package
+- No Node.js/npm dependency for users
+- `pip install neural-memory` includes dashboard automatically
+- CDN-loaded libraries (Alpine.js, Tailwind, Cytoscape.js, Chart.js)
+- Same pattern as existing `index.html` but much richer
+
+### 2.1 Dashboard Overview Page
+
+```
+┌─────────────────────────────────────────────────┐
+│  🧠 NeuralMemory Dashboard    [brain: default]  │
+├──────────┬──────────┬──────────┬────────────────┤
+│ Neurons  │ Synapses │ Fibers   │ Health: A (92) │
+│   847    │  2,341   │   156    │ ████████████░  │
+├──────────┴──────────┴──────────┴────────────────┤
+│                                                  │
+│  Memory Timeline (30 days)     Type Distribution │
+│  ▁▂▃▅▇█▇▅▃▂▁▂▃▅▇            ██ fact    42%    │
+│                                ██ decision 18%   │
+│  Recent Activity               ██ insight  15%   │
+│  • [14:23] Remembered: ...     ██ todo     12%   │
+│  • [14:20] Recalled: ...       ██ other    13%   │
+│  • [14:15] Consolidated: ...                     │
+│                                                  │
+│  Warnings                      Quick Actions     │
+│  ⚠ Tag drift: UI/Frontend     [Remember] [Recall]│
+│  ⚠ Low diversity              [Health] [Export]  │
+└──────────────────────────────────────────────────┘
+```
+
+### 2.2 Graph Explorer (Cytoscape.js upgrade)
+
+Replace vis.js with Cytoscape.js (already used in VS Code extension):
+- Force-directed + hierarchical + radial layouts
+- Filter by neuron type, date range, tags
+- Fiber pathway highlighting
+- Synapse type color coding (20 types)
+- Sub-graph navigation (click neuron → show neighborhood)
+- Export as PNG/SVG
+
+### 2.3 Brain Management UI
+
+- Brain list with health grades
+- Create / delete / switch brains
+- Export / import (JSON)
+- Version history with rollback
+- Transplant wizard (source brain → filter → target brain)
+
+### 2.4 Health Diagnostics Page
+
+- Radar chart of 7 component scores
+- Warning list with severity badges
+- Recommendation cards with action buttons
+- Historical health trend (if data available)
+
+### 2.5 Vietnamese Localization (i18n)
+
+```javascript
+// locales/vi.json
+{
+  "dashboard": "Bảng Điều Khiển",
+  "neurons": "Nơ-ron",
+  "synapses": "Khớp Thần Kinh",
+  "fibers": "Sợi Ký Ức",
+  "health": "Sức Khỏe Não",
+  "remember": "Ghi Nhớ",
+  "recall": "Hồi Tưởng",
+  "brain": "Não",
+  "settings": "Cài Đặt",
+  ...
+}
+```
+
+- Language toggle in settings (EN/VI)
+- Auto-detect from browser locale
+- All UI labels, tooltips, error messages localized
+- Vietnamese-first approach for targeting Vietnamese developer community
+
+### Files
+
+| Action | File | Description |
+|--------|------|-------------|
+| **New** | `server/static/dashboard/index.html` | Main SPA entry point |
+| **New** | `server/static/dashboard/app.js` | Alpine.js app logic |
+| **New** | `server/static/dashboard/graph.js` | Cytoscape.js explorer |
+| **New** | `server/static/dashboard/charts.js` | Chart.js analytics |
+| **New** | `server/static/dashboard/style.css` | Tailwind overrides |
+| **New** | `server/static/dashboard/locales/en.json` | English strings |
+| **New** | `server/static/dashboard/locales/vi.json` | Vietnamese strings |
+| **Modified** | `server/app.py` | Mount dashboard route, new API endpoints |
+| **New** | `server/api/dashboard.py` | Dashboard-specific endpoints |
+| **New** | `tests/e2e/test_dashboard_api.py` | Dashboard API tests |
+
+### Scope
+
+~2,500 lines (HTML/JS/CSS) + ~300 lines (Python API) + ~200 test lines
+
+### VISION.md Check
+
+| Question | Answer |
+|----------|--------|
+| Activation or Search? | Visualization of activation — graph explorer shows spreading paths |
+| Spreading activation still central? | Yes — explorer visualizes it |
+| Works without embeddings? | Yes — pure frontend rendering |
+| Brain test? | Yes — visual cortex processes spatial information |
+
+---
+
+## Phase 3: v1.3.0 — Integration Dashboard
+
+> Dashboard becomes the control center for all integrations.
+
+**Target**: 2 weeks after v1.2.0
+
+### 3.1 Integration Management Panel
+
+```
+┌─────────────────────────────────────────────────┐
+│  Integrations                                    │
+├─────────────────────────────────────────────────┤
+│                                                  │
+│  ✅ MCP Server          Running on stdio         │
+│     Tools: 16 active    Clients: 1 connected     │
+│     Last call: 2 min ago                         │
+│                                                  │
+│  ✅ Nanobot             Connected                │
+│     Brain: nanobot      Tools: 4 registered      │
+│     Memories today: 23  Recalls today: 47        │
+│                                                  │
+│  ⬚ OpenClaw            Not configured            │
+│     [Setup Guide] [Install SKILL]                │
+│                                                  │
+│  ⬚ THOR NEXUS          Not configured            │
+│     [Setup Guide]                                │
+│                                                  │
+│  Import Sources                                  │
+│  ├── ChromaDB    [Import]                        │
+│  ├── Mem0        [Import]                        │
+│  ├── Cognee      [Import]                        │
+│  ├── Graphiti    [Import]                        │
+│  └── LlamaIndex  [Import]                        │
+│                                                  │
+└──────────────────────────────────────────────────┘
+```
+
+### 3.2 Integration Activity Log
+
+- Real-time feed of tool calls from all integrations
+- Source attribution (MCP, Nanobot, OpenClaw)
+- Error tracking and alerts
+- Usage statistics per integration
+
+### 3.3 One-Click Setup Wizards
+
+- **Nanobot**: Generate `setup_neural_memory()` code snippet
+- **OpenClaw**: Generate MCP config + SKILL.md installation
+- **Claude Code**: Generate `mcp_servers.json` entry
+- **Cursor**: Generate `mcp.json` entry
+
+### Files
+
+| Action | File | Description |
+|--------|------|-------------|
+| **New** | `server/static/dashboard/integrations.js` | Integration panel logic |
+| **New** | `server/api/integrations.py` | Integration status endpoints |
+| **Modified** | `server/static/dashboard/index.html` | Add integration page |
+| **New** | `tests/e2e/test_integration_api.py` | Integration API tests |
+
+### Scope
+
+~800 lines (HTML/JS) + ~200 lines (Python API) + ~100 test lines
+
+---
+
+## Phase 4: v1.4.0 — OpenClaw Memory Plugin
+
+> Replace OpenClaw's default memory with NeuralMemory.
+
+**Target**: 3-4 weeks after v1.3.0
+
+### Architecture
+
+```
+OpenClaw Gateway (TypeScript)
+  │
+  ├── Memory Slot (exclusive)
+  │   └── @neuralmemory/openclaw-plugin (TypeScript)
+  │       ├── registerTool("nmem_remember")
+  │       ├── registerTool("nmem_recall")
+  │       ├── memory.search() → MCP recall
+  │       ├── memory.index() → MCP remember
+  │       └── MCP Client (stdio) → python -m neural_memory.mcp
+  │
+  └── Agent uses NM memory transparently
+```
+
+### 4.1 TypeScript MCP Client
+
+Lightweight TypeScript client that spawns NM's MCP server as a subprocess and communicates via JSON-RPC 2.0 over stdio.
+
+```typescript
+// @neuralmemory/openclaw-plugin
+export default {
+  name: "neural-memory",
+  version: "1.0.0",
+  openclaw: {
+    extensions: {
+      memory: {
+        slot: "memory",
+        type: "memory"
+      }
+    }
+  }
+}
+```
+
+### 4.2 Memory Slot Implementation
+
+Map OpenClaw's memory interface to NM's MCP tools:
+
+| OpenClaw Method | NM MCP Tool |
+|----------------|-------------|
+| `memory.search(query)` | `nmem_recall` (depth=1) |
+| `memory.index(content)` | `nmem_remember` |
+| `memory.getContext()` | `nmem_context` |
+| `memory.getRecentMemories()` | `nmem_context` (fresh_only=true) |
+
+### 4.3 Contribute Fix for Issue #8921
+
+Submit PR to OpenClaw repo fixing third-party memory plugin detection in `status` command. This directly benefits NM and all other memory plugins.
+
+### Files
+
+| Action | File | Description |
+|--------|------|-------------|
+| **New** | `integrations/openclaw/plugin/` | TypeScript plugin package |
+| **New** | `integrations/openclaw/plugin/package.json` | npm manifest |
+| **New** | `integrations/openclaw/plugin/src/index.ts` | Plugin entry point |
+| **New** | `integrations/openclaw/plugin/src/mcp-client.ts` | MCP stdio client |
+| **New** | `integrations/openclaw/plugin/src/memory-provider.ts` | Memory slot adapter |
+| **New** | `integrations/openclaw/plugin/README.md` | Installation guide |
+
+### Scope
+
+~600 lines TypeScript + ~200 lines docs
+
+### External
+
+- PR to openclaw/openclaw fixing Issue #8921
+- Publish to npm as `@neuralmemory/openclaw-plugin`
+- Update ClawHub SKILL.md with plugin instructions
+
+---
+
+## Phase 5: v1.5.0 — Ecosystem Expansion
+
+> Widen the net. More integrations, more languages, marketplace.
+
+**Target**: 1-2 months after v1.4.0
+
+### 5.1 THOR NEXUS Integration (D:\Antigravity\OmniAI)
+
+Integrate NM into the local THOR NEXUS project for cross-session Solana forensics memory:
+
+| THOR Agent | NM Value |
+|------------|----------|
+| Zeus (orchestrator) | Persistent decision history |
+| Athena (analysis) | Pattern memory across sessions |
+| Hermes (trading) | Trade outcome learning |
+| Apollo (sentiment) | Sentiment correlation memory |
+| Hephaestus (infra) | Error pattern detection |
+| Artemis (risk) | Risk assessment history |
+
+### 5.2 Brain Marketplace (Preview)
+
+- Public brain gallery on NM website
+- Upload/download brains with quality badges
+- Categories: programming, devops, security, data-science, vietnamese-dev
+- Search by tags, language, grade
+
+### 5.3 Neo4j Storage Backend
+
+For users with large-scale graph requirements:
+- `Neo4jStorage` implementing `BaseStorage` ABC
+- Native graph queries (Cypher) for complex traversals
+- Horizontal scaling for enterprise use
+- Optional — SQLite remains default
+
+### 5.4 Multi-Language Expansion
+
+Beyond EN/VI:
+- Japanese (large AI dev community)
+- Korean
+- Chinese (simplified)
+- Extraction patterns + lexicons per language
+
+---
+
+## Phase 6: v2.0.0 — Platform
+
+> NeuralMemory becomes the universal memory layer for AI agents.
+
+### Vision
+
+```
+Any AI Agent → NM Protocol (MCP/REST/SDK) → Neural Graph → Intelligent Recall
+                                                 ↑
+                                          Dashboard (visual management)
+                                                 ↑
+                                          Brain Marketplace (shared knowledge)
+```
+
+### 2.0 Features
+
+- **NM Protocol**: Standardized memory protocol beyond MCP
+- **Multi-brain reasoning**: Query across multiple brains simultaneously
+- **Federated memory**: Distributed brains across machines
+- **Real-time collaboration**: Multiple agents sharing one brain with conflict resolution
+- **Memory compression**: Lossy summarization for very old fibers (save storage)
+- **Adaptive recall**: Learn which depth level works best per query pattern
+
+---
+
+## Dependency Graph (Post-v1.0)
+
+```
+v1.1.0 (Community Foundations)
+  ├──→ v1.2.0 (Dashboard Foundation)
+  │       └──→ v1.3.0 (Integration Dashboard)
+  │               └──→ v1.5.0 (Ecosystem Expansion)
+  └──→ v1.4.0 (OpenClaw Memory Plugin)
+              └──→ v1.5.0 (Ecosystem Expansion)
+                        └──→ v2.0.0 (Platform)
+```
+
+**Critical path**: v1.1.0 → v1.2.0 → v1.3.0 → v1.5.0
+
+**Parallel track**: v1.4.0 (OpenClaw plugin) can run independently after v1.1.0
+
+---
+
+## Priority Matrix
+
+| Phase | Impact | Effort | Priority | Rationale |
+|-------|--------|--------|----------|-----------|
+| **v1.1.0** | High | Low | **P0** | Community visibility, zero code |
+| **v1.2.0** | High | High | **P1** | Dashboard is the face of NM |
+| **v1.3.0** | Medium | Medium | **P2** | Builds on dashboard, integration UX |
+| **v1.4.0** | High | Medium | **P1** | 178k-star ecosystem access |
+| **v1.5.0** | Medium | High | **P3** | Expansion, can be incremental |
+| **v2.0.0** | Critical | Very High | **P4** | Long-term platform vision |
+
+### Recommended Execution Order
+
+```
+v1.1.0 (1 week) → v1.2.0 (3 weeks) → v1.4.0 (2 weeks) → v1.3.0 (2 weeks) → v1.5.0 (ongoing)
+```
+
+Do v1.4.0 before v1.3.0 because OpenClaw plugin provides the real-world integration data that makes the Integration Dashboard useful.
+
+---
+
+## Vietnamese Community Strategy
+
+### Why Vietnamese-First
+
+- Creator is Vietnamese
+- NM already supports Vietnamese (extraction, sentiment, temporal parsing)
+- Vietnamese AI dev community is growing fast but underserved
+- First-mover advantage for Vietnamese-localized AI memory tool
+- Cultural alignment: Vietnamese developers appreciate tools built by Vietnamese
+
+### Channels
+
+| Channel | Action |
+|---------|--------|
+| **Facebook Groups** | Post in Vietnamese AI/Dev groups with demo |
+| **Vietnamese Tech Blogs** | Viblo.asia, TopDev, ITviec blog posts |
+| **YouTube/TikTok** | Short demo videos in Vietnamese |
+| **GitHub Vietnamese** | Vietnamese README, Vietnamese docs |
+| **Local Meetups** | Present at Vietnamese AI meetups (online/offline) |
+
+### Content Strategy
+
+1. **Vietnamese README** for GitHub (alongside English)
+2. **Vietnamese Getting Started guide** in docs
+3. **Vietnamese blog posts** on Viblo.asia
+4. **Dashboard default language** detects Vietnamese locale
+5. **Vietnamese-specific brain templates** (common Vietnamese dev patterns)
+
+---
+
+*See [VISION.md](VISION.md) for the north star guiding all decisions.*
+*Last updated: 2026-02-09 (Post-v1.0 roadmap: Dashboard + OpenClaw + Community strategy)*
