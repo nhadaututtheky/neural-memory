@@ -465,4 +465,45 @@ def get_tool_schemas() -> list[dict[str, Any]]:
                 "required": ["action"],
             },
         },
+        {
+            "name": "nmem_train",
+            "description": "Train a brain from documentation files. Parses markdown into semantic chunks, encodes through the NLP pipeline, builds heading hierarchy, and runs consolidation. Use to create expert domain brains.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["train", "status"],
+                        "description": "train=process docs into brain, status=show training stats",
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Directory or file path to train from (default: current directory)",
+                    },
+                    "domain_tag": {
+                        "type": "string",
+                        "maxLength": 100,
+                        "description": "Domain tag for all chunks (e.g., 'react', 'kubernetes')",
+                    },
+                    "brain_name": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "Target brain name (default: current brain)",
+                    },
+                    "extensions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [".md", ".mdx", ".txt", ".rst"],
+                        },
+                        "description": "File extensions to include (default: ['.md'])",
+                    },
+                    "consolidate": {
+                        "type": "boolean",
+                        "description": "Run ENRICH consolidation after encoding (default: true)",
+                    },
+                },
+                "required": ["action"],
+            },
+        },
     ]

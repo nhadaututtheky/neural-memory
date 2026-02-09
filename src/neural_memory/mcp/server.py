@@ -50,6 +50,7 @@ from neural_memory.mcp.index_handler import IndexHandler
 from neural_memory.mcp.prompt import get_system_prompt
 from neural_memory.mcp.session_handler import SessionHandler
 from neural_memory.mcp.tool_schemas import get_tool_schemas
+from neural_memory.mcp.train_handler import TrainHandler
 from neural_memory.unified_config import get_config, get_shared_storage
 from neural_memory.utils.timeutils import utcnow
 
@@ -60,7 +61,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler, ConflictHandler):
+class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler, ConflictHandler, TrainHandler):
     """MCP server that exposes NeuralMemory tools.
 
     Uses shared SQLite storage for cross-tool memory sharing.
@@ -72,6 +73,7 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler, Confl
         AutoHandler     — _auto, _passive_capture, _save_detected_memories
         IndexHandler    — _index, _import
         ConflictHandler — _conflicts (list, resolve, check)
+        TrainHandler    — _train (train docs into brain, status)
     """
 
     def __init__(self) -> None:
@@ -134,6 +136,7 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler, Confl
             "nmem_version": self._version,
             "nmem_transplant": self._transplant,
             "nmem_conflicts": self._conflicts,
+            "nmem_train": self._train,
         }
         handler = dispatch.get(name)
         if handler:

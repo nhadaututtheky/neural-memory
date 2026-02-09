@@ -91,6 +91,9 @@ class MemoryEncoder:
         metadata: dict[str, Any] | None = None,
         tags: set[str] | None = None,
         language: str = "auto",
+        *,
+        skip_conflicts: bool = False,
+        skip_time_neurons: bool = False,
     ) -> EncodingResult:
         """
         Encode content into neural structures.
@@ -101,6 +104,8 @@ class MemoryEncoder:
             metadata: Additional metadata to attach
             tags: Optional tags for the fiber
             language: Language hint ("vi", "en", or "auto")
+            skip_conflicts: Skip conflict detection (for bulk doc training).
+            skip_time_neurons: Skip TIME neuron creation (for bulk doc training).
 
         Returns:
             EncodingResult with created structures
@@ -112,8 +117,11 @@ class MemoryEncoder:
         neurons_linked: list[str] = []
         synapses_created: list[Synapse] = []
 
-        # 1. Extract time neurons
-        time_neurons = await self._extract_time_neurons(content, timestamp)
+        # 1. Extract time neurons (skipped for bulk doc training)
+        if skip_time_neurons:
+            time_neurons: list[Neuron] = []
+        else:
+            time_neurons = await self._extract_time_neurons(content, timestamp)
         neurons_created.extend(time_neurons)
 
         # 2. Extract entity neurons
@@ -240,26 +248,28 @@ class MemoryEncoder:
         )
         synapses_created.extend(boost_synapses)
 
-        # 7. Detect and resolve conflicts with existing memories
-        from neural_memory.engine.conflict_detection import detect_conflicts, resolve_conflicts
+        # 7. Detect and resolve conflicts (skipped for bulk doc training)
+        _conflicts_detected = 0
+        if not skip_conflicts:
+            from neural_memory.engine.conflict_detection import detect_conflicts, resolve_conflicts
 
-        conflict_tags = merged_tags
-        memory_type_str = effective_metadata.get("type", "")
-        conflicts = await detect_conflicts(
-            content=content,
-            tags=conflict_tags,
-            storage=self._storage,
-            memory_type=memory_type_str,
-        )
-        _conflicts_detected = len(conflicts)
-        if conflicts:
-            resolutions = await resolve_conflicts(
-                conflicts=conflicts,
-                new_neuron_id=anchor_neuron.id,
+            conflict_tags = merged_tags
+            memory_type_str = effective_metadata.get("type", "")
+            conflicts = await detect_conflicts(
+                content=content,
+                tags=conflict_tags,
                 storage=self._storage,
+                memory_type=memory_type_str,
             )
-            for resolution in resolutions:
-                synapses_created.append(resolution.contradicts_synapse)
+            _conflicts_detected = len(conflicts)
+            if conflicts:
+                resolutions = await resolve_conflicts(
+                    conflicts=conflicts,
+                    new_neuron_id=anchor_neuron.id,
+                    storage=self._storage,
+                )
+                for resolution in resolutions:
+                    synapses_created.append(resolution.contradicts_synapse)
 
         # 8. Link to nearby temporal memories
         linked = await self._link_temporal_neighbors(anchor_neuron, timestamp)
