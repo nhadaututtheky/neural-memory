@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -21,6 +22,8 @@ from neural_memory.core.brain import Brain, BrainConfig
 from neural_memory.integrations.nanobot.context import NMContext
 from neural_memory.storage.memory_store import InMemoryStorage
 
+if TYPE_CHECKING:
+    from neural_memory.integrations.nanobot.memory_store import NMMemoryStore
 
 # ── Fixtures ──────────────────────────────────────────────
 
@@ -305,7 +308,7 @@ class TestNMMemoryStore:
     """Test drop-in MemoryStore replacement."""
 
     @pytest_asyncio.fixture
-    async def store(self, nm_context: NMContext, workspace: Path) -> "NMMemoryStore":
+    async def store(self, nm_context: NMContext, workspace: Path) -> NMMemoryStore:
         from neural_memory.integrations.nanobot.memory_store import NMMemoryStore
 
         return NMMemoryStore(nm_context, workspace)
