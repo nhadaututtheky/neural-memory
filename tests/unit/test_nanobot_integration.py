@@ -392,9 +392,7 @@ class TestSetup:
         mock_registry = MagicMock()
         store = await setup_neural_memory(mock_registry, workspace)
 
-        registered_names = {
-            call.args[0].name for call in mock_registry.register.call_args_list
-        }
+        registered_names = {call.args[0].name for call in mock_registry.register.call_args_list}
         assert registered_names == {"nmem_remember", "nmem_recall", "nmem_context", "nmem_health"}
 
         await store._ctx.close()
