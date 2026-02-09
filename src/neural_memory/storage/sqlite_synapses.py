@@ -333,14 +333,33 @@ class SQLiteSynapseMixin:
         return None
 
     async def _build_path_result(self, path: list[tuple[str, str]]) -> list[tuple[Neuron, Synapse]]:
-        """Build path result from neuron/synapse IDs."""
+        """Build path result from neuron/synapse IDs using batch fetches."""
+        if not path:
+            return []
+        neuron_ids = [nid for nid, _ in path]
+        synapse_ids = [sid for _, sid in path]
+        neurons = await self.get_neurons_batch(neuron_ids)
+        synapses_map = await self._get_synapses_batch(synapse_ids)
         result: list[tuple[Neuron, Synapse]] = []
         for neuron_id, synapse_id in path:
-            neuron = await self.get_neuron(neuron_id)
-            synapse = await self.get_synapse(synapse_id)
+            neuron = neurons.get(neuron_id)
+            synapse = synapses_map.get(synapse_id)
             if neuron and synapse:
                 result.append((neuron, synapse))
         return result
+
+    async def _get_synapses_batch(self, synapse_ids: list[str]) -> dict[str, Synapse]:
+        """Batch fetch synapses by ID list."""
+        if not synapse_ids:
+            return {}
+        conn = self._ensure_conn()
+        brain_id = self._get_brain_id()
+        placeholders = ",".join("?" for _ in synapse_ids)
+        query = f"SELECT * FROM synapses WHERE brain_id = ? AND id IN ({placeholders})"
+        params: list[Any] = [brain_id, *synapse_ids]
+        async with conn.execute(query, params) as cursor:
+            rows = await cursor.fetchall()
+            return {row["id"]: row_to_synapse(row) for row in rows}
 
 
 def _row_to_joined_synapse(row: Any) -> Synapse:

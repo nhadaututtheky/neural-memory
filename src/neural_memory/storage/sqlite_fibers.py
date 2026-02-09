@@ -56,10 +56,10 @@ class SQLiteFiberMixin:
             )
 
             # Populate junction table for fast lookups
-            for neuron_id in fiber.neuron_ids:
-                await conn.execute(
+            if fiber.neuron_ids:
+                await conn.executemany(
                     "INSERT OR IGNORE INTO fiber_neurons (brain_id, fiber_id, neuron_id) VALUES (?, ?, ?)",
-                    (brain_id, fiber.id, neuron_id),
+                    [(brain_id, fiber.id, nid) for nid in fiber.neuron_ids],
                 )
 
             await conn.commit()
@@ -192,10 +192,10 @@ class SQLiteFiberMixin:
             "DELETE FROM fiber_neurons WHERE brain_id = ? AND fiber_id = ?",
             (brain_id, fiber.id),
         )
-        for neuron_id in fiber.neuron_ids:
-            await conn.execute(
+        if fiber.neuron_ids:
+            await conn.executemany(
                 "INSERT OR IGNORE INTO fiber_neurons (brain_id, fiber_id, neuron_id) VALUES (?, ?, ?)",
-                (brain_id, fiber.id, neuron_id),
+                [(brain_id, fiber.id, nid) for nid in fiber.neuron_ids],
             )
 
         await conn.commit()

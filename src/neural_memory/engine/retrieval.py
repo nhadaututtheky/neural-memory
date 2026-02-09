@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import heapq
 import logging
 import math
 import time
@@ -666,14 +667,16 @@ class ReflexPipeline:
             for nid, _act in items[:per_cluster]:
                 winner_ids.add(nid)
 
-        # If we still have budget, fill from global top
+        # If we still have budget, fill from global top using heapq for O(n log k)
         if len(winner_ids) < k:
-            all_sorted = sorted(
+            remaining_budget = k - len(winner_ids)
+            # Fetch slightly more than needed to account for already-selected winners
+            top_candidates = heapq.nlargest(
+                remaining_budget + len(winner_ids),
                 activations.items(),
                 key=lambda x: x[1].activation_level,
-                reverse=True,
             )
-            for nid, _act in all_sorted:
+            for nid, _act in top_candidates:
                 if nid not in winner_ids:
                     winner_ids.add(nid)
                 if len(winner_ids) >= k:
@@ -824,15 +827,20 @@ class ReflexPipeline:
         """
         anchor_sets: list[list[str]] = []
 
-        # 1. TIME ANCHORS FIRST (primary)
+        # 1. TIME ANCHORS FIRST (primary) — batch via asyncio.gather
         time_anchors: list[str] = []
-        for hint in stimulus.time_hints:
-            neurons = await self._storage.find_neurons(
-                type=NeuronType.TIME,
-                time_range=(hint.absolute_start, hint.absolute_end),
-                limit=5,
-            )
-            time_anchors.extend(n.id for n in neurons)
+        if stimulus.time_hints:
+            time_tasks = [
+                self._storage.find_neurons(
+                    type=NeuronType.TIME,
+                    time_range=(hint.absolute_start, hint.absolute_end),
+                    limit=5,
+                )
+                for hint in stimulus.time_hints
+            ]
+            time_results = await asyncio.gather(*time_tasks)
+            for neurons in time_results:
+                time_anchors.extend(n.id for n in neurons)
 
         if time_anchors:
             anchor_sets.append(time_anchors)

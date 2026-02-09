@@ -219,6 +219,28 @@ def check_sensitive_content(
             seen_positions.add(pos)
             unique_matches.append(match)
 
+    # Merge overlapping spans (keep highest severity for merged spans)
+    if unique_matches:
+        unique_matches.sort(key=lambda m: m.start)
+        merged: list[SensitiveMatch] = [unique_matches[0]]
+        for span in unique_matches[1:]:
+            if span.start <= merged[-1].end:
+                # Overlapping - extend the end, keep higher severity match
+                prev = merged[-1]
+                new_end = max(prev.end, span.end)
+                best = span if span.severity > prev.severity else prev
+                merged[-1] = SensitiveMatch(
+                    pattern_name=best.pattern_name,
+                    matched_text=best.matched_text,
+                    type=best.type,
+                    severity=max(prev.severity, span.severity),
+                    start=prev.start,
+                    end=new_end,
+                )
+            else:
+                merged.append(span)
+        unique_matches = merged
+
     return sorted(unique_matches, key=lambda m: (-m.severity, m.start))
 
 

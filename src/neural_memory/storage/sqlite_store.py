@@ -141,21 +141,23 @@ class SQLiteStorage(
 
     async def get_stats(self, brain_id: str) -> dict[str, int]:
         conn = self._ensure_conn()
-        stats: dict[str, int] = {}
 
-        for table, key in [
-            ("neurons", "neuron_count"),
-            ("synapses", "synapse_count"),
-            ("fibers", "fiber_count"),
-            ("projects", "project_count"),
-        ]:
-            async with conn.execute(
-                f"SELECT COUNT(*) as cnt FROM {table} WHERE brain_id = ?", (brain_id,)
-            ) as cursor:
-                row = await cursor.fetchone()
-                stats[key] = row["cnt"] if row else 0
-
-        return stats
+        async with conn.execute(
+            """SELECT
+                (SELECT COUNT(*) FROM neurons WHERE brain_id = ?) as neuron_count,
+                (SELECT COUNT(*) FROM synapses WHERE brain_id = ?) as synapse_count,
+                (SELECT COUNT(*) FROM fibers WHERE brain_id = ?) as fiber_count,
+                (SELECT COUNT(*) FROM projects WHERE brain_id = ?) as project_count
+            """,
+            (brain_id, brain_id, brain_id, brain_id),
+        ) as cursor:
+            row = await cursor.fetchone()
+            return {
+                "neuron_count": row["neuron_count"] if row else 0,
+                "synapse_count": row["synapse_count"] if row else 0,
+                "fiber_count": row["fiber_count"] if row else 0,
+                "project_count": row["project_count"] if row else 0,
+            }
 
     async def get_enhanced_stats(self, brain_id: str) -> dict[str, Any]:
         from datetime import datetime as dt

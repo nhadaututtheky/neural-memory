@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Annotated, Any
 
@@ -81,21 +82,15 @@ async def get_stats(
     cfg = get_config()
     brain_names = cfg.list_brains()
     active_name = cfg.current_brain
-    brains: list[BrainSummary] = []
-    total_n = 0
-    total_s = 0
-    total_f = 0
-    active_grade = "F"
-    active_purity = 0.0
 
-    for name in brain_names:
+    async def _analyze_brain(name: str) -> BrainSummary:
+        """Analyze a single brain and return its summary."""
         try:
             stats = await storage.get_stats(name)
             nc = stats.get("neuron_count", 0)
             sc = stats.get("synapse_count", 0)
             fc = stats.get("fiber_count", 0)
 
-            # Quick grade estimate from connectivity
             grade = "F"
             purity = 0.0
             try:
@@ -108,28 +103,31 @@ async def get_stats(
             except Exception:
                 pass
 
-            is_active = name == active_name
-            brains.append(
-                BrainSummary(
-                    id=name,
-                    name=name,
-                    neuron_count=nc,
-                    synapse_count=sc,
-                    fiber_count=fc,
-                    grade=grade,
-                    purity_score=purity,
-                    is_active=is_active,
-                )
+            return BrainSummary(
+                id=name,
+                name=name,
+                neuron_count=nc,
+                synapse_count=sc,
+                fiber_count=fc,
+                grade=grade,
+                purity_score=purity,
+                is_active=name == active_name,
             )
-            total_n += nc
-            total_s += sc
-            total_f += fc
-
-            if is_active:
-                active_grade = grade
-                active_purity = purity
         except Exception:
-            brains.append(BrainSummary(id=name, name=name, is_active=name == active_name))
+            return BrainSummary(id=name, name=name, is_active=name == active_name)
+
+    brains = list(await asyncio.gather(*[_analyze_brain(name) for name in brain_names]))
+
+    total_n = sum(b.neuron_count for b in brains)
+    total_s = sum(b.synapse_count for b in brains)
+    total_f = sum(b.fiber_count for b in brains)
+    active_grade = "F"
+    active_purity = 0.0
+    for b in brains:
+        if b.is_active:
+            active_grade = b.grade
+            active_purity = b.purity_score
+            break
 
     return DashboardStats(
         active_brain=active_name,

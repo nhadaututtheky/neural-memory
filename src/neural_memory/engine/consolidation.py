@@ -262,7 +262,8 @@ class ConsolidationEngine:
             return
 
         # Update fiber synapse_ids to remove pruned refs
-        fibers = await self._storage.get_fibers(limit=10000)
+        # Reuse fibers already fetched for salience cache
+        fibers = fibers_for_salience
         for fiber in fibers:
             removed = fiber.synapse_ids & pruned_synapse_ids
             if removed and not dry_run:
@@ -278,15 +279,16 @@ class ConsolidationEngine:
         if not self._config.prune_isolated_neurons:
             return
 
-        remaining_synapses = await self._storage.get_synapses()
+        # Derive remaining synapses from cached list instead of re-fetching
         connected_neuron_ids: set[str] = set()
-        for syn in remaining_synapses:
-            connected_neuron_ids.add(syn.source_id)
-            connected_neuron_ids.add(syn.target_id)
+        for syn in all_synapses:
+            if syn.id not in pruned_synapse_ids:
+                connected_neuron_ids.add(syn.source_id)
+                connected_neuron_ids.add(syn.target_id)
 
         anchor_neuron_ids: set[str] = set()
-        fibers_after = await self._storage.get_fibers(limit=10000)
-        for fiber in fibers_after:
+        # Reuse fibers list (already fetched above)
+        for fiber in fibers:
             anchor_neuron_ids.add(fiber.anchor_neuron_id)
 
         all_neurons = await self._storage.find_neurons(limit=100000)
@@ -652,12 +654,14 @@ class ConsolidationEngine:
         if not counts:
             return
 
-        # 2. Build existing synapse pairs set
+        # 2. Build existing synapse pairs set + lookup for reinforcement
         all_synapses = await self._storage.get_synapses()
         existing_pairs: set[tuple[str, str]] = set()
+        synapse_by_pair: dict[tuple[str, str], Synapse] = {}
         for syn in all_synapses:
             existing_pairs.add((syn.source_id, syn.target_id))
             existing_pairs.add((syn.target_id, syn.source_id))
+            synapse_by_pair[(syn.source_id, syn.target_id)] = syn
 
         new_candidates, reinforce_candidates = identify_candidates(counts, existing_pairs, config)
 
@@ -675,14 +679,13 @@ class ConsolidationEngine:
                 logger.debug("Inferred synapse already exists, skipping")
 
         # 4. Reinforce existing synapses for reinforce candidates
+        #    Use cached synapse_by_pair lookup instead of N+1 queries
         for candidate in reinforce_candidates:
             a, b = candidate.neuron_a, candidate.neuron_b
-            forward = await self._storage.get_synapses(source_id=a, target_id=b)
-            reverse = await self._storage.get_synapses(source_id=b, target_id=a)
-            existing = forward or reverse
+            existing_synapse = synapse_by_pair.get((a, b)) or synapse_by_pair.get((b, a))
 
-            if existing:
-                reinforced = existing[0].reinforce(delta=0.05)
+            if existing_synapse:
+                reinforced = existing_synapse.reinforce(delta=0.05)
                 try:
                     await self._storage.update_synapse(reinforced)
                     report.synapses_inferred += 1

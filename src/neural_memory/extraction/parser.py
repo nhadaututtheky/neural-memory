@@ -286,7 +286,7 @@ class QueryParser:
         vi_count = sum(1 for c in text_lower if c in vi_chars)
 
         # If significant Vietnamese characters, it's Vietnamese
-        if vi_count > len(text) * 0.05:
+        if len(text) >= 20 and vi_count > len(text) * 0.05:
             return "vi"
 
         # Check for Vietnamese words

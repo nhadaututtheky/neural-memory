@@ -134,6 +134,8 @@ class Project:
 
     def with_extended_deadline(self, extra_days: int) -> Project:
         """Extend project deadline by given days."""
+        if extra_days < 0:
+            raise ValueError("extra_days must be non-negative")
         if self.end_date is None:
             raise ValueError("Cannot extend ongoing project - set end_date first")
         new_end = self.end_date + timedelta(days=extra_days)

@@ -213,12 +213,14 @@ class EntityExtractor:
             try:
                 ner_results = self._nlp_vi.ner(text)
                 entities = []
+                # Use cumulative offset to handle duplicate words
+                offset = 0
                 for word, tag in ner_results:
                     if tag.startswith("B-") or tag.startswith("I-"):
                         entity_type = self._map_underthesea_type(tag[2:])
                         if entity_type:
-                            # Find position in text
-                            start = text.find(word)
+                            # Find position in text from current offset
+                            start = text.find(word, offset)
                             if start >= 0:
                                 entities.append(
                                     Entity(
@@ -229,6 +231,7 @@ class EntityExtractor:
                                         confidence=0.85,
                                     )
                                 )
+                                offset = start + len(word)
                 if entities:
                     return entities
             except (ValueError, TypeError, AttributeError) as e:

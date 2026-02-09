@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -123,19 +124,27 @@ class AutoHandler:
 
     async def _save_detected_memories(self, detected: list[dict[str, Any]]) -> list[str]:
         """Save detected memories that meet confidence threshold."""
-        saved = []
-        for item in detected:
-            if item["confidence"] >= self.config.auto.min_confidence:
-                result = await self._remember(
+        eligible = [
+            item for item in detected if item["confidence"] >= self.config.auto.min_confidence
+        ]
+        if not eligible:
+            return []
+
+        results = await asyncio.gather(
+            *[
+                self._remember(
                     {
                         "content": item["content"],
                         "type": item["type"],
                         "priority": item.get("priority", 5),
                     }
                 )
-                if "error" not in result:
-                    saved.append(item["content"][:50])
-        return saved
+                for item in eligible
+            ]
+        )
+        return [
+            item["content"][:50] for item, result in zip(eligible, results) if "error" not in result
+        ]
 
     def _run_detection(self, text: str) -> list[dict[str, Any]]:
         """Run pattern detection with current config."""

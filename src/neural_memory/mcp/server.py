@@ -500,10 +500,9 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
         elif action == "clear":
             fibers = await storage.get_fibers(limit=10000)
             habits = [f for f in fibers if f.metadata.get("_habit_pattern")]
-            cleared = 0
-            for h in habits:
-                await storage.delete_fiber(h.id)
-                cleared += 1
+            if habits:
+                await asyncio.gather(*[storage.delete_fiber(h.id) for h in habits])
+            cleared = len(habits)
             return {"cleared": cleared, "message": f"Cleared {cleared} learned habits"}
 
         return {"error": f"Unknown action: {action}"}
@@ -737,7 +736,7 @@ async def handle_message(server: MCPServer, message: dict[str, Any]) -> dict[str
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,
-                "result": {"content": [{"type": "text", "text": json.dumps(result, indent=2)}]},
+                "result": {"content": [{"type": "text", "text": json.dumps(result)}]},
             }
         except TimeoutError:
             return {

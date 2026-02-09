@@ -217,12 +217,38 @@ class DecayManager:
 
         consolidated = 0
 
-        for fiber in fibers:
-            if fiber.frequency < frequency_threshold:
-                break
+        # Filter eligible fibers first
+        eligible_fibers = [f for f in fibers if f.frequency >= frequency_threshold]
 
+        # Collect ALL synapse IDs from ALL eligible fibers into one list
+        all_synapse_ids: list[str] = []
+        for fiber in eligible_fibers:
+            all_synapse_ids.extend(fiber.synapse_ids)
+
+        if not all_synapse_ids:
+            return consolidated
+
+        # Batch fetch: get all synapses for eligible fibers' neuron IDs
+        # Since there's no get_synapses_batch(ids), use get_synapses_for_neurons
+        # to fetch synapses connected to fiber neurons, then index by synapse ID.
+        all_neuron_ids: list[str] = list(
+            {nid for fiber in eligible_fibers for nid in fiber.neuron_ids}
+        )
+        outgoing = await storage.get_synapses_for_neurons(all_neuron_ids, direction="out")
+        incoming = await storage.get_synapses_for_neurons(all_neuron_ids, direction="in")
+
+        # Build synapse lookup by ID
+        synapse_map: dict[str, object] = {}
+        for synapses in outgoing.values():
+            for syn in synapses:
+                synapse_map[syn.id] = syn
+        for synapses in incoming.values():
+            for syn in synapses:
+                synapse_map[syn.id] = syn
+
+        for fiber in eligible_fibers:
             for synapse_id in fiber.synapse_ids:
-                synapse = await storage.get_synapse(synapse_id)
+                synapse = synapse_map.get(synapse_id)
                 if synapse is None:
                     continue
 
@@ -275,8 +301,12 @@ class ReinforcementManager:
         """
         reinforced = 0
 
+        # Batch fetch all neuron states at once
+        states_map = await storage.get_neuron_states_batch(neuron_ids)
+        now = utcnow()
+
         for neuron_id in neuron_ids:
-            state = await storage.get_neuron_state(neuron_id)
+            state = states_map.get(neuron_id)
             if state:
                 new_level = min(
                     state.activation_level + self.reinforcement_delta,
@@ -287,7 +317,7 @@ class ReinforcementManager:
                     neuron_id=state.neuron_id,
                     activation_level=new_level,
                     access_frequency=state.access_frequency + 1,
-                    last_activated=utcnow(),
+                    last_activated=now,
                     decay_rate=state.decay_rate,
                     created_at=state.created_at,
                     firing_threshold=state.firing_threshold,
@@ -299,8 +329,27 @@ class ReinforcementManager:
                 reinforced += 1
 
         if synapse_ids:
+            # Batch fetch synapses via neuron-based lookup
+            # Collect neuron IDs involved in synapse reinforcement from states
+            all_neuron_ids = list(states_map.keys())
+            if all_neuron_ids:
+                outgoing = await storage.get_synapses_for_neurons(all_neuron_ids, direction="out")
+                incoming = await storage.get_synapses_for_neurons(all_neuron_ids, direction="in")
+                synapse_map: dict[str, object] = {}
+                for synapses in outgoing.values():
+                    for syn in synapses:
+                        synapse_map[syn.id] = syn
+                for synapses in incoming.values():
+                    for syn in synapses:
+                        synapse_map[syn.id] = syn
+            else:
+                synapse_map = {}
+
             for synapse_id in synapse_ids:
-                synapse = await storage.get_synapse(synapse_id)
+                synapse = synapse_map.get(synapse_id)
+                if synapse is None:
+                    # Fallback for synapses not connected to reinforced neurons
+                    synapse = await storage.get_synapse(synapse_id)
                 if synapse:
                     new_weight = min(
                         synapse.weight + self.reinforcement_delta,

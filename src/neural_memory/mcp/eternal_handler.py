@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -61,8 +62,10 @@ class EternalHandler:
             old_facts = await storage.find_typed_memories(
                 memory_type=MemoryType.FACT, tags={"project_context"}, limit=100
             )
-            for old in old_facts:
-                await storage.delete_typed_memory(old.fiber_id)
+            if old_facts:
+                await asyncio.gather(
+                    *[storage.delete_typed_memory(old.fiber_id) for old in old_facts]
+                )
 
             parts: list[str] = []
             if args.get("project_name"):

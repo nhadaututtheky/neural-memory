@@ -133,9 +133,10 @@ def create_app(
 
         storage = await get_shared_storage()
 
-        # Get all data
-        neurons = await storage.find_neurons()
-        synapses = await storage.get_all_synapses()
+        # Get data with limits to avoid unbounded queries
+        neurons = await storage.find_neurons(limit=500)
+        synapses_all = await storage.get_all_synapses()
+        synapses = synapses_all[:1000]
         fibers = await storage.get_fibers(limit=1000)
 
         stats = {

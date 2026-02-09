@@ -179,6 +179,10 @@ class Synapse:
         now = now or utcnow()
 
         if pre_activation is not None and post_activation is not None:
+            # Validate activation levels are in bounds [0, 1]
+            pre_activation = max(0.0, min(1.0, pre_activation))
+            post_activation = max(0.0, min(1.0, post_activation))
+
             from neural_memory.engine.learning_rule import LearningConfig, hebbian_update
 
             config = LearningConfig(learning_rate=delta)
@@ -217,6 +221,7 @@ class Synapse:
         Returns:
             New Synapse with decreased weight
         """
+        factor = max(0.0, min(1.0, factor))
         return Synapse(
             id=self.id,
             source_id=self.source_id,
@@ -255,7 +260,9 @@ class Synapse:
         hours_since = max(0, hours_since)
 
         # Sigmoid decay: center at 1440h (60 days), spread 720h
-        factor = 1.0 / (1.0 + math.exp((hours_since - 1440) / 720))
+        exponent = (hours_since - 1440) / 720
+        exponent = max(-100.0, min(100.0, exponent))
+        factor = 1.0 / (1.0 + math.exp(exponent))
         factor = max(0.3, factor)  # Floor: never decay below 30% of original
 
         new_weight = self.weight * factor

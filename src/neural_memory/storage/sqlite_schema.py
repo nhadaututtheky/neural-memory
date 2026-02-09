@@ -367,6 +367,7 @@ CREATE TABLE IF NOT EXISTS typed_memories (
 CREATE INDEX IF NOT EXISTS idx_typed_memories_type ON typed_memories(brain_id, memory_type);
 CREATE INDEX IF NOT EXISTS idx_typed_memories_project ON typed_memories(brain_id, project_id);
 CREATE INDEX IF NOT EXISTS idx_typed_memories_expires ON typed_memories(brain_id, expires_at);
+CREATE INDEX IF NOT EXISTS idx_typed_memories_expiry ON typed_memories(brain_id, expires_at);
 
 -- Projects table
 CREATE TABLE IF NOT EXISTS projects (
@@ -412,6 +413,7 @@ CREATE TABLE IF NOT EXISTS co_activation_events (
 );
 CREATE INDEX IF NOT EXISTS idx_co_activation_pair ON co_activation_events(brain_id, neuron_a, neuron_b);
 CREATE INDEX IF NOT EXISTS idx_co_activation_created ON co_activation_events(brain_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_co_activation_time ON co_activation_events(brain_id, created_at, neuron_a, neuron_b);
 
 -- Action event log for habit learning
 CREATE TABLE IF NOT EXISTS action_events (
@@ -429,6 +431,7 @@ CREATE TABLE IF NOT EXISTS action_events (
 CREATE INDEX IF NOT EXISTS idx_action_events_type ON action_events(brain_id, action_type);
 CREATE INDEX IF NOT EXISTS idx_action_events_session ON action_events(brain_id, session_id);
 CREATE INDEX IF NOT EXISTS idx_action_events_created ON action_events(brain_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_action_events_sequence ON action_events(brain_id, session_id, created_at);
 
 -- Brain versioning snapshots
 CREATE TABLE IF NOT EXISTS brain_versions (
