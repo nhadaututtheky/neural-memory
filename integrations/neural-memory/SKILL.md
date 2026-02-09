@@ -28,11 +28,52 @@ pip install neural-memory
 nmem init
 ```
 
-This creates `~/.neuralmemory/` with a default brain and configures MCP automatically.
+This creates `~/.neuralmemory/` with a default brain.
 
-### 2. Configure MCP for OpenClaw
+### 2. Install the OpenClaw Plugin (Recommended)
 
-Add to your OpenClaw MCP configuration (`~/.openclaw/mcp.json` or project `openclaw.json`):
+The plugin occupies the exclusive **memory slot** — auto-injects context before each agent run and auto-captures memories after.
+
+```bash
+# Install from npm
+npm install -g @neuralmemory/openclaw-plugin
+```
+
+Add to `~/.openclaw/openclaw.json`:
+
+```json
+{
+  "plugins": {
+    "load": {
+      "paths": ["<path-to-installed-plugin>"]
+    },
+    "entries": {
+      "neuralmemory": {
+        "enabled": true,
+        "config": {
+          "pythonPath": "python",
+          "brain": "default",
+          "autoContext": true,
+          "autoCapture": true
+        }
+      }
+    },
+    "slots": {
+      "memory": "neuralmemory"
+    }
+  }
+}
+```
+
+**Plugin features:**
+- 6 tools registered automatically (nmem_remember, nmem_recall, nmem_context, nmem_todo, nmem_stats, nmem_health)
+- `before_agent_start` hook: queries relevant memories and injects them as context
+- `agent_end` hook: auto-extracts facts, decisions, and TODOs from the conversation
+- Configurable: `contextDepth` (0-3), `maxContextTokens` (100-10000)
+
+### Alternative: MCP Configuration (Manual)
+
+If you prefer MCP over the plugin, add to `~/.openclaw/mcp.json`:
 
 ```json
 {
@@ -47,6 +88,8 @@ Add to your OpenClaw MCP configuration (`~/.openclaw/mcp.json` or project `openc
   }
 }
 ```
+
+This gives you all 16 MCP tools but without the auto-context/auto-capture hooks.
 
 ### 3. Verify
 
