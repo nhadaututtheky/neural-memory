@@ -38,7 +38,7 @@ export type McpClientOptions = {
 const PROTOCOL_VERSION = "2024-11-05";
 const DEFAULT_TIMEOUT = 30_000;
 const CLIENT_NAME = "openclaw-neuralmemory";
-const CLIENT_VERSION = "1.4.0";
+const CLIENT_VERSION = "1.4.1";
 
 // ── Client ─────────────────────────────────────────────────
 

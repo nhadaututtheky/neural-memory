@@ -3,7 +3,7 @@
   "kind": "memory",
   "name": "NeuralMemory",
   "description": "Brain-inspired persistent memory for AI agents — neurons, synapses, and fibers",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "configSchema": {
     "jsonSchema": {
       "type": "object",
