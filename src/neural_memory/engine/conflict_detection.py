@@ -221,8 +221,8 @@ async def detect_conflicts(
         if candidate.type == NeuronType.TIME:
             continue
 
-        # Already disputed — don't re-flag
-        if candidate.metadata.get("_disputed"):
+        # Already disputed or resolved — don't re-flag
+        if candidate.metadata.get("_disputed") or candidate.metadata.get("_conflict_resolved"):
             continue
 
         existing_predicates = _extract_predicates(candidate.content)
@@ -344,6 +344,7 @@ async def resolve_conflicts(
             _disputed_at=utcnow().isoformat(),
             _disputed_by=new_neuron_id,
             _superseded=is_superseded,
+            _pre_dispute_activation=current_confidence,
         )
         await storage.update_neuron(updated_neuron)
 

@@ -43,6 +43,7 @@ from neural_memory.core.memory_types import (
 from neural_memory.engine.encoder import MemoryEncoder
 from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline
 from neural_memory.mcp.auto_handler import AutoHandler
+from neural_memory.mcp.conflict_handler import ConflictHandler
 from neural_memory.mcp.constants import MAX_CONTENT_LENGTH
 from neural_memory.mcp.eternal_handler import EternalHandler
 from neural_memory.mcp.index_handler import IndexHandler
@@ -59,7 +60,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
+class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler, ConflictHandler):
     """MCP server that exposes NeuralMemory tools.
 
     Uses shared SQLite storage for cross-tool memory sharing.
@@ -70,6 +71,7 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
         EternalHandler  — _eternal, _recap, _fire_eternal_trigger
         AutoHandler     — _auto, _passive_capture, _save_detected_memories
         IndexHandler    — _index, _import
+        ConflictHandler — _conflicts (list, resolve, check)
     """
 
     def __init__(self) -> None:
@@ -131,6 +133,7 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
             "nmem_habits": self._habits,
             "nmem_version": self._version,
             "nmem_transplant": self._transplant,
+            "nmem_conflicts": self._conflicts,
         }
         handler = dispatch.get(name)
         if handler:
@@ -178,16 +181,27 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
         storage.disable_auto_save()
 
         try:
-            tags = set(args.get("tags", []))
+            raw_tags = args.get("tags", [])
+            if len(raw_tags) > 50:
+                return {"error": f"Too many tags ({len(raw_tags)}). Max: 50."}
+            tags = set()
+            for t in raw_tags:
+                if isinstance(t, str) and len(t) <= 100:
+                    tags.add(t)
             result = await encoder.encode(
                 content=content, timestamp=utcnow(), tags=tags if tags else None
             )
+
+            import os
+
+            _source = os.environ.get("NEURALMEMORY_SOURCE", "")[:256]
+            mcp_source = f"mcp:{_source}" if _source else "mcp_tool"
 
             typed_mem = TypedMemory.create(
                 fiber_id=result.fiber.id,
                 memory_type=mem_type,
                 priority=priority,
-                source="mcp_tool",
+                source=mcp_source,
                 expires_in_days=args.get("expires_days"),
                 tags=tags if tags else None,
             )
@@ -218,13 +232,23 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
 
         await self._record_tool_action("remember", content[:100])
 
-        return {
+        response: dict[str, Any] = {
             "success": True,
             "fiber_id": result.fiber.id,
             "memory_type": mem_type.value,
             "neurons_created": len(result.neurons_created),
             "message": f"Remembered: {content[:50]}{'...' if len(content) > 50 else ''}",
         }
+
+        try:
+            conflicts_detected = int(result.conflicts_detected)
+        except (TypeError, ValueError, AttributeError):
+            conflicts_detected = 0
+        if conflicts_detected > 0:
+            response["conflicts_detected"] = conflicts_detected
+            response["message"] += f" ({conflicts_detected} conflict(s) detected)"
+
+        return response
 
     async def _recall(self, args: dict[str, Any]) -> dict[str, Any]:
         """Query memories via spreading activation."""
@@ -305,6 +329,27 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
                 "frequency_boost": round(result.score_breakdown.frequency_boost, 4),
             }
 
+        # Surface conflict info from retrieval
+        disputed_ids: list[str] = (result.metadata or {}).get("disputed_ids", [])
+        if disputed_ids:
+            response["has_conflicts"] = True
+            response["conflict_count"] = len(disputed_ids)
+
+            # Full conflict details only when opt-in
+            if args.get("include_conflicts"):
+                neurons_map = await storage.get_neurons_batch(disputed_ids)
+                response["conflicts"] = [
+                    {
+                        "existing_neuron_id": nid,
+                        "content": n.content[:200] if n else "",
+                        "status": "superseded"
+                        if n and n.metadata.get("_superseded")
+                        else "disputed",
+                    }
+                    for nid, n in neurons_map.items()
+                    if n is not None
+                ]
+
         await self._record_tool_action("recall", query[:100])
 
         return response
@@ -371,6 +416,19 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
             return {"error": "No brain configured"}
 
         stats = await storage.get_enhanced_stats(brain.id)
+
+        # Count active conflicts (unresolved CONTRADICTS synapses)
+        conflicts_active = 0
+        try:
+            from neural_memory.core.synapse import SynapseType
+
+            contradicts_synapses = await storage.get_synapses(type=SynapseType.CONTRADICTS)
+            conflicts_active = sum(
+                1 for s in contradicts_synapses if not s.metadata.get("_resolved")
+            )
+        except Exception:
+            logger.debug("Conflict count failed (non-critical)", exc_info=True)
+
         return {
             "brain": brain.name,
             "neuron_count": stats["neuron_count"],
@@ -380,6 +438,7 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
             "today_fibers_count": stats.get("today_fibers_count", 0),
             "hot_neurons": stats.get("hot_neurons", []),
             "newest_memory": stats.get("newest_memory"),
+            "conflicts_active": conflicts_active,
         }
 
     async def _health(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -667,7 +726,7 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
         try:
             import os
 
-            source = os.environ.get("NEURALMEMORY_SOURCE", "mcp")
+            source = os.environ.get("NEURALMEMORY_SOURCE", "mcp")[:256]
             storage = await self.get_storage()
             await storage.record_action(
                 action_type=action_type,

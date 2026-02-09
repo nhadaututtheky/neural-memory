@@ -172,7 +172,7 @@ class ReflexPipeline:
         activations, _stab_report = stabilize(activations, StabilizationConfig())
 
         # 4.7 Deprioritize disputed neurons (conflict resolution)
-        activations = await self._deprioritize_disputed(activations)
+        activations, disputed_ids = await self._deprioritize_disputed(activations)
 
         # 5. Find matching fibers
         fibers_matched = await self._find_matching_fibers(activations, valid_at=valid_at)
@@ -250,6 +250,7 @@ class ReflexPipeline:
                 "use_reflex": self._use_reflex,
                 "stabilization_iterations": _stab_report.iterations,
                 "stabilization_converged": _stab_report.converged,
+                "disputed_ids": disputed_ids,
             },
         )
 
@@ -702,7 +703,7 @@ class ReflexPipeline:
     async def _deprioritize_disputed(
         self,
         activations: dict[str, ActivationResult],
-    ) -> dict[str, ActivationResult]:
+    ) -> tuple[dict[str, ActivationResult], list[str]]:
         """Reduce activation of disputed neurons by 50%.
 
         Neurons marked with _disputed metadata get their activation
@@ -713,10 +714,10 @@ class ReflexPipeline:
             activations: Current activation results
 
         Returns:
-            New dict with disputed neurons deprioritized
+            Tuple of (new dict with disputed neurons deprioritized, list of disputed neuron IDs)
         """
         if not activations:
-            return activations
+            return activations, []
 
         disputed_factor = 0.5
         superseded_factor = 0.25
@@ -725,10 +726,12 @@ class ReflexPipeline:
         neuron_ids = list(activations.keys())
         neurons = await self._storage.get_neurons_batch(neuron_ids)
 
+        disputed_ids: list[str] = []
         result: dict[str, ActivationResult] = {}
         for neuron_id, activation in activations.items():
             neuron = neurons.get(neuron_id)
             if neuron is not None and neuron.metadata.get("_disputed"):
+                disputed_ids.append(neuron_id)
                 factor = (
                     superseded_factor if neuron.metadata.get("_superseded") else disputed_factor
                 )
@@ -744,7 +747,7 @@ class ReflexPipeline:
             else:
                 result[neuron_id] = activation
 
-        return result
+        return result, disputed_ids
 
     def _expand_query_terms(self, keywords: list[str]) -> list[str]:
         """Expand query keywords with basic stemming and synonyms.

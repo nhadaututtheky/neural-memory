@@ -43,6 +43,7 @@ class EncodingResult:
     neurons_created: list[Neuron]
     neurons_linked: list[str]
     synapses_created: list[Synapse]
+    conflicts_detected: int = 0
 
 
 class MemoryEncoder:
@@ -250,6 +251,7 @@ class MemoryEncoder:
             storage=self._storage,
             memory_type=memory_type_str,
         )
+        _conflicts_detected = len(conflicts)
         if conflicts:
             resolutions = await resolve_conflicts(
                 conflicts=conflicts,
@@ -312,6 +314,7 @@ class MemoryEncoder:
             neurons_created=neurons_created,
             neurons_linked=neurons_linked,
             synapses_created=synapses_created,
+            conflicts_detected=_conflicts_detected,
         )
 
     def _build_pathway(

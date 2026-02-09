@@ -79,6 +79,10 @@ def get_tool_schemas() -> list[dict[str, Any]]:
                         "type": "string",
                         "description": "ISO datetime string to filter memories valid at that point in time (e.g. '2026-02-01T12:00:00')",
                     },
+                    "include_conflicts": {
+                        "type": "boolean",
+                        "description": "Include full conflict details in response (default: false). When false, only has_conflicts flag and conflict_count are returned.",
+                    },
                 },
                 "required": ["query"],
             },
@@ -420,6 +424,45 @@ def get_tool_schemas() -> list[dict[str, Any]]:
                     },
                 },
                 "required": ["source_brain"],
+            },
+        },
+        {
+            "name": "nmem_conflicts",
+            "description": "View and manage memory conflicts. List detected contradictions, resolve them manually, or pre-check content for potential conflicts before storing.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["list", "resolve", "check"],
+                        "description": "list=view active conflicts, resolve=manually resolve a conflict, check=pre-check content for conflicts",
+                    },
+                    "neuron_id": {
+                        "type": "string",
+                        "description": "Neuron ID of the disputed memory (required for resolve)",
+                    },
+                    "resolution": {
+                        "type": "string",
+                        "enum": ["keep_existing", "keep_new", "keep_both"],
+                        "description": "How to resolve: keep_existing=undo dispute, keep_new=supersede old, keep_both=accept both",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Content to pre-check for conflicts (required for check)",
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional tags for more accurate conflict checking",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 200,
+                        "description": "Max conflicts to list (default: 50)",
+                    },
+                },
+                "required": ["action"],
             },
         },
     ]

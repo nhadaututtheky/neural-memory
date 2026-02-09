@@ -144,9 +144,12 @@ class DiagnosticsEngine:
         # Compute individual metrics
         synapse_stats = enhanced.get("synapse_stats", {})
 
+        # Fetch fibers once for freshness + diagnostics
+        fibers = await self._storage.get_fibers(limit=10000)
+
         connectivity = self._compute_connectivity(synapse_count, neuron_count)
         diversity = self._compute_diversity(synapse_stats)
-        freshness = await self._compute_freshness()
+        freshness = self._compute_freshness(fibers)
         consolidation_ratio = await self._compute_consolidation_ratio(fiber_count)
         orphan_rate = await self._compute_orphan_rate(neuron_count)
         activation_efficiency = await self._compute_activation_efficiency(neuron_count)
@@ -163,11 +166,26 @@ class DiagnosticsEngine:
             + recall_confidence * 0.05
         ) * 100
 
+        # Apply penalty for unresolved CONTRADICTS synapses
+        by_type = synapse_stats.get("by_type", {})
+        contradicts_entry = by_type.get(SynapseType.CONTRADICTS, {})
+        contradicts_count: int = (
+            (
+                contradicts_entry["count"]
+                if isinstance(contradicts_entry, dict)
+                else contradicts_entry
+            )
+            if contradicts_entry
+            else 0
+        )
+        conflict_rate = contradicts_count / max(neuron_count, 1)
+        conflict_penalty = min(10.0, conflict_rate * 50.0)  # Max 10 point penalty
+        purity = max(0.0, purity - conflict_penalty)
+
         grade = _score_to_grade(purity)
 
         # Generate warnings and recommendations
         raw_connectivity = synapse_count / max(neuron_count, 1)
-        fibers = await self._storage.get_fibers(limit=10000)
         warnings, recommendations = self._generate_diagnostics(
             neuron_count=neuron_count,
             synapse_count=synapse_count,
@@ -178,6 +196,7 @@ class DiagnosticsEngine:
             consolidation_ratio=consolidation_ratio,
             freshness=freshness,
             fibers=fibers,
+            contradicts_count=contradicts_count,
         )
 
         return BrainHealthReport(
@@ -244,9 +263,9 @@ class DiagnosticsEngine:
         max_entropy = math.log(expected_types) if expected_types > 1 else 1.0
         return min(1.0, entropy / max_entropy)
 
-    async def _compute_freshness(self) -> float:
+    @staticmethod
+    def _compute_freshness(fibers: list) -> float:
         """Compute fraction of fibers accessed/created in last 7 days."""
-        fibers = await self._storage.get_fibers(limit=10000)
         if not fibers:
             return 0.0
 
@@ -314,6 +333,7 @@ class DiagnosticsEngine:
         consolidation_ratio: float,
         freshness: float,
         fibers: list,
+        contradicts_count: int = 0,
     ) -> tuple[list[DiagnosticWarning], list[str]]:
         """Generate warnings and recommendations from metrics."""
         warnings: list[DiagnosticWarning] = []
@@ -405,6 +425,20 @@ class DiagnosticsEngine:
                 )
             if drift_reports:
                 recommendations.append("Normalize tags to reduce semantic drift.")
+
+        # High conflict count (unresolved CONTRADICTS synapses)
+        if contradicts_count > 5:
+            warnings.append(
+                DiagnosticWarning(
+                    severity=WarningSeverity.WARNING,
+                    code="HIGH_CONFLICT_COUNT",
+                    message=f"{contradicts_count} unresolved memory conflicts detected.",
+                    details={"count": contradicts_count},
+                )
+            )
+            recommendations.append(
+                "Run `nmem_conflicts` to review and resolve memory contradictions."
+            )
 
         return warnings, recommendations
 
