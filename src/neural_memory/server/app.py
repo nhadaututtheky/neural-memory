@@ -17,6 +17,7 @@ from neural_memory.server.routes import (
     brain_router,
     consolidation_router,
     dashboard_router,
+    integration_status_router,
     memory_router,
     oauth_router,
     openclaw_router,
@@ -100,6 +101,7 @@ def create_app(
 
     # Dashboard API routes (unversioned — dashboard-specific)
     app.include_router(dashboard_router)
+    app.include_router(integration_status_router)
     app.include_router(oauth_router)
     app.include_router(openclaw_router)
 

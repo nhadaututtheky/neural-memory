@@ -396,7 +396,7 @@
         </div>
       </section>
 
-      <!-- ═══ Integrations Tab (status-only) ═════════════ -->
+      <!-- ═══ Integrations Tab (status + activity + wizards) ═════════════ -->
       <section x-show="activeTab === 'integrations'" x-transition role="tabpanel" aria-label="Integrations">
         <div class="flex items-center justify-between mb-2">
           <h2 class="text-2xl font-code font-bold" x-text="t('integrations')"></h2>
@@ -416,33 +416,58 @@
           <div class="skeleton skeleton-card"></div>
         </div>
 
-        <!-- Integration status cards -->
+        <!-- Integration status cards (enhanced with metrics) -->
         <div x-show="!loading.integrations" class="space-y-3 max-w-3xl">
           <template x-for="int in integrations" :key="int.id">
-            <div class="bg-nm-primary border border-nm-border rounded-xl p-5 flex items-center gap-4">
-              <!-- Icon -->
-              <div class="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
-                   :style="`background: ${int.color}15`">
-                <i :data-lucide="int.icon" class="w-6 h-6" :style="`color: ${int.color}`"></i>
-              </div>
-
-              <!-- Info -->
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2">
-                  <span class="font-code font-semibold" x-text="int.name"></span>
-                  <span class="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                        :class="int.active ? 'bg-nm-cta pulse-dot' : 'bg-nm-secondary'"></span>
+            <div class="bg-nm-primary border border-nm-border rounded-xl p-5">
+              <div class="flex items-center gap-4">
+                <!-- Icon -->
+                <div class="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
+                     :style="`background: ${int.color}15`">
+                  <i :data-lucide="int.icon" class="w-6 h-6" :style="`color: ${int.color}`"></i>
                 </div>
-                <div class="text-sm text-nm-muted mt-0.5" x-text="int.detail"></div>
+
+                <!-- Info -->
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="font-code font-semibold" x-text="int.name"></span>
+                    <span class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          :class="int.active ? 'bg-nm-cta pulse-dot' : 'bg-nm-secondary'"></span>
+                  </div>
+                  <div class="text-sm text-nm-muted mt-0.5" x-text="int.detail"></div>
+                </div>
+
+                <!-- Deep link -->
+                <a x-show="int.link"
+                   :href="int.link" target="_blank" rel="noopener"
+                   class="bg-nm-secondary hover:bg-nm-border px-3 py-1.5 rounded-lg font-code text-xs transition-colors duration-200 cursor-pointer flex items-center gap-1.5 flex-shrink-0">
+                  <span x-text="int.linkLabel"></span>
+                  <i data-lucide="external-link" class="w-3 h-3"></i>
+                </a>
               </div>
 
-              <!-- Deep link -->
-              <a x-show="int.link"
-                 :href="int.link" target="_blank" rel="noopener"
-                 class="bg-nm-secondary hover:bg-nm-border px-3 py-1.5 rounded-lg font-code text-xs transition-colors duration-200 cursor-pointer flex items-center gap-1.5 flex-shrink-0">
-                <span x-text="int.linkLabel"></span>
-                <i data-lucide="external-link" class="w-3 h-3"></i>
-              </a>
+              <!-- Metrics row (shown when metrics available) -->
+              <div x-show="int.metrics && int.metrics.total_today > 0"
+                   class="flex flex-wrap gap-4 mt-3 pt-3 border-t border-nm-border text-xs">
+                <div>
+                  <span class="font-code text-nm-text" x-text="int.metrics?.memories_today || 0"></span>
+                  <span class="text-nm-muted" x-text="t('int_memories_today')"></span>
+                </div>
+                <div>
+                  <span class="font-code text-nm-text" x-text="int.metrics?.recalls_today || 0"></span>
+                  <span class="text-nm-muted" x-text="t('int_recalls_today')"></span>
+                </div>
+                <div x-show="int.metrics?.last_call_at">
+                  <span class="text-nm-muted" x-text="t('int_last_call')"></span>:
+                  <span class="font-code text-nm-text" x-text="formatTime(int.metrics?.last_call_at)"></span>
+                </div>
+              </div>
+
+              <!-- Error badge -->
+              <div x-show="int.metrics?.error_count > 0" class="mt-2">
+                <span class="text-xs bg-red-500/10 text-red-400 px-2 py-0.5 rounded font-code"
+                      x-text="int.metrics.error_count + ' ' + t('errors')"></span>
+              </div>
             </div>
           </template>
         </div>
@@ -451,6 +476,107 @@
         <div x-show="!loading.integrations && integrations.length === 0" class="empty-state">
           <i data-lucide="puzzle"></i>
           <p class="text-sm text-nm-muted" x-text="t('loading')"></p>
+        </div>
+
+        <!-- ── Activity Log ──────────────────────────────── -->
+        <div x-show="!loading.integrations" class="mt-8 max-w-3xl">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-code font-semibold" x-text="t('int_activity_log')"></h3>
+            <div class="flex gap-2">
+              <button @click="refreshActivity()"
+                      aria-label="Refresh activity log"
+                      class="bg-nm-secondary hover:bg-nm-border px-3 py-1.5 rounded-lg font-code text-xs transition-colors duration-200 cursor-pointer flex items-center gap-1.5">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              </button>
+              <button @click="activityExpanded = !activityExpanded"
+                      :aria-label="activityExpanded ? t('collapse') : t('expand')"
+                      class="bg-nm-secondary hover:bg-nm-border px-3 py-1.5 rounded-lg font-code text-xs transition-colors duration-200 cursor-pointer flex items-center gap-1.5">
+                <i :data-lucide="activityExpanded ? 'chevron-up' : 'chevron-down'" class="w-3.5 h-3.5"></i>
+                <span x-text="activityExpanded ? t('collapse') : t('expand')"></span>
+              </button>
+            </div>
+          </div>
+
+          <div x-show="activityExpanded" x-transition class="space-y-2">
+            <!-- Activity loading -->
+            <div x-show="loading.activity" class="space-y-2">
+              <div class="skeleton skeleton-line"></div>
+              <div class="skeleton skeleton-line"></div>
+              <div class="skeleton skeleton-line"></div>
+            </div>
+
+            <!-- Activity empty -->
+            <div x-show="!loading.activity && activityLog.length === 0"
+                 class="text-sm text-nm-muted py-4 text-center" x-text="t('int_no_activity')">
+            </div>
+
+            <!-- Activity entries -->
+            <template x-for="entry in activityLog" :key="entry.id">
+              <div class="bg-nm-primary border border-nm-border rounded-lg px-4 py-3 flex items-center gap-3 text-sm hover:border-nm-cta/30 transition-colors duration-150">
+                <i :data-lucide="activityIcon(entry.action_type)" class="w-4 h-4 flex-shrink-0 text-nm-muted"></i>
+                <div class="flex-1 min-w-0">
+                  <span class="font-code" x-text="entry.action_type"></span>
+                  <span x-show="entry.action_context" class="text-nm-muted ml-2 truncate inline-block max-w-xs align-bottom" x-text="entry.action_context"></span>
+                </div>
+                <span class="text-xs text-nm-muted bg-nm-secondary px-2 py-0.5 rounded font-code flex-shrink-0" x-text="entry.source"></span>
+                <span class="text-xs text-nm-muted font-code flex-shrink-0" x-text="formatTime(entry.created_at)"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- ── Setup Wizards ─────────────────────────────── -->
+        <div x-show="!loading.integrations" class="mt-8 max-w-3xl">
+          <h3 class="text-lg font-code font-semibold mb-2" x-text="t('int_setup_wizards')"></h3>
+          <p class="text-nm-muted text-sm mb-4" x-text="t('int_setup_desc')"></p>
+
+          <div class="space-y-3">
+            <template x-for="wizard in setupWizards" :key="wizard.id">
+              <div class="bg-nm-primary border border-nm-border rounded-xl overflow-hidden">
+                <button @click="wizard.open = !wizard.open"
+                        class="w-full text-left px-5 py-4 flex items-center gap-3 hover:bg-nm-secondary/50 transition-colors duration-200 cursor-pointer"
+                        :aria-expanded="wizard.open"
+                        :aria-label="wizard.name + ' setup'">
+                  <i :data-lucide="wizard.icon" class="w-5 h-5" :style="`color: ${wizard.color}`"></i>
+                  <span class="font-code font-semibold" x-text="wizard.name"></span>
+                  <i :data-lucide="wizard.open ? 'chevron-up' : 'chevron-down'" class="w-4 h-4 ml-auto text-nm-muted"></i>
+                </button>
+                <div x-show="wizard.open" x-transition class="px-5 pb-5 border-t border-nm-border">
+                  <p class="text-sm text-nm-muted my-3" x-text="wizard.description"></p>
+                  <div class="relative">
+                    <pre class="bg-nm-bg border border-nm-border rounded-lg p-4 text-sm font-code text-nm-text overflow-x-auto whitespace-pre"><code x-text="wizard.snippet"></code></pre>
+                    <button @click="copySnippet(wizard.snippet)"
+                            class="absolute top-2 right-2 bg-nm-secondary hover:bg-nm-border p-1.5 rounded-lg cursor-pointer transition-colors duration-200"
+                            :aria-label="t('copy_to_clipboard')">
+                      <i data-lucide="copy" class="w-4 h-4"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- ── Import Sources (Preview) ──────────────────── -->
+        <div x-show="!loading.integrations" class="mt-8 max-w-3xl">
+          <h3 class="text-lg font-code font-semibold mb-2" x-text="t('int_import_sources')"></h3>
+          <p class="text-nm-muted text-sm mb-4" x-text="t('int_import_desc')"></p>
+          <div class="space-y-2">
+            <template x-for="src in importSources" :key="src.id">
+              <div class="bg-nm-primary border border-nm-border rounded-lg px-5 py-3 flex items-center gap-3">
+                <span class="font-code text-sm" x-text="src.name"></span>
+                <span class="ml-auto text-xs font-code px-2 py-0.5 rounded"
+                      :class="src.detected ? 'bg-green-500/10 text-green-400' : 'bg-nm-secondary text-nm-muted'"
+                      x-text="src.detected ? t('detected') : t('not_detected')"></span>
+                <button x-show="src.detected" disabled
+                        class="bg-nm-secondary px-3 py-1.5 rounded-lg font-code text-xs text-nm-muted cursor-not-allowed flex items-center gap-1.5"
+                        :aria-label="t('int_import_coming_soon')">
+                  <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                  <span x-text="t('int_coming_soon')"></span>
+                </button>
+              </div>
+            </template>
+          </div>
         </div>
       </section>
 

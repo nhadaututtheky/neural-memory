@@ -662,10 +662,14 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler):
     async def _record_tool_action(self, action_type: str, context: str = "") -> None:
         """Record an action event for habit learning (fire-and-forget)."""
         try:
+            import os
+
+            source = os.environ.get("NEURALMEMORY_SOURCE", "mcp")
             storage = await self.get_storage()
             await storage.record_action(
                 action_type=action_type,
                 action_context=context[:200] if context else "",
+                session_id=f"{source}-{id(self)}",
             )
         except Exception:
             logger.debug("Action recording failed (non-critical)", exc_info=True)

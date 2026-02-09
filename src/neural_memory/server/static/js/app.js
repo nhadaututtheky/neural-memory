@@ -22,12 +22,16 @@ function dashboardApp() {
     healthWarnings: [],
     healthRecommendations: [],
     integrations: [],
+    activityLog: [],
+    activityExpanded: false,
+    setupWizards: [],
+    importSources: [],
     selectedNode: null,
     graphSearch: '',
     graphFilter: '',
     graphEmpty: false,
     toasts: [],
-    loading: { stats: true, health: true, graph: false, integrations: false },
+    loading: { stats: true, health: true, graph: false, integrations: false, activity: false },
     _radarChart: null,
     _graphLoaded: false,
     _healthData: null,
@@ -111,8 +115,13 @@ function dashboardApp() {
         }
       }
 
-      if (tab === 'integrations' && this.integrations.length === 0) {
-        await this.loadIntegrations();
+      if (tab === 'integrations') {
+        if (this.integrations.length === 0) {
+          await this.loadIntegrations();
+        }
+        this.initSetupWizards();
+        this.initImportSources();
+        await this.loadActivity();
       }
 
       if (tab === 'health') {
@@ -353,7 +362,144 @@ function dashboardApp() {
     async refreshIntegrations() {
       this.integrations = [];
       await this.loadIntegrations();
+      await this.loadActivity();
       this.toast(this.t('int_status_refreshed'), 'success');
+    },
+
+    // ── Activity log ────────────────────────────────────
+
+    async loadActivity() {
+      this.loading = { ...this.loading, activity: true };
+      try {
+        const resp = await fetch('/api/dashboard/activity?limit=50');
+        if (resp.ok) {
+          const data = await resp.json();
+          this.activityLog = data.activity || [];
+          // Merge metrics into integrations (immutable)
+          for (const m of (data.metrics || [])) {
+            const idx = this.integrations.findIndex(i => i.id === m.integration_id);
+            if (idx !== -1) {
+              this.integrations = [
+                ...this.integrations.slice(0, idx),
+                { ...this.integrations[idx], metrics: m },
+                ...this.integrations.slice(idx + 1),
+              ];
+            }
+          }
+        }
+      } catch {
+        // Activity data is optional
+      }
+      this.loading = { ...this.loading, activity: false };
+      this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+    },
+
+    async refreshActivity() {
+      await this.loadActivity();
+      this.toast(this.t('int_activity_refreshed'), 'success');
+    },
+
+    activityIcon(type) {
+      const map = {
+        remember: 'brain',
+        recall: 'search',
+        context: 'layers',
+        auto: 'zap',
+        process: 'cpu',
+        todo: 'check-square',
+      };
+      return map[type] || 'activity';
+    },
+
+    formatTime(isoString) {
+      if (!isoString) return '';
+      const d = new Date(isoString);
+      const now = new Date();
+      const diffMs = now - d;
+      if (diffMs < 60000) return this.t('just_now');
+      if (diffMs < 3600000) return Math.floor(diffMs / 60000) + 'm ' + this.t('ago');
+      if (diffMs < 86400000) return Math.floor(diffMs / 3600000) + 'h ' + this.t('ago');
+      return d.toLocaleDateString();
+    },
+
+    // ── Setup wizards ───────────────────────────────────
+
+    initSetupWizards() {
+      if (this.setupWizards.length > 0) return;
+      this.setupWizards = [
+        {
+          id: 'claude-code', name: 'Claude Code', icon: 'terminal', color: '#D97757', open: false,
+          description: this.t('int_setup_claude_desc'),
+          snippet: JSON.stringify({
+            mcpServers: {
+              'neural-memory': {
+                command: 'python',
+                args: ['-m', 'neural_memory.mcp'],
+              },
+            },
+          }, null, 2),
+        },
+        {
+          id: 'cursor', name: 'Cursor', icon: 'mouse-pointer', color: '#3B82F6', open: false,
+          description: this.t('int_setup_cursor_desc'),
+          snippet: JSON.stringify({
+            mcpServers: {
+              'neural-memory': {
+                command: 'python',
+                args: ['-m', 'neural_memory.mcp'],
+              },
+            },
+          }, null, 2),
+        },
+        {
+          id: 'openclaw', name: 'OpenClaw Plugin', icon: 'puzzle', color: '#F59E0B', open: false,
+          description: this.t('int_setup_openclaw_desc'),
+          snippet: '# Install the plugin\nnpm install -g @neuralmemory/openclaw-plugin\n\n# Add to ~/.openclaw/openclaw.json:\n' + JSON.stringify({
+            plugins: {
+              entries: {
+                neuralmemory: { enabled: true, config: { brain: 'default', autoContext: true, autoCapture: true } },
+              },
+              slots: { memory: 'neuralmemory' },
+            },
+          }, null, 2),
+        },
+        {
+          id: 'generic-mcp', name: 'Generic MCP', icon: 'server', color: '#22C55E', open: false,
+          description: this.t('int_setup_generic_desc'),
+          snippet: JSON.stringify({
+            'neural-memory': {
+              command: 'python',
+              args: ['-m', 'neural_memory.mcp'],
+              env: { NEURALMEMORY_BRAIN: 'default' },
+            },
+          }, null, 2),
+        },
+      ];
+      this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+    },
+
+    // ── Import sources ──────────────────────────────────
+
+    initImportSources() {
+      if (this.importSources.length > 0) return;
+      this.importSources = [
+        { id: 'chromadb', name: 'ChromaDB', detected: false },
+        { id: 'mem0', name: 'Mem0', detected: false },
+        { id: 'cognee', name: 'Cognee', detected: false },
+        { id: 'graphiti', name: 'Graphiti', detected: false },
+        { id: 'llamaindex', name: 'LlamaIndex', detected: false },
+      ];
+    },
+
+    // ── Clipboard ───────────────────────────────────────
+
+    async copySnippet(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        this.toast(this.t('copied_to_clipboard'), 'success');
+      } catch {
+        this.toast(this.t('error_occurred'), 'error');
+      }
     },
 
     // ── Health radar chart ─────────────────────────────

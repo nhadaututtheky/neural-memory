@@ -4,8 +4,8 @@
 > Every feature passes the VISION.md 4-question test + brain test.
 > ZERO LLM dependency — pure algorithmic, regex, graph-based.
 
-**Current state**: v1.2.0 shipped to PyPI (schema v11). Dashboard with OAuth, OpenClaw config, channels, UX overhaul.
-**Next milestone**: v1.4.0 — OpenClaw Memory Plugin (in progress) → v1.3.0 — Deep Integration Status.
+**Current state**: v1.3.0 shipped. Dashboard with deep integration status, activity log, setup wizards.
+**Next milestone**: v1.5.0 — Ecosystem Expansion.
 
 ---
 
@@ -1170,61 +1170,45 @@ Integrations (read-only status + deep links)
 
 ---
 
-## Phase 3: v1.3.0 — Deep Integration Status
+## Phase 3: v1.3.0 — Deep Integration Status ✅
 
 > Richer integration status with activity logs and setup wizards.
 
-**Target**: 2 weeks after v1.2.0
+**Status**: ✅ Shipped (2026-02-09). 12 new tests (1352 total).
 
-### 3.1 Enhanced Status Cards
+### What shipped
 
-Extend the v1.2.0 status-only cards with:
-- **Live metrics**: memories today, recalls today, last call timestamp
-- **Error indicators**: red badge + last error message
-- **THOR NEXUS**: add status card when detected
+| Feature | Description |
+|---------|-------------|
+| **Enhanced status cards** | Live metrics: memories/recalls today, last call timestamp, error badges |
+| **Activity log** | Collapsible feed of recent tool calls with source attribution (MCP/OpenClaw/Nanobot) |
+| **Setup wizards** | Accordion config snippets for Claude Code, Cursor, OpenClaw, generic MCP with copy-to-clipboard |
+| **Import sources** | Detection panel for ChromaDB, Mem0, Cognee, Graphiti, LlamaIndex (placeholder for v1.5.0) |
+| **Source attribution** | `NEURALMEMORY_SOURCE` env var → session_id prefix for integration tracking |
+| **i18n** | 25 new keys in EN + VI (87 total) |
 
-### 3.2 Integration Activity Log
+### Files shipped
 
-- Real-time feed of tool calls from all integrations
-- Source attribution (MCP, Nanobot, OpenClaw)
-- Error tracking and alerts
-- Usage statistics per integration
-
-### 3.3 One-Click Setup Wizards
-
-Deep-link-based setup (not config forms — config lives in each service):
-- **Nanobot**: Generate `setup_neural_memory()` code snippet, copy to clipboard
-- **OpenClaw**: Generate MCP config + SKILL.md installation instructions
-- **Claude Code**: Generate `mcp_servers.json` entry
-- **Cursor**: Generate `mcp.json` entry
-
-### 3.4 Import Sources Panel
-
-One-directional import from competing memory systems into NM:
-- ChromaDB, Mem0, Cognee, Graphiti, LlamaIndex
-- Each shows status (importable/not detected) + [Import] button
-
-### Files
-
-| Action | File | Description |
-|--------|------|-------------|
-| **Modified** | `server/static/js/app.js` | Enhanced loadIntegrations with live metrics |
-| **New** | `server/routes/integration_status.py` | Backend status aggregation endpoint |
-| **Modified** | `server/static/dashboard.html` | Activity log + setup wizard sections |
-| **New** | `tests/unit/test_integration_status.py` | Status endpoint tests |
-
-### Scope
-
-~400 lines (HTML/JS) + ~200 lines (Python API) + ~100 test lines
+| Action | File |
+|--------|------|
+| NEW | `server/routes/integration_status.py` — Activity metrics + log endpoint |
+| NEW | `tests/unit/test_integration_status.py` — 12 tests for metrics + attribution |
+| MOD | `server/routes/__init__.py` — Export new router |
+| MOD | `server/app.py` — Mount integration_status_router |
+| MOD | `mcp/server.py` — Source attribution via NEURALMEMORY_SOURCE env var |
+| MOD | `server/static/dashboard.html` — Enhanced cards, activity log, wizards, import panel |
+| MOD | `server/static/js/app.js` — loadActivity, formatTime, setupWizards, importSources, copySnippet |
+| MOD | `server/static/css/dashboard.css` — Code snippet styling |
+| MOD | `server/static/locales/en.json` — 25 new keys |
+| MOD | `server/static/locales/vi.json` — 25 new keys |
 
 ---
 
-## Phase 4: v1.4.0 — OpenClaw Memory Plugin (IN PROGRESS)
+## Phase 4: v1.4.0 — OpenClaw Memory Plugin ✅
 
 > NM becomes the memory layer inside OpenClaw (the hub).
 
-**Target**: 2 weeks (can start immediately — independent of v1.3.0)
-**Status**: Core plugin implemented — 7 files, ~400 lines TypeScript, zero npm dependencies.
+**Status**: ✅ Shipped. `@neuralmemory/openclaw-plugin@1.4.1` published to npm. 6 tools, 2 hooks, 1 service. Verified in real OpenClaw (loaded among 35 plugins).
 
 ### Why This Is P1
 
@@ -1383,16 +1367,16 @@ Any AI Agent (OpenClaw, Claude Code, Cursor, THOR, Nanobot, custom)
 ```
 v1.1.0 ✅ (Community Foundations)
   ├──→ v1.2.0 ✅ (Dashboard — specialist tool + status-only integrations)
-  │       └──→ v1.3.0 (Deep Integration Status + activity logs)
-  │               └──→ v1.5.0 (Ecosystem — THOR, Marketplace, Neo4j, i18n)
-  └──→ v1.4.0 (OpenClaw Memory Plugin — NM inside the hub)
+  │       └──→ v1.3.0 ✅ (Deep Integration Status + activity logs)
+  │               └──→ v1.5.0 (Ecosystem — Marketplace, Neo4j, i18n)
+  └──→ v1.4.0 ✅ (OpenClaw Memory Plugin — NM inside the hub)
               └──→ v1.5.0 (Ecosystem Expansion)
                         └──→ v2.0.0 (Platform — protocol, federation, real-time)
 ```
 
-**Critical path**: v1.1.0 ✅ → v1.2.0 ✅ → v1.4.0 → v1.3.0 → v1.5.0
+**Critical path**: v1.1.0 ✅ → v1.2.0 ✅ → v1.4.0 ✅ → v1.3.0 ✅ → v1.5.0
 
-**Parallel track**: v1.4.0 starts immediately — highest impact, independent of v1.3.0
+**Next**: v1.5.0 — Ecosystem Expansion (Marketplace, Neo4j, multi-language)
 
 ---
 
@@ -1402,18 +1386,18 @@ v1.1.0 ✅ (Community Foundations)
 |-------|--------|--------|----------|-----------|
 | **v1.1.0** ✅ | High | Low | **P0** | Community visibility, zero code |
 | **v1.2.0** ✅ | High | High | **P1** | Dashboard is the face of NM |
-| **v1.3.0** | Medium | Low | **P2** | Richer status + activity logs, low effort since v1.2.0 did the hard work |
-| **v1.4.0** | Critical | Medium | **P1** | 178k-star ecosystem — NM inside the hub (Option B) |
+| **v1.3.0** ✅ | Medium | Low | **P2** | Richer status + activity logs, shipped |
+| **v1.4.0** ✅ | Critical | Medium | **P1** | 178k-star ecosystem — NM inside the hub, shipped |
 | **v1.5.0** | High | High | **P3** | THOR + Marketplace + Neo4j, can be incremental |
 | **v2.0.0** | Critical | Very High | **P4** | Protocol + federation + real-time, long-term vision |
 
 ### Recommended Execution Order
 
 ```
-v1.1.0 ✅ → v1.2.0 ✅ → v1.4.0 (2 weeks, P1) → v1.3.0 (1 week, P2) → v1.5.0 (ongoing)
+v1.1.0 ✅ → v1.2.0 ✅ → v1.4.0 ✅ → v1.3.0 ✅ → v1.5.0 (ongoing)
 ```
 
-v1.4.0 first: OpenClaw plugin is the highest-impact integration (Option B — NM inside the hub). Real-world plugin data then makes v1.3.0 status cards meaningful. v1.3.0 is now low-effort since v1.2.0 already built the status card UI.
+All post-v1.0 milestones through v1.4.0 complete. Next: v1.5.0 Ecosystem Expansion.
 
 ---
 
@@ -1448,4 +1432,4 @@ v1.4.0 first: OpenClaw plugin is the highest-impact integration (Option B — NM
 ---
 
 *See [VISION.md](VISION.md) for the north star guiding all decisions.*
-*Last updated: 2026-02-09 (v1.2.0 shipped to PyPI: Dashboard with status-only integrations, neural graph, UX overhaul, Option B architecture)*
+*Last updated: 2026-02-09 (v1.3.0 shipped: Deep integration status, activity log, setup wizards. v1.4.0 shipped: OpenClaw plugin @1.4.1)*

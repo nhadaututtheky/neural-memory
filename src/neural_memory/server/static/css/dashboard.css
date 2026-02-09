@@ -183,6 +183,14 @@ section[x-show] {
   border-color: #22C55E;
 }
 
+/* ── Code snippet blocks ────────────────────────────── */
+
+pre code {
+  font-family: 'Fira Code', monospace;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
 /* ── Responsive: Mobile ──────────────────────────────── */
 
 @media (max-width: 768px) {
