@@ -997,15 +997,13 @@ Published `neural-memory@1.0.0` to [ClawHub](https://clawhub.ai/skills/neural-me
 **What it does**: Instructs OpenClaw's agent to use NM via the existing MCP server.
 **Shipped**: Commit `8d661cb`, verified live via `clawhub inspect neural-memory`.
 
-### 1.2 OpenClaw Issue #7273 Fix PR
+### 1.2 OpenClaw Issue #7273 Fix PR ✅
 
 Issue #8921 was **closed as duplicate** of [#7273](https://github.com/openclaw/openclaw/issues/7273) — `openclaw status` reports memory as unavailable for third-party plugins.
 
-**Current state**: Existing [PR #7289](https://github.com/openclaw/openclaw/pulls/7289) is stalled (confidence 2/5, SQL injection + cross-platform bugs flagged by Greptile review).
+**Submitted**: [PR #12596](https://github.com/openclaw/openclaw/pull/12596) — minimal 2-file fix (~50 lines). Type-check clean, 5/5 tests pass. The competing PR #7289 had 32 files and was flagged 2/5 confidence by Greptile.
 
-**Opportunity**: Submit a smaller, cleaner PR (~20 lines, 2 files: `status.scan.ts` + `status.command.ts`) that just fixes the rendering without the 32-file scope creep of PR #7289.
-
-**Why**: Builds credibility as contributor. Directly unblocks NM status display. Gets NM's name in OpenClaw's commit history.
+**Fix**: `status.scan.ts` now probes non-core plugins via gateway RPC `memory.status`. `status.command.ts` renders "active" or "N entries" instead of "unavailable".
 
 ### 1.3 Blog Post: "Neural Memory for OpenClaw" ✅
 
@@ -1023,7 +1021,7 @@ Updated to v1.0.2: 1,340 tests, 16 MCP tools, 10 feature sections, full comparis
 | Post SKILL + demo | OpenClaw Discord #showcase | Pending |
 | Tag @openclaw on X | Twitter | Pending |
 | Submit to awesome-openclaw-skills | GitHub PR | Pending |
-| Submit clean PR for #7273 | OpenClaw repo | Pending |
+| Submit clean PR for #7273 | OpenClaw repo | ✅ [PR #12596](https://github.com/openclaw/openclaw/pull/12596) |
 
 ### Files
 
@@ -1472,4 +1470,4 @@ Do v1.4.0 before v1.3.0 because OpenClaw plugin provides the real-world integrat
 ---
 
 *See [VISION.md](VISION.md) for the north star guiding all decisions.*
-*Last updated: 2026-02-09 (v1.1.0 in progress: SKILL published, blog written, #7273 PR pending)*
+*Last updated: 2026-02-09 (v1.1.0 nearly complete: SKILL published, blog written, #7273 PR submitted)*
