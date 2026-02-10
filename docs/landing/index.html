@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NeuralMemory — Brain-Inspired Memory for AI Agents</title>
+  <meta name="description" content="Reflex-based memory system for AI agents. Retrieval through activation, not search. Multi-hop reasoning, causal chains, temporal awareness.">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwindcss.config = {
+      theme: {
+        extend: {
+          colors: {
+            nm: {
+              bg: '#0F172A',
+              surface: '#1E293B',
+              border: '#334155',
+              text: '#F8FAFC',
+              muted: '#94A3B8',
+              green: '#22C55E',
+              'green-dim': '#16A34A',
+              purple: '#A78BFA',
+              blue: '#38BDF8',
+              orange: '#FB923C',
+            }
+          },
+          fontFamily: {
+            heading: ['"Space Grotesk"', 'system-ui', 'sans-serif'],
+            body: ['"DM Sans"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body { font-family: 'DM Sans', system-ui, sans-serif; }
+    h1, h2, h3, h4 { font-family: 'Space Grotesk', system-ui, sans-serif; }
+    code, pre { font-family: 'JetBrains Mono', monospace; }
+
+    /* Neural network animation */
+    @keyframes pulse-node {
+      0%, 100% { opacity: 0.3; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.3); }
+    }
+    @keyframes trace-edge {
+      0% { stroke-dashoffset: 100; opacity: 0.1; }
+      50% { opacity: 0.8; }
+      100% { stroke-dashoffset: 0; opacity: 0.1; }
+    }
+    .node-pulse { animation: pulse-node 3s ease-in-out infinite; }
+    .edge-trace {
+      stroke-dasharray: 100;
+      animation: trace-edge 4s ease-in-out infinite;
+    }
+    .node-pulse:nth-child(2) { animation-delay: 0.5s; }
+    .node-pulse:nth-child(3) { animation-delay: 1.0s; }
+    .node-pulse:nth-child(4) { animation-delay: 1.5s; }
+    .node-pulse:nth-child(5) { animation-delay: 2.0s; }
+    .edge-trace:nth-child(2) { animation-delay: 0.7s; }
+    .edge-trace:nth-child(3) { animation-delay: 1.4s; }
+    .edge-trace:nth-child(4) { animation-delay: 2.1s; }
+
+    /* Code block styling */
+    .code-block {
+      background: #0F172A;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .code-header {
+      background: #1E293B;
+      padding: 8px 16px;
+      border-bottom: 1px solid #334155;
+      font-size: 13px;
+      color: #94A3B8;
+    }
+    .code-body { padding: 16px; font-size: 14px; line-height: 1.7; }
+    .code-body .comment { color: #6B7280; }
+    .code-body .keyword { color: #A78BFA; }
+    .code-body .string { color: #22C55E; }
+    .code-body .function { color: #38BDF8; }
+    .code-body .variable { color: #FB923C; }
+    .code-body .punct { color: #94A3B8; }
+
+    /* Smooth section reveal */
+    @media (prefers-reduced-motion: no-preference) {
+      .reveal {
+        opacity: 0;
+        transform: translateY(20px);
+        transition: opacity 0.6s ease, transform 0.6s ease;
+      }
+      .reveal.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .reveal { opacity: 1; transform: none; }
+    }
+  </style>
+</head>
+
+<body class="bg-nm-bg text-nm-text antialiased">
+
+  <!-- ─── Navbar ─────────────────────────────────────── -->
+  <nav class="fixed top-4 left-4 right-4 z-50 bg-nm-surface/80 backdrop-blur-md border border-nm-border rounded-xl px-6 py-3 flex items-center justify-between">
+    <a href="#" class="flex items-center gap-2 font-heading font-bold text-lg">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" class="text-nm-green">
+        <circle cx="12" cy="8" r="3" stroke="currentColor" stroke-width="2"/>
+        <circle cx="6" cy="18" r="2.5" stroke="currentColor" stroke-width="2"/>
+        <circle cx="18" cy="18" r="2.5" stroke="currentColor" stroke-width="2"/>
+        <line x1="12" y1="11" x2="7" y2="16" stroke="currentColor" stroke-width="1.5" opacity="0.5"/>
+        <line x1="12" y1="11" x2="17" y2="16" stroke="currentColor" stroke-width="1.5" opacity="0.5"/>
+        <line x1="8" y1="18" x2="16" y2="18" stroke="currentColor" stroke-width="1.5" opacity="0.3"/>
+      </svg>
+      NeuralMemory
+    </a>
+    <div class="hidden md:flex items-center gap-6 text-sm text-nm-muted">
+      <a href="#features" class="hover:text-nm-text transition-colors duration-200 cursor-pointer">Features</a>
+      <a href="#comparison" class="hover:text-nm-text transition-colors duration-200 cursor-pointer">vs RAG</a>
+      <a href="#quickstart" class="hover:text-nm-text transition-colors duration-200 cursor-pointer">Quick Start</a>
+      <a href="#benchmark" class="hover:text-nm-text transition-colors duration-200 cursor-pointer">Benchmark</a>
+      <a href="https://github.com/nhadaututtheky/neural-memory" target="_blank" rel="noopener" class="flex items-center gap-1.5 hover:text-nm-text transition-colors duration-200 cursor-pointer">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </nav>
+
+  <!-- ─── Hero ───────────────────────────────────────── -->
+  <section class="min-h-screen flex items-center pt-20 pb-16 px-6">
+    <div class="max-w-6xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
+
+      <!-- Left: Text -->
+      <div>
+        <div class="inline-flex items-center gap-2 bg-nm-green/10 text-nm-green text-sm font-medium px-3 py-1 rounded-full mb-6 border border-nm-green/20">
+          <span class="w-2 h-2 bg-nm-green rounded-full"></span>
+          v1.6.0 — 18 MCP tools, 1648 tests
+        </div>
+        <h1 class="font-heading text-4xl md:text-5xl lg:text-6xl font-bold leading-tight mb-6">
+          Memory for<br>
+          <span class="text-nm-green">AI Agents</span>
+        </h1>
+        <p class="text-nm-muted text-lg md:text-xl leading-relaxed mb-8 max-w-lg">
+          Reflex-based memory system that retrieves through <strong class="text-nm-text">activation</strong>, not search.
+          Multi-hop reasoning. Causal chains. Temporal awareness. Like a brain, not a database.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-4">
+          <div class="code-block flex items-center gap-3 px-4 py-3 cursor-pointer group" onclick="navigator.clipboard.writeText('pip install neural-memory')" title="Click to copy">
+            <code class="text-sm text-nm-muted">$</code>
+            <code class="text-sm text-nm-green">pip install neural-memory</code>
+            <svg class="w-4 h-4 text-nm-muted group-hover:text-nm-green transition-colors duration-200 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+            </svg>
+          </div>
+          <a href="https://github.com/nhadaututtheky/neural-memory" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 bg-nm-surface border border-nm-border text-nm-text font-medium px-6 py-3 rounded-lg hover:bg-nm-border transition-colors duration-200 cursor-pointer">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+            View on GitHub
+          </a>
+        </div>
+      </div>
+
+      <!-- Right: Neural graph animation -->
+      <div class="hidden lg:flex items-center justify-center">
+        <svg viewBox="0 0 400 400" class="w-full max-w-md" aria-hidden="true">
+          <!-- Edges -->
+          <line x1="200" y1="100" x2="120" y2="200" stroke="#334155" stroke-width="2" class="edge-trace"/>
+          <line x1="200" y1="100" x2="280" y2="200" stroke="#334155" stroke-width="2" class="edge-trace"/>
+          <line x1="120" y1="200" x2="280" y2="200" stroke="#334155" stroke-width="1.5" class="edge-trace"/>
+          <line x1="120" y1="200" x2="80" y2="300" stroke="#334155" stroke-width="1.5" class="edge-trace"/>
+          <line x1="120" y1="200" x2="180" y2="310" stroke="#334155" stroke-width="1.5" class="edge-trace"/>
+          <line x1="280" y1="200" x2="220" y2="310" stroke="#334155" stroke-width="1.5" class="edge-trace"/>
+          <line x1="280" y1="200" x2="340" y2="290" stroke="#334155" stroke-width="1.5" class="edge-trace"/>
+          <line x1="80" y1="300" x2="180" y2="310" stroke="#334155" stroke-width="1" class="edge-trace"/>
+          <line x1="220" y1="310" x2="340" y2="290" stroke="#334155" stroke-width="1" class="edge-trace"/>
+
+          <!-- Edge labels -->
+          <text x="148" y="148" fill="#A78BFA" font-size="10" font-family="JetBrains Mono" opacity="0.7">CAUSED_BY</text>
+          <text x="242" y="148" fill="#38BDF8" font-size="10" font-family="JetBrains Mono" opacity="0.7">LEADS_TO</text>
+          <text x="185" y="195" fill="#FB923C" font-size="10" font-family="JetBrains Mono" opacity="0.7">CO_OCCURS</text>
+
+          <!-- Nodes -->
+          <g class="node-pulse">
+            <circle cx="200" cy="100" r="18" fill="#22C55E" opacity="0.2"/>
+            <circle cx="200" cy="100" r="10" fill="#22C55E"/>
+            <text x="200" y="75" fill="#F8FAFC" font-size="11" text-anchor="middle" font-family="DM Sans">query</text>
+          </g>
+          <g class="node-pulse">
+            <circle cx="120" cy="200" r="16" fill="#A78BFA" opacity="0.2"/>
+            <circle cx="120" cy="200" r="9" fill="#A78BFA"/>
+            <text x="120" y="225" fill="#94A3B8" font-size="10" text-anchor="middle" font-family="DM Sans">auth bug</text>
+          </g>
+          <g class="node-pulse">
+            <circle cx="280" cy="200" r="16" fill="#38BDF8" opacity="0.2"/>
+            <circle cx="280" cy="200" r="9" fill="#38BDF8"/>
+            <text x="280" y="225" fill="#94A3B8" font-size="10" text-anchor="middle" font-family="DM Sans">JWT config</text>
+          </g>
+          <g class="node-pulse">
+            <circle cx="80" cy="300" r="14" fill="#FB923C" opacity="0.2"/>
+            <circle cx="80" cy="300" r="8" fill="#FB923C"/>
+            <text x="80" y="323" fill="#94A3B8" font-size="10" text-anchor="middle" font-family="DM Sans">outage</text>
+          </g>
+          <g class="node-pulse">
+            <circle cx="180" cy="310" r="12" fill="#A78BFA" opacity="0.15"/>
+            <circle cx="180" cy="310" r="7" fill="#A78BFA"/>
+            <text x="180" y="333" fill="#94A3B8" font-size="10" text-anchor="middle" font-family="DM Sans">login.py</text>
+          </g>
+          <g class="node-pulse">
+            <circle cx="220" cy="310" r="12" fill="#38BDF8" opacity="0.15"/>
+            <circle cx="220" cy="310" r="7" fill="#38BDF8"/>
+          </g>
+          <g class="node-pulse">
+            <circle cx="340" cy="290" r="12" fill="#22C55E" opacity="0.15"/>
+            <circle cx="340" cy="290" r="7" fill="#22C55E"/>
+            <text x="340" y="313" fill="#94A3B8" font-size="10" text-anchor="middle" font-family="DM Sans">Tuesday</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Comparison: vs RAG ─────────────────────────── -->
+  <section id="comparison" class="py-24 px-6">
+    <div class="max-w-5xl mx-auto reveal">
+      <h2 class="font-heading text-3xl md:text-4xl font-bold text-center mb-4">
+        Why Not RAG?
+      </h2>
+      <p class="text-nm-muted text-center text-lg mb-12 max-w-2xl mx-auto">
+        RAG treats memory as a search engine. NeuralMemory treats it as a brain.
+      </p>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b border-nm-border">
+              <th class="py-4 pr-6 text-nm-muted font-medium text-sm">Aspect</th>
+              <th class="py-4 pr-6 text-nm-muted font-medium text-sm">RAG / Vector Search</th>
+              <th class="py-4 text-nm-green font-medium text-sm">NeuralMemory</th>
+            </tr>
+          </thead>
+          <tbody class="text-sm">
+            <tr class="border-b border-nm-border/50">
+              <td class="py-4 pr-6 text-nm-muted">Model</td>
+              <td class="py-4 pr-6">Search Engine</td>
+              <td class="py-4 text-nm-green font-medium">Human Brain</td>
+            </tr>
+            <tr class="border-b border-nm-border/50">
+              <td class="py-4 pr-6 text-nm-muted">Query</td>
+              <td class="py-4 pr-6">"Find similar text"</td>
+              <td class="py-4 text-nm-green font-medium">"Recall through association"</td>
+            </tr>
+            <tr class="border-b border-nm-border/50">
+              <td class="py-4 pr-6 text-nm-muted">Structure</td>
+              <td class="py-4 pr-6">Flat chunks + embeddings</td>
+              <td class="py-4 text-nm-green font-medium">Neural graph + typed synapses</td>
+            </tr>
+            <tr class="border-b border-nm-border/50">
+              <td class="py-4 pr-6 text-nm-muted">Relationships</td>
+              <td class="py-4 pr-6">None (just cosine similarity)</td>
+              <td class="py-4 text-nm-green font-medium">CAUSED_BY, LEADS_TO, IS_A, ...</td>
+            </tr>
+            <tr class="border-b border-nm-border/50">
+              <td class="py-4 pr-6 text-nm-muted">Temporal</td>
+              <td class="py-4 pr-6">Timestamp filter</td>
+              <td class="py-4 text-nm-green font-medium">Time as first-class neurons</td>
+            </tr>
+            <tr>
+              <td class="py-4 pr-6 text-nm-muted">Multi-hop</td>
+              <td class="py-4 pr-6">Multiple queries needed</td>
+              <td class="py-4 text-nm-green font-medium">Natural graph traversal</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Causal chain example -->
+      <div class="mt-12 bg-nm-surface border border-nm-border rounded-xl p-6 md:p-8">
+        <p class="text-nm-muted text-sm mb-3">Example: "Why did Tuesday's outage happen?"</p>
+        <div class="grid md:grid-cols-2 gap-6">
+          <div>
+            <p class="text-sm font-medium text-nm-muted mb-2">RAG returns:</p>
+            <p class="text-nm-text">"JWT caused outage" <span class="text-nm-muted text-sm">(missing <em>why</em> JWT was used)</span></p>
+          </div>
+          <div>
+            <p class="text-sm font-medium text-nm-green mb-2">NeuralMemory traces:</p>
+            <div class="flex items-center gap-2 flex-wrap font-mono text-sm">
+              <span class="bg-nm-bg px-2 py-1 rounded text-nm-orange">outage</span>
+              <span class="text-nm-purple">&larr; CAUSED_BY &larr;</span>
+              <span class="bg-nm-bg px-2 py-1 rounded text-nm-blue">JWT</span>
+              <span class="text-nm-purple">&larr; SUGGESTED_BY &larr;</span>
+              <span class="bg-nm-bg px-2 py-1 rounded text-nm-green">Alice</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Features ───────────────────────────────────── -->
+  <section id="features" class="py-24 px-6 bg-nm-surface/30">
+    <div class="max-w-6xl mx-auto reveal">
+      <h2 class="font-heading text-3xl md:text-4xl font-bold text-center mb-12">
+        Features
+      </h2>
+
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Feature cards -->
+        <div class="bg-nm-surface border border-nm-border rounded-xl p-6 hover:border-nm-green/40 transition-colors duration-200 cursor-default">
+          <div class="w-10 h-10 bg-nm-green/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-nm-green" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+          </div>
+          <h3 class="font-heading font-semibold text-lg mb-2">Reflex Activation</h3>
+          <p class="text-nm-muted text-sm leading-relaxed">Trail-based retrieval through fiber pathways with conductivity. Memories that fire together, wire together.</p>
+        </div>
+
+        <div class="bg-nm-surface border border-nm-border rounded-xl p-6 hover:border-nm-purple/40 transition-colors duration-200 cursor-default">
+          <div class="w-10 h-10 bg-nm-purple/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-nm-purple" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+            </svg>
+          </div>
+          <h3 class="font-heading font-semibold text-lg mb-2">Co-Activation</h3>
+          <p class="text-nm-muted text-sm leading-relaxed">Hebbian binding detects neurons activated by multiple sources. Emergent pattern recognition.</p>
+        </div>
+
+        <div class="bg-nm-surface border border-nm-border rounded-xl p-6 hover:border-nm-blue/40 transition-colors duration-200 cursor-default">
+          <div class="w-10 h-10 bg-nm-blue/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-nm-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <h3 class="font-heading font-semibold text-lg mb-2">Time-First Anchoring</h3>
+          <p class="text-nm-muted text-sm leading-relaxed">Time neurons as primary anchors. "What happened last Tuesday?" just works.</p>
+        </div>
+
+        <div class="bg-nm-surface border border-nm-border rounded-xl p-6 hover:border-nm-orange/40 transition-colors duration-200 cursor-default">
+          <div class="w-10 h-10 bg-nm-orange/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-nm-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+          <h3 class="font-heading font-semibold text-lg mb-2">Typed Relationships</h3>
+          <p class="text-nm-muted text-sm leading-relaxed">15+ synapse types: CAUSED_BY, LEADS_TO, IS_A, CONTAINS, CO_OCCURS. Not just "related".</p>
+        </div>
+
+        <div class="bg-nm-surface border border-nm-border rounded-xl p-6 hover:border-nm-green/40 transition-colors duration-200 cursor-default">
+          <div class="w-10 h-10 bg-nm-green/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-nm-green" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </div>
+          <h3 class="font-heading font-semibold text-lg mb-2">Brain Import/Export</h3>
+          <p class="text-nm-muted text-sm leading-relaxed">Export, import, merge brains. Share learned patterns between agents like Git repos.</p>
+        </div>
+
+        <div class="bg-nm-surface border border-nm-border rounded-xl p-6 hover:border-nm-purple/40 transition-colors duration-200 cursor-default">
+          <div class="w-10 h-10 bg-nm-purple/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-nm-purple" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+            </svg>
+          </div>
+          <h3 class="font-heading font-semibold text-lg mb-2">DB-to-Brain Training</h3>
+          <p class="text-nm-muted text-sm leading-relaxed">Teach brains to understand database schemas. Tables become neurons, FKs become synapses.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Quick Start ────────────────────────────────── -->
+  <section id="quickstart" class="py-24 px-6">
+    <div class="max-w-4xl mx-auto reveal">
+      <h2 class="font-heading text-3xl md:text-4xl font-bold text-center mb-12">
+        Quick Start
+      </h2>
+
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- CLI -->
+        <div class="code-block">
+          <div class="code-header">Terminal</div>
+          <div class="code-body text-sm">
+            <p class="comment"># Store memories</p>
+            <p><span class="variable">$</span> <span class="function">nmem</span> <span class="keyword">remember</span> <span class="string">"Fixed auth bug in login.py:42"</span></p>
+            <p><span class="variable">$</span> <span class="function">nmem</span> <span class="keyword">remember</span> <span class="string">"Use PostgreSQL"</span> <span class="punct">--type</span> decision</p>
+            <br>
+            <p class="comment"># Recall through association</p>
+            <p><span class="variable">$</span> <span class="function">nmem</span> <span class="keyword">recall</span> <span class="string">"auth bug fix"</span></p>
+            <p class="comment"># &rarr; "Fixed auth bug in login.py:42"</p>
+            <br>
+            <p class="comment"># Inject context into AI</p>
+            <p><span class="variable">$</span> <span class="function">nmem</span> <span class="keyword">context</span> <span class="punct">--limit</span> 10 <span class="punct">--json</span></p>
+          </div>
+        </div>
+
+        <!-- MCP -->
+        <div class="code-block">
+          <div class="code-header">MCP Server &mdash; Claude Code / Cursor</div>
+          <div class="code-body text-sm">
+            <p class="comment">// ~/.claude/mcp_servers.json</p>
+            <p><span class="punct">{</span></p>
+            <p>&nbsp;&nbsp;<span class="string">"neural-memory"</span><span class="punct">:</span> <span class="punct">{</span></p>
+            <p>&nbsp;&nbsp;&nbsp;&nbsp;<span class="string">"command"</span><span class="punct">:</span> <span class="string">"nmem-mcp"</span></p>
+            <p>&nbsp;&nbsp;<span class="punct">}</span></p>
+            <p><span class="punct">}</span></p>
+            <br>
+            <p class="comment">// Then just ask naturally:</p>
+            <p class="comment">// "What did we decide about caching?"</p>
+            <p class="comment">// "Recall the auth bug fix"</p>
+            <p class="comment">// "What happened last Tuesday?"</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Benchmark ──────────────────────────────────── -->
+  <section id="benchmark" class="py-24 px-6 bg-nm-surface/30">
+    <div class="max-w-5xl mx-auto reveal">
+      <h2 class="font-heading text-3xl md:text-4xl font-bold text-center mb-4">
+        Benchmark
+      </h2>
+      <p class="text-nm-muted text-center text-lg mb-12 max-w-2xl mx-auto">
+        NeuralMemory vs cosine-similarity vector search on query types that matter for AI agents.
+      </p>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr class="border-b border-nm-border">
+              <th class="py-3 pr-4 text-nm-muted font-medium">Query Type</th>
+              <th class="py-3 pr-4 text-nm-muted font-medium text-center">Vector Search</th>
+              <th class="py-3 text-nm-green font-medium text-center">NeuralMemory</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="border-b border-nm-border/50">
+              <td class="py-3 pr-4">Direct fact recall</td>
+              <td class="py-3 pr-4 text-center text-nm-green">~90%</td>
+              <td class="py-3 text-center text-nm-green font-semibold">~92%</td>
+            </tr>
+            <tr class="border-b border-nm-border/50">
+              <td class="py-3 pr-4">Multi-hop reasoning <span class="text-nm-muted">(A&rarr;B&rarr;C)</span></td>
+              <td class="py-3 pr-4 text-center text-nm-orange">~30%</td>
+              <td class="py-3 text-center text-nm-green font-semibold">~85%</td>
+            </tr>
+            <tr class="border-b border-nm-border/50">
+              <td class="py-3 pr-4">Causal chain <span class="text-nm-muted">("why did X happen?")</span></td>
+              <td class="py-3 pr-4 text-center text-red-400">~15%</td>
+              <td class="py-3 text-center text-nm-green font-semibold">~80%</td>
+            </tr>
+            <tr class="border-b border-nm-border/50">
+              <td class="py-3 pr-4">Temporal query <span class="text-nm-muted">("what happened Tuesday?")</span></td>
+              <td class="py-3 pr-4 text-center text-red-400">~10%</td>
+              <td class="py-3 text-center text-nm-green font-semibold">~88%</td>
+            </tr>
+            <tr>
+              <td class="py-3 pr-4">Associative recall <span class="text-nm-muted">("related to auth")</span></td>
+              <td class="py-3 pr-4 text-center text-nm-orange">~50%</td>
+              <td class="py-3 text-center text-nm-green font-semibold">~90%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-nm-muted text-xs mt-4 text-center">
+        Synthetic benchmark: 15 memories, 8 queries. Accuracy = correct information retrieved in top-3 results.
+      </p>
+    </div>
+  </section>
+
+  <!-- ─── How It Works ───────────────────────────────── -->
+  <section class="py-24 px-6">
+    <div class="max-w-4xl mx-auto reveal">
+      <h2 class="font-heading text-3xl md:text-4xl font-bold text-center mb-12">
+        How It Works
+      </h2>
+
+      <div class="grid sm:grid-cols-3 gap-8 text-center">
+        <div>
+          <div class="w-14 h-14 bg-nm-green/10 border border-nm-green/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <span class="font-heading font-bold text-nm-green text-xl">1</span>
+          </div>
+          <h3 class="font-heading font-semibold mb-2">Encode</h3>
+          <p class="text-nm-muted text-sm leading-relaxed">
+            Text is parsed into neurons (entities, events, concepts) connected by typed synapses. Time anchors are created automatically.
+          </p>
+        </div>
+        <div>
+          <div class="w-14 h-14 bg-nm-purple/10 border border-nm-purple/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <span class="font-heading font-bold text-nm-purple text-xl">2</span>
+          </div>
+          <h3 class="font-heading font-semibold mb-2">Consolidate</h3>
+          <p class="text-nm-muted text-sm leading-relaxed">
+            Like sleep for the brain. Cross-links related memories, strengthens important paths, prunes weak connections.
+          </p>
+        </div>
+        <div>
+          <div class="w-14 h-14 bg-nm-blue/10 border border-nm-blue/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <span class="font-heading font-bold text-nm-blue text-xl">3</span>
+          </div>
+          <h3 class="font-heading font-semibold mb-2">Recall</h3>
+          <p class="text-nm-muted text-sm leading-relaxed">
+            Query activates matching neurons. Activation spreads through synapses. The strongest path = the answer. Multi-hop is free.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Integrations ───────────────────────────────── -->
+  <section class="py-24 px-6 bg-nm-surface/30">
+    <div class="max-w-4xl mx-auto reveal text-center">
+      <h2 class="font-heading text-3xl md:text-4xl font-bold mb-4">
+        Works Everywhere
+      </h2>
+      <p class="text-nm-muted text-lg mb-12">18 MCP tools. CLI. Python API. VS Code extension.</p>
+
+      <div class="flex flex-wrap justify-center gap-4">
+        <div class="bg-nm-surface border border-nm-border rounded-lg px-5 py-3 text-sm font-medium">Claude Code</div>
+        <div class="bg-nm-surface border border-nm-border rounded-lg px-5 py-3 text-sm font-medium">Cursor</div>
+        <div class="bg-nm-surface border border-nm-border rounded-lg px-5 py-3 text-sm font-medium">VS Code</div>
+        <div class="bg-nm-surface border border-nm-border rounded-lg px-5 py-3 text-sm font-medium">Python</div>
+        <div class="bg-nm-surface border border-nm-border rounded-lg px-5 py-3 text-sm font-medium">CLI</div>
+        <div class="bg-nm-surface border border-nm-border rounded-lg px-5 py-3 text-sm font-medium">MCP Server</div>
+        <div class="bg-nm-surface border border-nm-border rounded-lg px-5 py-3 text-sm font-medium">FastAPI</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── CTA ────────────────────────────────────────── -->
+  <section class="py-24 px-6">
+    <div class="max-w-3xl mx-auto text-center reveal">
+      <h2 class="font-heading text-3xl md:text-4xl font-bold mb-6">
+        Give Your Agents a Brain
+      </h2>
+      <p class="text-nm-muted text-lg mb-10 max-w-xl mx-auto">
+        Install in 10 seconds. First memory in 30 seconds. Multi-hop reasoning in 60 seconds.
+      </p>
+
+      <div class="code-block inline-flex items-center gap-3 px-6 py-4 cursor-pointer group" onclick="navigator.clipboard.writeText('pip install neural-memory')">
+        <code class="text-nm-muted">$</code>
+        <code class="text-lg text-nm-green">pip install neural-memory</code>
+        <svg class="w-4 h-4 text-nm-muted group-hover:text-nm-green transition-colors duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+        </svg>
+      </div>
+
+      <div class="flex justify-center gap-4 mt-8">
+        <a href="https://github.com/nhadaututtheky/neural-memory" target="_blank" rel="noopener" class="text-nm-muted hover:text-nm-text text-sm transition-colors duration-200 cursor-pointer">GitHub</a>
+        <span class="text-nm-border">|</span>
+        <a href="https://github.com/nhadaututtheky/neural-memory#readme" target="_blank" rel="noopener" class="text-nm-muted hover:text-nm-text text-sm transition-colors duration-200 cursor-pointer">Documentation</a>
+        <span class="text-nm-border">|</span>
+        <a href="https://pypi.org/project/neural-memory/" target="_blank" rel="noopener" class="text-nm-muted hover:text-nm-text text-sm transition-colors duration-200 cursor-pointer">PyPI</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Footer ─────────────────────────────────────── -->
+  <footer class="border-t border-nm-border py-8 px-6">
+    <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-nm-muted">
+      <p>NeuralMemory &mdash; MIT License</p>
+      <p>Built by <a href="https://github.com/nhadaututtheky" target="_blank" rel="noopener" class="text-nm-text hover:text-nm-green transition-colors duration-200 cursor-pointer">nhadaututtheky</a></p>
+    </div>
+  </footer>
+
+  <!-- ─── Scroll reveal ──────────────────────────────── -->
+  <script>
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) e.target.classList.add('visible');
+        });
+      },
+      { threshold: 0.1 }
+    );
+    document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
+  </script>
+</body>
+</html>
