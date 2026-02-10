@@ -28,7 +28,6 @@ from neural_memory.engine.db_trainer import (
     DBTrainingResult,
 )
 
-
 # ── Frozen dataclass tests ──────────────────────────────────────
 
 
@@ -421,7 +420,7 @@ class TestDomainNeuron:
                 domain_tag="ecommerce",
                 consolidate=False,
             )
-            result = await trainer.train(tc)
+            await trainer.train(tc)
 
             # Domain neuron added via storage.add_neuron
             assert storage.add_neuron.call_count >= 1
@@ -765,10 +764,10 @@ class TestHandlerHappyPath:
             synapses_created=5,
             schema_fingerprint="abc123",
         )
-        with patch("neural_memory.engine.db_trainer.DBTrainer") as MockTrainer:
+        with patch("neural_memory.engine.db_trainer.DBTrainer") as mock_trainer_cls:
             mock_instance = AsyncMock()
             mock_instance.train = AsyncMock(return_value=mock_result)
-            MockTrainer.return_value = mock_instance
+            mock_trainer_cls.return_value = mock_instance
             result = await handler._train_db_schema({"connection_string": "sqlite:///test.db"})
         assert result["tables_processed"] == 3
         assert result["relationships_mapped"] == 2
@@ -816,10 +815,10 @@ class TestHandlerErrorPaths:
     @pytest.mark.asyncio
     async def test_value_error_returns_generic_message(self) -> None:
         handler = self._make_handler()
-        with patch("neural_memory.engine.db_trainer.DBTrainer") as MockTrainer:
+        with patch("neural_memory.engine.db_trainer.DBTrainer") as mock_trainer_cls:
             mock_instance = AsyncMock()
             mock_instance.train = AsyncMock(side_effect=ValueError("secret path /etc/shadow"))
-            MockTrainer.return_value = mock_instance
+            mock_trainer_cls.return_value = mock_instance
             result = await handler._train_db_schema({"connection_string": "sqlite:///test.db"})
         assert "error" in result
         assert "invalid configuration" in result["error"]
@@ -828,10 +827,10 @@ class TestHandlerErrorPaths:
     @pytest.mark.asyncio
     async def test_generic_exception_returns_generic_message(self) -> None:
         handler = self._make_handler()
-        with patch("neural_memory.engine.db_trainer.DBTrainer") as MockTrainer:
+        with patch("neural_memory.engine.db_trainer.DBTrainer") as mock_trainer_cls:
             mock_instance = AsyncMock()
             mock_instance.train = AsyncMock(side_effect=RuntimeError("internal error details"))
-            MockTrainer.return_value = mock_instance
+            mock_trainer_cls.return_value = mock_instance
             result = await handler._train_db_schema({"connection_string": "sqlite:///test.db"})
         assert "error" in result
         assert "unexpectedly" in result["error"]

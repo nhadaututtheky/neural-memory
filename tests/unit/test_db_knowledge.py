@@ -26,7 +26,6 @@ from neural_memory.engine.db_knowledge import (
     _infer_purpose,
 )
 
-
 # ── Frozen dataclass tests ──────────────────────────────────────
 
 
@@ -855,10 +854,10 @@ class TestInferColumnPurpose:
         assert "email" in self.extractor._infer_column_purpose("email")
 
     def test_name(self) -> None:
-        assert "display name" == self.extractor._infer_column_purpose("name")
+        assert self.extractor._infer_column_purpose("name") == "display name"
 
     def test_description(self) -> None:
-        assert "text content" == self.extractor._infer_column_purpose("description")
+        assert self.extractor._infer_column_purpose("description") == "text content"
 
     def test_status(self) -> None:
         assert "lifecycle" in self.extractor._infer_column_purpose("status")

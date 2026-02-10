@@ -45,12 +45,12 @@ from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline
 from neural_memory.mcp.auto_handler import AutoHandler
 from neural_memory.mcp.conflict_handler import ConflictHandler
 from neural_memory.mcp.constants import MAX_CONTENT_LENGTH
+from neural_memory.mcp.db_train_handler import DBTrainHandler
 from neural_memory.mcp.eternal_handler import EternalHandler
 from neural_memory.mcp.index_handler import IndexHandler
 from neural_memory.mcp.prompt import get_system_prompt
 from neural_memory.mcp.session_handler import SessionHandler
 from neural_memory.mcp.tool_schemas import get_tool_schemas
-from neural_memory.mcp.db_train_handler import DBTrainHandler
 from neural_memory.mcp.train_handler import TrainHandler
 from neural_memory.unified_config import get_config, get_shared_storage
 from neural_memory.utils.timeutils import utcnow
