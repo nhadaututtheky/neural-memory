@@ -351,6 +351,58 @@ await manager.reinforce(
 )
 ```
 
+### DBTrainer
+
+Train a brain from database schema knowledge (v1.6.0+).
+
+```python
+from neural_memory.engine.db_trainer import DBTrainer, DBTrainingConfig
+
+# Configure training
+config = DBTrainingConfig(
+    connection_string="sqlite:///data/ecommerce.db",
+    domain_tag="ecommerce",
+    max_tables=100,
+    consolidate=True,
+)
+
+# Train
+trainer = DBTrainer(storage, brain.config)
+result = await trainer.train(config)
+
+print(f"Tables: {result.tables_processed}")
+print(f"Relationships: {result.relationships_mapped}")
+print(f"Patterns: {result.patterns_detected}")
+print(f"Fingerprint: {result.schema_fingerprint}")
+```
+
+**DBTrainingConfig options:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `connection_string` | str | required | Database URI (e.g., `sqlite:///path/to/db`) |
+| `domain_tag` | str | `""` | Tag applied to all schema knowledge |
+| `brain_name` | str | `""` | Target brain (empty = current) |
+| `consolidate` | bool | `True` | Run ENRICH consolidation after |
+| `salience_ceiling` | float | `0.5` | Cap initial fiber salience |
+| `initial_stage` | str | `"episodic"` | Maturation stage |
+| `include_patterns` | bool | `True` | Detect schema patterns |
+| `include_relationships` | bool | `True` | Create FK-based synapses |
+| `max_tables` | int | `100` | Maximum tables to process |
+
+**Schema introspection (advanced):**
+
+```python
+from neural_memory.engine.db_introspector import SchemaIntrospector
+
+introspector = SchemaIntrospector()
+snapshot = await introspector.introspect("sqlite:///data/app.db")
+
+for table in snapshot.tables:
+    print(f"{table.name}: {len(table.columns)} cols, {len(table.foreign_keys)} FKs")
+print(f"Fingerprint: {snapshot.schema_fingerprint}")
+```
+
 ## Typed Memories
 
 ```python

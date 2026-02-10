@@ -159,6 +159,34 @@ For bigger project context, just say:
 
 Next session, say "recap" or "what were we working on?" and everything reloads instantly.
 
+## Database Training
+
+### Q: Can NeuralMemory learn from my database?
+
+Yes. The `nmem_train_db` tool teaches your brain to understand database structure:
+
+```
+nmem_train_db(action="train", connection_string="sqlite:///myapp.db", domain_tag="myapp")
+```
+
+This extracts schema knowledge (tables, relationships, patterns) — NOT raw data rows.
+
+### Q: Which databases are supported?
+
+SQLite only in v1. The architecture supports adding PostgreSQL and MySQL dialects in the future.
+
+### Q: Will it read my actual data?
+
+No. DB-to-Brain opens the database in **read-only mode** and only reads PRAGMA metadata (table definitions, foreign keys, indexes). No `SELECT` queries are run on your data tables (except `COUNT(*)` for row count estimates).
+
+### Q: How do I check what schema knowledge is stored?
+
+```
+nmem_train_db(action="status")
+```
+
+This shows how many schema entities have been trained into the current brain.
+
 ## Data & Multi-tool Sharing
 
 ### Q: Do I need to install NeuralMemory per project?

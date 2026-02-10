@@ -137,6 +137,51 @@ Auto-capture memories from conversation text.
 - `save` - Save previously detected items
 - `process` - Analyze and save in one call
 
+### nmem_train_db
+
+Train a brain from database schema knowledge.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `action` | string | No | "train" (default) or "status" |
+| `connection_string` | string | Yes (train) | SQLite connection string (e.g., `sqlite:///path/to/db`) |
+| `domain_tag` | string | No | Tag applied to all schema knowledge (e.g., "ecommerce") |
+| `brain_name` | string | No | Target brain name (empty = current brain) |
+| `consolidate` | boolean | No | Run ENRICH consolidation after training (default: true) |
+| `max_tables` | integer | No | Maximum tables to process, 1-500 (default: 100) |
+
+**Example — Train:**
+```json
+{
+  "action": "train",
+  "connection_string": "sqlite:///data/ecommerce.db",
+  "domain_tag": "ecommerce",
+  "max_tables": 50
+}
+```
+
+**Example — Status:**
+```json
+{
+  "action": "status"
+}
+```
+
+**Response (train):**
+```json
+{
+  "tables_processed": 12,
+  "relationships_mapped": 8,
+  "patterns_detected": 5,
+  "neurons_created": 45,
+  "synapses_created": 32,
+  "schema_fingerprint": "a1b2c3d4e5f6g7h8",
+  "message": "Trained schema: 12 tables, 8 relationships, 5 patterns detected"
+}
+```
+
 ## Resources
 
 The MCP server also provides resources for system prompts:

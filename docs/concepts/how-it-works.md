@@ -195,3 +195,43 @@ Compressed: [1 summary neuron: "API design meeting with Alice"]
 | Temporal | Metadata filter | First-class neurons |
 | Multi-hop | Multiple queries | Single traversal |
 | Memory lifecycle | Static | Dynamic decay/reinforce |
+
+## Training from External Sources
+
+Beyond encoding individual memories, NeuralMemory can learn domain knowledge from structured sources.
+
+### Database Schema Training (v1.6.0+)
+
+NeuralMemory can learn to understand database structure by training from schema metadata:
+
+```
+SQLite Database
+    │
+    ▼
+┌─────────────────────┐
+│ SchemaIntrospector   │  Extract tables, columns, FKs, indexes
+└─────────────────────┘
+    │
+    ▼
+┌─────────────────────┐
+│ KnowledgeExtractor   │  Map FKs → synapse types, detect patterns
+└─────────────────────┘
+    │
+    ▼
+┌─────────────────────┐
+│ DBTrainer            │  Batch encode into brain neurons + synapses
+└─────────────────────┘
+```
+
+**What it learns:**
+
+- Table entities as CONCEPT neurons with semantic descriptions
+- FK relationships as typed synapses (IS_A, INVOLVES, AT_LOCATION, RELATED_TO)
+- Schema patterns: audit trails, soft deletes, tree hierarchies, polymorphic types, enum tables
+- Join tables become direct CO_OCCURS synapses (no separate entity node)
+
+**What it does NOT import:** Raw data rows. Only structural knowledge.
+
+This enables queries like:
+- "How are orders related to customers?" → Traces FK relationships
+- "Which tables have audit trails?" → Recalls detected patterns

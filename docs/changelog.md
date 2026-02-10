@@ -5,6 +5,49 @@ All notable changes to NeuralMemory are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-02-10
+
+### Added
+
+- **DB-to-Brain Schema Training (`nmem_train_db`)** — Teach brains to understand database structure
+  - 3-layer pipeline: `SchemaIntrospector` → `KnowledgeExtractor` → `DBTrainer`
+  - Extracts **schema knowledge** (table structures, relationships, patterns) — NOT raw data rows
+  - SQLite dialect (v1) via `aiosqlite` read-only connections
+  - Schema fingerprint (SHA256) for re-training detection
+- **Schema Introspection** — `engine/db_introspector.py`
+  - `SchemaDialect` protocol with `SQLiteDialect` implementation
+  - Frozen dataclasses: `ColumnInfo`, `ForeignKeyInfo`, `IndexInfo`, `TableInfo`, `SchemaSnapshot`
+  - PRAGMA-based metadata extraction (table_info, foreign_key_list, index_list)
+- **Knowledge Extraction** — `engine/db_knowledge.py`
+  - FK-to-SynapseType mapping with confidence scoring (IS_A, INVOLVES, AT_LOCATION, RELATED_TO)
+  - Structure-based join table detection (2+ FKs, ≤1 business column → CO_OCCURS synapse, no entity node)
+  - 5 schema pattern detectors: audit_trail, soft_delete, tree_hierarchy, polymorphic, enum_table
+  - Semantic entity descriptions with business purpose inference
+- **Training Orchestrator** — `engine/db_trainer.py`
+  - Mirrors DocTrainer architecture: batch save, per-table error isolation, shared domain neuron
+  - Configurable: `max_tables` (1-500), `salience_ceiling`, `consolidate`, `domain_tag`
+  - Optional ENRICH consolidation for cross-cluster linking
+- **MCP Tool: `nmem_train_db`** — Train brain from database schema
+  - `train` action: provide `connection_string` (SQLite only for v1), `domain_tag`, `max_tables`
+  - `status` action: view trained schema entity count
+  - Input validation: connection string length, SQLite-only scheme, max_tables bounds
+
+### Fixed
+
+- **Security: read-only SQLite connections** — Introspection uses `file:?mode=ro` URI
+- **Security: absolute path rejection** — Connection strings reject absolute paths
+- **Security: SQL identifier sanitization** — `_SAFE_IDENTIFIER` regex prevents injection
+- **Security: info leakage prevention** — Error messages sanitized, no raw exceptions exposed
+- **Security: handler input validation** — `max_tables` bounded 1-500, `consolidate` type-checked
+
+### Changed
+
+- MCP tools expanded from 17 to 18 (`nmem_train_db`)
+- Version bumped to 1.6.0
+- Tests: 1648 passed (up from 1596)
+
+---
+
 ## [1.5.0] - 2026-02-10
 
 ### Added
@@ -557,6 +600,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.6.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v1.6.0
+[1.5.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v1.5.0
 [1.0.2]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v1.0.2
 [1.0.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v1.0.0
 [0.20.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v0.20.0

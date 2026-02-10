@@ -149,6 +149,7 @@ pip install neural-memory[all]      # All features
     - `nmem_todo` - Quick TODO
     - `nmem_stats` - Brain statistics
     - `nmem_auto` - Auto-capture memories
+    - `nmem_train_db` - Train brain from database schema
 
 ## VS Code Extension
 
@@ -189,6 +190,7 @@ nmem serve
 - **Sensitive Content Detection** - Auto-detect secrets, PII
 - **Memory Decay** - Ebbinghaus forgetting curve
 - **Brain Sharing** - Export, import, merge brains
+- **DB-to-Brain Training** - Teach brains to understand database schemas (v1.6.0+)
 
 ## Next Steps
 

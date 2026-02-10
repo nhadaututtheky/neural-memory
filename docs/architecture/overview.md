@@ -14,6 +14,11 @@ NeuralMemory's layered architecture for memory management.
 │  │              │  │   Pipeline   │  │   Manager    │       │
 │  └──────────────┘  └──────────────┘  └──────────────┘       │
 │                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │  DocTrainer  │  │  DBTrainer   │  │Consolidation │       │
+│  │              │  │              │  │   Engine     │       │
+│  └──────────────┘  └──────────────┘  └──────────────┘       │
+│                                                              │
 ├─────────────────────────────────────────────────────────────┤
 │                    Extraction Layer                          │
 │  ┌───────────┐  ┌────────────┐  ┌──────────────────┐        │
@@ -51,6 +56,16 @@ Core processing components:
 - **ReflexActivation** - Trail-based activation through fiber pathways (v0.6.0+)
 - **SpreadingActivation** - Classic distance-based activation
 - **LifecycleManager** - Decay, reinforcement, compression
+
+### Training Layer
+
+Specialized pipelines for training brains from external sources:
+
+- **DocTrainer** - Train from documents (chunking, encoding, consolidation)
+- **DBTrainer** - Train from database schemas (introspection → knowledge extraction → encoding)
+- **SchemaIntrospector** - Database schema metadata extraction (SQLite dialect)
+- **KnowledgeExtractor** - Transform schema snapshots into confidence-scored teachable knowledge
+- **ConsolidationEngine** - ENRICH, DREAM, LEARN_HABITS, MATURE, INFER, PRUNE strategies
 
 ### Extraction Layer
 
@@ -262,7 +277,12 @@ src/neural_memory/
 │   ├── retrieval_context.py   # reconstitute_answer, format_context
 │   ├── activation.py          # ActivationResult, SpreadingActivation
 │   ├── reflex_activation.py   # ReflexActivation, CoActivation
-│   └── lifecycle.py           # DecayManager, ReinforcementManager
+│   ├── lifecycle.py              # DecayManager, ReinforcementManager
+│   ├── db_introspector.py        # Database schema introspection
+│   ├── db_knowledge.py           # Schema → teachable knowledge extraction
+│   ├── db_trainer.py             # DB-to-Brain training orchestrator
+│   ├── doc_chunker.py            # Document chunking
+│   └── doc_trainer.py            # Doc-to-Brain training pipeline
 ├── extraction/
 │   ├── parser.py              # QueryParser, Stimulus
 │   ├── router.py              # QueryRouter
@@ -294,6 +314,7 @@ src/neural_memory/
 │   ├── server.py              # MCP server implementation
 │   ├── tool_schemas.py        # MCP tool definitions
 │   ├── auto_capture.py        # Pattern-based memory detection
+│   ├── db_train_handler.py       # Database schema training handler
 │   └── prompt.py              # System prompts
 ├── cli/
 │   ├── main.py                # Entry point, app registration

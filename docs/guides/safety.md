@@ -226,15 +226,22 @@ nmem cleanup --expired
 - Use `--fresh-only` for context
 - Apply decay: `nmem decay`
 
-### No Contradiction Detection
+### Database Training Security
 
-**Current State:** Conflicting memories can coexist.
+**Current State:** DB-to-Brain training uses read-only connections and validates paths.
 
-**Workaround:**
+**Built-in protections:**
 
-- Use tags to mark superseded information
-- Include timestamps in memories
-- Manually resolve conflicts
+- SQLite databases opened in read-only mode (`?mode=ro`)
+- Absolute paths rejected in connection strings
+- Path traversal (`../`) rejected
+- SQL identifiers sanitized (regex validation)
+- Error messages sanitized (no raw exceptions exposed)
+- Only PRAGMA metadata queried (no data rows accessed)
+
+### ~~No Contradiction Detection~~
+
+**Resolved in v1.5.0:** The `nmem_conflicts` tool detects factual contradictions and decision reversals at encode time, with manual resolution via `keep_existing`, `keep_new`, `keep_both` strategies.
 
 ## Incident Response
 
