@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import sys
 import tempfile
 from pathlib import Path
 
@@ -16,7 +18,6 @@ from neural_memory.engine.db_introspector import (
     SQLiteDialect,
     TableInfo,
 )
-
 
 # ── Frozen dataclass tests ──────────────────────────────────────
 
@@ -206,15 +207,8 @@ class TestSQLiteDialect:
         import aiosqlite
 
         async with aiosqlite.connect(":memory:") as conn:
-            await conn.execute(
-                "CREATE TABLE users ("
-                "  id INTEGER PRIMARY KEY,"
-                "  email TEXT"
-                ")"
-            )
-            await conn.execute(
-                "CREATE UNIQUE INDEX idx_email ON users(email)"
-            )
+            await conn.execute("CREATE TABLE users (  id INTEGER PRIMARY KEY,  email TEXT)")
+            await conn.execute("CREATE UNIQUE INDEX idx_email ON users(email)")
 
             dialect = SQLiteDialect()
             indexes = await dialect.get_indexes(conn, "users")
@@ -231,9 +225,7 @@ class TestSQLiteDialect:
         import aiosqlite
 
         async with aiosqlite.connect(":memory:") as conn:
-            await conn.execute(
-                "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)"
-            )
+            await conn.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
             await conn.execute("INSERT INTO users VALUES (1, 'Alice')")
             await conn.execute("INSERT INTO users VALUES (2, 'Bob')")
             await conn.commit()
@@ -248,9 +240,7 @@ class TestSQLiteDialect:
         import aiosqlite
 
         async with aiosqlite.connect(":memory:") as conn:
-            await conn.execute(
-                "CREATE TABLE empty_table (id INTEGER PRIMARY KEY)"
-            )
+            await conn.execute("CREATE TABLE empty_table (id INTEGER PRIMARY KEY)")
 
             dialect = SQLiteDialect()
             count = await dialect.get_row_count_estimate(conn, "empty_table")
@@ -274,29 +264,30 @@ class TestFullIntrospection:
         """Full introspection produces correct SchemaSnapshot."""
         import aiosqlite
 
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-            db_path = f.name
-
-        async with aiosqlite.connect(db_path) as conn:
-            await conn.execute(
-                "CREATE TABLE categories ("
-                "  id INTEGER PRIMARY KEY,"
-                "  name TEXT NOT NULL"
-                ")"
-            )
-            await conn.execute(
-                "CREATE TABLE products ("
-                "  id INTEGER PRIMARY KEY,"
-                "  name TEXT NOT NULL,"
-                "  category_id INTEGER,"
-                "  FOREIGN KEY (category_id) REFERENCES categories(id)"
-                ")"
-            )
-            await conn.commit()
+        tmpdir = tempfile.mkdtemp()
+        original_cwd = os.getcwd()
+        db_name = "test_introspect.db"
 
         try:
+            # Use relative path — absolute paths are rejected by security check
+            os.chdir(tmpdir)
+
+            async with aiosqlite.connect(db_name) as conn:
+                await conn.execute(
+                    "CREATE TABLE categories (  id INTEGER PRIMARY KEY,  name TEXT NOT NULL)"
+                )
+                await conn.execute(
+                    "CREATE TABLE products ("
+                    "  id INTEGER PRIMARY KEY,"
+                    "  name TEXT NOT NULL,"
+                    "  category_id INTEGER,"
+                    "  FOREIGN KEY (category_id) REFERENCES categories(id)"
+                    ")"
+                )
+                await conn.commit()
+
             introspector = SchemaIntrospector()
-            snapshot = await introspector.introspect(f"sqlite:///{db_path}")
+            snapshot = await introspector.introspect(f"sqlite:///{db_name}")
 
             assert snapshot.dialect == "sqlite"
             assert len(snapshot.tables) == 2
@@ -306,23 +297,21 @@ class TestFullIntrospection:
             assert "categories" in table_names
             assert "products" in table_names
 
-            products = next(
-                t for t in snapshot.tables if t.name == "products"
-            )
+            products = next(t for t in snapshot.tables if t.name == "products")
             assert len(products.columns) == 3
             assert len(products.foreign_keys) == 1
             assert products.foreign_keys[0].referenced_table == "categories"
         finally:
-            Path(db_path).unlink(missing_ok=True)
+            os.chdir(original_cwd)
+            Path(tmpdir, db_name).unlink(missing_ok=True)
+            Path(tmpdir).rmdir()
 
     @pytest.mark.asyncio
     async def test_nonexistent_db_raises(self) -> None:
         """Missing database directory raises ValueError."""
         introspector = SchemaIntrospector()
         with pytest.raises(ValueError, match="Failed to connect"):
-            await introspector.introspect(
-                "sqlite:///nonexistent_dir_12345/test.db"
-            )
+            await introspector.introspect("sqlite:///nonexistent_dir_12345/test.db")
 
 
 # ── Schema fingerprint ──────────────────────────────────────────
@@ -452,3 +441,99 @@ class TestSchemaFingerprint:
         fp1 = introspector._compute_fingerprint(tables_ab)
         fp2 = introspector._compute_fingerprint(tables_ba)
         assert fp1 == fp2
+
+
+# ── Absolute path rejection (security) ────────────────────────
+
+
+class TestAbsolutePathRejected:
+    """Security: absolute paths are rejected to prevent arbitrary file access."""
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix absolute path not detected on Windows")
+    def test_absolute_unix_path_rejected(self) -> None:
+        introspector = SchemaIntrospector()
+        with pytest.raises(ValueError, match="Absolute paths"):
+            introspector._extract_path("sqlite:////etc/data.db", "sqlite")
+
+    def test_absolute_windows_path_rejected(self) -> None:
+        introspector = SchemaIntrospector()
+        with pytest.raises(ValueError, match="Absolute paths"):
+            introspector._extract_path("sqlite:///C:\\data\\test.db", "sqlite")
+
+
+# ── SQL identifier validation (security) ──────────────────────
+
+
+class TestIdentifierValidation:
+    """Security: SQL identifiers are sanitized to prevent injection."""
+
+    def test_safe_identifier_passes(self) -> None:
+        dialect = SQLiteDialect()
+        assert dialect._validate_identifier("users") == "users"
+
+    def test_safe_identifier_with_space(self) -> None:
+        dialect = SQLiteDialect()
+        assert dialect._validate_identifier("user roles") == "user roles"
+
+    def test_unsafe_identifier_single_quote(self) -> None:
+        dialect = SQLiteDialect()
+        with pytest.raises(ValueError, match="Unsafe SQL identifier"):
+            dialect._validate_identifier("it's_a_test")
+
+    def test_unsafe_identifier_semicolon(self) -> None:
+        dialect = SQLiteDialect()
+        with pytest.raises(ValueError, match="Unsafe SQL identifier"):
+            dialect._validate_identifier("users; DROP TABLE")
+
+    def test_unsafe_identifier_double_quote(self) -> None:
+        dialect = SQLiteDialect()
+        with pytest.raises(ValueError, match="Unsafe SQL identifier"):
+            dialect._validate_identifier('table"name')
+
+
+# ── Info leakage prevention ───────────────────────────────────
+
+
+class TestInfoLeakage:
+    """Error messages must not expose secrets from connection strings."""
+
+    def test_dialect_error_no_connection_string(self) -> None:
+        """Error from _detect_dialect should not contain the connection string."""
+        introspector = SchemaIntrospector()
+        with pytest.raises(ValueError) as exc_info:
+            introspector._detect_dialect("postgresql://secret:pass@host/db")
+        assert "secret" not in str(exc_info.value)
+        assert "pass" not in str(exc_info.value)
+
+
+# ── BLOB fallback for empty column type ───────────────────────
+
+
+class TestBlobFallback:
+    """Columns with no type affinity default to BLOB."""
+
+    @pytest.mark.asyncio
+    async def test_column_with_no_type_defaults_to_blob(self) -> None:
+        import aiosqlite
+
+        async with aiosqlite.connect(":memory:") as conn:
+            # SQLite allows columns with no type affinity
+            await conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, data)")
+            dialect = SQLiteDialect()
+            columns = await dialect.get_columns(conn, "t")
+            data_col = next(c for c in columns if c.name == "data")
+            assert data_col.data_type == "BLOB"
+
+
+# ── Empty schema fingerprint stability ────────────────────────
+
+
+class TestEmptySchemaFingerprint:
+    """Empty database produces a stable, fixed-length fingerprint."""
+
+    def test_empty_schema_fingerprint(self) -> None:
+        introspector = SchemaIntrospector()
+        fp1 = introspector._compute_fingerprint([])
+        fp2 = introspector._compute_fingerprint([])
+        assert fp1 == fp2
+        assert len(fp1) == 16  # SHA256 truncated to 16 chars

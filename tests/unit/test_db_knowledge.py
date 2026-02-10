@@ -805,3 +805,199 @@ class TestSchemaPatternType:
         assert SchemaPatternType.TREE_HIERARCHY == "tree_hierarchy"
         assert SchemaPatternType.POLYMORPHIC == "polymorphic"
         assert SchemaPatternType.ENUM_TABLE == "enum_table"
+
+
+# ── TestInferColumnPurpose ───────────────────────────────────────
+
+
+class TestInferColumnPurpose:
+    """Tests for _infer_column_purpose — all branches."""
+
+    def setup_method(self) -> None:
+        self.extractor = KnowledgeExtractor()
+
+    def test_id_column(self) -> None:
+        assert self.extractor._infer_column_purpose("id") == "primary identifier"
+
+    def test_foreign_key_column(self) -> None:
+        result = self.extractor._infer_column_purpose("user_id")
+        assert "references" in result
+        assert "user" in result
+
+    def test_created_at(self) -> None:
+        assert "creation" in self.extractor._infer_column_purpose("created_at")
+
+    def test_created_on(self) -> None:
+        assert "creation" in self.extractor._infer_column_purpose("created_on")
+
+    def test_updated_at(self) -> None:
+        assert "modification" in self.extractor._infer_column_purpose("updated_at")
+
+    def test_updated_on(self) -> None:
+        assert "modification" in self.extractor._infer_column_purpose("updated_on")
+
+    def test_modified_at(self) -> None:
+        assert "modification" in self.extractor._infer_column_purpose("modified_at")
+
+    def test_deleted_at(self) -> None:
+        assert "soft-delete" in self.extractor._infer_column_purpose("deleted_at")
+
+    def test_removed_at(self) -> None:
+        assert "soft-delete" in self.extractor._infer_column_purpose("removed_at")
+
+    def test_is_deleted(self) -> None:
+        assert "boolean" in self.extractor._infer_column_purpose("is_deleted")
+
+    def test_is_active(self) -> None:
+        assert "boolean" in self.extractor._infer_column_purpose("is_active")
+
+    def test_email(self) -> None:
+        assert "email" in self.extractor._infer_column_purpose("email")
+
+    def test_name(self) -> None:
+        assert "display name" == self.extractor._infer_column_purpose("name")
+
+    def test_description(self) -> None:
+        assert "text content" == self.extractor._infer_column_purpose("description")
+
+    def test_status(self) -> None:
+        assert "lifecycle" in self.extractor._infer_column_purpose("status")
+
+    def test_version(self) -> None:
+        assert "version" in self.extractor._infer_column_purpose("version")
+
+    def test_price(self) -> None:
+        assert "monetary" in self.extractor._infer_column_purpose("price")
+
+    def test_quantity(self) -> None:
+        assert "count" in self.extractor._infer_column_purpose("quantity")
+
+    def test_unknown_column(self) -> None:
+        assert self.extractor._infer_column_purpose("foobar") == ""
+
+
+# ── TestCreateProperty ───────────────────────────────────────────
+
+
+class TestCreateProperty:
+    """Tests for _create_property constraint tuple."""
+
+    def setup_method(self) -> None:
+        self.extractor = KnowledgeExtractor()
+
+    def test_primary_key_constraint(self) -> None:
+        col = ColumnInfo("id", "INTEGER", False, True)
+        prop = self.extractor._create_property("users", col)
+        assert "PRIMARY KEY" in prop.constraints
+
+    def test_not_null_constraint(self) -> None:
+        col = ColumnInfo("email", "TEXT", False, False)
+        prop = self.extractor._create_property("users", col)
+        assert "NOT NULL" in prop.constraints
+
+    def test_default_value_constraint(self) -> None:
+        col = ColumnInfo("status", "TEXT", True, False, default_value="active")
+        prop = self.extractor._create_property("users", col)
+        assert any("DEFAULT" in c for c in prop.constraints)
+
+    def test_nullable_no_not_null(self) -> None:
+        col = ColumnInfo("bio", "TEXT", True, False)
+        prop = self.extractor._create_property("users", col)
+        assert "NOT NULL" not in prop.constraints
+
+    def test_data_type_preserved(self) -> None:
+        col = ColumnInfo("age", "INTEGER", True, False)
+        prop = self.extractor._create_property("users", col)
+        assert prop.data_type == "INTEGER"
+
+
+# ── TestThreeWayJoinTable ────────────────────────────────────────
+
+
+class TestThreeWayJoinTable:
+    """3-way join table creates combinatorial CO_OCCURS pairs."""
+
+    def test_three_fk_join_produces_three_co_occurs(self) -> None:
+        table = TableInfo(
+            name="tag_user_roles",
+            schema=None,
+            columns=(
+                ColumnInfo("id", "INTEGER", False, True),
+                ColumnInfo("tag_id", "INTEGER", False, False),
+                ColumnInfo("user_id", "INTEGER", False, False),
+                ColumnInfo("role_id", "INTEGER", False, False),
+            ),
+            foreign_keys=(
+                ForeignKeyInfo("tag_id", "tags", "id", None, None),
+                ForeignKeyInfo("user_id", "users", "id", None, None),
+                ForeignKeyInfo("role_id", "roles", "id", None, None),
+            ),
+            indexes=(),
+            row_count_estimate=0,
+        )
+        snapshot = SchemaSnapshot(
+            database_name="test.db",
+            dialect="sqlite",
+            tables=(
+                table,
+                TableInfo("tags", None, (ColumnInfo("id", "INTEGER", False, True),), (), (), 0),
+                TableInfo("users", None, (ColumnInfo("id", "INTEGER", False, True),), (), (), 0),
+                TableInfo("roles", None, (ColumnInfo("id", "INTEGER", False, True),), (), (), 0),
+            ),
+        )
+        extractor = KnowledgeExtractor()
+        result = extractor.extract(snapshot)
+        co_occurs = [r for r in result.relationships if r.synapse_type == SynapseType.CO_OCCURS]
+        # 3 FKs -> 3 pairs: (tags,users), (tags,roles), (users,roles)
+        assert len(co_occurs) == 3
+
+
+# ── TestColumnTruncation ─────────────────────────────────────────
+
+
+class TestColumnTruncation:
+    """Entity description truncates column summary at 8 columns."""
+
+    def test_more_than_8_columns_truncated(self) -> None:
+        cols = tuple(
+            ColumnInfo(f"col_{i}", "TEXT", True, i == 0) for i in range(12)
+        )
+        table = TableInfo("wide_table", None, cols, (), (), 0)
+        snapshot = SchemaSnapshot("test.db", "sqlite", (table,))
+        extractor = KnowledgeExtractor()
+        result = extractor.extract(snapshot)
+        entity = result.entities[0]
+        assert "+4 more" in entity.column_summary
+
+
+# ── TestAuditTrailAlternateColumns ───────────────────────────────
+
+
+class TestAuditTrailAlternateColumns:
+    """Audit trail detection with _on column variants."""
+
+    def test_created_on_updated_on(self) -> None:
+        detector = PatternDetector()
+        cols = {"id", "name", "created_on", "updated_on"}
+        result = detector._detect_audit_trail(cols)
+        assert result is not None
+        assert result[0] == SchemaPatternType.AUDIT_TRAIL
+
+
+# ── TestSingularizationEdgeCases ─────────────────────────────────
+
+
+class TestSingularizationEdgeCases:
+    """Edge cases in _infer_purpose singularization logic."""
+
+    def test_ses_suffix(self) -> None:
+        result = _infer_purpose("addresses")
+        assert "address" in result
+
+    def test_ss_suffix_not_trimmed(self) -> None:
+        result = _infer_purpose("access")
+        assert "access" in result
+
+    def test_histories_suffix(self) -> None:
+        result = _infer_purpose("order_histories")
+        assert "historical" in result

@@ -26,7 +26,7 @@ class DBTrainHandler:
 
         if action == "train":
             return await self._train_db_schema(args)
-        elif action == "status":
+        if action == "status":
             return await self._train_db_status()
         return {"error": f"Unknown train_db action: {action}"}
 
@@ -44,14 +44,10 @@ class DBTrainHandler:
         if not connection_string:
             return {"error": "connection_string is required"}
         if len(connection_string) > _MAX_CONNECTION_STRING_LEN:
-            return {
-                "error": f"connection_string too long (max {_MAX_CONNECTION_STRING_LEN} chars)"
-            }
+            return {"error": f"connection_string too long (max {_MAX_CONNECTION_STRING_LEN} chars)"}
         # v1: SQLite only
         if not connection_string.lower().startswith("sqlite:///"):
-            return {
-                "error": "Only SQLite is supported in v1. Use: sqlite:///path/to/db"
-            }
+            return {"error": "Only SQLite is supported in v1. Use: sqlite:///path/to/db"}
 
         # Validate domain_tag
         domain_tag = args.get("domain_tag", "")
@@ -65,15 +61,20 @@ class DBTrainHandler:
 
         # Validate max_tables
         max_tables = args.get("max_tables", 100)
-        if not isinstance(max_tables, int) or max_tables < 1:
-            return {"error": "max_tables must be a positive integer"}
+        if not isinstance(max_tables, int) or max_tables < 1 or max_tables > 500:
+            return {"error": "max_tables must be an integer between 1 and 500"}
+
+        # Validate consolidate
+        consolidate = args.get("consolidate", True)
+        if not isinstance(consolidate, bool):
+            return {"error": "consolidate must be a boolean"}
 
         # Build training config
         tc = DBTrainingConfig(
             connection_string=connection_string,
             domain_tag=domain_tag,
             brain_name=brain_name,
-            consolidate=args.get("consolidate", True),
+            consolidate=consolidate,
             max_tables=max_tables,
         )
 
@@ -82,7 +83,7 @@ class DBTrainHandler:
             result = await trainer.train(tc)
         except ValueError as exc:
             logger.error("DB training validation error: %s", exc)
-            return {"error": str(exc)}
+            return {"error": "Training failed: invalid configuration"}
         except Exception:
             logger.error("DB training failed", exc_info=True)
             return {"error": "Database training failed unexpectedly"}
@@ -116,9 +117,7 @@ class DBTrainHandler:
             type=NeuronType.CONCEPT,
             limit=1000,
         )
-        trained_count = sum(
-            1 for n in schema_neurons if n.metadata.get("db_schema")
-        )
+        trained_count = sum(1 for n in schema_neurons if n.metadata.get("db_schema"))
 
         return {
             "trained_tables": trained_count,

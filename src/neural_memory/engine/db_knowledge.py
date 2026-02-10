@@ -20,6 +20,7 @@ from typing import Any
 
 from neural_memory.core.synapse import SynapseType
 from neural_memory.engine.db_introspector import (
+    ColumnInfo,
     ForeignKeyInfo,
     SchemaSnapshot,
     TableInfo,
@@ -100,6 +101,8 @@ class KnowledgePattern:
 
     pattern_type: SchemaPatternType
     table_name: str
+    # NOTE: dict inside frozen dataclass — matches Neuron precedent.
+    # Contents should not be mutated after creation.
     evidence: dict[str, Any] = field(default_factory=dict)
     description: str = ""
     confidence: float = 0.7
@@ -187,6 +190,9 @@ class FKMapper:
 # ── Join table detector ─────────────────────────────────────────
 
 # Columns that don't count as "business" columns in join table detection
+_MAX_SUMMARY_COLUMNS = 8
+_MAX_ENUM_TABLE_COLUMNS = 4
+
 _AUDIT_COLUMNS = frozenset(
     {"id", "created_at", "updated_at", "created_on", "modified_at"}
 )
@@ -351,7 +357,7 @@ class PatternDetector:
         col_names: set[str],
     ) -> tuple[SchemaPatternType, float, dict[str, Any]] | None:
         """Detect enum/lookup table (small, has name/label/code column)."""
-        if len(table.columns) > 4:
+        if len(table.columns) > _MAX_ENUM_TABLE_COLUMNS:
             return None
 
         name_cols = col_names & {"name", "label", "code", "value", "title"}
@@ -436,8 +442,8 @@ class KnowledgeExtractor:
 
             # Join tables → CO_OCCURS relationships, not entity nodes
             if is_join:
-                self._extract_join_relationships(
-                    table, relationships
+                relationships.extend(
+                    self._extract_join_relationships(table)
                 )
                 continue
 
@@ -484,14 +490,14 @@ class KnowledgeExtractor:
     def _extract_join_relationships(
         self,
         table: TableInfo,
-        relationships: list[KnowledgeRelationship],
-    ) -> None:
+    ) -> list[KnowledgeRelationship]:
         """Convert join table FKs into direct CO_OCCURS relationships.
 
         For a join table with FKs to table A and B, creates a
         CO_OCCURS relationship between A and B (skipping the join
         table itself as an entity).
         """
+        result: list[KnowledgeRelationship] = []
         fk_targets = [
             (fk.referenced_table, fk.referenced_column)
             for fk in table.foreign_keys
@@ -500,7 +506,7 @@ class KnowledgeExtractor:
         # Create CO_OCCURS between all pairs of referenced tables
         for i in range(len(fk_targets)):
             for j in range(i + 1, len(fk_targets)):
-                relationships.append(
+                result.append(
                     KnowledgeRelationship(
                         source_table=fk_targets[i][0],
                         source_column=fk_targets[i][1],
@@ -510,6 +516,7 @@ class KnowledgeExtractor:
                         confidence=0.85,
                     )
                 )
+        return result
 
     def _create_entity(
         self, table: TableInfo, snapshot: SchemaSnapshot
@@ -517,9 +524,9 @@ class KnowledgeExtractor:
         """Create semantic entity description for a table."""
         purpose = _infer_purpose(table.name)
 
-        # Build column summary (first 8 columns)
+        # Build column summary (first N columns)
         col_parts: list[str] = []
-        for col in table.columns[:8]:
+        for col in table.columns[:_MAX_SUMMARY_COLUMNS]:
             constraints: list[str] = []
             if col.primary_key:
                 constraints.append("PK")
@@ -529,8 +536,8 @@ class KnowledgeExtractor:
             col_parts.append(f"{col.name} ({col.data_type}{suffix})")
 
         column_summary = ", ".join(col_parts)
-        if len(table.columns) > 8:
-            column_summary += f", ... (+{len(table.columns) - 8} more)"
+        if len(table.columns) > _MAX_SUMMARY_COLUMNS:
+            column_summary += f", ... (+{len(table.columns) - _MAX_SUMMARY_COLUMNS} more)"
 
         # Build FK context for richer descriptions
         fk_context = ""
@@ -562,7 +569,7 @@ class KnowledgeExtractor:
         )
 
     def _create_property(
-        self, table_name: str, col: Any
+        self, table_name: str, col: ColumnInfo
     ) -> KnowledgeProperty:
         """Create column-level property knowledge."""
         constraints: list[str] = []

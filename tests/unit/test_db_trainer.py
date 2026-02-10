@@ -225,34 +225,24 @@ class TestDBTrainerBatchPattern:
 
     @pytest.mark.asyncio
     async def test_auto_save_restored_on_error(self) -> None:
-        """enable_auto_save is called even when encoding fails."""
+        """enable_auto_save is called even when batch_save raises."""
         storage = _build_mock_storage()
-        config = _build_mock_config()
+        storage.batch_save = AsyncMock(side_effect=RuntimeError("disk full"))
 
-        with (
-            patch.object(
-                DBTrainer, "__init__", lambda self, *a, **kw: None
-            ),
-        ):
+        with patch.object(DBTrainer, "__init__", lambda self, *a, **kw: None):
             trainer = DBTrainer.__new__(DBTrainer)
             trainer._storage = storage
-            trainer._config = config
+            trainer._config = _build_mock_config()
             trainer._encoder = MagicMock()
             trainer._introspector = MagicMock()
             trainer._extractor = MagicMock()
-
             trainer._introspector.introspect = AsyncMock(return_value=_make_snapshot())
-            # Return knowledge with no entities to avoid encoder being called
             empty_knowledge = SchemaKnowledge((), (), (), ())
             trainer._extractor.extract = MagicMock(return_value=empty_knowledge)
 
-            tc = DBTrainingConfig(
-                connection_string="sqlite:///test.db",
-                consolidate=False,
-            )
-            await trainer.train(tc)
-
-            # Even with empty knowledge, batch pattern should complete
+            tc = DBTrainingConfig(connection_string="sqlite:///test.db", consolidate=False)
+            with pytest.raises(RuntimeError, match="disk full"):
+                await trainer.train(tc)
             storage.enable_auto_save.assert_called_once()
 
 
@@ -693,3 +683,261 @@ class TestDBTrainHandler:
         )
         assert "error" in result
         assert "No brain" in result["error"]
+
+
+# ── Enrichment path tests ─────────────────────────────────────
+
+
+class TestEnrichmentPath:
+    """Tests for consolidation / enrichment path."""
+
+    @pytest.mark.asyncio
+    async def test_enrichment_called_when_consolidate_true(self) -> None:
+        storage = _build_mock_storage()
+        with patch.object(DBTrainer, "__init__", lambda self, *a, **kw: None):
+            trainer = DBTrainer.__new__(DBTrainer)
+            trainer._storage = storage
+            trainer._config = _build_mock_config()
+            trainer._encoder = MagicMock()
+            trainer._introspector = MagicMock()
+            trainer._extractor = MagicMock()
+            trainer._introspector.introspect = AsyncMock(return_value=_make_snapshot())
+            trainer._extractor.extract = MagicMock(return_value=_make_knowledge())
+            trainer._encoder.encode = AsyncMock(return_value=_mock_encode_result())
+            trainer._run_enrichment = AsyncMock(return_value=5)
+
+            tc = DBTrainingConfig(connection_string="sqlite:///test.db", consolidate=True)
+            result = await trainer.train(tc)
+            trainer._run_enrichment.assert_called_once()
+            assert result.enrichment_synapses == 5
+
+    @pytest.mark.asyncio
+    async def test_enrichment_failure_returns_partial_result(self) -> None:
+        storage = _build_mock_storage()
+        with patch.object(DBTrainer, "__init__", lambda self, *a, **kw: None):
+            trainer = DBTrainer.__new__(DBTrainer)
+            trainer._storage = storage
+            trainer._config = _build_mock_config()
+            trainer._encoder = MagicMock()
+            trainer._introspector = MagicMock()
+            trainer._extractor = MagicMock()
+            trainer._introspector.introspect = AsyncMock(return_value=_make_snapshot())
+            trainer._extractor.extract = MagicMock(return_value=_make_knowledge())
+            trainer._encoder.encode = AsyncMock(return_value=_mock_encode_result())
+            trainer._run_enrichment = AsyncMock(side_effect=RuntimeError("enrich failed"))
+
+            tc = DBTrainingConfig(connection_string="sqlite:///test.db", consolidate=True)
+            result = await trainer.train(tc)
+            # Should succeed with partial result (enrichment_synapses=0)
+            assert result.tables_processed == 2
+            assert result.enrichment_synapses == 0
+
+
+# ── Handler happy-path tests ──────────────────────────────────
+
+
+class TestHandlerHappyPath:
+    """Tests for successful training and status operations."""
+
+    def _make_handler(self):
+        from neural_memory.mcp.db_train_handler import DBTrainHandler
+
+        handler = MagicMock(spec=DBTrainHandler)
+        handler._train_db = DBTrainHandler._train_db.__get__(handler)
+        handler._train_db_schema = DBTrainHandler._train_db_schema.__get__(handler)
+        handler._train_db_status = DBTrainHandler._train_db_status.__get__(handler)
+        mock_brain = MagicMock()
+        mock_brain.config = MagicMock()
+        mock_storage = AsyncMock()
+        mock_storage._current_brain_id = "brain-1"
+        mock_storage.get_brain = AsyncMock(return_value=mock_brain)
+        handler.get_storage = AsyncMock(return_value=mock_storage)
+        return handler, mock_storage
+
+    @pytest.mark.asyncio
+    async def test_successful_train_returns_result(self) -> None:
+        handler, _ = self._make_handler()
+        mock_result = DBTrainingResult(
+            tables_processed=3,
+            relationships_mapped=2,
+            patterns_detected=1,
+            neurons_created=10,
+            synapses_created=5,
+            schema_fingerprint="abc123",
+        )
+        with patch("neural_memory.engine.db_trainer.DBTrainer") as MockTrainer:
+            mock_instance = AsyncMock()
+            mock_instance.train = AsyncMock(return_value=mock_result)
+            MockTrainer.return_value = mock_instance
+            result = await handler._train_db_schema({"connection_string": "sqlite:///test.db"})
+        assert result["tables_processed"] == 3
+        assert result["relationships_mapped"] == 2
+        assert "message" in result
+
+    @pytest.mark.asyncio
+    async def test_status_returns_count(self) -> None:
+        handler, mock_storage = self._make_handler()
+        mock_neuron = MagicMock()
+        mock_neuron.metadata = {"db_schema": True}
+        mock_storage.find_neurons = AsyncMock(return_value=[mock_neuron, mock_neuron])
+        result = await handler._train_db_status()
+        assert result["trained_tables"] == 2
+        assert result["has_training_data"] is True
+
+    @pytest.mark.asyncio
+    async def test_status_empty_brain(self) -> None:
+        handler, mock_storage = self._make_handler()
+        mock_storage.find_neurons = AsyncMock(return_value=[])
+        result = await handler._train_db_status()
+        assert result["trained_tables"] == 0
+        assert result["has_training_data"] is False
+
+
+# ── Handler error-path tests ──────────────────────────────────
+
+
+class TestHandlerErrorPaths:
+    """Tests for ValueError and generic Exception handling."""
+
+    def _make_handler(self):
+        from neural_memory.mcp.db_train_handler import DBTrainHandler
+
+        handler = MagicMock(spec=DBTrainHandler)
+        handler._train_db = DBTrainHandler._train_db.__get__(handler)
+        handler._train_db_schema = DBTrainHandler._train_db_schema.__get__(handler)
+        mock_brain = MagicMock()
+        mock_brain.config = MagicMock()
+        mock_storage = AsyncMock()
+        mock_storage._current_brain_id = "brain-1"
+        mock_storage.get_brain = AsyncMock(return_value=mock_brain)
+        handler.get_storage = AsyncMock(return_value=mock_storage)
+        return handler
+
+    @pytest.mark.asyncio
+    async def test_value_error_returns_generic_message(self) -> None:
+        handler = self._make_handler()
+        with patch("neural_memory.engine.db_trainer.DBTrainer") as MockTrainer:
+            mock_instance = AsyncMock()
+            mock_instance.train = AsyncMock(side_effect=ValueError("secret path /etc/shadow"))
+            MockTrainer.return_value = mock_instance
+            result = await handler._train_db_schema({"connection_string": "sqlite:///test.db"})
+        assert "error" in result
+        assert "invalid configuration" in result["error"]
+        assert "secret" not in result["error"]  # no info leakage
+
+    @pytest.mark.asyncio
+    async def test_generic_exception_returns_generic_message(self) -> None:
+        handler = self._make_handler()
+        with patch("neural_memory.engine.db_trainer.DBTrainer") as MockTrainer:
+            mock_instance = AsyncMock()
+            mock_instance.train = AsyncMock(side_effect=RuntimeError("internal error details"))
+            MockTrainer.return_value = mock_instance
+            result = await handler._train_db_schema({"connection_string": "sqlite:///test.db"})
+        assert "error" in result
+        assert "unexpectedly" in result["error"]
+        assert "internal" not in result["error"]
+
+
+# ── Dispatch routing tests ────────────────────────────────────
+
+
+class TestDispatchRouting:
+    """Tests for _train_db dispatcher routing."""
+
+    def _make_handler(self):
+        from neural_memory.mcp.db_train_handler import DBTrainHandler
+
+        handler = MagicMock(spec=DBTrainHandler)
+        handler._train_db = DBTrainHandler._train_db.__get__(handler)
+        handler._train_db_schema = AsyncMock(return_value={"ok": True})
+        handler._train_db_status = AsyncMock(return_value={"status": "ok"})
+        return handler
+
+    @pytest.mark.asyncio
+    async def test_default_action_is_train(self) -> None:
+        handler = self._make_handler()
+        await handler._train_db({})
+        handler._train_db_schema.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_train_action_dispatches(self) -> None:
+        handler = self._make_handler()
+        await handler._train_db({"action": "train"})
+        handler._train_db_schema.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_status_action_dispatches(self) -> None:
+        handler = self._make_handler()
+        await handler._train_db({"action": "status"})
+        handler._train_db_status.assert_called_once()
+
+
+# ── Handler new validations tests ─────────────────────────────
+
+
+class TestHandlerNewValidations:
+    """Tests for consolidate and max_tables upper bound validations."""
+
+    def _make_handler(self):
+        from neural_memory.mcp.db_train_handler import DBTrainHandler
+
+        handler = MagicMock(spec=DBTrainHandler)
+        handler._train_db_schema = DBTrainHandler._train_db_schema.__get__(handler)
+        mock_brain = MagicMock()
+        mock_brain.config = MagicMock()
+        mock_storage = AsyncMock()
+        mock_storage._current_brain_id = "brain-1"
+        mock_storage.get_brain = AsyncMock(return_value=mock_brain)
+        handler.get_storage = AsyncMock(return_value=mock_storage)
+        return handler
+
+    @pytest.mark.asyncio
+    async def test_max_tables_over_500_rejected(self) -> None:
+        handler = self._make_handler()
+        result = await handler._train_db_schema(
+            {"connection_string": "sqlite:///test.db", "max_tables": 501}
+        )
+        assert "error" in result
+
+    @pytest.mark.asyncio
+    async def test_consolidate_non_boolean_rejected(self) -> None:
+        handler = self._make_handler()
+        result = await handler._train_db_schema(
+            {"connection_string": "sqlite:///test.db", "consolidate": "yes"}
+        )
+        assert "error" in result
+        assert "boolean" in result["error"]
+
+
+# ── Pattern skip for unencoded tables ─────────────────────────
+
+
+class TestPatternSkipForUnencoded:
+    """Patterns are skipped when their table was not encoded."""
+
+    @pytest.mark.asyncio
+    async def test_pattern_skipped_if_table_not_encoded(self) -> None:
+        storage = _build_mock_storage()
+        with patch.object(DBTrainer, "__init__", lambda self, *a, **kw: None):
+            trainer = DBTrainer.__new__(DBTrainer)
+            trainer._storage = storage
+            trainer._config = _build_mock_config()
+            trainer._encoder = MagicMock()
+            trainer._introspector = MagicMock()
+            trainer._extractor = MagicMock()
+            trainer._introspector.introspect = AsyncMock(return_value=_make_snapshot())
+            # Knowledge has pattern for table "unknown" which is not in entities
+            knowledge = SchemaKnowledge(
+                entities=(),
+                relationships=(),
+                patterns=(
+                    KnowledgePattern(
+                        SchemaPatternType.AUDIT_TRAIL, "unknown", {}, "desc", 0.7
+                    ),
+                ),
+                properties=(),
+            )
+            trainer._extractor.extract = MagicMock(return_value=knowledge)
+            tc = DBTrainingConfig(connection_string="sqlite:///test.db", consolidate=False)
+            result = await trainer.train(tc)
+            assert result.patterns_detected == 0

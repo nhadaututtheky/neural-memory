@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.engine.db_introspector import SchemaIntrospector
-from neural_memory.engine.db_knowledge import KnowledgeExtractor
+from neural_memory.engine.db_knowledge import KnowledgeExtractor, SchemaKnowledge
 from neural_memory.engine.encoder import MemoryEncoder
 
 logger = logging.getLogger(__name__)
@@ -130,17 +130,12 @@ class DBTrainer:
         knowledge = self._extractor.extract(snapshot)
 
         # Step 3: Batch encode
-        neurons_created = 0
-        synapses_created = 0
-        tables_processed = 0
-        tables_skipped = 0
-        columns_processed = 0
-
         self._storage.disable_auto_save()
 
         try:
             # Create domain CONCEPT neuron (shared anchor, like session TIME)
             domain_neuron = None
+            domain_neurons_created = 0
             if tc.domain_tag:
                 domain_neuron = Neuron.create(
                     type=NeuronType.CONCEPT,
@@ -152,160 +147,33 @@ class DBTrainer:
                     },
                 )
                 await self._storage.add_neuron(domain_neuron)
-                neurons_created += 1
+                domain_neurons_created = 1
 
-            # Encode table entities (up to max_tables)
-            table_neurons: dict[str, str] = {}  # table_name -> anchor_neuron_id
-            for entity in knowledge.entities:
-                if tables_processed >= tc.max_tables:
-                    tables_skipped += 1
-                    continue
-
-                try:
-                    tags: set[str] = {"db_schema", "table"}
-                    if tc.domain_tag:
-                        tags.add(tc.domain_tag)
-
-                    metadata: dict[str, object] = {
-                        "type": "reference",
-                        "table_name": entity.table_name,
-                        "db_schema": True,
-                        "business_purpose": entity.business_purpose,
-                        "knowledge_confidence": entity.confidence,
-                    }
-
-                    result = await self._encoder.encode(
-                        content=entity.description,
-                        tags=tags,
-                        metadata=metadata,
-                        skip_conflicts=True,
-                        skip_time_neurons=True,
-                        initial_stage=tc.initial_stage,
-                        salience_ceiling=tc.salience_ceiling,
-                    )
-
-                    neurons_created += len(result.neurons_created)
-                    synapses_created += len(result.synapses_created)
-                    table_neurons[entity.table_name] = result.fiber.anchor_neuron_id
-                    tables_processed += 1
-                    columns_processed += len(
-                        [
-                            p
-                            for p in knowledge.properties
-                            if p.table_name == entity.table_name
-                        ]
-                    )
-
-                    # Link to domain neuron
-                    if domain_neuron:
-                        synapse = Synapse.create(
-                            source_id=domain_neuron.id,
-                            target_id=result.fiber.anchor_neuron_id,
-                            type=SynapseType.CONTAINS,
-                            weight=0.8,
-                            metadata={"db_domain_link": True},
-                        )
-                        await self._storage.add_synapse(synapse)
-                        synapses_created += 1
-
-                except Exception:
-                    logger.warning(
-                        "Failed to encode table %s",
-                        entity.table_name,
-                        exc_info=True,
-                    )
+            # Encode table entities
+            (
+                table_neurons,
+                tables_processed,
+                tables_skipped,
+                columns_processed,
+                ent_neurons_created,
+                ent_synapses_created,
+            ) = await self._encode_entities(knowledge, tc, domain_neuron)
 
             # Encode patterns
-            patterns_encoded = 0
-            if tc.include_patterns:
-                for pattern in knowledge.patterns:
-                    # Skip patterns for tables that weren't encoded
-                    if pattern.table_name not in table_neurons:
-                        continue
+            (
+                patterns_encoded,
+                pat_neurons_created,
+                pat_synapses_created,
+            ) = await self._encode_patterns(knowledge, tc, table_neurons)
 
-                    try:
-                        tags = {
-                            "db_schema",
-                            "pattern",
-                            pattern.pattern_type.value,
-                        }
-                        if tc.domain_tag:
-                            tags.add(tc.domain_tag)
-
-                        metadata = {
-                            "type": "insight",
-                            "pattern_type": pattern.pattern_type.value,
-                            "table_name": pattern.table_name,
-                            "db_schema_pattern": True,
-                            "knowledge_confidence": pattern.confidence,
-                        }
-
-                        result = await self._encoder.encode(
-                            content=pattern.description,
-                            tags=tags,
-                            metadata=metadata,
-                            skip_conflicts=True,
-                            skip_time_neurons=True,
-                            initial_stage=tc.initial_stage,
-                            salience_ceiling=tc.salience_ceiling,
-                        )
-
-                        neurons_created += len(result.neurons_created)
-                        synapses_created += len(result.synapses_created)
-                        patterns_encoded += 1
-
-                        # Link pattern to its table
-                        table_anchor = table_neurons.get(pattern.table_name)
-                        if table_anchor:
-                            synapse = Synapse.create(
-                                source_id=result.fiber.anchor_neuron_id,
-                                target_id=table_anchor,
-                                type=SynapseType.HAS_PROPERTY,
-                                weight=pattern.confidence,
-                                metadata={"db_pattern_link": True},
-                            )
-                            await self._storage.add_synapse(synapse)
-                            synapses_created += 1
-
-                    except Exception:
-                        logger.warning(
-                            "Failed to encode pattern %s for %s",
-                            pattern.pattern_type,
-                            pattern.table_name,
-                            exc_info=True,
-                        )
-
-            # Create relationship synapses (direct, not via encoder)
+            # Create relationship synapses
             relationships_mapped = 0
+            rel_synapses_created = 0
             if tc.include_relationships:
-                for rel in knowledge.relationships:
-                    source_anchor = table_neurons.get(rel.source_table)
-                    target_anchor = table_neurons.get(rel.target_table)
-
-                    if source_anchor and target_anchor:
-                        try:
-                            synapse = Synapse.create(
-                                source_id=source_anchor,
-                                target_id=target_anchor,
-                                type=rel.synapse_type,
-                                weight=rel.confidence,
-                                metadata={
-                                    "fk_column": rel.source_column,
-                                    "fk_target": rel.target_column,
-                                    "db_relationship": True,
-                                    "knowledge_confidence": rel.confidence,
-                                },
-                            )
-                            await self._storage.add_synapse(synapse)
-                            synapses_created += 1
-                            relationships_mapped += 1
-                        except Exception:
-                            logger.debug(
-                                "Failed to create relationship synapse %s -> %s",
-                                rel.source_table,
-                                rel.target_table,
-                                exc_info=True,
-                            )
+                (
+                    relationships_mapped,
+                    rel_synapses_created,
+                ) = await self._create_relationship_synapses(knowledge, table_neurons)
 
             # Batch save
             await self._storage.batch_save()
@@ -313,10 +181,16 @@ class DBTrainer:
         finally:
             self._storage.enable_auto_save()
 
+        neurons_created = domain_neurons_created + ent_neurons_created + pat_neurons_created
+        synapses_created = ent_synapses_created + pat_synapses_created + rel_synapses_created
+
         # Run ENRICH consolidation if requested
         enrichment_synapses = 0
         if tc.consolidate and tables_processed > 0:
-            enrichment_synapses = await self._run_enrichment()
+            try:
+                enrichment_synapses = await self._run_enrichment()
+            except Exception:
+                logger.warning("ENRICH consolidation failed", exc_info=True)
 
         return DBTrainingResult(
             tables_processed=tables_processed,
@@ -330,6 +204,210 @@ class DBTrainer:
             schema_fingerprint=snapshot.schema_fingerprint,
             brain_name=tc.brain_name or "current",
         )
+
+    async def _encode_entities(
+        self,
+        knowledge: SchemaKnowledge,
+        tc: DBTrainingConfig,
+        domain_neuron: Neuron | None,
+    ) -> tuple[dict[str, str], int, int, int, int, int]:
+        """Encode table entities.
+
+        Returns:
+            (table_neurons, tables_processed, tables_skipped,
+             columns_processed, neurons_created, synapses_created)
+        """
+        table_neurons: dict[str, str] = {}  # table_name -> anchor_neuron_id
+        tables_processed = 0
+        tables_skipped = 0
+        columns_processed = 0
+        neurons_created = 0
+        synapses_created = 0
+
+        for entity in knowledge.entities:
+            if tables_processed >= tc.max_tables:
+                tables_skipped += 1
+                continue
+
+            try:
+                tags: set[str] = {"db_schema", "table"}
+                if tc.domain_tag:
+                    tags.add(tc.domain_tag)
+
+                metadata: dict[str, object] = {
+                    "type": "reference",
+                    "table_name": entity.table_name,
+                    "db_schema": True,
+                    "business_purpose": entity.business_purpose,
+                    "knowledge_confidence": entity.confidence,
+                }
+
+                result = await self._encoder.encode(
+                    content=entity.description,
+                    tags=tags,
+                    metadata=metadata,
+                    skip_conflicts=True,
+                    skip_time_neurons=True,
+                    initial_stage=tc.initial_stage,
+                    salience_ceiling=tc.salience_ceiling,
+                )
+
+                neurons_created += len(result.neurons_created)
+                synapses_created += len(result.synapses_created)
+                table_neurons[entity.table_name] = result.fiber.anchor_neuron_id
+                tables_processed += 1
+                columns_processed += len(
+                    [p for p in knowledge.properties if p.table_name == entity.table_name]
+                )
+
+                # Link to domain neuron
+                if domain_neuron:
+                    synapse = Synapse.create(
+                        source_id=domain_neuron.id,
+                        target_id=result.fiber.anchor_neuron_id,
+                        type=SynapseType.CONTAINS,
+                        weight=0.8,
+                        metadata={"db_domain_link": True},
+                    )
+                    await self._storage.add_synapse(synapse)
+                    synapses_created += 1
+
+            except Exception:
+                logger.warning(
+                    "Failed to encode table %s",
+                    entity.table_name,
+                    exc_info=True,
+                )
+
+        return (
+            table_neurons,
+            tables_processed,
+            tables_skipped,
+            columns_processed,
+            neurons_created,
+            synapses_created,
+        )
+
+    async def _encode_patterns(
+        self,
+        knowledge: SchemaKnowledge,
+        tc: DBTrainingConfig,
+        table_neurons: dict[str, str],
+    ) -> tuple[int, int, int]:
+        """Encode schema patterns.
+
+        Returns:
+            (patterns_encoded, neurons_created, synapses_created)
+        """
+        patterns_encoded = 0
+        neurons_created = 0
+        synapses_created = 0
+
+        if not tc.include_patterns:
+            return (patterns_encoded, neurons_created, synapses_created)
+
+        for pattern in knowledge.patterns:
+            # Skip patterns for tables that weren't encoded
+            if pattern.table_name not in table_neurons:
+                continue
+
+            try:
+                tags: set[str] = {
+                    "db_schema",
+                    "pattern",
+                    pattern.pattern_type.value,
+                }
+                if tc.domain_tag:
+                    tags.add(tc.domain_tag)
+
+                metadata: dict[str, object] = {
+                    "type": "insight",
+                    "pattern_type": pattern.pattern_type.value,
+                    "table_name": pattern.table_name,
+                    "db_schema_pattern": True,
+                    "knowledge_confidence": pattern.confidence,
+                }
+
+                result = await self._encoder.encode(
+                    content=pattern.description,
+                    tags=tags,
+                    metadata=metadata,
+                    skip_conflicts=True,
+                    skip_time_neurons=True,
+                    initial_stage=tc.initial_stage,
+                    salience_ceiling=tc.salience_ceiling,
+                )
+
+                neurons_created += len(result.neurons_created)
+                synapses_created += len(result.synapses_created)
+                patterns_encoded += 1
+
+                # Link pattern to its table (table HAS_PROPERTY pattern)
+                table_anchor = table_neurons.get(pattern.table_name)
+                if table_anchor:
+                    synapse = Synapse.create(
+                        source_id=table_anchor,
+                        target_id=result.fiber.anchor_neuron_id,
+                        type=SynapseType.HAS_PROPERTY,
+                        weight=pattern.confidence,
+                        metadata={"db_pattern_link": True},
+                    )
+                    await self._storage.add_synapse(synapse)
+                    synapses_created += 1
+
+            except Exception:
+                logger.warning(
+                    "Failed to encode pattern %s for %s",
+                    pattern.pattern_type,
+                    pattern.table_name,
+                    exc_info=True,
+                )
+
+        return (patterns_encoded, neurons_created, synapses_created)
+
+    async def _create_relationship_synapses(
+        self,
+        knowledge: SchemaKnowledge,
+        table_neurons: dict[str, str],
+    ) -> tuple[int, int]:
+        """Create FK relationship synapses.
+
+        Returns:
+            (relationships_mapped, synapses_created)
+        """
+        relationships_mapped = 0
+        synapses_created = 0
+
+        for rel in knowledge.relationships:
+            source_anchor = table_neurons.get(rel.source_table)
+            target_anchor = table_neurons.get(rel.target_table)
+
+            if source_anchor and target_anchor:
+                try:
+                    synapse = Synapse.create(
+                        source_id=source_anchor,
+                        target_id=target_anchor,
+                        type=rel.synapse_type,
+                        weight=rel.confidence,
+                        metadata={
+                            "fk_column": rel.source_column,
+                            "fk_target": rel.target_column,
+                            "db_relationship": True,
+                            "knowledge_confidence": rel.confidence,
+                        },
+                    )
+                    await self._storage.add_synapse(synapse)
+                    synapses_created += 1
+                    relationships_mapped += 1
+                except Exception:
+                    logger.warning(
+                        "Failed to create relationship synapse %s -> %s",
+                        rel.source_table,
+                        rel.target_table,
+                        exc_info=True,
+                    )
+
+        return (relationships_mapped, synapses_created)
 
     async def _run_enrichment(self) -> int:
         """Run ENRICH consolidation to create cross-cluster links."""

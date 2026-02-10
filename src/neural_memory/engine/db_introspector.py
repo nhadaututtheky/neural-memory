@@ -10,13 +10,18 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
+import urllib.parse
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 from neural_memory.utils.timeutils import utcnow
 
 logger = logging.getLogger(__name__)
+
+_SAFE_IDENTIFIER = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_ ]*$")
 
 
 # ── Frozen dataclasses ──────────────────────────────────────────
@@ -136,27 +141,19 @@ class SchemaDialect(Protocol):
         """Return list of user table names (excluding system tables)."""
         ...
 
-    async def get_columns(
-        self, connection: Any, table: str
-    ) -> list[ColumnInfo]:
+    async def get_columns(self, connection: Any, table: str) -> list[ColumnInfo]:
         """Return column metadata for a table."""
         ...
 
-    async def get_foreign_keys(
-        self, connection: Any, table: str
-    ) -> list[ForeignKeyInfo]:
+    async def get_foreign_keys(self, connection: Any, table: str) -> list[ForeignKeyInfo]:
         """Return foreign key constraints for a table."""
         ...
 
-    async def get_indexes(
-        self, connection: Any, table: str
-    ) -> list[IndexInfo]:
+    async def get_indexes(self, connection: Any, table: str) -> list[IndexInfo]:
         """Return index metadata for a table."""
         ...
 
-    async def get_row_count_estimate(
-        self, connection: Any, table: str
-    ) -> int:
+    async def get_row_count_estimate(self, connection: Any, table: str) -> int:
         """Return approximate row count for a table."""
         ...
 
@@ -167,6 +164,17 @@ class SchemaDialect(Protocol):
 class SQLiteDialect:
     """SQLite schema introspection using PRAGMA statements."""
 
+    def _validate_identifier(self, name: str) -> str:
+        """Validate SQL identifier to prevent injection.
+
+        Raises:
+            ValueError: If the identifier contains unsafe characters.
+        """
+        if not _SAFE_IDENTIFIER.match(name):
+            logger.warning("Skipping unsafe identifier: %r", name)
+            raise ValueError(f"Unsafe SQL identifier: {name!r}")
+        return name
+
     async def get_tables(self, connection: Any) -> list[str]:
         """Get user table names, excluding sqlite_ system tables."""
         cursor = await connection.execute(
@@ -175,13 +183,13 @@ class SQLiteDialect:
             "ORDER BY name"
         )
         rows = await cursor.fetchall()
-        return [row[0] for row in rows]
+        tables = [row[0] for row in rows]
+        return [t for t in tables if _SAFE_IDENTIFIER.match(t)]
 
-    async def get_columns(
-        self, connection: Any, table: str
-    ) -> list[ColumnInfo]:
+    async def get_columns(self, connection: Any, table: str) -> list[ColumnInfo]:
         """Get column metadata via PRAGMA table_info."""
-        cursor = await connection.execute(f"PRAGMA table_info('{table}')")
+        self._validate_identifier(table)
+        cursor = await connection.execute(f'PRAGMA table_info("{table}")')
         rows = await cursor.fetchall()
 
         columns: list[ColumnInfo] = []
@@ -200,13 +208,10 @@ class SQLiteDialect:
             )
         return columns
 
-    async def get_foreign_keys(
-        self, connection: Any, table: str
-    ) -> list[ForeignKeyInfo]:
+    async def get_foreign_keys(self, connection: Any, table: str) -> list[ForeignKeyInfo]:
         """Get FK constraints via PRAGMA foreign_key_list."""
-        cursor = await connection.execute(
-            f"PRAGMA foreign_key_list('{table}')"
-        )
+        self._validate_identifier(table)
+        cursor = await connection.execute(f'PRAGMA foreign_key_list("{table}")')
         rows = await cursor.fetchall()
 
         fks: list[ForeignKeyInfo] = []
@@ -223,11 +228,10 @@ class SQLiteDialect:
             )
         return fks
 
-    async def get_indexes(
-        self, connection: Any, table: str
-    ) -> list[IndexInfo]:
+    async def get_indexes(self, connection: Any, table: str) -> list[IndexInfo]:
         """Get index metadata via PRAGMA index_list + index_info."""
-        cursor = await connection.execute(f"PRAGMA index_list('{table}')")
+        self._validate_identifier(table)
+        cursor = await connection.execute(f'PRAGMA index_list("{table}")')
         index_rows = await cursor.fetchall()
 
         indexes: list[IndexInfo] = []
@@ -240,9 +244,11 @@ class SQLiteDialect:
             if idx_name.startswith("sqlite_autoindex_"):
                 continue
 
-            col_cursor = await connection.execute(
-                f"PRAGMA index_info('{idx_name}')"
-            )
+            # Skip unsafe index names
+            if not _SAFE_IDENTIFIER.match(idx_name):
+                continue
+
+            col_cursor = await connection.execute(f'PRAGMA index_info("{idx_name}")')
             col_rows = await col_cursor.fetchall()
             col_names = tuple(r[2] for r in col_rows if r[2])
 
@@ -256,13 +262,10 @@ class SQLiteDialect:
                 )
         return indexes
 
-    async def get_row_count_estimate(
-        self, connection: Any, table: str
-    ) -> int:
+    async def get_row_count_estimate(self, connection: Any, table: str) -> int:
         """Get exact row count (SQLite has no estimate mechanism)."""
-        cursor = await connection.execute(
-            f"SELECT COUNT(*) FROM '{table}'"
-        )
+        self._validate_identifier(table)
+        cursor = await connection.execute(f'SELECT COUNT(*) FROM "{table}"')
         row = await cursor.fetchone()
         return row[0] if row else 0
 
@@ -308,9 +311,7 @@ class SchemaIntrospector:
                 columns = await dialect.get_columns(connection, name)
                 foreign_keys = await dialect.get_foreign_keys(connection, name)
                 indexes = await dialect.get_indexes(connection, name)
-                row_count = await dialect.get_row_count_estimate(
-                    connection, name
-                )
+                row_count = await dialect.get_row_count_estimate(connection, name)
 
                 tables.append(
                     TableInfo(
@@ -345,22 +346,17 @@ class SchemaIntrospector:
         lower = connection_string.lower()
         if lower.startswith("sqlite:///"):
             return "sqlite"
-        msg = (
-            f"Unsupported dialect in connection string: {connection_string!r}. "
-            "Supported: sqlite:///path"
-        )
+        msg = "Unsupported dialect. Supported: sqlite:///path"
         raise ValueError(msg)
 
-    def _extract_path(
-        self, connection_string: str, dialect_name: str
-    ) -> str:
+    def _extract_path(self, connection_string: str, dialect_name: str) -> str:
         """Extract database path from connection string.
 
         Raises:
             ValueError: If path contains traversal attempts.
         """
         if dialect_name == "sqlite":
-            path = connection_string[len("sqlite:///"):]
+            path = connection_string[len("sqlite:///") :]
             if not path:
                 msg = "Empty path in SQLite connection string"
                 raise ValueError(msg)
@@ -368,13 +364,15 @@ class SchemaIntrospector:
             if ".." in path:
                 msg = "Path traversal (..) not allowed in connection string"
                 raise ValueError(msg)
+            # Security: reject absolute paths
+            if Path(path).is_absolute():
+                msg = "Absolute paths not allowed in connection string"
+                raise ValueError(msg)
             return path
         msg = f"Path extraction not implemented for {dialect_name}"
         raise ValueError(msg)
 
-    async def _create_connection(
-        self, db_path: str, dialect_name: str
-    ) -> Any:
+    async def _create_connection(self, db_path: str, dialect_name: str) -> Any:
         """Create async database connection.
 
         Raises:
@@ -388,12 +386,13 @@ class SchemaIntrospector:
                 raise ValueError(msg) from exc
 
             try:
-                conn = await aiosqlite.connect(db_path)
+                uri_path = urllib.parse.quote(db_path, safe="/:\\")
+                conn = await aiosqlite.connect(f"file:{uri_path}?mode=ro", uri=True)
                 # Enable FK support for accurate introspection
                 await conn.execute("PRAGMA foreign_keys = ON")
                 return conn
             except Exception as exc:
-                msg = f"Failed to connect to SQLite database: {db_path!r}"
+                msg = "Failed to connect to SQLite database"
                 raise ValueError(msg) from exc
 
         msg = f"Connection creation not implemented for {dialect_name}"
