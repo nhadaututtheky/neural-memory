@@ -1417,7 +1417,127 @@ NM dashboard gains a "Marketplace" tab (6th tab — the exception where NM IS th
 - Search by tags, language, grade
 - Brain transplant from marketplace → local brain
 
-### 7.2 Neo4j Storage Backend
+### 7.2 Lab Brains — Build-and-Ship Knowledge Pipelines
+
+> Clone → build workflow → train brain → publish → delete source. Labs are temporary.
+
+#### Why Labs exist
+
+Some platforms (e.g. AntiGravity Google) **do not provide public APIs**. The only way to obtain auth credentials is:
+
+1. Clone a proxy tool (e.g. [Clipproxy](https://github.com/AltimateAI/clipproxy)) locally
+2. Run its OAuth flow to authenticate a Google account
+3. Extract the resulting credentials (tokens, session data)
+4. Build a custom API workflow from those credentials
+
+This is a **high-friction onboarding wall** for OpenClaw users — many give up before getting a working setup. Labs solve this by packaging the entire workflow into a reproducible, trainable pipeline.
+
+#### Lifecycle
+
+```
+┌─────────────┐     ┌──────────────┐     ┌───────────────┐     ┌────────────┐
+│ 1. Clone     │────→│ 2. Build     │────→│ 3. Train      │────→│ 4. Publish │
+│ git repo     │     │ workflow     │     │ nmem_train    │     │ to Market  │
+│ into lab/    │     │ (setup,test) │     │ → brain JSON  │     │ brain JSON │
+└─────────────┘     └──────────────┘     └───────────────┘     └────────────┘
+                                                                      │
+                                          ┌───────────────┐           │
+                                          │ 5. Cleanup    │←──────────┘
+                                          │ rm -rf lab/   │
+                                          │ (source gone, │
+                                          │  brain lives) │
+                                          └───────────────┘
+```
+
+**Key principle**: The cloned repo is scaffolding. Once the knowledge is encoded into a brain, the source is deleted. The brain is the deliverable, not the repo.
+
+#### Lab structure (draft)
+
+```
+labs/                                    # .gitignored — ephemeral workspace
+├── clipproxy-oauth/                     # Lab 1: OAuth via Clipproxy
+│   ├── README.md                        #   Step-by-step setup guide
+│   ├── scripts/
+│   │   ├── setup.sh                     #   Clone Clipproxy, install deps
+│   │   ├── run-oauth.sh                 #   Start OAuth flow
+│   │   └── extract-credentials.sh       #   Export tokens
+│   └── docs/                            #   Trainable docs for nmem_train
+│       ├── oauth-flow.md                #   How the OAuth flow works
+│       ├── troubleshooting.md           #   Common errors + fixes
+│       └── credential-management.md     #   Token refresh, expiry, rotation
+│
+├── openclaw-quickstart/                 # Lab 2: OpenClaw first-run
+│   ├── README.md
+│   ├── scripts/setup.sh
+│   └── docs/
+│       ├── install-guide.md
+│       ├── first-agent.md
+│       └── mcp-config.md
+│
+└── antigravity-api-builder/             # Lab 3: Custom API from OAuth creds
+    ├── README.md
+    ├── scripts/build-api.sh
+    └── docs/
+        ├── api-construction.md
+        └── rate-limits-and-quotas.md
+```
+
+#### CLI workflow (target)
+
+```bash
+# 1. Init lab from template
+nmem lab init clipproxy-oauth
+
+# 2. User follows setup (interactive or scripted)
+cd labs/clipproxy-oauth && ./scripts/setup.sh
+
+# 3. Train brain from lab docs
+nmem train --path labs/clipproxy-oauth/docs/ \
+           --domain-tag clipproxy-oauth \
+           --brain-name clipproxy-setup
+
+# 4. Verify brain quality
+nmem health                              # Must be grade B+ for marketplace
+
+# 5. Publish to marketplace
+nmem brain publish clipproxy-setup       # Upload brain JSON to marketplace
+
+# 6. Cleanup — source is scaffolding
+rm -rf labs/clipproxy-oauth/             # Brain lives on, repo is gone
+```
+
+#### End-user experience (consumer side)
+
+```bash
+# New OpenClaw user, day 1:
+nmem brain install clipproxy-setup       # Download from marketplace
+
+nmem recall "how to activate Google OAuth via Clipproxy"
+# → Step-by-step: clone repo, run setup.sh, authorize, extract tokens
+
+nmem recall "Clipproxy OAuth token expired what do I do"
+# → Token refresh procedure, common errors, rotation strategy
+```
+
+#### Initial Lab Brains (launch inventory for marketplace)
+
+| Brain | Source | Pain point solved |
+|-------|--------|-------------------|
+| `clipproxy-oauth` | Clipproxy repo + custom docs | Google OAuth setup via proxy |
+| `openclaw-quickstart` | OpenClaw docs + setup scripts | First-run onboarding |
+| `antigravity-api-builder` | Custom workflow docs | Building API without official endpoints |
+| `nm-best-practices` | NeuralMemory docs + guides | NM power-user patterns |
+| `mcp-server-setup` | MCP spec + NM integration docs | MCP configuration for any agent |
+
+#### Relationship to 7.1 Marketplace
+
+Labs are the **content pipeline** for marketplace. Marketplace is the shelf — Labs produce the inventory. Without Labs, marketplace launches empty. Without marketplace, lab brains stay local.
+
+```
+Labs (produce) ──→ Brains (train) ──→ Marketplace (distribute) ──→ Users (consume)
+```
+
+### 7.3 Neo4j Storage Backend
 
 For users with large-scale graph requirements:
 - `Neo4jStorage` implementing `BaseStorage` ABC
@@ -1426,7 +1546,7 @@ For users with large-scale graph requirements:
 - Optional — SQLite remains default
 - Dashboard graph tab auto-detects Neo4j and uses native traversal
 
-### 7.3 Multi-Language Expansion
+### 7.4 Multi-Language Expansion
 
 Beyond EN/VI:
 - Japanese (large AI dev community)
