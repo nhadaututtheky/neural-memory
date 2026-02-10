@@ -11,6 +11,9 @@ from neural_memory.engine.brain_evolution import (
     BrainEvolution,
     EvolutionEngine,
     ProficiencyLevel,
+    _compute_activity,
+    _compute_decay,
+    _compute_plasticity,
     _compute_proficiency,
     _maturity_signal,
 )
@@ -106,6 +109,10 @@ class TestProficiencyLevel:
         assert ProficiencyLevel.SENIOR.value == "senior"
         assert ProficiencyLevel.EXPERT.value == "expert"
 
+    def test_exactly_three_levels(self) -> None:
+        """Enum has exactly 3 members."""
+        assert len(ProficiencyLevel) == 3
+
 
 class TestProficiencyComputation:
     """Tests for _compute_proficiency pure function."""
@@ -197,6 +204,66 @@ class TestProficiencyComputation:
         )
         assert 0 <= index <= 100
 
+    # ── Boundary condition tests ──────────────────────────────
+
+    def test_boundary_expert_at_55(self) -> None:
+        """Index exactly 55 with 10+ days → SENIOR (not EXPERT, needs > 55)."""
+        # raw = 0.5*0.30 + 1.0*0.25 + 0.4*0.25 + 0.25*0.20 = 0.55 → index=55
+        _, level = _compute_proficiency(
+            semantic_ratio=0.5,
+            reinforcement_days=10.0,
+            topology_coherence=0.4,
+            plasticity_index=0.05,
+            decay_factor=1.0,
+        )
+        # index = 55, which is NOT > 55
+        assert level == ProficiencyLevel.SENIOR
+
+    def test_boundary_expert_at_56(self) -> None:
+        """Index 56 with 10+ days → EXPERT."""
+        _, level = _compute_proficiency(
+            semantic_ratio=0.56,
+            reinforcement_days=10.0,
+            topology_coherence=0.56,
+            plasticity_index=0.112,  # norm = 0.56
+            decay_factor=1.0,
+        )
+        assert level == ProficiencyLevel.EXPERT
+
+    def test_boundary_senior_at_25(self) -> None:
+        """Index exactly 25 with 4+ days → SENIOR."""
+        _, level = _compute_proficiency(
+            semantic_ratio=0.25,
+            reinforcement_days=4.0,
+            topology_coherence=0.25,
+            plasticity_index=0.05,  # norm = 0.25
+            decay_factor=1.0,
+        )
+        assert level == ProficiencyLevel.SENIOR
+
+    def test_boundary_junior_below_25(self) -> None:
+        """Index 24 with 4+ days → JUNIOR."""
+        # raw = 0.2*0.30 + 0.4*0.25 + 0.2*0.25 + 0.15*0.20 = 0.24 → index=24
+        _, level = _compute_proficiency(
+            semantic_ratio=0.2,
+            reinforcement_days=4.0,
+            topology_coherence=0.2,
+            plasticity_index=0.03,
+            decay_factor=1.0,
+        )
+        assert level == ProficiencyLevel.JUNIOR
+
+    def test_boundary_senior_needs_4_days(self) -> None:
+        """Index 25+ but reinforcement_days < 4 → JUNIOR."""
+        _, level = _compute_proficiency(
+            semantic_ratio=0.5,
+            reinforcement_days=3.99,
+            topology_coherence=0.5,
+            plasticity_index=0.1,
+            decay_factor=1.0,
+        )
+        assert level == ProficiencyLevel.JUNIOR
+
 
 class TestMaturitySignal:
     """Tests for _maturity_signal agent-facing function."""
@@ -211,6 +278,147 @@ class TestMaturitySignal:
     def test_partial(self) -> None:
         signal = _maturity_signal(0.25, 3.5)
         assert 0.0 < signal < 1.0
+
+    def test_clamped_high_ratio(self) -> None:
+        """semantic_ratio > 0.5 still caps ratio_signal at 1.0."""
+        signal = _maturity_signal(0.8, 7.0)
+        assert signal == 1.0
+
+    def test_clamped_high_days(self) -> None:
+        """reinforcement_days > 7.0 still caps days_signal at 1.0."""
+        signal = _maturity_signal(0.5, 14.0)
+        assert signal == 1.0
+
+
+class TestComputePlasticity:
+    """Tests for _compute_plasticity pure function."""
+
+    def test_empty_synapses(self) -> None:
+        """No synapses → 0.0."""
+        assert _compute_plasticity([], utcnow()) == 0.0
+
+    def test_all_new(self) -> None:
+        """All synapses created recently → plasticity 1.0."""
+        now = utcnow()
+        synapses = [
+            _mock_synapse(created_at=now - timedelta(days=1)),
+            _mock_synapse(created_at=now - timedelta(days=2)),
+            _mock_synapse(created_at=now - timedelta(days=3)),
+        ]
+        assert _compute_plasticity(synapses, now) == 1.0
+
+    def test_all_old(self) -> None:
+        """All synapses old and not reinforced → plasticity 0.0."""
+        now = utcnow()
+        synapses = [
+            _mock_synapse(created_at=now - timedelta(days=30)),
+            _mock_synapse(created_at=now - timedelta(days=60)),
+        ]
+        assert _compute_plasticity(synapses, now) == 0.0
+
+    def test_no_double_count(self) -> None:
+        """Synapse that is both new AND reinforced is counted once (not twice)."""
+        now = utcnow()
+        synapses = [
+            _mock_synapse(
+                created_at=now - timedelta(days=1),
+                last_activated=now - timedelta(hours=2),
+            ),
+        ]
+        result = _compute_plasticity(synapses, now)
+        # 1 synapse active / 1 total = 1.0 (not 2.0)
+        assert result == 1.0
+
+    def test_bounded_zero_to_one(self) -> None:
+        """Plasticity is always in [0.0, 1.0]."""
+        now = utcnow()
+        # All synapses are both new and recently activated
+        synapses = [
+            _mock_synapse(
+                created_at=now - timedelta(days=i),
+                last_activated=now - timedelta(hours=i),
+            )
+            for i in range(1, 6)
+        ]
+        result = _compute_plasticity(synapses, now)
+        assert 0.0 <= result <= 1.0
+
+
+class TestComputeActivity:
+    """Tests for _compute_activity pure function."""
+
+    def test_zero_fiber_count(self) -> None:
+        """Zero fiber_count → 0.0."""
+        assert _compute_activity([], utcnow(), fiber_count=0) == 0.0
+
+    def test_all_active(self) -> None:
+        """All fibers recently conducted → 1.0."""
+        now = utcnow()
+        fibers = [
+            _mock_fiber(last_conducted=now - timedelta(days=1)),
+            _mock_fiber(last_conducted=now - timedelta(days=2)),
+        ]
+        assert _compute_activity(fibers, now, fiber_count=2) == 1.0
+
+    def test_all_inactive(self) -> None:
+        """All fibers old → 0.0."""
+        now = utcnow()
+        fibers = [
+            _mock_fiber(last_conducted=now - timedelta(days=30)),
+            _mock_fiber(last_conducted=now - timedelta(days=60)),
+        ]
+        assert _compute_activity(fibers, now, fiber_count=2) == 0.0
+
+    def test_none_last_conducted(self) -> None:
+        """Fibers with last_conducted=None are not counted as active."""
+        now = utcnow()
+        fibers = [_mock_fiber(last_conducted=None)]
+        assert _compute_activity(fibers, now, fiber_count=1) == 0.0
+
+
+class TestComputeDecay:
+    """Tests for _compute_decay pure function."""
+
+    def test_empty_fibers(self) -> None:
+        """No fibers → neutral decay 0.5."""
+        assert _compute_decay([], utcnow()) == 0.5
+
+    def test_all_none_timestamps(self) -> None:
+        """Fibers with both last_conducted and created_at as None → 0.5."""
+        f = MagicMock()
+        f.last_conducted = None
+        f.created_at = None
+        assert _compute_decay([f], utcnow()) == 0.5
+
+    def test_recent_usage(self) -> None:
+        """Recently used brain → decay close to 1.0."""
+        now = utcnow()
+        fibers = [_mock_fiber(last_conducted=now - timedelta(hours=1))]
+        decay = _compute_decay(fibers, now)
+        assert decay > 0.9
+
+    def test_30_day_midpoint(self) -> None:
+        """Brain unused for 30 days → decay ≈ 0.5 (sigmoid midpoint)."""
+        now = utcnow()
+        fibers = [_mock_fiber(last_conducted=now - timedelta(days=30))]
+        decay = _compute_decay(fibers, now)
+        assert abs(decay - 0.5) < 0.01
+
+    def test_60_day_low(self) -> None:
+        """Brain unused for 60 days → decay < 0.1."""
+        now = utcnow()
+        fibers = [_mock_fiber(last_conducted=now - timedelta(days=60))]
+        decay = _compute_decay(fibers, now)
+        assert decay < 0.1
+
+    def test_uses_created_at_fallback(self) -> None:
+        """When last_conducted is None, uses created_at."""
+        now = utcnow()
+        fibers = [
+            _mock_fiber(last_conducted=None, created_at=now - timedelta(hours=1))
+        ]
+        decay = _compute_decay(fibers, now)
+        assert decay > 0.9
 
 
 class TestEvolutionEngine:
@@ -276,8 +484,29 @@ class TestEvolutionEngine:
         engine = EvolutionEngine(mock_storage)
         evo = await engine.analyze("brain-1")
 
-        # 1 new + 1 reinforced out of 3 total = 2/3
-        assert evo.plasticity_index > 0.0
+        # 2 distinct active synapses out of 3 total = 2/3
+        assert abs(evo.plasticity_index - 2 / 3) < 0.01
+
+    @pytest.mark.asyncio
+    async def test_plasticity_no_double_count(self, mock_storage: AsyncMock) -> None:
+        """Synapse both new and reinforced is counted once."""
+        now = utcnow()
+        synapses = [
+            _mock_synapse(
+                created_at=now - timedelta(days=1),
+                last_activated=now - timedelta(hours=2),
+            ),
+        ]
+        mock_storage.get_all_synapses = AsyncMock(return_value=synapses)
+        mock_storage.get_stats = AsyncMock(
+            return_value={"neuron_count": 2, "synapse_count": 1, "fiber_count": 0}
+        )
+
+        engine = EvolutionEngine(mock_storage)
+        evo = await engine.analyze("brain-1")
+
+        # 1 active / 1 total = 1.0 (not 2.0)
+        assert evo.plasticity_index <= 1.0
 
     @pytest.mark.asyncio
     async def test_activity_score(self, mock_storage: AsyncMock) -> None:
@@ -302,6 +531,34 @@ class TestEvolutionEngine:
     @pytest.mark.asyncio
     async def test_agent_signals_bounded(self, mock_storage: AsyncMock) -> None:
         """Agent-facing signals are bounded 0.0-1.0."""
+        engine = EvolutionEngine(mock_storage)
+        evo = await engine.analyze("brain-1")
+
+        assert 0.0 <= evo.maturity_level <= 1.0
+        assert 0.0 <= evo.plasticity <= 1.0
+        assert 0.0 <= evo.density <= 1.0
+
+    @pytest.mark.asyncio
+    async def test_agent_signals_bounded_extreme(self, mock_storage: AsyncMock) -> None:
+        """Agent signals stay bounded with extreme metric values."""
+        now = utcnow()
+        # High knowledge density (100 synapses / 1 neuron)
+        mock_storage.get_stats = AsyncMock(
+            return_value={"neuron_count": 1, "synapse_count": 100, "fiber_count": 10}
+        )
+        # All synapses are new → max plasticity
+        synapses = [
+            _mock_synapse(created_at=now - timedelta(hours=i))
+            for i in range(100)
+        ]
+        mock_storage.get_all_synapses = AsyncMock(return_value=synapses)
+        # Recent fibers
+        fibers = [
+            _mock_fiber(last_conducted=now - timedelta(hours=1))
+            for _ in range(10)
+        ]
+        mock_storage.get_fibers = AsyncMock(return_value=fibers)
+
         engine = EvolutionEngine(mock_storage)
         evo = await engine.analyze("brain-1")
 
@@ -346,3 +603,149 @@ class TestEvolutionEngine:
 
         # Decay should significantly reduce proficiency
         assert evo.proficiency_index < 50
+
+    @pytest.mark.asyncio
+    async def test_unknown_brain_name(self, mock_storage: AsyncMock) -> None:
+        """get_brain returns None → brain_name 'unknown'."""
+        mock_storage.get_brain = AsyncMock(return_value=None)
+
+        engine = EvolutionEngine(mock_storage)
+        evo = await engine.analyze("brain-1")
+
+        assert evo.brain_name == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_prefetches_data_once(self, mock_storage: AsyncMock) -> None:
+        """analyze() calls get_all_synapses and get_fibers exactly once."""
+        engine = EvolutionEngine(mock_storage)
+        await engine.analyze("brain-1")
+
+        # get_all_synapses called once (pre-fetched, passed to topology + plasticity)
+        assert mock_storage.get_all_synapses.call_count == 1
+        # get_fibers called once (pre-fetched, passed to activity + decay)
+        assert mock_storage.get_fibers.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_full_integration(self, mock_storage: AsyncMock) -> None:
+        """Full integration test with all data sources populated."""
+        now = utcnow()
+
+        # Stats
+        mock_storage.get_stats = AsyncMock(
+            return_value={"neuron_count": 10, "synapse_count": 15, "fiber_count": 5}
+        )
+
+        # Maturations: 3 SEMANTIC, 2 EPISODIC
+        maturations = [
+            MaturationRecord(
+                fiber_id=f"f{i}",
+                brain_id="brain-1",
+                stage=MemoryStage.SEMANTIC if i < 3 else MemoryStage.EPISODIC,
+                reinforcement_timestamps=[
+                    "2025-01-01T10:00:00",
+                    "2025-01-03T10:00:00",
+                    "2025-01-07T10:00:00",
+                    "2025-01-10T10:00:00",
+                    "2025-01-15T10:00:00",
+                ],
+            )
+            for i in range(5)
+        ]
+        mock_storage.find_maturations = AsyncMock(return_value=maturations)
+
+        # Synapses: mix of new, reinforced, and old
+        synapses = [
+            _mock_synapse("a", "b", created_at=now - timedelta(days=1)),
+            _mock_synapse("b", "c", created_at=now - timedelta(days=30),
+                          last_activated=now - timedelta(days=2)),
+            _mock_synapse("c", "a", created_at=now - timedelta(days=60)),
+            _mock_synapse("a", "c", created_at=now - timedelta(days=2)),
+        ]
+        mock_storage.get_all_synapses = AsyncMock(return_value=synapses)
+
+        # Fibers: mix of recent and old
+        fibers = [
+            _mock_fiber(last_conducted=now - timedelta(days=1)),
+            _mock_fiber(last_conducted=now - timedelta(days=3)),
+            _mock_fiber(last_conducted=now - timedelta(days=30)),
+            _mock_fiber(last_conducted=now - timedelta(days=60)),
+            _mock_fiber(last_conducted=now - timedelta(hours=2)),
+        ]
+        mock_storage.get_fibers = AsyncMock(return_value=fibers)
+
+        engine = EvolutionEngine(mock_storage)
+        evo = await engine.analyze("brain-1")
+
+        # Verify all fields populated with reasonable values
+        assert evo.semantic_ratio == 0.6
+        assert evo.reinforcement_days == 5.0
+        assert evo.fibers_at_semantic == 3
+        assert evo.fibers_at_episodic == 2
+        assert evo.plasticity_index > 0.0
+        assert evo.activity_score > 0.0
+        assert evo.topology_coherence >= 0.0
+        assert evo.total_fibers == 5
+        assert evo.total_synapses == 15
+        assert evo.total_neurons == 10
+        assert 0.0 <= evo.maturity_level <= 1.0
+        assert 0.0 <= evo.plasticity <= 1.0
+        assert 0.0 <= evo.density <= 1.0
+        assert 0 <= evo.proficiency_index <= 100
+        assert evo.proficiency_level in ProficiencyLevel
+
+
+class TestMCPEvolutionHandler:
+    """Tests for nmem_evolution MCP handler."""
+
+    @pytest.mark.asyncio
+    async def test_evolution_handler_success(self, mock_storage: AsyncMock) -> None:
+        """Normal _evolution handler returns all expected keys."""
+        from neural_memory.mcp.server import MCPServer
+
+        server = MCPServer.__new__(MCPServer)
+        server.get_storage = AsyncMock(return_value=mock_storage)
+
+        result = await server._evolution({})
+
+        assert "proficiency_level" in result
+        assert "proficiency_index" in result
+        assert "maturity_level" in result
+        assert "plasticity" in result
+        assert "density" in result
+        assert "activity_score" in result
+        assert "brain" in result
+        assert result["brain"] == "test-brain"
+        assert result["proficiency_level"] == "junior"
+
+    @pytest.mark.asyncio
+    async def test_evolution_handler_no_brain(self) -> None:
+        """_evolution handler returns error when no brain configured."""
+        from neural_memory.mcp.server import MCPServer
+
+        storage = AsyncMock()
+        storage.get_brain = AsyncMock(return_value=None)
+        storage._current_brain_id = "missing"
+
+        server = MCPServer.__new__(MCPServer)
+        server.get_storage = AsyncMock(return_value=storage)
+
+        result = await server._evolution({})
+        assert "error" in result
+        assert result["error"] == "No brain configured"
+
+    @pytest.mark.asyncio
+    async def test_evolution_handler_engine_error(
+        self, mock_storage: AsyncMock
+    ) -> None:
+        """_evolution handler catches engine errors gracefully."""
+        from neural_memory.mcp.server import MCPServer
+
+        # Make get_stats raise to simulate engine failure
+        mock_storage.get_stats = AsyncMock(side_effect=RuntimeError("DB error"))
+
+        server = MCPServer.__new__(MCPServer)
+        server.get_storage = AsyncMock(return_value=mock_storage)
+
+        result = await server._evolution({})
+        assert "error" in result
+        assert result["error"] == "Evolution analysis failed"

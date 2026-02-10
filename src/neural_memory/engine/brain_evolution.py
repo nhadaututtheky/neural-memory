@@ -61,7 +61,7 @@ class BrainEvolution:
         semantic_ratio: Fibers at SEMANTIC stage / total maturation records.
         reinforcement_days: Average distinct reinforcement days per fiber.
         topology_coherence: Graph structure quality (clustering + LCC).
-        plasticity_index: Learning activity in last 7 days.
+        plasticity_index: Learning activity in last 7 days (0.0-1.0).
         knowledge_density: Synapses per neuron (raw ratio).
 
         maturity_level: Agent signal — 0.0-1.0 from maturation metrics.
@@ -123,6 +123,7 @@ class EvolutionEngine:
 
         Gathers data from maturation records, fibers, synapses,
         and topology analysis, then computes composite proficiency.
+        Pre-fetches shared data to avoid redundant storage calls.
         """
         now = utcnow()
 
@@ -136,31 +137,37 @@ class EvolutionEngine:
         synapse_count = stats.get("synapse_count", 0)
         fiber_count = stats.get("fiber_count", 0)
 
+        # Pre-fetch shared data once (avoids redundant storage calls)
+        all_synapses = await self._storage.get_all_synapses()
+        all_fibers = await self._storage.get_fibers(limit=10000)
+
         # Maturation metrics
         semantic_ratio, reinforcement_days, fibers_semantic, fibers_episodic = (
-            await self._compute_maturation(now)
+            await self._compute_maturation()
         )
 
-        # Topology metrics
-        topo = await compute_topology(self._storage, brain_id)
+        # Topology metrics (pass pre-fetched synapses)
+        topo = await compute_topology(
+            self._storage, brain_id, _preloaded_synapses=all_synapses
+        )
         topology_coherence = (
             topo.clustering_coefficient * 0.5 + topo.largest_component_ratio * 0.5
         )
         knowledge_density = topo.knowledge_density
 
-        # Plasticity
-        plasticity_index = await self._compute_plasticity(now)
+        # Plasticity (uses pre-fetched synapses)
+        plasticity_index = _compute_plasticity(all_synapses, now)
 
-        # Activity
-        activity_score = await self._compute_activity(now, fiber_count)
+        # Activity (uses pre-fetched fibers)
+        activity_score = _compute_activity(all_fibers, now, fiber_count)
 
         # Agent-facing signals (normalized 0-1)
         maturity_level = _maturity_signal(semantic_ratio, reinforcement_days)
         plasticity_signal = min(1.0, plasticity_index * 5.0)
         density_signal = min(1.0, knowledge_density / 5.0)
 
-        # Composite proficiency
-        decay_factor = await self._compute_decay(now)
+        # Composite proficiency (uses pre-fetched fibers)
+        decay_factor = _compute_decay(all_fibers, now)
         proficiency_index, proficiency_level = _compute_proficiency(
             semantic_ratio=semantic_ratio,
             reinforcement_days=reinforcement_days,
@@ -195,7 +202,6 @@ class EvolutionEngine:
 
     async def _compute_maturation(
         self,
-        now: datetime,
     ) -> tuple[float, float, int, int]:
         """Compute maturation metrics from MaturationRecord data.
 
@@ -220,82 +226,84 @@ class EvolutionEngine:
 
         return semantic_ratio, avg_days, semantic_count, episodic_count
 
-    async def _compute_plasticity(self, now: datetime) -> float:
-        """Compute plasticity index: learning activity in last 7 days.
-
-        plasticity = (reinforced_synapses_7d + new_synapses_7d) / total_synapses
-
-        High plasticity = brain is actively learning.
-        Low plasticity = brain is stable/frozen.
-        """
-        all_synapses = await self._storage.get_all_synapses()
-        if not all_synapses:
-            return 0.0
-
-        cutoff = now - timedelta(days=7)
-        total = len(all_synapses)
-
-        new_7d = sum(1 for s in all_synapses if s.created_at >= cutoff)
-        reinforced_7d = sum(
-            1
-            for s in all_synapses
-            if s.last_activated and s.last_activated >= cutoff
-        )
-
-        return (new_7d + reinforced_7d) / total
-
-    async def _compute_activity(
-        self,
-        now: datetime,
-        fiber_count: int,
-    ) -> float:
-        """Compute activity score: recent retrievals / total fibers.
-
-        Measures whether the brain is actively being used.
-        Dead brains on marketplace = noise.
-        """
-        if fiber_count == 0:
-            return 0.0
-
-        cutoff = now - timedelta(days=7)
-        all_fibers = await self._storage.get_fibers(limit=10000)
-
-        active_7d = sum(
-            1
-            for f in all_fibers
-            if f.last_conducted and f.last_conducted >= cutoff
-        )
-
-        return active_7d / fiber_count
-
-    async def _compute_decay(self, now: datetime) -> float:
-        """Compute decay factor from most recent fiber retrieval.
-
-        Proficiency decays if brain isn't used:
-        - 1.0 at 0 days since last use
-        - ~0.85 at 7 days
-        - ~0.5 at 30 days
-        - ~0.2 at 60 days
-        """
-        all_fibers = await self._storage.get_fibers(limit=10000)
-        if not all_fibers:
-            return 0.5  # No fibers = neutral decay
-
-        most_recent = None
-        for f in all_fibers:
-            ts = f.last_conducted or f.created_at
-            if most_recent is None or ts > most_recent:
-                most_recent = ts
-
-        if most_recent is None:
-            return 0.5
-
-        days_since = (now - most_recent).total_seconds() / 86400
-        # Sigmoid decay: center at 30 days, steepness factor 0.1
-        return 1.0 / (1.0 + math.exp(0.1 * (days_since - 30)))
-
 
 # ── Pure functions ───────────────────────────────────────────────
+
+
+def _compute_plasticity(
+    all_synapses: list[object], now: datetime
+) -> float:
+    """Compute plasticity index: learning activity in last 7 days.
+
+    Counts distinct synapses that are either new OR reinforced in the
+    last 7 days (each synapse counted at most once).
+
+    Returns:
+        Value in [0.0, 1.0] — fraction of synapses with recent activity.
+    """
+    if not all_synapses:
+        return 0.0
+
+    cutoff = now - timedelta(days=7)
+    total = len(all_synapses)
+
+    active_7d = sum(
+        1
+        for s in all_synapses
+        if s.created_at >= cutoff
+        or (s.last_activated and s.last_activated >= cutoff)
+    )
+
+    return active_7d / total
+
+
+def _compute_activity(
+    all_fibers: list[object],
+    now: datetime,
+    fiber_count: int,
+) -> float:
+    """Compute activity score: recent retrievals / total fibers.
+
+    Measures whether the brain is actively being used.
+    """
+    if fiber_count == 0:
+        return 0.0
+
+    cutoff = now - timedelta(days=7)
+
+    active_7d = sum(
+        1
+        for f in all_fibers
+        if f.last_conducted and f.last_conducted >= cutoff
+    )
+
+    return active_7d / fiber_count
+
+
+def _compute_decay(all_fibers: list[object], now: datetime) -> float:
+    """Compute decay factor from most recent fiber retrieval.
+
+    Proficiency decays if brain isn't used (sigmoid centered at 30 days):
+    - ~0.95 at 0 days since last use
+    - ~0.91 at 7 days
+    - 0.50 at 30 days
+    - ~0.05 at 60 days
+    """
+    if not all_fibers:
+        return 0.5  # No fibers = neutral decay
+
+    most_recent = None
+    for f in all_fibers:
+        ts = f.last_conducted or f.created_at
+        if most_recent is None or ts > most_recent:
+            most_recent = ts
+
+    if most_recent is None:
+        return 0.5
+
+    days_since = (now - most_recent).total_seconds() / 86400
+    # Sigmoid decay: center at 30 days, steepness factor 0.1
+    return 1.0 / (1.0 + math.exp(0.1 * (days_since - 30)))
 
 
 def _maturity_signal(semantic_ratio: float, reinforcement_days: float) -> float:

@@ -99,6 +99,11 @@ class TestLargestComponentRatio:
         ratio = _largest_component_ratio([], neuron_count=5)
         assert ratio == 0.0
 
+    def test_zero_neurons(self) -> None:
+        """Zero neuron_count → ratio 0.0."""
+        ratio = _largest_component_ratio([], neuron_count=0)
+        assert ratio == 0.0
+
 
 class TestClusteringCoefficient:
     """Tests for clustering coefficient."""
@@ -133,6 +138,38 @@ class TestClusteringCoefficient:
         synapses = [_mock_synapse("a", "b")]
         coeff = _clustering_coefficient(synapses)
         assert coeff == 0.0
+
+    def test_large_graph_sampling(self) -> None:
+        """Graph with >200 nodes triggers sampling path."""
+        # Create 250 nodes in a chain (no triangles)
+        synapses = [
+            _mock_synapse(f"n{i}", f"n{i+1}") for i in range(250)
+        ]
+        coeff = _clustering_coefficient(synapses)
+        # Chain has no triangles → coefficient 0.0
+        assert coeff == 0.0
+
+    def test_large_graph_deterministic(self) -> None:
+        """Sampling is deterministic (same result on repeated calls)."""
+        synapses = [
+            _mock_synapse(f"n{i}", f"n{i+1}") for i in range(250)
+        ]
+        coeff1 = _clustering_coefficient(synapses)
+        coeff2 = _clustering_coefficient(synapses)
+        assert coeff1 == coeff2
+
+    def test_hub_neighbor_cap(self) -> None:
+        """Hub node with many neighbors does not cause excessive computation."""
+        # Hub connected to 300 leaves + some triangles among first 3
+        synapses = [_mock_synapse("hub", f"leaf{i}") for i in range(300)]
+        # Add triangles among first 3 leaves
+        synapses.append(_mock_synapse("leaf0", "leaf1"))
+        synapses.append(_mock_synapse("leaf1", "leaf2"))
+        synapses.append(_mock_synapse("leaf0", "leaf2"))
+
+        coeff = _clustering_coefficient(synapses)
+        # Should complete without hanging and return a bounded value
+        assert 0.0 <= coeff <= 1.0
 
 
 class TestEnrichedRatio:
@@ -170,3 +207,62 @@ class TestKnowledgeDensity:
 
         result = await compute_topology(mock_storage, "brain-1")
         assert result.knowledge_density == 3.0
+
+
+class TestUndirectedDensity:
+    """Tests for undirected density formula."""
+
+    @pytest.mark.asyncio
+    async def test_density_undirected(self, mock_storage: AsyncMock) -> None:
+        """Density uses undirected formula: edges / (n*(n-1)/2)."""
+        # 3 neurons, 3 synapses → max_edges = 3*2/2 = 3 → density = 1.0
+        mock_storage.get_stats = AsyncMock(
+            return_value={"neuron_count": 3, "synapse_count": 3, "fiber_count": 0}
+        )
+        mock_storage.get_all_synapses = AsyncMock(
+            return_value=[
+                _mock_synapse("a", "b"),
+                _mock_synapse("b", "c"),
+                _mock_synapse("a", "c"),
+            ]
+        )
+
+        result = await compute_topology(mock_storage, "brain-1")
+        assert result.density == 1.0
+
+    @pytest.mark.asyncio
+    async def test_density_capped_at_one(self, mock_storage: AsyncMock) -> None:
+        """Density is capped at 1.0 even if synapse_count exceeds max_edges."""
+        # 2 neurons, max_edges = 1, but 5 synapses reported
+        mock_storage.get_stats = AsyncMock(
+            return_value={"neuron_count": 2, "synapse_count": 5, "fiber_count": 0}
+        )
+        mock_storage.get_all_synapses = AsyncMock(
+            return_value=[_mock_synapse("a", "b") for _ in range(5)]
+        )
+
+        result = await compute_topology(mock_storage, "brain-1")
+        assert result.density == 1.0
+
+
+class TestPreloadedSynapses:
+    """Tests for _preloaded_synapses parameter."""
+
+    @pytest.mark.asyncio
+    async def test_uses_preloaded(self, mock_storage: AsyncMock) -> None:
+        """Pre-loaded synapses avoid calling get_all_synapses."""
+        synapses = [
+            _mock_synapse("a", "b"),
+            _mock_synapse("b", "c"),
+        ]
+        mock_storage.get_stats = AsyncMock(
+            return_value={"neuron_count": 3, "synapse_count": 2, "fiber_count": 0}
+        )
+
+        result = await compute_topology(
+            mock_storage, "brain-1", _preloaded_synapses=synapses
+        )
+
+        # Should NOT have called get_all_synapses
+        mock_storage.get_all_synapses.assert_not_called()
+        assert result.largest_component_ratio > 0.0

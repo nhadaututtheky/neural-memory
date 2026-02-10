@@ -487,8 +487,12 @@ class MCPServer(SessionHandler, EternalHandler, AutoHandler, IndexHandler, Confl
 
         from neural_memory.engine.brain_evolution import EvolutionEngine
 
-        engine = EvolutionEngine(storage)
-        evo = await engine.analyze(brain.id)
+        try:
+            engine = EvolutionEngine(storage)
+            evo = await engine.analyze(brain.id)
+        except Exception:
+            logger.error("Evolution analysis failed", exc_info=True)
+            return {"error": "Evolution analysis failed"}
 
         return {
             "brain": evo.brain_name,

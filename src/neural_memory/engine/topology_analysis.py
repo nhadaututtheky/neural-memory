@@ -8,12 +8,22 @@ existing storage API — no new tables or infrastructure needed.
 
 from __future__ import annotations
 
+import random
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
+
+
+@runtime_checkable
+class SynapseLike(Protocol):
+    """Minimal synapse interface for topology analysis."""
+
+    source_id: str
+    target_id: str
+    metadata: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -27,7 +37,7 @@ class TopologyMetrics:
             neighbors are (0 = no triangles, 1 = fully meshed).
         largest_component_ratio: Fraction of neurons in the largest
             connected component (1.0 = fully connected graph).
-        density: Edge count / max possible edges.
+        density: Edge count / max possible edges (undirected).
         knowledge_density: Synapses per neuron (NOT 0-1, raw ratio).
         enriched_synapse_ratio: Fraction of synapses created by
             ENRICH consolidation (have ``_enriched`` metadata).
@@ -43,12 +53,20 @@ class TopologyMetrics:
 async def compute_topology(
     storage: NeuralStorage,
     brain_id: str,
+    *,
+    _preloaded_synapses: list[SynapseLike] | None = None,
 ) -> TopologyMetrics:
     """Compute graph topology metrics for a brain.
 
     Uses only existing storage methods — no new infrastructure.
     Samples neurons for clustering coefficient to keep cost O(n)
     for large brains.
+
+    Args:
+        storage: Neural storage instance.
+        brain_id: Brain identifier.
+        _preloaded_synapses: Optional pre-fetched synapse list to avoid
+            redundant storage calls when called from EvolutionEngine.
     """
     stats = await storage.get_stats(brain_id)
     neuron_count = stats.get("neuron_count", 0)
@@ -63,10 +81,14 @@ async def compute_topology(
             enriched_synapse_ratio=0.0,
         )
 
-    all_synapses = await storage.get_all_synapses()
+    all_synapses = (
+        _preloaded_synapses
+        if _preloaded_synapses is not None
+        else await storage.get_all_synapses()
+    )
 
-    # ── Density ──────────────────────────────────────────────
-    max_edges = neuron_count * (neuron_count - 1)
+    # ── Density (undirected: n*(n-1)/2) ────────────────────────
+    max_edges = neuron_count * (neuron_count - 1) // 2
     density = synapse_count / max_edges if max_edges > 0 else 0.0
 
     # ── Knowledge density ────────────────────────────────────
@@ -74,7 +96,9 @@ async def compute_topology(
 
     # ── Enriched synapse ratio ───────────────────────────────
     enriched_count = sum(
-        1 for s in all_synapses if s.metadata.get("_enriched")
+        1
+        for s in all_synapses
+        if getattr(s, "metadata", None) and s.metadata.get("_enriched")
     )
     enriched_ratio = enriched_count / max(1, len(all_synapses))
 
@@ -95,9 +119,13 @@ async def compute_topology(
 
 # ── Internal helpers ─────────────────────────────────────────────
 
+# Max nodes/neighbors sampled for performance-bounded computation
+_MAX_SAMPLE_NODES = 200
+_MAX_SAMPLE_NEIGHBORS = 200
+
 
 def _largest_component_ratio(
-    synapses: list[object],
+    synapses: list[SynapseLike],
     neuron_count: int,
 ) -> float:
     """Compute ratio of neurons in the largest connected component.
@@ -119,7 +147,8 @@ def _largest_component_ratio(
     if not all_nodes:
         return 0.0
 
-    # Union-Find
+    # Union-Find (path compression + union-by-rank mutates local dicts
+    # intentionally for near-constant amortized performance)
     parent: dict[str, str] = {n: n for n in all_nodes}
     rank: dict[str, int] = dict.fromkeys(all_nodes, 0)
 
@@ -153,14 +182,15 @@ def _largest_component_ratio(
     return largest / total
 
 
-def _clustering_coefficient(synapses: list[object]) -> float:
+def _clustering_coefficient(synapses: list[SynapseLike]) -> float:
     """Compute global clustering coefficient.
 
     For each node, checks how many of its neighbor pairs are
     also connected. Averages across all nodes with 2+ neighbors.
 
     Treats graph as undirected for triangle detection.
-    Samples max 200 nodes for performance.
+    Samples max 200 nodes and caps neighbors at 200 per node
+    for bounded O(n) performance.
     """
     # Build undirected adjacency
     adj: dict[str, set[str]] = defaultdict(set)
@@ -176,17 +206,19 @@ def _clustering_coefficient(synapses: list[object]) -> float:
     for s in synapses:
         edge_set.add(frozenset((s.source_id, s.target_id)))
 
-    # Sample nodes if too many (max 200 for performance)
+    # Sample nodes if too many
     nodes = list(adj.keys())
-    if len(nodes) > 200:
-        import random
-
+    if len(nodes) > _MAX_SAMPLE_NODES:
         rng = random.Random(42)  # deterministic sampling
-        nodes = rng.sample(nodes, 200)
+        nodes = rng.sample(nodes, _MAX_SAMPLE_NODES)
 
     coefficients: list[float] = []
+    rng_neighbors = random.Random(42)
     for node in nodes:
         neighbors = list(adj[node])
+        # Cap neighbors for hub nodes to avoid O(k²) blowup
+        if len(neighbors) > _MAX_SAMPLE_NEIGHBORS:
+            neighbors = rng_neighbors.sample(neighbors, _MAX_SAMPLE_NEIGHBORS)
         k = len(neighbors)
         if k < 2:
             continue
