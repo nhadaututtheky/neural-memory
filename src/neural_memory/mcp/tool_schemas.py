@@ -511,4 +511,44 @@ def get_tool_schemas() -> list[dict[str, Any]]:
                 "required": ["action"],
             },
         },
+        {
+            "name": "nmem_train_db",
+            "description": "Train a brain from database schema. Extracts table structures, relationships, and patterns as knowledge — NOT raw data rows. Enables schema-aware recall for database understanding.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["train", "status"],
+                        "description": "train=extract schema into brain, status=show training stats",
+                    },
+                    "connection_string": {
+                        "type": "string",
+                        "maxLength": 500,
+                        "description": "Database connection string (v1: sqlite:///path/to/db.db)",
+                    },
+                    "domain_tag": {
+                        "type": "string",
+                        "maxLength": 100,
+                        "description": "Domain tag for schema knowledge (e.g., 'ecommerce', 'analytics')",
+                    },
+                    "brain_name": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "description": "Target brain name (default: current brain)",
+                    },
+                    "consolidate": {
+                        "type": "boolean",
+                        "description": "Run ENRICH consolidation after encoding (default: true)",
+                    },
+                    "max_tables": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 500,
+                        "description": "Maximum tables to process (default: 100)",
+                    },
+                },
+                "required": ["action"],
+            },
+        },
     ]
