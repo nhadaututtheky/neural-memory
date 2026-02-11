@@ -69,6 +69,19 @@ def _lazy_load_adapter(name: str) -> type | None:
             )
             raise ValueError(msg) from e
 
+    if name == "mem0_self_hosted":
+        try:
+            from neural_memory.integration.adapters.mem0_adapter import Mem0SelfHostedAdapter
+
+            register_adapter("mem0_self_hosted", Mem0SelfHostedAdapter)
+            return Mem0SelfHostedAdapter
+        except ImportError as e:
+            msg = (
+                "Mem0 self-hosted adapter requires 'mem0ai' package. "
+                "Install with: pip install neural-memory[mem0]"
+            )
+            raise ValueError(msg) from e
+
     if name == "awf":
         from neural_memory.integration.adapters.awf_adapter import AWFAdapter
 
@@ -119,5 +132,5 @@ def _lazy_load_adapter(name: str) -> type | None:
 
 def list_adapters() -> list[str]:
     """List all available adapter names (including lazy-loadable)."""
-    known = {"chromadb", "mem0", "awf", "cognee", "graphiti", "llamaindex"}
+    known = {"chromadb", "mem0", "mem0_self_hosted", "awf", "cognee", "graphiti", "llamaindex"}
     return sorted(known | set(_ADAPTER_REGISTRY.keys()))

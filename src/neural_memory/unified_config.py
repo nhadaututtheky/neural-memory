@@ -210,6 +210,48 @@ class MaintenanceConfig:
         )
 
 
+@dataclass(frozen=True)
+class Mem0SyncConfig:
+    """Auto-sync configuration for Mem0 integration.
+
+    When enabled, the MCP server auto-detects Mem0 (via MEM0_API_KEY env var
+    or self_hosted flag) and syncs memories in background on startup.
+    """
+
+    enabled: bool = True
+    self_hosted: bool = False
+    user_id: str = ""
+    agent_id: str = ""
+    cooldown_minutes: int = 60
+    sync_on_startup: bool = True
+    limit: int | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "enabled": self.enabled,
+            "self_hosted": self.self_hosted,
+            "user_id": self.user_id,
+            "agent_id": self.agent_id,
+            "cooldown_minutes": self.cooldown_minutes,
+            "sync_on_startup": self.sync_on_startup,
+        }
+        if self.limit is not None:
+            result["limit"] = self.limit
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Mem0SyncConfig:
+        return cls(
+            enabled=data.get("enabled", True),
+            self_hosted=data.get("self_hosted", False),
+            user_id=data.get("user_id", ""),
+            agent_id=data.get("agent_id", ""),
+            cooldown_minutes=data.get("cooldown_minutes", 60),
+            sync_on_startup=data.get("sync_on_startup", True),
+            limit=data.get("limit"),
+        )
+
+
 @dataclass
 class UnifiedConfig:
     """Unified configuration for NeuralMemory.
@@ -240,6 +282,9 @@ class UnifiedConfig:
 
     # Proactive maintenance settings
     maintenance: MaintenanceConfig = field(default_factory=MaintenanceConfig)
+
+    # Mem0 auto-sync settings
+    mem0_sync: Mem0SyncConfig = field(default_factory=Mem0SyncConfig)
 
     # CLI preferences
     json_output: bool = False
@@ -275,6 +320,7 @@ class UnifiedConfig:
             auto=AutoConfig.from_dict(data.get("auto", {})),
             eternal=EternalConfig.from_dict(data.get("eternal", {})),
             maintenance=MaintenanceConfig.from_dict(data.get("maintenance", {})),
+            mem0_sync=Mem0SyncConfig.from_dict(data.get("mem0_sync", {})),
             json_output=data.get("cli", {}).get("json_output", False),
             default_depth=data.get("cli", {}).get("default_depth"),
             default_max_tokens=data.get("cli", {}).get("default_max_tokens", 500),
@@ -335,6 +381,15 @@ class UnifiedConfig:
             f"auto_consolidate = {'true' if self.maintenance.auto_consolidate else 'false'}",
             f"auto_consolidate_strategies = {json.dumps(list(self.maintenance.auto_consolidate_strategies))}",
             f"consolidate_cooldown_minutes = {self.maintenance.consolidate_cooldown_minutes}",
+            "",
+            "# Mem0 auto-sync settings",
+            "[mem0_sync]",
+            f"enabled = {'true' if self.mem0_sync.enabled else 'false'}",
+            f"self_hosted = {'true' if self.mem0_sync.self_hosted else 'false'}",
+            f'user_id = "{self.mem0_sync.user_id}"',
+            f'agent_id = "{self.mem0_sync.agent_id}"',
+            f"cooldown_minutes = {self.mem0_sync.cooldown_minutes}",
+            f"sync_on_startup = {'true' if self.mem0_sync.sync_on_startup else 'false'}",
             "",
             "# CLI preferences",
             "[cli]",

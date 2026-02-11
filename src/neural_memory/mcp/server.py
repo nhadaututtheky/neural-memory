@@ -49,6 +49,7 @@ from neural_memory.mcp.db_train_handler import DBTrainHandler
 from neural_memory.mcp.eternal_handler import EternalHandler
 from neural_memory.mcp.index_handler import IndexHandler
 from neural_memory.mcp.maintenance_handler import MaintenanceHandler
+from neural_memory.mcp.mem0_sync_handler import Mem0SyncHandler
 from neural_memory.mcp.prompt import get_system_prompt
 from neural_memory.mcp.session_handler import SessionHandler
 from neural_memory.mcp.tool_schemas import get_tool_schemas
@@ -72,6 +73,7 @@ class MCPServer(
     TrainHandler,
     DBTrainHandler,
     MaintenanceHandler,
+    Mem0SyncHandler,
 ):
     """MCP server that exposes NeuralMemory tools.
 
@@ -87,6 +89,7 @@ class MCPServer(
         TrainHandler        — _train (train docs into brain, status)
         DBTrainHandler      — _train_db (train DB schema into brain, status)
         MaintenanceHandler  — _check_maintenance, health pulse
+        Mem0SyncHandler     — maybe_start_mem0_sync, background auto-sync
     """
 
     def __init__(self) -> None:
@@ -962,6 +965,12 @@ async def run_mcp_server() -> None:
     """Run the MCP server over stdio."""
     server = create_mcp_server()
 
+    # Start background Mem0 auto-sync if configured
+    try:
+        await server.maybe_start_mem0_sync()
+    except Exception:
+        logger.debug("Mem0 auto-sync startup failed (non-critical)", exc_info=True)
+
     try:
         while True:
             try:
@@ -995,6 +1004,9 @@ async def run_mcp_server() -> None:
             except KeyboardInterrupt:
                 break
     finally:
+        # Cancel background Mem0 sync if still running
+        server.cancel_mem0_sync()
+
         # Close aiosqlite connection before event loop exits to prevent
         # "Event loop is closed" noise from the background thread.
         if server._storage is not None:

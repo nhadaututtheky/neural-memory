@@ -178,3 +178,160 @@ class Mem0Adapter:
                 "message": f"Mem0 connection failed: {e}",
                 "system": "mem0",
             }
+
+
+class Mem0SelfHostedAdapter:
+    """Adapter for self-hosted Mem0 using `from mem0 import Memory` (no API key).
+
+    Usage:
+        adapter = Mem0SelfHostedAdapter(user_id="alice")
+        records = await adapter.fetch_all()
+    """
+
+    def __init__(
+        self,
+        user_id: str | None = None,
+        agent_id: str | None = None,
+        config: dict[str, Any] | None = None,
+    ) -> None:
+        self._user_id = user_id
+        self._agent_id = agent_id
+        self._mem0_config = config
+        self._client: Any = None
+
+    def _get_client(self) -> Any:
+        """Lazy-initialize self-hosted Mem0 Memory instance."""
+        if self._client is None:
+            from mem0 import Memory  # type: ignore[import-untyped]
+
+            if self._mem0_config:
+                self._client = Memory.from_config(self._mem0_config)
+            else:
+                self._client = Memory()
+
+        return self._client
+
+    @property
+    def system_type(self) -> SourceSystemType:
+        return SourceSystemType.MEMORY_LAYER
+
+    @property
+    def system_name(self) -> str:
+        return "mem0_self_hosted"
+
+    @property
+    def capabilities(self) -> frozenset[SourceCapability]:
+        return frozenset(
+            {
+                SourceCapability.FETCH_ALL,
+                SourceCapability.FETCH_METADATA,
+                SourceCapability.HEALTH_CHECK,
+            }
+        )
+
+    async def fetch_all(
+        self,
+        collection: str | None = None,
+        limit: int | None = None,
+    ) -> list[ExternalRecord]:
+        """Fetch all memories from self-hosted Mem0."""
+        client = self._get_client()
+
+        kwargs: dict[str, Any] = {}
+        if self._user_id:
+            kwargs["user_id"] = self._user_id
+        if self._agent_id:
+            kwargs["agent_id"] = self._agent_id
+
+        memories = await asyncio.get_running_loop().run_in_executor(
+            None,
+            lambda: client.get_all(**kwargs),
+        )
+
+        records: list[ExternalRecord] = []
+        items = memories if isinstance(memories, list) else memories.get("results", [])
+
+        for mem in items:
+            if limit and len(records) >= limit:
+                break
+
+            mem_id = mem.get("id", "")
+            content = mem.get("memory", "") or mem.get("text", "")
+            if not content:
+                continue
+
+            metadata = mem.get("metadata", {}) or {}
+
+            created_at = utcnow()
+            if "created_at" in mem:
+                try:
+                    created_at = datetime.fromisoformat(
+                        str(mem["created_at"]).replace("Z", "+00:00")
+                    )
+                except (ValueError, TypeError):
+                    pass
+
+            updated_at = None
+            if "updated_at" in mem:
+                try:
+                    updated_at = datetime.fromisoformat(
+                        str(mem["updated_at"]).replace("Z", "+00:00")
+                    )
+                except (ValueError, TypeError):
+                    pass
+
+            source_type = mem.get("category", metadata.get("type", "memory"))
+
+            tags: set[str] = set()
+            if "categories" in mem:
+                tags = set(mem["categories"])
+            if self._user_id:
+                tags.add(f"user:{self._user_id}")
+            if self._agent_id:
+                tags.add(f"agent:{self._agent_id}")
+
+            record = ExternalRecord.create(
+                id=str(mem_id),
+                source_system="mem0_self_hosted",
+                content=content,
+                source_collection=self._user_id or self._agent_id or "default",
+                created_at=created_at,
+                updated_at=updated_at,
+                source_type=source_type,
+                metadata=metadata,
+                tags=tags,
+            )
+            records.append(record)
+
+        return records
+
+    async def fetch_since(
+        self,
+        since: datetime,
+        collection: str | None = None,
+        limit: int | None = None,
+    ) -> list[ExternalRecord]:
+        """Self-hosted Mem0 does not support temporal queries natively."""
+        raise NotImplementedError(
+            "Mem0 self-hosted adapter does not support incremental sync. Use fetch_all() instead."
+        )
+
+    async def health_check(self) -> dict[str, Any]:
+        """Check self-hosted Mem0 connectivity."""
+        try:
+            client = self._get_client()
+            await asyncio.get_running_loop().run_in_executor(
+                None,
+                lambda: client.get_all(user_id=self._user_id or "healthcheck", limit=1),
+            )
+            return {
+                "healthy": True,
+                "message": "Mem0 self-hosted connected successfully",
+                "system": "mem0_self_hosted",
+            }
+        except Exception as e:
+            return {
+                "healthy": False,
+                "message": f"Mem0 self-hosted connection failed: {e}",
+                "system": "mem0_self_hosted",
+            }

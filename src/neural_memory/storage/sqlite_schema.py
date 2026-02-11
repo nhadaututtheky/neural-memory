@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 # â”€â”€ Migrations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Each entry maps (from_version -> to_version) with a list of SQL statements.
@@ -178,6 +178,19 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
         "CREATE INDEX IF NOT EXISTS idx_synapses_pair ON synapses(brain_id, source_id, target_id)",
         # Composite index for fiber tag searches
         "CREATE INDEX IF NOT EXISTS idx_fibers_tags ON fibers(brain_id, tags)",
+    ],
+    (12, 13): [
+        # Sync state persistence for external source auto-sync (e.g. Mem0)
+        """CREATE TABLE IF NOT EXISTS sync_states (
+            source_system TEXT NOT NULL,
+            source_collection TEXT NOT NULL,
+            brain_id TEXT NOT NULL,
+            last_sync_at TEXT,
+            records_imported INTEGER DEFAULT 0,
+            last_record_id TEXT,
+            metadata TEXT DEFAULT '{}',
+            PRIMARY KEY (brain_id, source_system, source_collection)
+        )""",
     ],
 }
 
@@ -452,4 +465,16 @@ CREATE TABLE IF NOT EXISTS brain_versions (
 );
 CREATE INDEX IF NOT EXISTS idx_brain_versions_number ON brain_versions(brain_id, version_number DESC);
 CREATE INDEX IF NOT EXISTS idx_brain_versions_created ON brain_versions(brain_id, created_at DESC);
+
+-- Sync state persistence for external source auto-sync
+CREATE TABLE IF NOT EXISTS sync_states (
+    source_system TEXT NOT NULL,
+    source_collection TEXT NOT NULL,
+    brain_id TEXT NOT NULL,
+    last_sync_at TEXT,
+    records_imported INTEGER DEFAULT 0,
+    last_record_id TEXT,
+    metadata TEXT DEFAULT '{}',
+    PRIMARY KEY (brain_id, source_system, source_collection)
+);
 """
