@@ -114,9 +114,7 @@ class TestSetupSkills:
         dest_dir = claude_dir / "skills" / "memory-intake"
         dest_dir.mkdir(parents=True)
         source = SKILLS_DIR / "memory-intake" / "SKILL.md"
-        (dest_dir / "SKILL.md").write_text(
-            source.read_text(encoding="utf-8"), encoding="utf-8"
-        )
+        (dest_dir / "SKILL.md").write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
 
         with patch("neural_memory.cli.setup.Path.home", return_value=fake_home):
             from neural_memory.cli.setup import setup_skills
@@ -168,9 +166,7 @@ class TestSetupSkills:
         assert result["memory-intake"] == "updated"
 
         # Verify content matches source
-        source_content = (SKILLS_DIR / "memory-intake" / "SKILL.md").read_text(
-            encoding="utf-8"
-        )
+        source_content = (SKILLS_DIR / "memory-intake" / "SKILL.md").read_text(encoding="utf-8")
         dest_content = (dest_dir / "SKILL.md").read_text(encoding="utf-8")
         assert dest_content == source_content
 

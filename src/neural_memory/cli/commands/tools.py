@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -564,7 +565,7 @@ def install_skills(
     typer.echo()
 
 
-def _extract_skill_description(skill_path: object) -> str:
+def _extract_skill_description(skill_path: Path) -> str:
     """Extract description from SKILL.md YAML frontmatter."""
     try:
         content = skill_path.read_text(encoding="utf-8")
@@ -581,7 +582,7 @@ def _extract_skill_description(skill_path: object) -> str:
             if not in_frontmatter:
                 continue
             if line.startswith("description:"):
-                rest = line[len("description:"):].strip()
+                rest = line[len("description:") :].strip()
                 if rest and rest != "|":
                     return rest
                 in_desc = True
