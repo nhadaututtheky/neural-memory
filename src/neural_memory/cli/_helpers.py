@@ -94,9 +94,9 @@ async def get_storage(
     if config.use_sqlite or force_sqlite:
         from neural_memory.unified_config import get_shared_storage
 
-        storage = await get_shared_storage(name)
-        _active_storages.append(storage)
-        return storage  # type: ignore[return-value]
+        sqlite_storage = await get_shared_storage(name)
+        _active_storages.append(sqlite_storage)
+        return sqlite_storage  # type: ignore[return-value]
 
     # Legacy JSON mode
     brain_path = config.get_brain_path(name)
@@ -110,7 +110,7 @@ def get_brain_path_auto(config: CLIConfig, brain_name: str | None = None) -> Pat
     return config.get_brain_path(brain_name)
 
 
-def output_result(data: dict, as_json: bool = False) -> None:
+def output_result(data: dict[str, Any], as_json: bool = False) -> None:
     """Output result in appropriate format."""
     if as_json:
         typer.echo(json.dumps(data, indent=2, default=str))

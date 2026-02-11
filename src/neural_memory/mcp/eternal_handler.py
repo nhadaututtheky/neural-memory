@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from neural_memory.core.eternal_context import EternalContext
 from neural_memory.core.memory_types import MemoryType
 from neural_memory.core.trigger_engine import check_triggers
 from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline
 from neural_memory.utils.timeutils import utcnow
+
+if TYPE_CHECKING:
+    from neural_memory.storage.sqlite_store import SQLiteStorage
+    from neural_memory.unified_config import UnifiedConfig
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +23,11 @@ class EternalHandler:
     """Mixin: eternal context + recap tool handlers."""
 
     _eternal_ctx: EternalContext | None
+    config: UnifiedConfig
+    _remember: Any
+
+    async def get_storage(self) -> SQLiteStorage:
+        raise NotImplementedError
 
     async def get_eternal_context(self) -> EternalContext:
         """Get or create the eternal context query layer."""
@@ -51,7 +60,7 @@ class EternalHandler:
     async def _eternal_save(self, args: dict[str, Any]) -> dict[str, Any]:
         """Save project context, decisions, instructions into neural graph."""
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured"}
 
@@ -127,7 +136,7 @@ class EternalHandler:
     async def _recap_topic(self, ctx: EternalContext, topic: str) -> dict[str, Any]:
         """Recap with topic-based search via ReflexPipeline."""
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured"}
 

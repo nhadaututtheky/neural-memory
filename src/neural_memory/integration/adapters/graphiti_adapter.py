@@ -49,7 +49,7 @@ class GraphitiAdapter:
     def _get_client(self) -> Any:
         """Lazy-initialize Graphiti client."""
         if self._client is None:
-            from graphiti_core import Graphiti  # type: ignore[import-untyped]
+            from graphiti_core import Graphiti
 
             self._client = Graphiti(uri=self._uri)
 

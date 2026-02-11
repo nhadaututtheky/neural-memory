@@ -31,7 +31,8 @@ class SharedFiberBrainMixin:
         *,
         json_data: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
-    ) -> dict[str, Any]: ...
+    ) -> dict[str, Any]:
+        raise NotImplementedError
 
     # ========== Fiber Operations ==========
 
@@ -54,7 +55,7 @@ class SharedFiberBrainMixin:
             "created_at": fiber.created_at.isoformat(),
         }
         result = await self._request("POST", "/memory/fibers", json_data=data)
-        return result.get("id", fiber.id)
+        return str(result.get("id", fiber.id))
 
     async def get_fiber(self, fiber_id: str) -> Fiber | None:
         """Get a fiber by ID."""
@@ -203,4 +204,4 @@ class SharedFiberBrainMixin:
             f"/brain/{brain_id}/import",
             json_data=data,
         )
-        return result.get("id", brain_id)
+        return str(result.get("id", brain_id))

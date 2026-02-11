@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -24,11 +24,11 @@ def stats(
         nmem stats --json
     """
 
-    async def _stats() -> dict:
+    async def _stats() -> dict[str, Any]:
         config = get_config()
         storage = await get_storage(config)
 
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured"}
 
@@ -222,11 +222,11 @@ def status(
         nmem status --json
     """
 
-    async def _status() -> dict:
+    async def _status() -> dict[str, Any]:
         config = get_config()
         storage = await get_storage(config)
 
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured. Run: nmem init"}
 
@@ -258,7 +258,7 @@ def status(
             hours_since = (utcnow() - last_memory_at).total_seconds() / 3600
             if hours_since > 4:
                 suggestions.append(
-                    f"Last save was {format_age(hours_since / 24)} ago — consider saving progress"
+                    f"Last save was {format_age(int(hours_since / 24))} ago — consider saving progress"
                 )
 
         if len(expired) > 0:
@@ -312,7 +312,7 @@ def status(
         elif hours_ago < 24:
             age_str = f"{int(hours_ago)}h ago"
         else:
-            age_str = format_age(hours_ago / 24)
+            age_str = format_age(int(hours_ago / 24))
         typer.echo(f"  Last save: {age_str}")
     else:
         typer.echo("  Last save: never")
@@ -347,11 +347,11 @@ def health(
         nmem health --json
     """
 
-    async def _health() -> dict:
+    async def _health() -> dict[str, Any]:
         config = get_config()
         storage = await get_storage(config)
 
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured. Run: nmem init"}
 

@@ -54,7 +54,8 @@ class SentenceTransformerEmbedding(EmbeddingProvider):
         model = self._ensure_model()
         loop = asyncio.get_running_loop()
         vector = await loop.run_in_executor(None, lambda: model.encode(text, convert_to_numpy=True))
-        return vector.tolist()
+        result: list[float] = vector.tolist()
+        return result
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Encode a batch of texts using the model's native batching."""

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -153,7 +153,7 @@ async def get_brain_stats(
 async def export_brain(
     brain_id: str,
     storage: Annotated[NeuralStorage, Depends(get_storage)],
-) -> dict:
+) -> dict[str, Any]:
     """Export brain as snapshot."""
     brain = await storage.get_brain(brain_id)
     if brain is None:
@@ -304,7 +304,7 @@ async def merge_brain(
 async def delete_brain(
     brain_id: str,
     storage: Annotated[NeuralStorage, Depends(get_storage)],
-) -> dict:
+) -> dict[str, str]:
     """Delete a brain."""
     brain = await storage.get_brain(brain_id)
     if brain is None:

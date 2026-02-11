@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import random
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
@@ -54,7 +55,7 @@ async def compute_topology(
     storage: NeuralStorage,
     brain_id: str,
     *,
-    _preloaded_synapses: list[SynapseLike] | None = None,
+    _preloaded_synapses: Sequence[SynapseLike] | None = None,
 ) -> TopologyMetrics:
     """Compute graph topology metrics for a brain.
 
@@ -81,7 +82,7 @@ async def compute_topology(
             enriched_synapse_ratio=0.0,
         )
 
-    all_synapses = (
+    all_synapses: Sequence[SynapseLike] = (
         _preloaded_synapses if _preloaded_synapses is not None else await storage.get_all_synapses()
     )
 
@@ -121,7 +122,7 @@ _MAX_SAMPLE_NEIGHBORS = 200
 
 
 def _largest_component_ratio(
-    synapses: list[SynapseLike],
+    synapses: Sequence[SynapseLike],
     neuron_count: int,
 ) -> float:
     """Compute ratio of neurons in the largest connected component.
@@ -178,7 +179,7 @@ def _largest_component_ratio(
     return largest / total
 
 
-def _clustering_coefficient(synapses: list[SynapseLike]) -> float:
+def _clustering_coefficient(synapses: Sequence[SynapseLike]) -> float:
     """Compute global clustering coefficient.
 
     For each node, checks how many of its neighbor pairs are

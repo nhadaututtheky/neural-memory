@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -82,7 +83,8 @@ def create_app(
     from neural_memory.server.dependencies import get_storage as shared_get_storage
 
     async def get_storage() -> NeuralStorage:
-        return app.state.storage
+        storage: NeuralStorage = app.state.storage
+        return storage
 
     app.dependency_overrides[shared_get_storage] = get_storage
 
@@ -114,7 +116,7 @@ def create_app(
 
     # Root endpoint
     @app.get("/", tags=["health"])
-    async def root() -> dict:
+    async def root() -> dict[str, str]:
         """Root endpoint with API info."""
         return {
             "name": title,
@@ -127,7 +129,7 @@ def create_app(
 
     # Graph visualization API
     @app.get("/api/graph", tags=["visualization"])
-    async def get_graph_data() -> dict:
+    async def get_graph_data() -> dict[str, Any]:
         """Get graph data for visualization."""
         from neural_memory.unified_config import get_shared_storage
 

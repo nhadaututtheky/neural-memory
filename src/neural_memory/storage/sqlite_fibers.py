@@ -17,8 +17,11 @@ if TYPE_CHECKING:
 class SQLiteFiberMixin:
     """Mixin providing fiber CRUD operations."""
 
-    def _ensure_conn(self) -> aiosqlite.Connection: ...
-    def _get_brain_id(self) -> str: ...
+    def _ensure_conn(self) -> aiosqlite.Connection:
+        raise NotImplementedError
+
+    def _get_brain_id(self) -> str:
+        raise NotImplementedError
 
     async def add_fiber(self, fiber: Fiber) -> str:
         conn = self._ensure_conn()

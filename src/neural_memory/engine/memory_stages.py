@@ -148,7 +148,7 @@ class MaturationRecord:
         if isinstance(timestamps_raw, str):
             timestamps = json.loads(timestamps_raw)
         else:
-            timestamps = list(timestamps_raw) if timestamps_raw else []
+            timestamps = list(timestamps_raw) if timestamps_raw else []  # type: ignore[call-overload]
 
         stage_entered_raw = data.get("stage_entered_at", "")
         stage_entered = (
@@ -160,7 +160,7 @@ class MaturationRecord:
             brain_id=str(data["brain_id"]),
             stage=MemoryStage(str(data.get("stage", "stm"))),
             stage_entered_at=stage_entered,
-            rehearsal_count=int(data.get("rehearsal_count", 0)),
+            rehearsal_count=int(data.get("rehearsal_count", 0)),  # type: ignore[call-overload]
             reinforcement_timestamps=timestamps,
         )
 

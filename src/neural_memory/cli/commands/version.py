@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -30,7 +30,7 @@ def version_create(
         nmem version create pre-refactor -d "Before cleanup"
     """
 
-    async def _create() -> dict:
+    async def _create() -> dict[str, Any]:
         config = get_config()
         brain_name = config.current_brain
         brain_path = get_brain_path_auto(config, brain_name)
@@ -40,7 +40,7 @@ def version_create(
 
         storage = await get_storage(config)
         try:
-            brain = await storage.get_brain(storage._current_brain_id)
+            brain = await storage.get_brain(storage._current_brain_id or "")
             if not brain:
                 return {"error": "No brain configured"}
 
@@ -91,7 +91,7 @@ def version_list(
         nmem version list --limit 5
     """
 
-    async def _list() -> dict:
+    async def _list() -> dict[str, Any]:
         config = get_config()
         brain_name = config.current_brain
         brain_path = get_brain_path_auto(config, brain_name)
@@ -101,7 +101,7 @@ def version_list(
 
         storage = await get_storage(config)
         try:
-            brain = await storage.get_brain(storage._current_brain_id)
+            brain = await storage.get_brain(storage._current_brain_id or "")
             if not brain:
                 return {"error": "No brain configured"}
 
@@ -159,7 +159,7 @@ def version_rollback(
         nmem version rollback abc123
     """
 
-    async def _rollback() -> dict:
+    async def _rollback() -> dict[str, Any]:
         config = get_config()
         brain_name = config.current_brain
         brain_path = get_brain_path_auto(config, brain_name)
@@ -169,7 +169,7 @@ def version_rollback(
 
         storage = await get_storage(config)
         try:
-            brain = await storage.get_brain(storage._current_brain_id)
+            brain = await storage.get_brain(storage._current_brain_id or "")
             if not brain:
                 return {"error": "No brain configured"}
 
@@ -212,7 +212,7 @@ def version_diff(
         nmem version diff abc123 def456
     """
 
-    async def _diff() -> dict:
+    async def _diff() -> dict[str, Any]:
         config = get_config()
         brain_name = config.current_brain
         brain_path = get_brain_path_auto(config, brain_name)
@@ -222,7 +222,7 @@ def version_diff(
 
         storage = await get_storage(config)
         try:
-            brain = await storage.get_brain(storage._current_brain_id)
+            brain = await storage.get_brain(storage._current_brain_id or "")
             if not brain:
                 return {"error": "No brain configured"}
 

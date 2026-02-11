@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 # ATX headings: optional 0-3 leading spaces, #{1,6}, mandatory space, content
 # Captures: group(1)=hashes, group(2)=heading text (closing hashes stripped later)
@@ -229,23 +230,25 @@ def _clean_heading_text(text: str) -> str:
     return text.strip()
 
 
-def _split_by_headings(lines: list[str]) -> list[dict]:
+def _split_by_headings(lines: list[str]) -> list[dict[str, Any]]:
     """Split lines into sections by ATX and setext headings.
 
     Handles fenced code blocks (``` and ~~~) to avoid false heading matches.
     Returns list of dicts: {level, heading, body, line_start, line_end}.
     """
-    sections: list[dict] = []
-    current: dict | None = None
+    sections: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
     in_fence = False
     fence_marker = ""
 
-    def _finalize_section(section: dict, end_line: int) -> None:
+    def _finalize_section(section: dict[str, Any], end_line: int) -> None:
         section["line_end"] = end_line
         section["body"] = "\n".join(lines[section["body_start"] : end_line])
         sections.append(section)
 
-    def _start_section(level: int, heading: str, body_start: int, line_start: int) -> dict:
+    def _start_section(
+        level: int, heading: str, body_start: int, line_start: int
+    ) -> dict[str, Any]:
         return {
             "level": level,
             "heading": _clean_heading_text(heading),

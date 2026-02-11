@@ -29,6 +29,8 @@ from neural_memory.engine.reconstruction import (
 from neural_memory.engine.reflex_activation import CoActivation, ReflexActivation
 from neural_memory.engine.retrieval_context import format_context
 from neural_memory.engine.retrieval_types import DepthLevel, RetrievalResult, Subgraph
+
+__all__ = ["DepthLevel", "ReflexPipeline", "RetrievalResult"]
 from neural_memory.engine.stabilization import StabilizationConfig, stabilize
 from neural_memory.engine.write_queue import DeferredWriteQueue
 from neural_memory.extraction.parser import QueryIntent, QueryParser, Stimulus
@@ -341,12 +343,13 @@ class ReflexPipeline:
             return None
 
         if traversal == "causal":
+            assert seed_id is not None  # guarded by None check above
             direction = metadata.get("direction", "causes")
             chain = await trace_causal_chain(
                 self._storage,
                 seed_id,
                 direction,
-                max_depth=5,  # type: ignore[arg-type]
+                max_depth=5,
             )
             if not chain.steps:
                 return None
@@ -390,7 +393,7 @@ class ReflexPipeline:
                 self._storage,
                 seed_id,
                 direction,
-                max_steps=10,  # type: ignore[arg-type]
+                max_steps=10,
             )
             if not sequence.events:
                 return None
@@ -653,8 +656,8 @@ class ReflexPipeline:
             clusters.setdefault(anchor, []).append((neuron_id, activation))
 
         # Sort each cluster by activation level
-        for anchor in clusters:
-            clusters[anchor].sort(key=lambda x: x[1].activation_level, reverse=True)
+        for cluster_key in clusters:
+            clusters[cluster_key].sort(key=lambda x: x[1].activation_level, reverse=True)
 
         # Distribute K across clusters proportionally, minimum 1 per cluster
         num_clusters = len(clusters)

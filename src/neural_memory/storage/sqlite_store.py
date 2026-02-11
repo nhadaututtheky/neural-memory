@@ -204,8 +204,8 @@ class SQLiteStorage(
             "SELECT COUNT(*) as cnt FROM fibers WHERE brain_id = ? AND created_at >= ?",
             (brain_id, today_midnight.isoformat()),
         ) as cursor:
-            row = await cursor.fetchone()
-            today_fibers_count = row["cnt"] if row else 0
+            today_row = await cursor.fetchone()
+            today_fibers_count = today_row["cnt"] if today_row else 0
 
         # Synapse stats by type
         synapse_stats: dict[str, Any] = {
@@ -252,10 +252,10 @@ class SQLiteStorage(
             "SELECT MIN(created_at) as oldest, MAX(created_at) as newest FROM fibers WHERE brain_id = ?",
             (brain_id,),
         ) as cursor:
-            row = await cursor.fetchone()
-            if row:
-                oldest_memory = row["oldest"]
-                newest_memory = row["newest"]
+            time_row = await cursor.fetchone()
+            if time_row:
+                oldest_memory = time_row["oldest"]
+                newest_memory = time_row["newest"]
 
         return {
             **basic_stats,

@@ -43,7 +43,7 @@ class ChromaDBAdapter:
     def _get_client(self) -> Any:
         """Lazy-initialize ChromaDB client."""
         if self._client is None:
-            import chromadb  # type: ignore[import-untyped]
+            import chromadb
 
             if self._host:
                 self._client = chromadb.HttpClient(

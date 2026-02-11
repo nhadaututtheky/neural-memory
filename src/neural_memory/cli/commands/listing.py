@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -52,7 +52,7 @@ def list_memories(
         nmem list --project "Q1 Sprint"         # Memories in a project
     """
 
-    async def _list() -> dict:
+    async def _list() -> dict[str, Any]:
         config = get_config()
         storage = await get_storage(config)
 
@@ -130,7 +130,7 @@ def list_memories(
             fibers = await storage.get_fibers(limit=limit)
             memories_data = []
             for fiber in fibers:
-                content = fiber.summary
+                content = fiber.summary or ""
                 if not content and fiber.anchor_neuron_id:
                     anchor = await storage.get_neuron(fiber.anchor_neuron_id)
                     if anchor:
@@ -176,18 +176,17 @@ def list_memories(
                 if days is not None:
                     expiry_info = f"{days}d" if days > 0 else "EXPIRED"
 
-            memories_data.append(
-                {
-                    "fiber_id": tm.fiber_id,
-                    "type": tm.memory_type.value,
-                    "priority": tm.priority.name.lower(),
-                    "content": content[:100] + "..." if len(content) > 100 else content,
-                    "age": format_age(freshness.age_days),
-                    "expires": expiry_info,
-                    "verified": tm.provenance.verified,
-                    "created_at": tm.created_at.isoformat(),
-                }
-            )
+            entry: dict[str, Any] = {
+                "fiber_id": tm.fiber_id,
+                "type": tm.memory_type.value,
+                "priority": tm.priority.name.lower(),
+                "content": content[:100] + "..." if len(content) > 100 else content,
+                "age": format_age(freshness.age_days),
+                "expires": expiry_info,
+                "verified": tm.provenance.verified,
+                "created_at": tm.created_at.isoformat(),
+            }
+            memories_data.append(entry)
 
         return {
             "memories": memories_data,
@@ -310,7 +309,7 @@ def cleanup(
         nmem cleanup --type context         # Remove expired context memories
     """
 
-    async def _cleanup() -> dict:
+    async def _cleanup() -> dict[str, Any]:
         config = get_config()
         storage = await get_storage(config)
 

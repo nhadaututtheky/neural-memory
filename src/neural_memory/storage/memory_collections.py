@@ -17,7 +17,8 @@ class InMemoryCollectionsMixin:
     _typed_memories: dict[str, dict[str, TypedMemory]]
     _projects: dict[str, dict[str, Project]]
 
-    def _get_brain_id(self) -> str: ...
+    def _get_brain_id(self) -> str:
+        raise NotImplementedError
 
     # ========== Fiber Operations ==========
 

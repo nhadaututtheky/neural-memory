@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from neural_memory.utils.timeutils import utcnow
+
+if TYPE_CHECKING:
+    import aiosqlite
 
 
 class SQLiteCoActivationMixin:
@@ -14,6 +18,12 @@ class SQLiteCoActivationMixin:
     Stores individual co-activation events with canonical pair ordering
     (neuron_a < neuron_b) for consistent aggregation.
     """
+
+    def _ensure_conn(self) -> aiosqlite.Connection:
+        raise NotImplementedError
+
+    def _get_brain_id(self) -> str:
+        raise NotImplementedError
 
     async def record_co_activation(
         self,
@@ -75,7 +85,7 @@ class SQLiteCoActivationMixin:
                 HAVING cnt >= ?
                 ORDER BY cnt DESC
             """
-            params = (brain_id, min_count)
+            params = (brain_id, min_count)  # type: ignore[assignment]
 
         results: list[tuple[str, str, int, float]] = []
         async with conn.execute(query, params) as cursor:
@@ -94,4 +104,4 @@ class SQLiteCoActivationMixin:
             (brain_id, older_than.isoformat()),
         )
         await conn.commit()
-        return cursor.rowcount
+        return int(cursor.rowcount)

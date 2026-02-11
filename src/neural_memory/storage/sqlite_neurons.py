@@ -53,8 +53,11 @@ def _build_fts_prefix_query(prefix: str) -> str:
 class SQLiteNeuronMixin:
     """Mixin providing neuron and neuron state CRUD operations."""
 
-    def _ensure_conn(self) -> aiosqlite.Connection: ...
-    def _get_brain_id(self) -> str: ...
+    def _ensure_conn(self) -> aiosqlite.Connection:
+        raise NotImplementedError
+
+    def _get_brain_id(self) -> str:
+        raise NotImplementedError
 
     _has_fts: bool
 

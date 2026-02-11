@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.4] - 2026-02-11
+
+### Fixed
+
+- **Full mypy compliance**: Resolved all 341 mypy errors across 79 files (0 errors in 170 source files)
+  - Added `TYPE_CHECKING` protocol stubs to all mixin classes (storage, MCP handlers)
+  - Added generic type parameters to all bare `dict`/`list` annotations
+  - Narrowed `str | None` → `str` before passing to typed parameters
+  - Removed 14 stale `# type: ignore` comments
+  - Added proper type annotations to `HybridStorage` factory delegate methods
+  - Fixed variable name reuse across different types in same scope
+  - Fixed missing `await` on coroutine calls in CLI commands
+
+### Added
+
+- **CLAUDE.md — Type Safety Rules**: New section documenting mixin protocol stubs, generic type params, Optional narrowing, and `# type: ignore` discipline to prevent future mypy regressions
+
 ## [1.7.3] - 2026-02-11
 
 ### Added

@@ -4,16 +4,26 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from neural_memory.mcp.auto_capture import analyze_text_for_memories
 from neural_memory.mcp.constants import MAX_CONTENT_LENGTH
+
+if TYPE_CHECKING:
+    from neural_memory.storage.sqlite_store import SQLiteStorage
+    from neural_memory.unified_config import UnifiedConfig
 
 logger = logging.getLogger(__name__)
 
 
 class AutoHandler:
     """Mixin: auto-capture tool handlers."""
+
+    config: UnifiedConfig
+    _remember: Any
+
+    async def get_storage(self) -> SQLiteStorage:
+        raise NotImplementedError
 
     async def _auto(self, args: dict[str, Any]) -> dict[str, Any]:
         """Handle auto-capture settings and analysis."""

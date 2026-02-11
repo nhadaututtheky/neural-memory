@@ -803,7 +803,7 @@ class NeuralStorage(ABC):
         session_id: str | None = None,
         since: datetime | None = None,
         limit: int = 1000,
-    ) -> list:
+    ) -> list[Any]:
         """Get action events ordered by time.
 
         Args:

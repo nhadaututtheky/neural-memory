@@ -207,7 +207,7 @@ async def query_temporal_range(
 
     # Filter out fibers with no temporal bounds and sort chronologically
     temporal_fibers = [f for f in fibers if f.time_start is not None]
-    temporal_fibers.sort(key=lambda f: f.time_start)  # type: ignore[arg-type]
+    temporal_fibers.sort(key=lambda f: f.time_start)  # type: ignore[arg-type, return-value]
 
     return temporal_fibers
 

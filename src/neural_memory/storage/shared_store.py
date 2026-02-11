@@ -153,7 +153,8 @@ class SharedStorage(SharedFiberBrainMixin, NeuralStorage):
                         f"Server error: {text}",
                         status_code=response.status,
                     )
-                return await response.json()
+                result: dict[str, Any] = await response.json()
+                return result
         except aiohttp.ClientError as e:
             raise SharedStorageError(f"Connection error: {e}") from e
 
@@ -169,7 +170,7 @@ class SharedStorage(SharedFiberBrainMixin, NeuralStorage):
             "created_at": neuron.created_at.isoformat(),
         }
         result = await self._request("POST", "/memory/neurons", json_data=data)
-        return result.get("id", neuron.id)
+        return str(result.get("id", neuron.id))
 
     async def get_neuron(self, neuron_id: str) -> Neuron | None:
         """Get a neuron by ID."""
@@ -234,7 +235,8 @@ class SharedStorage(SharedFiberBrainMixin, NeuralStorage):
         if type_filter:
             params["type"] = type_filter.value
         result = await self._request("GET", "/memory/suggest", params=params)
-        return result.get("suggestions", [])
+        suggestions: list[dict[str, Any]] = result.get("suggestions", [])
+        return suggestions
 
     # ========== Neuron State Operations ==========
 
@@ -284,7 +286,7 @@ class SharedStorage(SharedFiberBrainMixin, NeuralStorage):
             "created_at": synapse.created_at.isoformat(),
         }
         result = await self._request("POST", "/memory/synapses", json_data=data)
-        return result.get("id", synapse.id)
+        return str(result.get("id", synapse.id))
 
     async def get_synapse(self, synapse_id: str) -> Synapse | None:
         """Get a synapse by ID."""
@@ -402,6 +404,11 @@ class SharedStorage(SharedFiberBrainMixin, NeuralStorage):
             "synapse_count": result.get("synapse_count", 0),
             "fiber_count": result.get("fiber_count", 0),
         }
+
+    async def get_enhanced_stats(self, brain_id: str) -> dict[str, Any]:
+        """Get enhanced brain statistics via API."""
+        result = await self._request("GET", f"/brain/{brain_id}/stats")
+        return result
 
     # ========== Cleanup ==========
 

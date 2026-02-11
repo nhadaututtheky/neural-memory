@@ -37,7 +37,7 @@ class CogneeAdapter:
     def _get_client(self) -> Any:
         """Lazy-initialize Cognee client."""
         if not self._client_initialized:
-            import cognee  # type: ignore[import-untyped]
+            import cognee
 
             api_key = self._api_key or os.environ.get("COGNEE_API_KEY")
             if api_key:
@@ -46,7 +46,7 @@ class CogneeAdapter:
             self._client_initialized = True
             return cognee
 
-        import cognee  # type: ignore[import-untyped]
+        import cognee
 
         return cognee
 
@@ -76,7 +76,7 @@ class CogneeAdapter:
     ) -> list[ExternalRecord]:
         """Fetch all knowledge chunks and relationships from Cognee."""
         cognee = self._get_client()
-        from cognee.api.v1.search import SearchType  # type: ignore[import-untyped]
+        from cognee.api.v1.search import SearchType
 
         search_results = await cognee.search(query_text="*", query_type=SearchType.CHUNKS)
 
@@ -175,7 +175,7 @@ class CogneeAdapter:
         """Check Cognee connectivity."""
         try:
             cognee = self._get_client()
-            from cognee.api.v1.search import SearchType  # type: ignore[import-untyped]
+            from cognee.api.v1.search import SearchType
 
             await cognee.search(query_text="test", query_type=SearchType.CHUNKS)
             return {

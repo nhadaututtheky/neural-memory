@@ -232,7 +232,8 @@ class SyncClient:
             response = await self._ws.receive()
             if response.type == aiohttp.WSMsgType.TEXT:
                 data = json.loads(response.data)
-                return data.get("type") == "subscribed"
+                result: bool = data.get("type") == "subscribed"
+                return result
 
         return False
 

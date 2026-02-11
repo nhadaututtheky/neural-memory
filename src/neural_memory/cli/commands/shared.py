@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -115,7 +115,7 @@ def shared_test() -> None:
         )
         raise typer.Exit(1)
 
-    async def _test() -> dict:
+    async def _test() -> dict[str, Any]:
         import aiohttp
 
         url = f"{config.shared.server_url}/health"
@@ -184,7 +184,7 @@ def shared_sync(
         )
         raise typer.Exit(1)
 
-    async def _sync() -> dict:
+    async def _sync() -> dict[str, Any]:
         from neural_memory.storage.shared_store import SharedStorage
 
         # Load local storage (force local to avoid recursion into shared mode)
@@ -204,7 +204,7 @@ def shared_sync(
         try:
             if direction in ("push", "both"):
                 # Export local and push to remote
-                snapshot = await local_storage.export_brain(local_storage._current_brain_id)
+                snapshot = await local_storage.export_brain(local_storage._current_brain_id or "")
                 await remote.import_brain(snapshot, config.current_brain)
                 sync_result["pushed"] = True
                 sync_result["neurons_pushed"] = len(snapshot.neurons)
@@ -215,7 +215,9 @@ def shared_sync(
                 # Pull from remote and import locally
                 try:
                     snapshot = await remote.export_brain(config.current_brain)
-                    await local_storage.import_brain(snapshot, local_storage._current_brain_id)
+                    await local_storage.import_brain(
+                        snapshot, local_storage._current_brain_id or ""
+                    )
                     await local_storage.save()
                     sync_result["pulled"] = True
                     sync_result["neurons_pulled"] = len(snapshot.neurons)

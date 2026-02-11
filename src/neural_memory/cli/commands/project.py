@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -43,7 +43,7 @@ def project_create(
         nmem project create "Research" -d "ML exploration" --priority 2.0
     """
 
-    async def _create() -> dict:
+    async def _create() -> dict[str, Any]:
         config = get_config()
         storage = await get_storage(config)
 
@@ -110,7 +110,7 @@ def project_list(
         nmem project list --active
     """
 
-    async def _list() -> dict:
+    async def _list() -> dict[str, Any]:
         config = get_config()
         storage = await get_storage(config)
 
@@ -194,7 +194,7 @@ def project_show(
         nmem project show "Q1 Sprint"
     """
 
-    async def _show() -> dict:
+    async def _show() -> dict[str, Any]:
         config = get_config()
         storage = await get_storage(config)
 
@@ -317,7 +317,7 @@ def project_delete(
         nmem project delete "Temp" --force
     """
 
-    async def _delete() -> dict:
+    async def _delete() -> dict[str, Any]:
         config = get_config()
         storage = await get_storage(config)
 
@@ -387,7 +387,7 @@ def project_extend(
         nmem project extend "Q1 Sprint" 7
     """
 
-    async def _extend() -> dict:
+    async def _extend() -> dict[str, Any]:
         config = get_config()
         storage = await get_storage(config)
 

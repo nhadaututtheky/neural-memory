@@ -16,8 +16,11 @@ if TYPE_CHECKING:
 class SQLiteTypedMemoryMixin:
     """Mixin providing typed memory CRUD operations."""
 
-    def _ensure_conn(self) -> aiosqlite.Connection: ...
-    def _get_brain_id(self) -> str: ...
+    def _ensure_conn(self) -> aiosqlite.Connection:
+        raise NotImplementedError
+
+    def _get_brain_id(self) -> str:
+        raise NotImplementedError
 
     async def add_typed_memory(self, typed_memory: TypedMemory) -> str:
         conn = self._ensure_conn()

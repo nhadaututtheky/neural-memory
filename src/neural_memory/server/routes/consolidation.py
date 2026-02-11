@@ -74,7 +74,7 @@ async def consolidate_brain(
     if brain is None:
         raise HTTPException(status_code=404, detail=f"Brain {brain_id} not found")
 
-    storage.set_brain(brain_id)
+    storage.set_brain(brain_id)  # type: ignore[attr-defined]
 
     try:
         strategies = [ConsolidationStrategy(s) for s in request.strategies]

@@ -24,10 +24,11 @@ these metrics: maturity_level, plasticity, density.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from neural_memory.engine.memory_stages import MemoryStage
 from neural_memory.engine.topology_analysis import compute_topology
@@ -225,7 +226,7 @@ class EvolutionEngine:
 # ── Pure functions ───────────────────────────────────────────────
 
 
-def _compute_plasticity(all_synapses: list[object], now: datetime) -> float:
+def _compute_plasticity(all_synapses: Sequence[Any], now: datetime) -> float:
     """Compute plasticity index: learning activity in last 7 days.
 
     Counts distinct synapses that are either new OR reinforced in the
@@ -250,7 +251,7 @@ def _compute_plasticity(all_synapses: list[object], now: datetime) -> float:
 
 
 def _compute_activity(
-    all_fibers: list[object],
+    all_fibers: Sequence[Any],
     now: datetime,
     fiber_count: int,
 ) -> float:
@@ -268,7 +269,7 @@ def _compute_activity(
     return active_7d / fiber_count
 
 
-def _compute_decay(all_fibers: list[object], now: datetime) -> float:
+def _compute_decay(all_fibers: Sequence[Any], now: datetime) -> float:
     """Compute decay factor from most recent fiber retrieval.
 
     Proficiency decays if brain isn't used (sigmoid centered at 30 days):

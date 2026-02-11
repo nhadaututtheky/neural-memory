@@ -53,7 +53,7 @@ class LlamaIndexAdapter:
             )
             raise ValueError(msg)
 
-        from llama_index.core import (  # type: ignore[import-untyped]
+        from llama_index.core import (
             StorageContext,
             load_index_from_storage,
         )

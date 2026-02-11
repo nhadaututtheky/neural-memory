@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from neural_memory.core.neuron import NeuronState
-from neural_memory.core.synapse import SynapseType
+from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
@@ -238,12 +238,12 @@ class DecayManager:
         incoming = await storage.get_synapses_for_neurons(all_neuron_ids, direction="in")
 
         # Build synapse lookup by ID
-        synapse_map: dict[str, object] = {}
-        for synapses in outgoing.values():
-            for syn in synapses:
+        synapse_map: dict[str, Synapse] = {}
+        for synapses_list in outgoing.values():
+            for syn in synapses_list:
                 synapse_map[syn.id] = syn
-        for synapses in incoming.values():
-            for syn in synapses:
+        for synapses_list in incoming.values():
+            for syn in synapses_list:
                 synapse_map[syn.id] = syn
 
         for fiber in eligible_fibers:
@@ -335,18 +335,18 @@ class ReinforcementManager:
             if all_neuron_ids:
                 outgoing = await storage.get_synapses_for_neurons(all_neuron_ids, direction="out")
                 incoming = await storage.get_synapses_for_neurons(all_neuron_ids, direction="in")
-                synapse_map: dict[str, object] = {}
-                for synapses in outgoing.values():
-                    for syn in synapses:
-                        synapse_map[syn.id] = syn
-                for synapses in incoming.values():
-                    for syn in synapses:
-                        synapse_map[syn.id] = syn
+                synapse_map_2: dict[str, Synapse] = {}
+                for synapses_out in outgoing.values():
+                    for syn in synapses_out:
+                        synapse_map_2[syn.id] = syn
+                for synapses_in in incoming.values():
+                    for syn in synapses_in:
+                        synapse_map_2[syn.id] = syn
             else:
-                synapse_map = {}
+                synapse_map_2 = {}
 
             for synapse_id in synapse_ids:
-                synapse = synapse_map.get(synapse_id)
+                synapse = synapse_map_2.get(synapse_id)
                 if synapse is None:
                     # Fallback for synapses not connected to reinforced neurons
                     synapse = await storage.get_synapse(synapse_id)

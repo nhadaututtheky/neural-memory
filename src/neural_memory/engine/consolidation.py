@@ -194,7 +194,7 @@ class ConsolidationEngine:
     ) -> None:
         """Prune weak synapses and orphan neurons."""
         # Ensure brain context is set (validates state)
-        self._storage._get_brain_id()
+        self._storage._get_brain_id()  # type: ignore[attr-defined]
 
         # Get all synapses
         all_synapses = await self._storage.get_synapses()
@@ -789,7 +789,7 @@ class ConsolidationEngine:
 
         logger = logging.getLogger(__name__)
 
-        brain = await self._storage.get_brain(self._storage._current_brain_id)
+        brain = await self._storage.get_brain(self._storage.current_brain_id)  # type: ignore[arg-type]
         if not brain:
             return
 
@@ -819,7 +819,7 @@ class ConsolidationEngine:
 
         logger = logging.getLogger(__name__)
 
-        brain = await self._storage.get_brain(self._storage._current_brain_id)
+        brain = await self._storage.get_brain(self._storage.current_brain_id)  # type: ignore[arg-type]
         if not brain:
             return
 

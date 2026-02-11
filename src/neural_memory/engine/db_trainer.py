@@ -130,7 +130,7 @@ class DBTrainer:
         knowledge = self._extractor.extract(snapshot)
 
         # Step 3: Batch encode
-        self._storage.disable_auto_save()
+        self._storage.disable_auto_save()  # type: ignore[attr-defined]
 
         try:
             # Create domain CONCEPT neuron (shared anchor, like session TIME)
@@ -176,10 +176,10 @@ class DBTrainer:
                 ) = await self._create_relationship_synapses(knowledge, table_neurons)
 
             # Batch save
-            await self._storage.batch_save()
+            await self._storage.batch_save()  # type: ignore[attr-defined]
 
         finally:
-            self._storage.enable_auto_save()
+            self._storage.enable_auto_save()  # type: ignore[attr-defined]
 
         neurons_created = domain_neurons_created + ent_neurons_created + pat_neurons_created
         synapses_created = ent_synapses_created + pat_synapses_created + rel_synapses_created

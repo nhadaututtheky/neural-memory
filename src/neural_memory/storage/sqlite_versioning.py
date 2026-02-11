@@ -19,7 +19,8 @@ class SQLiteVersioningMixin:
 
     _conn: aiosqlite.Connection | None
 
-    def _ensure_conn(self) -> aiosqlite.Connection: ...
+    def _ensure_conn(self) -> aiosqlite.Connection:
+        raise NotImplementedError
 
     async def save_version(
         self,
@@ -107,7 +108,7 @@ class SQLiteVersioningMixin:
 
         if row is None or row["max_num"] is None:
             return 1
-        return row["max_num"] + 1
+        return int(row["max_num"]) + 1
 
     async def delete_version(self, brain_id: str, version_id: str) -> bool:
         """Delete a specific version."""

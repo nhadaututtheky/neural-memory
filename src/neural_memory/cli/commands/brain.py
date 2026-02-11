@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -136,7 +136,7 @@ def brain_export(
             raise typer.Exit(1)
 
         storage = await get_storage(config, brain_name=brain_name)
-        snapshot = await storage.export_brain(storage._current_brain_id)
+        snapshot = await storage.export_brain(storage._current_brain_id or "")
 
         # Filter sensitive content if requested
         neurons = snapshot.neurons
@@ -317,7 +317,7 @@ def brain_delete(
     typer.secho(f"Deleted brain: {name}", fg=typer.colors.GREEN)
 
 
-def _scan_sensitive_neurons(neurons: list) -> list[dict]:
+def _scan_sensitive_neurons(neurons: list[Any]) -> list[dict[str, Any]]:
     """Scan neurons for sensitive content, return summary dicts."""
     result = []
     for neuron in neurons:
@@ -333,7 +333,7 @@ def _scan_sensitive_neurons(neurons: list) -> list[dict]:
     return result
 
 
-def _compute_health_score(sensitive_count: int, freshness_report: object) -> tuple[int, list[str]]:
+def _compute_health_score(sensitive_count: int, freshness_report: Any) -> tuple[int, list[str]]:
     """Compute health score (0-100) and list of issues."""
     score = 100
     issues: list[str] = []
@@ -356,7 +356,7 @@ def _compute_health_score(sensitive_count: int, freshness_report: object) -> tup
     return max(0, score), issues
 
 
-def _display_health(result: dict) -> None:
+def _display_health(result: dict[str, Any]) -> None:
     """Pretty-print health report to terminal."""
     if "error" in result:
         typer.secho(result["error"], fg=typer.colors.RED)
@@ -414,7 +414,7 @@ def brain_transplant(
         nmem brain transplant shared --strategy prefer_recent
     """
 
-    async def _transplant() -> dict:
+    async def _transplant() -> dict[str, Any]:
         from neural_memory.engine.brain_transplant import TransplantFilter, transplant
         from neural_memory.engine.merge import ConflictStrategy
 
@@ -431,8 +431,8 @@ def brain_transplant(
         source_storage = await get_storage(config, brain_name=source)
         target_storage = await get_storage(config, brain_name=target_name)
         try:
-            source_brain = await source_storage.get_brain(source_storage._current_brain_id)
-            target_brain = await target_storage.get_brain(target_storage._current_brain_id)
+            source_brain = await source_storage.get_brain(source_storage._current_brain_id or "")
+            target_brain = await target_storage.get_brain(target_storage._current_brain_id or "")
 
             if not source_brain:
                 return {"error": f"Source brain '{source}' has no data."}
@@ -500,7 +500,7 @@ def brain_health(
         nmem brain health --name work --json
     """
 
-    async def _health() -> dict:
+    async def _health() -> dict[str, Any]:
         config = get_config()
         brain_name = name or config.current_brain
         brain_path = get_brain_path_auto(config, brain_name)
@@ -509,7 +509,7 @@ def brain_health(
             return {"error": f"Brain '{brain_name}' not found."}
 
         storage = await get_storage(config, brain_name=brain_name)
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured"}
 

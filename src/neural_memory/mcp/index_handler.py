@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from neural_memory.storage.sqlite_store import SQLiteStorage
 
 logger = logging.getLogger(__name__)
 
 
 class IndexHandler:
     """Mixin: codebase indexing + external import tool handlers."""
+
+    async def get_storage(self) -> SQLiteStorage:
+        raise NotImplementedError
 
     async def _index(self, args: dict[str, Any]) -> dict[str, Any]:
         """Index codebase into neural memory."""
@@ -28,7 +34,7 @@ class IndexHandler:
 
         from neural_memory.engine.codebase_encoder import CodebaseEncoder
 
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured"}
 
@@ -81,7 +87,7 @@ class IndexHandler:
         from neural_memory.integration.sync_engine import SyncEngine
 
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured"}
 

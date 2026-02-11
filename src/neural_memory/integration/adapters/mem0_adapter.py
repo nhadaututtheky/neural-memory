@@ -208,7 +208,7 @@ class Mem0Adapter(_BaseMem0Adapter):
     def _get_client(self) -> Any:
         """Lazy-initialize Mem0 Platform client."""
         if self._client is None:
-            from mem0 import MemoryClient  # type: ignore[import-untyped]
+            from mem0 import MemoryClient
 
             api_key = self._api_key or os.environ.get("MEM0_API_KEY")
             if not api_key:
@@ -247,7 +247,7 @@ class Mem0SelfHostedAdapter(_BaseMem0Adapter):
     def _get_client(self) -> Any:
         """Lazy-initialize self-hosted Mem0 Memory instance."""
         if self._client is None:
-            from mem0 import Memory  # type: ignore[import-untyped]
+            from mem0 import Memory
 
             if self._mem0_config:
                 self._client = Memory.from_config(self._mem0_config)

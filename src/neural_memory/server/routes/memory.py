@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -125,7 +125,7 @@ async def get_fiber(
     fiber_id: str,
     brain: Annotated[Brain, Depends(get_brain)],
     storage: Annotated[NeuralStorage, Depends(get_storage)],
-) -> dict:
+) -> dict[str, Any]:
     """Get a specific fiber by ID."""
     fiber = await storage.get_fiber(fiber_id)
     if fiber is None:
@@ -158,7 +158,7 @@ async def list_neurons(
     type: str | None = None,
     content_contains: str | None = None,
     limit: int = 50,
-) -> dict:
+) -> dict[str, Any]:
     """List neurons with optional filters."""
     from neural_memory.core.neuron import NeuronType
 

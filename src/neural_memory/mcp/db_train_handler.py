@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from neural_memory.storage.sqlite_store import SQLiteStorage
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +23,9 @@ class DBTrainHandler:
     Validates inputs and delegates to DBTrainer.
     """
 
+    async def get_storage(self) -> SQLiteStorage:
+        raise NotImplementedError
+
     async def _train_db(self, args: dict[str, Any]) -> dict[str, Any]:
         """Handle database schema training actions."""
         action = args.get("action", "train")
@@ -35,7 +41,7 @@ class DBTrainHandler:
         from neural_memory.engine.db_trainer import DBTrainer, DBTrainingConfig
 
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured"}
 

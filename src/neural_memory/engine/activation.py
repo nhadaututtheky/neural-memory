@@ -169,15 +169,15 @@ class SpreadingActivation:
             if uncached_ids:
                 batch_states = await self._storage.get_neuron_states_batch(uncached_ids)
                 for nid in uncached_ids:
-                    state = batch_states.get(nid)
-                    freq_cache[nid] = state.access_frequency if state else 0
+                    neuron_state = batch_states.get(nid)
+                    freq_cache[nid] = neuron_state.access_frequency if neuron_state else 0
 
             # Build set of refractory neuron IDs for quick lookup
             refractory_ids: set[str] = set()
             if uncached_ids:
                 for nid in uncached_ids:
-                    state = batch_states.get(nid)
-                    if state and state.in_refractory:
+                    neuron_state = batch_states.get(nid)
+                    if neuron_state and neuron_state.in_refractory:
                         refractory_ids.add(nid)
 
             for neighbor_neuron, synapse in neighbors:

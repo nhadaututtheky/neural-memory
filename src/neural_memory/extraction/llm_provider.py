@@ -89,10 +89,10 @@ def deduplicate_relations(
             existing_pairs.add((src, tgt))
 
     new_relations: list[RelationCandidate] = []
-    for rel in llm_relations:
-        pair = (rel.source.lower().strip(), rel.target.lower().strip())
+    for llm_rel in llm_relations:
+        pair = (llm_rel.source.lower().strip(), llm_rel.target.lower().strip())
         if pair not in existing_pairs:
-            new_relations.append(rel)
+            new_relations.append(llm_rel)
             existing_pairs.add(pair)
 
     return new_relations

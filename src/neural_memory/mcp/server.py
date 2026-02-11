@@ -166,7 +166,7 @@ class MCPServer(
     async def _remember(self, args: dict[str, Any]) -> dict[str, Any]:
         """Store a memory in the neural graph."""
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured"}
 
@@ -332,12 +332,14 @@ class MCPServer(
 
                         related_memories = []
                         for nid in sorted_anchors:
-                            fiber = fiber_by_anchor.get(nid)
-                            if fiber:
-                                preview = (fiber.summary or anchor_neurons[nid].content or "")[:100]
+                            related_fiber = fiber_by_anchor.get(nid)
+                            if related_fiber:
+                                preview = (
+                                    related_fiber.summary or anchor_neurons[nid].content or ""
+                                )[:100]
                                 related_memories.append(
                                     {
-                                        "fiber_id": fiber.id,
+                                        "fiber_id": related_fiber.id,
                                         "preview": preview,
                                         "similarity": round(activations[nid].activation_level, 2),
                                     }
@@ -353,7 +355,7 @@ class MCPServer(
     async def _recall(self, args: dict[str, Any]) -> dict[str, Any]:
         """Query memories via spreading activation."""
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured"}
 
@@ -516,7 +518,7 @@ class MCPServer(
     async def _stats(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get brain statistics."""
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured"}
 
@@ -549,7 +551,7 @@ class MCPServer(
     async def _health(self, args: dict[str, Any]) -> dict[str, Any]:
         """Run brain health diagnostics."""
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured"}
 
@@ -582,7 +584,7 @@ class MCPServer(
     async def _evolution(self, args: dict[str, Any]) -> dict[str, Any]:
         """Measure brain evolution dynamics."""
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured"}
 
@@ -653,7 +655,7 @@ class MCPServer(
     async def _habits(self, args: dict[str, Any]) -> dict[str, Any]:
         """Manage learned workflow habits."""
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured"}
 
@@ -711,7 +713,7 @@ class MCPServer(
     async def _version(self, args: dict[str, Any]) -> dict[str, Any]:
         """Brain version control operations."""
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured"}
 
@@ -804,7 +806,7 @@ class MCPServer(
     async def _transplant(self, args: dict[str, Any]) -> dict[str, Any]:
         """Transplant memories from another brain."""
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured"}
 
@@ -842,7 +844,7 @@ class MCPServer(
 
         old_brain_id = storage._current_brain_id
         try:
-            storage.set_brain(source_brain.id)
+            storage.set_brain(source_brain.id or "")
             result = await transplant(
                 source_storage=storage,
                 target_storage=storage,
@@ -852,7 +854,7 @@ class MCPServer(
                 strategy=strategy,
             )
         finally:
-            storage.set_brain(old_brain_id)
+            storage.set_brain(old_brain_id or "")
 
         return {
             "success": True,

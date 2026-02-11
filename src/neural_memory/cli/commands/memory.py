@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated, Any
+
+if TYPE_CHECKING:
+    from neural_memory.cli.storage import PersistentStorage
 
 import typer
 
@@ -38,7 +41,7 @@ def _validate_content(
     *,
     force: bool,
     redact: bool,
-) -> tuple[str, list]:
+) -> tuple[str, list[Any]]:
     """Validate and optionally redact sensitive content. Returns (content, matches)."""
     sensitive_matches = check_sensitive_content(content, min_severity=2)
 
@@ -70,7 +73,7 @@ def _resolve_memory_type(
     return suggest_memory_type(content)
 
 
-async def _resolve_project_id(storage: object, project: str | None) -> str | None:
+async def _resolve_project_id(storage: PersistentStorage, project: str | None) -> str | None:
     """Look up project by name, return ID or None."""
     if not project:
         return None
@@ -81,8 +84,8 @@ async def _resolve_project_id(storage: object, project: str | None) -> str | Non
 
 
 async def _encode_and_store(
-    storage: object,
-    brain_config: object,
+    storage: PersistentStorage,
+    brain_config: Any,
     content: str,
     *,
     tags: set[str] | None,
@@ -90,7 +93,7 @@ async def _encode_and_store(
     mem_priority: Priority,
     expiry_days: int | None,
     project_id: str | None,
-) -> dict:
+) -> dict[str, Any]:
     """Encode content into neural graph and store typed memory metadata."""
     encoder = MemoryEncoder(storage, brain_config)
     storage.disable_auto_save()
@@ -171,12 +174,12 @@ def remember(
     expiry_days = expires if expires is not None else DEFAULT_EXPIRY_DAYS.get(mem_type)
     mem_priority = Priority.from_int(priority) if priority is not None else Priority.NORMAL
 
-    async def _remember() -> dict:
+    async def _remember() -> dict[str, Any]:
         config = get_config()
         storage = await get_storage(config, force_shared=shared)
 
-        brain_id = (
-            storage._current_brain_id
+        brain_id: str = (
+            storage._current_brain_id or ""
             if hasattr(storage, "_current_brain_id")
             else config.current_brain
         )
@@ -256,11 +259,11 @@ def todo(
     expiry_days = expires if expires is not None else 30
     mem_priority = Priority.from_int(priority)
 
-    async def _todo() -> dict:
+    async def _todo() -> dict[str, Any]:
         config = get_config()
         storage = await get_storage(config)
 
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured"}
 
@@ -313,7 +316,9 @@ def todo(
     output_result(result, json_output)
 
 
-async def _gather_freshness(storage: object, fiber_ids: list[str]) -> tuple[list[str], int]:
+async def _gather_freshness(
+    storage: PersistentStorage, fiber_ids: list[str]
+) -> tuple[list[str], int]:
     """Collect freshness warnings and oldest age from matched fibers."""
     warnings: list[str] = []
     oldest_age = 0
@@ -360,12 +365,12 @@ def recall(
         nmem recall "project status" --min-confidence 0.5
     """
 
-    async def _recall() -> dict:
+    async def _recall() -> dict[str, Any]:
         config = get_config()
         storage = await get_storage(config, force_shared=shared)
 
-        brain_id = (
-            storage._current_brain_id
+        brain_id: str = (
+            storage._current_brain_id or ""
             if hasattr(storage, "_current_brain_id")
             else config.current_brain
         )
@@ -446,7 +451,7 @@ def context(
         nmem context --fresh-only
     """
 
-    async def _context() -> dict:
+    async def _context() -> dict[str, Any]:
         config = get_config()
         storage = await get_storage(config)
 

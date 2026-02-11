@@ -20,6 +20,9 @@ logger = logging.getLogger(__name__)
 class SessionHandler:
     """Mixin: session tracking tool handlers."""
 
+    async def get_storage(self) -> SQLiteStorage:
+        raise NotImplementedError
+
     async def _get_active_session(self, storage: SQLiteStorage) -> dict[str, Any] | None:
         """Get active session metadata, or None if no active session."""
         try:
@@ -83,7 +86,7 @@ class SessionHandler:
         if git_ctx:
             session_tags.add(f"branch:{git_ctx.branch}")
 
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured"}
 
@@ -136,7 +139,7 @@ class SessionHandler:
             summary += f", task: {task}"
         summary += f", progress: {int(progress * 100)}%"
 
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured"}
 

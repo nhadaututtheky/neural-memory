@@ -264,7 +264,7 @@ class DiagnosticsEngine:
         return min(1.0, entropy / max_entropy)
 
     @staticmethod
-    def _compute_freshness(fibers: list) -> float:
+    def _compute_freshness(fibers: list[Any]) -> float:
         """Compute fraction of fibers accessed/created in last 7 days."""
         if not fibers:
             return 0.0
@@ -316,7 +316,7 @@ class DiagnosticsEngine:
 
         Higher average weight indicates stronger recall pathways.
         """
-        avg_weight = synapse_stats.get("avg_weight", 0.0)
+        avg_weight: float = synapse_stats.get("avg_weight", 0.0)
         return min(1.0, max(0.0, avg_weight))
 
     # ── Warning and recommendation generation ────────────────────
@@ -332,7 +332,7 @@ class DiagnosticsEngine:
         orphan_rate: float,
         consolidation_ratio: float,
         freshness: float,
-        fibers: list,
+        fibers: list[Any],
         contradicts_count: int = 0,
     ) -> tuple[list[DiagnosticWarning], list[str]]:
         """Generate warnings and recommendations from metrics."""

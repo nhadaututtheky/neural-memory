@@ -53,7 +53,8 @@ class TimeHint:
 
 
 # Type alias for time resolver functions
-TimeResolver = Callable[[datetime], tuple[datetime, datetime]]
+# Some resolvers take (ref) and some take (ref, match) — arity is checked at runtime
+TimeResolver = Callable[..., tuple[datetime, datetime]]
 
 
 def _start_of_day(dt: datetime) -> datetime:
@@ -344,7 +345,7 @@ class TemporalExtractor:
             for match in pattern.finditer(text):
                 try:
                     if arity == 2:
-                        start, end = resolver(reference_time, match)  # type: ignore
+                        start, end = resolver(reference_time, match)
                     else:
                         start, end = resolver(reference_time)
 

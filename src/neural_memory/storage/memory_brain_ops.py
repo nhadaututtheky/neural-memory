@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import datetime
+from typing import Any
 
 from neural_memory.core.brain import Brain, BrainConfig, BrainSnapshot
 from neural_memory.core.fiber import Fiber
@@ -32,10 +33,18 @@ class InMemoryBrainMixin:
     _current_brain_id: str | None
 
     def set_brain(self, brain_id: str) -> None: ...
-    def _get_brain_id(self) -> str: ...
-    async def add_neuron(self, neuron: Neuron) -> str: ...
-    async def add_synapse(self, synapse: Synapse) -> str: ...
-    async def add_fiber(self, fiber: Fiber) -> str: ...
+
+    def _get_brain_id(self) -> str:
+        raise NotImplementedError
+
+    async def add_neuron(self, neuron: Neuron) -> str:
+        raise NotImplementedError
+
+    async def add_synapse(self, synapse: Synapse) -> str:
+        raise NotImplementedError
+
+    async def add_fiber(self, fiber: Fiber) -> str:
+        raise NotImplementedError
 
     async def save_brain(self, brain: Brain) -> None:
         self._brains[brain.id] = brain
@@ -171,7 +180,7 @@ class InMemoryBrainMixin:
 
         return brain_id
 
-    async def _import_neurons(self, brain_id: str, neurons_data: list[dict]) -> None:
+    async def _import_neurons(self, brain_id: str, neurons_data: list[dict[str, Any]]) -> None:
         for n_data in neurons_data:
             neuron = Neuron(
                 id=n_data["id"],
@@ -182,7 +191,7 @@ class InMemoryBrainMixin:
             )
             await self.add_neuron(neuron)
 
-    async def _import_synapses(self, brain_id: str, synapses_data: list[dict]) -> None:
+    async def _import_synapses(self, brain_id: str, synapses_data: list[dict[str, Any]]) -> None:
         for s_data in synapses_data:
             synapse = Synapse(
                 id=s_data["id"],
@@ -197,7 +206,7 @@ class InMemoryBrainMixin:
             )
             await self.add_synapse(synapse)
 
-    async def _import_fibers(self, brain_id: str, fibers_data: list[dict]) -> None:
+    async def _import_fibers(self, brain_id: str, fibers_data: list[dict[str, Any]]) -> None:
         for f_data in fibers_data:
             # Tag origin: read auto_tags/agent_tags, fallback to legacy tags
             auto_tags = set(f_data.get("auto_tags", []))
@@ -236,7 +245,9 @@ class InMemoryBrainMixin:
             )
             await self.add_fiber(fiber)
 
-    async def _import_typed_memories(self, brain_id: str, typed_memories_data: list[dict]) -> None:
+    async def _import_typed_memories(
+        self, brain_id: str, typed_memories_data: list[dict[str, Any]]
+    ) -> None:
         for tm_data in typed_memories_data:
             prov_data = tm_data.get("provenance", {})
             provenance = Provenance(
@@ -274,7 +285,7 @@ class InMemoryBrainMixin:
             if typed_memory.fiber_id in self._fibers[brain_id]:
                 self._typed_memories[brain_id][typed_memory.fiber_id] = typed_memory
 
-    def _import_projects(self, brain_id: str, projects_data: list[dict]) -> None:
+    def _import_projects(self, brain_id: str, projects_data: list[dict[str, Any]]) -> None:
         for p_data in projects_data:
             project = Project.from_dict(p_data)
             self._projects[brain_id][project.id] = project

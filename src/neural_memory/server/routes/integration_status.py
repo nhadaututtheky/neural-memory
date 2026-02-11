@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -66,12 +66,12 @@ def _extract_source(session_id: str | None) -> str:
 
 
 def _compute_metrics(
-    events: list,
+    events: list[Any],
 ) -> list[IntegrationMetrics]:
     """Group action events by source and compute daily metrics."""
     from collections import defaultdict
 
-    by_source: dict[str, dict] = defaultdict(
+    by_source: dict[str, dict[str, Any]] = defaultdict(
         lambda: {
             "memories": 0,
             "recalls": 0,

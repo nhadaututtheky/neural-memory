@@ -288,8 +288,11 @@ def decay(
 
         storage = await get_storage(config, brain_name=brain_name)
 
+        from neural_memory.unified_config import get_config as get_unified_config
+
+        unified = get_unified_config()
         manager = DecayManager(
-            decay_rate=config.brain.decay_rate,
+            decay_rate=unified.brain.decay_rate,
             prune_threshold=prune_threshold,
         )
 
@@ -364,13 +367,7 @@ def consolidate(
         )
 
         engine = ConsolidationEngine(storage, cons_config)
-        report = engine.run(strategies=strategies, dry_run=dry_run)
-
-        # Handle both sync and async
-        import inspect
-
-        if inspect.isawaitable(report):
-            report = await report
+        report = await engine.run(strategies=strategies, dry_run=dry_run)
 
         typer.echo("")
         typer.echo(report.summary())
@@ -397,7 +394,7 @@ fi
 """
 
 
-def _hooks_install(post_commit: object) -> None:
+def _hooks_install(post_commit: Path) -> None:
     """Install the post-commit hook."""
     import os
     import stat
@@ -425,7 +422,7 @@ def _hooks_install(post_commit: object) -> None:
     typer.echo("  After each commit you'll see a reminder to save the commit message.")
 
 
-def _hooks_uninstall(post_commit: object) -> None:
+def _hooks_uninstall(post_commit: Path) -> None:
     """Uninstall the post-commit hook."""
     if not post_commit.exists():
         typer.secho("No post-commit hook found.", fg=typer.colors.YELLOW)
@@ -441,7 +438,7 @@ def _hooks_uninstall(post_commit: object) -> None:
     typer.secho("Removed post-commit hook.", fg=typer.colors.GREEN)
 
 
-def _hooks_show(post_commit: object) -> None:
+def _hooks_show(post_commit: Path) -> None:
     """Show installed hook status."""
     if post_commit.exists():
         existing = post_commit.read_text(encoding="utf-8")

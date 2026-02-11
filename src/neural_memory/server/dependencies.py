@@ -27,7 +27,7 @@ async def get_brain(
     brain = await storage.get_brain(brain_id)
     if brain is None:
         # Fallback: brain_id might be a name, not a UUID
-        brain = await storage.find_brain_by_name(brain_id)  # type: ignore[attr-defined]
+        brain = await storage.find_brain_by_name(brain_id)
     if brain is None:
         raise HTTPException(status_code=404, detail=f"Brain {brain_id} not found")
 

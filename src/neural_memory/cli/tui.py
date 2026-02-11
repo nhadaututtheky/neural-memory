@@ -60,7 +60,7 @@ async def render_dashboard(storage: PersistentStorage) -> None:
     """Render a rich dashboard with brain stats and recent activity."""
     from neural_memory.safety.freshness import analyze_freshness, evaluate_freshness
 
-    brain = await storage.get_brain(storage._current_brain_id)
+    brain = await storage.get_brain(storage._current_brain_id or "")
     if not brain:
         console.print("[red]No brain configured[/red]")
         return
@@ -183,7 +183,7 @@ async def render_dashboard(storage: PersistentStorage) -> None:
         row_text = Text()
         row_text.append(f"[{tm.memory_type.value[:4].upper()}] ", style=type_color)
         row_text.append(content, style="white")
-        row_text.append(f" ({freshness.label})", style=age_color)
+        row_text.append(f" ({freshness.level.value})", style=age_color)
         recent_table.add_row(row_text)
 
     layout["recent"].update(Panel(recent_table, title="Recent Memories", border_style="yellow"))
@@ -216,7 +216,7 @@ async def render_memory_browser(
     """Render an interactive memory browser."""
     from neural_memory.safety.freshness import evaluate_freshness, format_age
 
-    brain = await storage.get_brain(storage._current_brain_id)
+    brain = await storage.get_brain(storage._current_brain_id or "")
     if not brain:
         console.print("[red]No brain configured[/red]")
         return
@@ -338,7 +338,7 @@ async def render_graph(
     """Render a text-based graph visualization."""
     from neural_memory.core.synapse import SynapseType
 
-    brain = await storage.get_brain(storage._current_brain_id)
+    brain = await storage.get_brain(storage._current_brain_id or "")
     if not brain:
         console.print("[red]No brain configured[/red]")
         return
@@ -445,7 +445,7 @@ async def render_graph(
 
 async def render_quick_stats(storage: PersistentStorage) -> str:
     """Render a compact stats string for context injection."""
-    brain = await storage.get_brain(storage._current_brain_id)
+    brain = await storage.get_brain(storage._current_brain_id or "")
     if not brain:
         return "No brain configured"
 

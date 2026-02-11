@@ -6,6 +6,7 @@ import logging
 import re
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -121,8 +122,8 @@ class EntityExtractor:
             use_nlp: If True, try to use spaCy/underthesea (not implemented yet)
         """
         self._use_nlp = use_nlp
-        self._nlp_en = None
-        self._nlp_vi = None
+        self._nlp_en: Any = None
+        self._nlp_vi: Any = None
 
         if use_nlp:
             self._init_nlp()

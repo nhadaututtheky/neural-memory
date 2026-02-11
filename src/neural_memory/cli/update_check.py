@@ -35,7 +35,8 @@ def _read_cache() -> dict[str, Any]:
         cache_path = _get_cache_path()
         if not cache_path.exists():
             return {}
-        return json.loads(cache_path.read_text(encoding="utf-8"))
+        result: dict[str, Any] = json.loads(cache_path.read_text(encoding="utf-8"))
+        return result
     except Exception:
         logger.debug("Failed to read update cache", exc_info=True)
         return {}
@@ -84,7 +85,8 @@ def _fetch_latest_version() -> str | None:
             if resp.status != 200:
                 return None
             data = json.loads(resp.read())
-            return data.get("info", {}).get("version")
+            version: str | None = data.get("info", {}).get("version")
+            return version
     except Exception:
         logger.debug("Failed to fetch latest version from PyPI", exc_info=True)
         return None

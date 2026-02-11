@@ -55,6 +55,15 @@ src/neural_memory/
 - In MCP handlers: always `logger.error(...)` before returning error dicts.
 - Migration errors: halt on non-benign errors (don't advance schema version).
 
+## Type Safety Rules
+
+- **Always use generic type params**: `dict[str, Any]` not bare `dict`, `list[str]` not bare `list`.
+- **Mixin classes must declare protocol stubs** under `if TYPE_CHECKING` for all attributes/methods used from the composing class. Use `raise NotImplementedError` for stubs with non-`None` return types.
+- **Narrow Optional types before use**: `assert x is not None` or `x = x or "default"` before passing `str | None` to a parameter typed `str`.
+- **No stale `# type: ignore`**: remove when the underlying issue is fixed. Always use specific error codes (`# type: ignore[attr-defined]`), never bare `# type: ignore`.
+- **CI must pass `mypy src/ --ignore-missing-imports` with 0 errors.** Never merge code that adds new mypy errors.
+- **Avoid variable name reuse** across different types in the same scope — rename to avoid type conflicts (e.g. `storage` / `sqlite_storage`).
+
 ## Naming Conventions
 
 - `type` parameter is accepted in **public API** (FastAPI query params, MCP tool args).

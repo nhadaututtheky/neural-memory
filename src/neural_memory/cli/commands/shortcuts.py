@@ -28,7 +28,7 @@ def quick_recall(
     async def _recall() -> None:
         config = get_config()
         storage = await get_storage(config)
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
 
         if not brain:
             typer.secho("No brain configured", fg=typer.colors.RED)
@@ -64,7 +64,7 @@ def quick_add(
     async def _add() -> None:
         config = get_config()
         storage = await get_storage(config)
-        brain = await storage.get_brain(storage._current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
 
         if not brain:
             typer.secho("No brain configured", fg=typer.colors.RED)

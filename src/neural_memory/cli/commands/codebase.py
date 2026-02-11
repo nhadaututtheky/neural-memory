@@ -68,7 +68,7 @@ async def _index_async(
 
     exts = set(extensions) if extensions else {".py"}
 
-    brain = await storage.get_brain(storage._current_brain_id)
+    brain = await storage.get_brain(storage._current_brain_id or "")
     if not brain:
         typer.echo("Error: No brain configured", err=True)
         raise typer.Exit(code=1)

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from neural_memory.storage.sqlite_store import SQLiteStorage
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +18,9 @@ _ALLOWED_EXTENSIONS = frozenset({".md", ".mdx", ".txt", ".rst"})
 
 class TrainHandler:
     """Mixin: doc-to-brain training tool handlers."""
+
+    async def get_storage(self) -> SQLiteStorage:
+        raise NotImplementedError
 
     async def _train(self, args: dict[str, Any]) -> dict[str, Any]:
         """Handle doc-to-brain training actions."""
@@ -33,7 +39,7 @@ class TrainHandler:
         from neural_memory.engine.doc_trainer import DocTrainer, TrainingConfig
 
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage.current_brain_id)
+        brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
             return {"error": "No brain configured"}
 

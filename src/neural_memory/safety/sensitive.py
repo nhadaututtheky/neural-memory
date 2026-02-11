@@ -213,11 +213,11 @@ def check_sensitive_content(
     # Remove duplicates (same position)
     seen_positions: set[tuple[int, int]] = set()
     unique_matches: list[SensitiveMatch] = []
-    for match in matches:
-        pos = (match.start, match.end)
+    for sensitive_match in matches:
+        pos = (sensitive_match.start, sensitive_match.end)
         if pos not in seen_positions:
             seen_positions.add(pos)
-            unique_matches.append(match)
+            unique_matches.append(sensitive_match)
 
     # Merge overlapping spans (keep highest severity for merged spans)
     if unique_matches:

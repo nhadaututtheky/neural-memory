@@ -200,7 +200,7 @@ def get_system_prompt(compact: bool = False) -> str:
     return COMPACT_PROMPT if compact else SYSTEM_PROMPT
 
 
-def get_prompt_for_mcp() -> dict:
+def get_prompt_for_mcp() -> dict[str, str]:
     """Get prompt formatted for MCP resources."""
     return {
         "uri": "neuralmemory://prompt/system",

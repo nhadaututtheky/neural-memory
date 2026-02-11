@@ -223,7 +223,7 @@ def row_to_brain(row: aiosqlite.Row) -> Brain:
     )
 
 
-def provenance_to_dict(provenance: Provenance) -> dict:
+def provenance_to_dict(provenance: Provenance) -> dict[str, object]:
     """Serialize Provenance to a JSON-compatible dict."""
     return {
         "source": provenance.source,

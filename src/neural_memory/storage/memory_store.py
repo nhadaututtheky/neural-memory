@@ -576,7 +576,7 @@ class InMemoryStorage(InMemoryCollectionsMixin, InMemoryBrainMixin, NeuralStorag
         session_id: str | None = None,
         since: datetime | None = None,
         limit: int = 1000,
-    ) -> list:
+    ) -> list[Any]:
         from neural_memory.core.action_event import ActionEvent
 
         brain_id = self._get_brain_id()

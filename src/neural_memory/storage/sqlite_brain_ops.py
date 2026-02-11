@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from neural_memory.core.brain import Brain, BrainConfig, BrainSnapshot
 from neural_memory.core.fiber import Fiber
@@ -28,14 +28,23 @@ if TYPE_CHECKING:
 class SQLiteBrainMixin:
     """Mixin providing brain CRUD, export, and import operations."""
 
-    def _ensure_conn(self) -> aiosqlite.Connection: ...
-    def _get_brain_id(self) -> str: ...
+    def _ensure_conn(self) -> aiosqlite.Connection:
+        raise NotImplementedError
+
+    def _get_brain_id(self) -> str:
+        raise NotImplementedError
 
     _current_brain_id: str | None
 
     def set_brain(self, brain_id: str) -> None: ...
 
-    # These are provided by other mixins
+    # Protocol stubs for methods provided by other mixins
+    async def add_project(self, project: Project) -> str:
+        raise NotImplementedError
+
+    async def add_typed_memory(self, typed_memory: TypedMemory) -> str:
+        raise NotImplementedError
+
     async def save_brain(self, brain: Brain) -> None:
         conn = self._ensure_conn()
 
@@ -166,7 +175,7 @@ class SQLiteBrainMixin:
 
         return brain_id
 
-    async def _import_neurons(self, neurons_data: list[dict]) -> None:
+    async def _import_neurons(self, neurons_data: list[dict[str, Any]]) -> None:
         conn = self._ensure_conn()
         brain_id = self._get_brain_id()
         for n_data in neurons_data:
@@ -200,7 +209,7 @@ class SQLiteBrainMixin:
                 (neuron.id, brain_id, 0.3, 500.0, 0.5, utcnow().isoformat()),
             )
 
-    async def _import_synapses(self, synapses_data: list[dict]) -> None:
+    async def _import_synapses(self, synapses_data: list[dict[str, Any]]) -> None:
         conn = self._ensure_conn()
         brain_id = self._get_brain_id()
         for s_data in synapses_data:
@@ -236,7 +245,7 @@ class SQLiteBrainMixin:
                 ),
             )
 
-    async def _import_fibers(self, fibers_data: list[dict]) -> None:
+    async def _import_fibers(self, fibers_data: list[dict[str, Any]]) -> None:
         conn = self._ensure_conn()
         brain_id = self._get_brain_id()
         for f_data in fibers_data:
@@ -305,7 +314,7 @@ class SQLiteBrainMixin:
                     [(brain_id, fiber.id, nid) for nid in fiber.neuron_ids],
                 )
 
-    async def _import_projects(self, projects_data: list[dict]) -> None:
+    async def _import_projects(self, projects_data: list[dict[str, Any]]) -> None:
         for p_data in projects_data:
             project = Project(
                 id=p_data["id"],
@@ -322,7 +331,7 @@ class SQLiteBrainMixin:
             )
             await self.add_project(project)
 
-    async def _import_typed_memories(self, typed_memories_data: list[dict]) -> None:
+    async def _import_typed_memories(self, typed_memories_data: list[dict[str, Any]]) -> None:
         for tm_data in typed_memories_data:
             prov_data = tm_data.get("provenance", {})
             provenance = Provenance(
@@ -363,8 +372,8 @@ class SQLiteBrainMixin:
 # ========== Export helpers (module-level) ==========
 
 
-async def _export_neurons(conn: aiosqlite.Connection, brain_id: str) -> list[dict]:
-    neurons: list[dict] = []
+async def _export_neurons(conn: aiosqlite.Connection, brain_id: str) -> list[dict[str, Any]]:
+    neurons: list[dict[str, Any]] = []
     async with conn.execute("SELECT * FROM neurons WHERE brain_id = ?", (brain_id,)) as cursor:
         async for row in cursor:
             neurons.append(
@@ -379,8 +388,8 @@ async def _export_neurons(conn: aiosqlite.Connection, brain_id: str) -> list[dic
     return neurons
 
 
-async def _export_synapses(conn: aiosqlite.Connection, brain_id: str) -> list[dict]:
-    synapses: list[dict] = []
+async def _export_synapses(conn: aiosqlite.Connection, brain_id: str) -> list[dict[str, Any]]:
+    synapses: list[dict[str, Any]] = []
     async with conn.execute("SELECT * FROM synapses WHERE brain_id = ?", (brain_id,)) as cursor:
         async for row in cursor:
             synapses.append(
@@ -399,8 +408,8 @@ async def _export_synapses(conn: aiosqlite.Connection, brain_id: str) -> list[di
     return synapses
 
 
-async def _export_fibers(conn: aiosqlite.Connection, brain_id: str) -> list[dict]:
-    fibers: list[dict] = []
+async def _export_fibers(conn: aiosqlite.Connection, brain_id: str) -> list[dict[str, Any]]:
+    fibers: list[dict[str, Any]] = []
     async with conn.execute("SELECT * FROM fibers WHERE brain_id = ?", (brain_id,)) as cursor:
         async for row in cursor:
             fibers.append(
@@ -423,8 +432,8 @@ async def _export_fibers(conn: aiosqlite.Connection, brain_id: str) -> list[dict
     return fibers
 
 
-async def _export_typed_memories(conn: aiosqlite.Connection, brain_id: str) -> list[dict]:
-    typed_memories: list[dict] = []
+async def _export_typed_memories(conn: aiosqlite.Connection, brain_id: str) -> list[dict[str, Any]]:
+    typed_memories: list[dict[str, Any]] = []
     async with conn.execute(
         "SELECT * FROM typed_memories WHERE brain_id = ?", (brain_id,)
     ) as cursor:
@@ -445,8 +454,8 @@ async def _export_typed_memories(conn: aiosqlite.Connection, brain_id: str) -> l
     return typed_memories
 
 
-async def _export_projects(conn: aiosqlite.Connection, brain_id: str) -> list[dict]:
-    projects: list[dict] = []
+async def _export_projects(conn: aiosqlite.Connection, brain_id: str) -> list[dict[str, Any]]:
+    projects: list[dict[str, Any]] = []
     async with conn.execute("SELECT * FROM projects WHERE brain_id = ?", (brain_id,)) as cursor:
         async for row in cursor:
             projects.append(

@@ -192,15 +192,15 @@ def extract_habit_candidates(
         for pair_bc in pair_map.get(pair_ab.action_b, []):
             if pair_bc.action_b == pair_ab.action_a:
                 continue  # Skip cycles
-            steps = (pair_ab.action_a, pair_ab.action_b, pair_bc.action_b)
-            if steps in seen_steps:
+            tri_steps = (pair_ab.action_a, pair_ab.action_b, pair_bc.action_b)
+            if tri_steps in seen_steps:
                 continue
-            seen_steps.add(steps)
+            seen_steps.add(tri_steps)
             freq = min(pair_ab.count, pair_bc.count)
             if freq >= min_frequency:
                 candidates.append(
                     HabitCandidate(
-                        steps=steps,
+                        steps=tri_steps,
                         frequency=freq,
                         avg_duration_seconds=pair_ab.avg_gap_seconds + pair_bc.avg_gap_seconds,
                         confidence=freq / max(total_sessions, 1),

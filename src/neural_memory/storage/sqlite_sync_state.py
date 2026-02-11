@@ -5,15 +5,24 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from neural_memory.integration.models import SyncState
+
+if TYPE_CHECKING:
+    import aiosqlite
 
 logger = logging.getLogger(__name__)
 
 
 class SQLiteSyncStateMixin:
     """Mixin: persist and retrieve sync state for external source integrations."""
+
+    def _ensure_conn(self) -> aiosqlite.Connection:
+        raise NotImplementedError
+
+    def _get_brain_id(self) -> str:
+        raise NotImplementedError
 
     async def get_sync_state(
         self, source: str, collection: str, brain_id: str | None = None

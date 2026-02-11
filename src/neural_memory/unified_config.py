@@ -18,7 +18,10 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from neural_memory.storage.sqlite_store import SQLiteStorage
 
 # Valid brain name: alphanumeric, hyphens, underscores, dots (no path separators)
 _BRAIN_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
@@ -508,7 +511,7 @@ def get_config(reload: bool = False) -> UnifiedConfig:
     return _config
 
 
-async def get_shared_storage(brain_name: str | None = None):
+async def get_shared_storage(brain_name: str | None = None) -> SQLiteStorage:
     """Get SQLite storage for shared brain access.
 
     This is the main entry point for getting storage that works

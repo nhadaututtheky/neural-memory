@@ -19,8 +19,14 @@ if TYPE_CHECKING:
 class SQLiteSynapseMixin:
     """Mixin providing synapse CRUD and graph traversal operations."""
 
-    def _ensure_conn(self) -> aiosqlite.Connection: ...
-    def _get_brain_id(self) -> str: ...
+    def _ensure_conn(self) -> aiosqlite.Connection:
+        raise NotImplementedError
+
+    def _get_brain_id(self) -> str:
+        raise NotImplementedError
+
+    async def get_neurons_batch(self, neuron_ids: list[str]) -> dict[str, Neuron]:
+        raise NotImplementedError
 
     # ========== Synapse Operations ==========
 
@@ -300,7 +306,7 @@ class SQLiteSynapseMixin:
             "SELECT id FROM neurons WHERE id IN (?, ?) AND brain_id = ?",
             (source_id, target_id, brain_id),
         ) as cursor:
-            rows = await cursor.fetchall()
+            rows = list(await cursor.fetchall())
             if len(rows) < 2:
                 return None
 

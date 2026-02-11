@@ -219,7 +219,7 @@ def _tokenize_vietnamese(text: str) -> str | None:
     or None if pyvi is not available.
     """
     try:
-        from pyvi import ViTokenizer  # type: ignore[import-untyped]
+        from pyvi import ViTokenizer
 
         return ViTokenizer.tokenize(text)  # type: ignore[no-any-return]
     except ImportError:

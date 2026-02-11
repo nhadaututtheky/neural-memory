@@ -17,8 +17,11 @@ if TYPE_CHECKING:
 class SQLiteProjectMixin:
     """Mixin providing project CRUD operations."""
 
-    def _ensure_conn(self) -> aiosqlite.Connection: ...
-    def _get_brain_id(self) -> str: ...
+    def _ensure_conn(self) -> aiosqlite.Connection:
+        raise NotImplementedError
+
+    def _get_brain_id(self) -> str:
+        raise NotImplementedError
 
     async def add_project(self, project: Project) -> str:
         conn = self._ensure_conn()

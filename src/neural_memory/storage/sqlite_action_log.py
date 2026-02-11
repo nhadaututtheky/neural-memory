@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from neural_memory.core.action_event import ActionEvent
 from neural_memory.utils.timeutils import utcnow
+
+if TYPE_CHECKING:
+    import aiosqlite
 
 
 class SQLiteActionLogMixin:
@@ -17,6 +21,12 @@ class SQLiteActionLogMixin:
     habit detection. Events are grouped by session_id and
     ordered by created_at.
     """
+
+    def _ensure_conn(self) -> aiosqlite.Connection:
+        raise NotImplementedError
+
+    def _get_brain_id(self) -> str:
+        raise NotImplementedError
 
     async def record_action(
         self,
@@ -80,7 +90,7 @@ class SQLiteActionLogMixin:
         brain_id = self._get_brain_id()
 
         conditions = ["brain_id = ?"]
-        params: list = [brain_id]
+        params: list[Any] = [brain_id]
 
         if session_id is not None:
             conditions.append("session_id = ?")
@@ -139,4 +149,4 @@ class SQLiteActionLogMixin:
             (brain_id, older_than.isoformat()),
         )
         await conn.commit()
-        return cursor.rowcount
+        return int(cursor.rowcount)
