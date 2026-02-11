@@ -11,8 +11,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from neural_memory.core.trigger_engine import TriggerResult, TriggerType
 
@@ -153,7 +153,7 @@ class MaintenanceHandler:
         if not cfg.auto_consolidate or not pulse.should_consolidate:
             return
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if self._last_consolidation_at is not None:
             cooldown = timedelta(minutes=cfg.consolidate_cooldown_minutes)
             if now - self._last_consolidation_at < cooldown:
@@ -161,7 +161,7 @@ class MaintenanceHandler:
                 return
 
         self._last_consolidation_at = now
-        asyncio.create_task(self._run_auto_consolidation(cfg))
+        self._consolidation_task = asyncio.create_task(self._run_auto_consolidation(cfg))
 
     async def _run_auto_consolidation(self, cfg: MaintenanceConfig) -> None:
         """Background task: run lightweight consolidation strategies."""

@@ -55,6 +55,21 @@ Store a memory in the brain.
 }
 ```
 
+**Response includes:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `success` | boolean | Whether storage succeeded |
+| `fiber_id` | string | ID of the created fiber |
+| `neurons_created` | integer | Number of neurons created |
+| `related_memories` | array | Up to 3 related existing memories (if any found) |
+| `maintenance_hint` | string | Brain maintenance suggestion (if health check triggered) |
+
+**Related Memories** — When storing a memory, NeuralMemory automatically discovers related existing memories via 2-hop spreading activation. Each related memory includes:
+- `fiber_id` — ID of the related fiber
+- `preview` — First 100 characters of content
+- `similarity` — Activation-based similarity score (0.0–1.0)
+
 ### nmem_recall
 
 Query memories using spreading activation.

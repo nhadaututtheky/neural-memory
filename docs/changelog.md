@@ -5,6 +5,38 @@ All notable changes to NeuralMemory are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-02-11
+
+### Added
+
+- **Proactive Brain Intelligence** — 3 features that make the brain self-aware during normal usage
+  - **Related Memories on Write** — `nmem_remember` discovers and returns up to 3 related existing memories via 2-hop SpreadingActivation. Always-on, non-intrusive. Response includes `related_memories` list with `fiber_id`, `preview`, and `similarity`.
+  - **Expired Memory Hint** — Health pulse detects expired memories via cheap COUNT query. Surfaces hint when count exceeds threshold (default: 10).
+  - **Stale Fiber Detection** — Health pulse detects fibers with decayed conductivity (>90 days unused). Surfaces hint when stale ratio exceeds 30%.
+- **MaintenanceConfig extensions** — `expired_memory_warn_threshold`, `stale_fiber_ratio_threshold`, `stale_fiber_days`
+- **Storage layer** — `get_expired_memory_count()` and `get_stale_fiber_count()` on SQLite + InMemory backends
+- **HealthPulse extensions** — `expired_memory_count` and `stale_fiber_ratio` fields
+- **HEALTH_DEGRADATION trigger** — New trigger type for maintenance events
+
+### Changed
+
+- Tests: 1696 passed (up from 1695)
+
+---
+
+## [1.6.1] - 2026-02-10
+
+### Fixed
+
+- CLI brain commands (`export`, `import`, `create`, `delete`, `health`, `transplant`) now work correctly in SQLite mode
+- `brain export` no longer produces empty files when brain was created with `brain create`
+- `brain delete` correctly removes `.db` files in unified config mode
+- `brain health` uses storage-agnostic `find_neurons()` instead of JSON-internal `_neurons` dict
+- All `version` subcommands (`create`, `list`, `rollback`, `diff`) now find brains in SQLite mode
+- `shared sync` uses correct storage backend
+
+---
+
 ## [1.6.0] - 2026-02-10
 
 ### Added
@@ -761,6 +793,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.7.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v1.7.0
+[1.6.1]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v1.6.1
 [1.6.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v1.6.0
 [1.5.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v1.5.0
 [1.0.2]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v1.0.2

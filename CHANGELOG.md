@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-02-11
+
+### Added
+
+- **Proactive Brain Intelligence** — 3 features that make the brain self-aware during normal usage
+  - **Related Memories on Write** — `nmem_remember` now discovers and returns up to 3 related existing memories via 2-hop SpreadingActivation from the new anchor neuron. Always-on (~5-10ms overhead), non-intrusive. Response includes `related_memories` list with `fiber_id`, `preview`, and `similarity` score.
+  - **Expired Memory Hint** — Health pulse detects expired memories via cheap COUNT query on `typed_memories` table. Surfaces hint when count exceeds threshold (default: 10): `"N expired memories found. Consider cleanup via nmem list --expired."`
+  - **Stale Fiber Detection** — Health pulse detects fibers with decayed conductivity (last conducted >90 days ago or never). Surfaces hint when stale ratio exceeds threshold (default: 30%): `"N% of fibers are stale. Consider running nmem_health for review."`
+- **MaintenanceConfig extensions** — 3 new configuration fields:
+  - `expired_memory_warn_threshold` (default: 10)
+  - `stale_fiber_ratio_threshold` (default: 0.3)
+  - `stale_fiber_days` (default: 90)
+- **Storage layer** — 2 new optional methods on `NeuralStorage`:
+  - `get_expired_memory_count()` — COUNT of expired typed memories (SQLite + InMemory)
+  - `get_stale_fiber_count(brain_id, stale_days)` — COUNT of stale fibers (SQLite + InMemory)
+- **HealthPulse extensions** — `expired_memory_count` and `stale_fiber_ratio` fields
+- **HEALTH_DEGRADATION trigger** — `TriggerType.HEALTH_DEGRADATION` for maintenance events
+
+### Changed
+
+- Tests: 1696 passed (up from 1695)
+
 ## [1.6.1] - 2026-02-10
 
 ### Fixed

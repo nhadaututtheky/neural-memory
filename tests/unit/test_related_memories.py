@@ -123,10 +123,10 @@ class TestRelatedMemoryDiscovery:
         server.get_storage = AsyncMock(return_value=mock_storage)
 
         # SpreadingActivation returns empty (no related neurons)
-        with patch("neural_memory.mcp.server.MemoryEncoder") as MockEncoder, \
+        with patch("neural_memory.mcp.server.MemoryEncoder") as mock_encoder, \
              patch("neural_memory.safety.sensitive.check_sensitive_content", return_value=[]), \
-             patch("neural_memory.engine.activation.SpreadingActivation") as MockActivation:
-            MockEncoder.return_value.encode = AsyncMock(return_value=encode_result)
+             patch("neural_memory.engine.activation.SpreadingActivation") as mock_activation:
+            mock_encoder.return_value.encode = AsyncMock(return_value=encode_result)
             mock_activator = AsyncMock()
             mock_activator.activate = AsyncMock(return_value={
                 "anchor-new": _FakeActivationResult(
@@ -137,7 +137,7 @@ class TestRelatedMemoryDiscovery:
                     source_anchor="anchor-new",
                 ),
             })
-            MockActivation.return_value = mock_activator
+            mock_activation.return_value = mock_activator
 
             response = await server._remember({"content": "test content"})
 
@@ -182,10 +182,10 @@ class TestRelatedMemoryDiscovery:
         server._storage = mock_storage
         server.get_storage = AsyncMock(return_value=mock_storage)
 
-        with patch("neural_memory.mcp.server.MemoryEncoder") as MockEncoder, \
+        with patch("neural_memory.mcp.server.MemoryEncoder") as mock_encoder, \
              patch("neural_memory.safety.sensitive.check_sensitive_content", return_value=[]), \
-             patch("neural_memory.engine.activation.SpreadingActivation") as MockActivation:
-            MockEncoder.return_value.encode = AsyncMock(return_value=encode_result)
+             patch("neural_memory.engine.activation.SpreadingActivation") as mock_activation:
+            mock_encoder.return_value.encode = AsyncMock(return_value=encode_result)
             mock_activator = AsyncMock()
             mock_activator.activate = AsyncMock(return_value={
                 "anchor-new": _FakeActivationResult(
@@ -210,7 +210,7 @@ class TestRelatedMemoryDiscovery:
                     source_anchor="anchor-new",
                 ),
             })
-            MockActivation.return_value = mock_activator
+            mock_activation.return_value = mock_activator
 
             response = await server._remember({"content": "new content"})
 
@@ -247,13 +247,13 @@ class TestRelatedMemoryDiscovery:
         server._storage = mock_storage
         server.get_storage = AsyncMock(return_value=mock_storage)
 
-        with patch("neural_memory.mcp.server.MemoryEncoder") as MockEncoder, \
+        with patch("neural_memory.mcp.server.MemoryEncoder") as mock_encoder, \
              patch("neural_memory.safety.sensitive.check_sensitive_content", return_value=[]), \
-             patch("neural_memory.engine.activation.SpreadingActivation") as MockActivation:
-            MockEncoder.return_value.encode = AsyncMock(return_value=encode_result)
+             patch("neural_memory.engine.activation.SpreadingActivation") as mock_activation:
+            mock_encoder.return_value.encode = AsyncMock(return_value=encode_result)
             mock_activator = AsyncMock()
             mock_activator.activate = AsyncMock(side_effect=RuntimeError("activation failed"))
-            MockActivation.return_value = mock_activator
+            mock_activation.return_value = mock_activator
 
             response = await server._remember({"content": "test content"})
 
@@ -314,13 +314,13 @@ class TestRelatedMemoryDiscovery:
         server._storage = mock_storage
         server.get_storage = AsyncMock(return_value=mock_storage)
 
-        with patch("neural_memory.mcp.server.MemoryEncoder") as MockEncoder, \
+        with patch("neural_memory.mcp.server.MemoryEncoder") as mock_encoder, \
              patch("neural_memory.safety.sensitive.check_sensitive_content", return_value=[]), \
-             patch("neural_memory.engine.activation.SpreadingActivation") as MockActivation:
-            MockEncoder.return_value.encode = AsyncMock(return_value=encode_result)
+             patch("neural_memory.engine.activation.SpreadingActivation") as mock_activation:
+            mock_encoder.return_value.encode = AsyncMock(return_value=encode_result)
             mock_activator = AsyncMock()
             mock_activator.activate = AsyncMock(return_value=activations)
-            MockActivation.return_value = mock_activator
+            mock_activation.return_value = mock_activator
 
             response = await server._remember({"content": "content"})
 

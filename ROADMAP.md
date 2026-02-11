@@ -4,8 +4,8 @@
 > Every feature passes the VISION.md 4-question test + brain test.
 > ZERO LLM dependency — pure algorithmic, regex, graph-based.
 
-**Current state**: v1.6.0 shipped. DB-to-Brain schema training pipeline. 3 composable AI skills. 18 MCP tools, 1648 tests.
-**Next milestone**: v1.7.0 — Ecosystem Expansion (Marketplace, Neo4j, multi-language).
+**Current state**: v1.7.0 shipped. Proactive brain intelligence (related memories, expired/stale hints). 18 MCP tools, 1696 tests.
+**Next milestone**: v1.8.0 — Ecosystem Expansion (Marketplace, Neo4j, multi-language).
 
 ---
 
@@ -937,7 +937,7 @@ Starting from 1105 tests (v0.20.0) → targeting ~1,455+ tests at v1.0.0.
 >
 > **Three pillars**: Dashboard + Integrations + Community
 >
-> **Current state**: v1.6.0 shipped. 1,648 tests. 18 MCP tools. DB-to-Brain schema training pipeline.
+> **Current state**: v1.7.0 shipped. 1,696 tests. 18 MCP tools. Proactive brain intelligence.
 
 ## Strategic Context
 
@@ -1402,13 +1402,49 @@ Invoke via `/memory-intake`, `/memory-audit`, `/memory-evolution` in Claude Code
 
 ---
 
-## Phase 7: v1.7.0 — Ecosystem Expansion
+## Phase 6b: v1.7.0 — Proactive Brain Intelligence ✅
+
+> Brain becomes self-aware: discovers related memories, detects expired/stale content, surfaces maintenance hints.
+
+**Status**: ✅ Shipped (2026-02-11). 1,696 tests. No new MCP tools — enhances existing `nmem_remember` response and health pulse.
+
+### What shipped
+
+| Feature | Description |
+|---------|-------------|
+| **Related Memories on Write** | `nmem_remember` discovers up to 3 related memories via 2-hop SpreadingActivation from new anchor neuron. Returns `related_memories` with `fiber_id`, `preview`, `similarity`. Always-on, ~5-10ms overhead. |
+| **Expired Memory Hint** | Health pulse detects expired `typed_memories` via cheap COUNT query. Hint when count > threshold (default: 10). |
+| **Stale Fiber Detection** | Health pulse detects fibers with `last_conducted` >90 days ago or never conducted. Hint when stale ratio > 30%. |
+| **MaintenanceConfig extensions** | `expired_memory_warn_threshold`, `stale_fiber_ratio_threshold`, `stale_fiber_days` |
+| **HealthPulse extensions** | `expired_memory_count`, `stale_fiber_ratio` fields |
+| **HEALTH_DEGRADATION trigger** | New `TriggerType` for maintenance events |
+| **Storage layer** | `get_expired_memory_count()`, `get_stale_fiber_count()` on SQLite + InMemory |
+
+### Files
+
+| Action | File |
+|--------|------|
+| MOD | `mcp/server.py` — Related memory discovery in `_remember()` (~60 lines) |
+| MOD | `mcp/maintenance_handler.py` — Expired/stale checks in health pulse |
+| MOD | `unified_config.py` — MaintenanceConfig + TOML serialization |
+| MOD | `storage/base.py` — 2 new abstract methods |
+| MOD | `storage/sqlite_typed.py` — `get_expired_memory_count()` |
+| MOD | `storage/sqlite_fibers.py` — `get_stale_fiber_count()` |
+| MOD | `storage/memory_collections.py` — InMemory expired count |
+| MOD | `storage/memory_store.py` — InMemory stale fiber count |
+| MOD | `core/trigger_engine.py` — `HEALTH_DEGRADATION` trigger type |
+| NEW | `tests/unit/test_related_memories.py` — 4 tests |
+| MOD | `tests/unit/test_maintenance_handler.py` — 9 new tests (expired + stale) |
+
+---
+
+## Phase 7: v1.8.0 — Ecosystem Expansion
 
 > Marketplace, storage backends, more languages.
 
 **Target**: After v1.6.0
 
-### 7.1 Brain Marketplace (Preview)
+### 8.1 Brain Marketplace (Preview)
 
 NM dashboard gains a "Marketplace" tab (6th tab — the exception where NM IS the hub):
 - Public brain gallery
@@ -1417,7 +1453,7 @@ NM dashboard gains a "Marketplace" tab (6th tab — the exception where NM IS th
 - Search by tags, language, grade
 - Brain transplant from marketplace → local brain
 
-### 7.2 Lab Brains — Build-and-Ship Knowledge Pipelines
+### 8.2 Lab Brains — Build-and-Ship Knowledge Pipelines
 
 > Clone → build workflow → train brain → publish → delete source. Labs are temporary.
 
@@ -1529,7 +1565,7 @@ nmem recall "Clipproxy OAuth token expired what do I do"
 | `nm-best-practices` | NeuralMemory docs + guides | NM power-user patterns |
 | `mcp-server-setup` | MCP spec + NM integration docs | MCP configuration for any agent |
 
-#### Relationship to 7.1 Marketplace
+#### Relationship to 8.1 Marketplace
 
 Labs are the **content pipeline** for marketplace. Marketplace is the shelf — Labs produce the inventory. Without Labs, marketplace launches empty. Without marketplace, lab brains stay local.
 
@@ -1537,7 +1573,7 @@ Labs are the **content pipeline** for marketplace. Marketplace is the shelf — 
 Labs (produce) ──→ Brains (train) ──→ Marketplace (distribute) ──→ Users (consume)
 ```
 
-### 7.3 Neo4j Storage Backend
+### 8.3 Neo4j Storage Backend
 
 For users with large-scale graph requirements:
 - `Neo4jStorage` implementing `BaseStorage` ABC
@@ -1546,7 +1582,7 @@ For users with large-scale graph requirements:
 - Optional — SQLite remains default
 - Dashboard graph tab auto-detects Neo4j and uses native traversal
 
-### 7.4 Multi-Language Expansion
+### 8.4 Multi-Language Expansion
 
 Beyond EN/VI:
 - Japanese (large AI dev community)
@@ -1598,13 +1634,14 @@ v1.1.0 ✅ (Community Foundations)
   └──→ v1.4.0 ✅ (OpenClaw Memory Plugin — NM inside the hub)
               └──→ v1.5.0 ✅ (Conflict Detection + Quality Hardening)
                         └──→ v1.6.0 ✅ (DB-to-Brain Schema Training)
-                                  └──→ v1.7.0 (Ecosystem — Marketplace, Neo4j, i18n)
-                                            └──→ v2.0.0 (Platform — protocol, federation, real-time)
+                                  └──→ v1.7.0 ✅ (Proactive Brain Intelligence)
+                                            └──→ v1.8.0 (Ecosystem — Marketplace, Neo4j, i18n)
+                                                      └──→ v2.0.0 (Platform — protocol, federation, real-time)
 ```
 
-**Critical path**: v1.1.0 ✅ → v1.2.0 ✅ → v1.3.0 ✅ → v1.4.0 ✅ → v1.5.0 ✅ → v1.6.0 ✅ → v1.7.0
+**Critical path**: v1.1.0 ✅ → v1.2.0 ✅ → v1.3.0 ✅ → v1.4.0 ✅ → v1.5.0 ✅ → v1.6.0 ✅ → v1.7.0 ✅ → v1.8.0
 
-**Next**: v1.7.0 — Ecosystem Expansion (Marketplace, Neo4j, multi-language)
+**Next**: v1.8.0 — Ecosystem Expansion (Marketplace, Neo4j, multi-language)
 
 ---
 
@@ -1618,16 +1655,17 @@ v1.1.0 ✅ (Community Foundations)
 | **v1.4.0** ✅ | Critical | Medium | **P1** | 178k-star ecosystem — NM inside the hub, shipped |
 | **v1.5.0** ✅ | High | Medium | **P1** | Conflict detection surfaced, quality hardening, shipped |
 | **v1.6.0** ✅ | High | Medium | **P2** | DB-to-Brain schema training, 18 MCP tools, shipped |
-| **v1.7.0** | High | High | **P3** | Marketplace + Neo4j + i18n, can be incremental |
+| **v1.7.0** ✅ | Medium | Low | **P2** | Proactive brain intelligence — related memories, expired/stale hints, shipped |
+| **v1.8.0** | High | High | **P3** | Marketplace + Neo4j + i18n, can be incremental |
 | **v2.0.0** | Critical | Very High | **P4** | Protocol + federation + real-time, long-term vision |
 
 ### Recommended Execution Order
 
 ```
-v1.1.0 ✅ → v1.2.0 ✅ → v1.4.0 ✅ → v1.3.0 ✅ → v1.5.0 ✅ → v1.6.0 ✅ → v1.7.0
+v1.1.0 ✅ → v1.2.0 ✅ → v1.4.0 ✅ → v1.3.0 ✅ → v1.5.0 ✅ → v1.6.0 ✅ → v1.7.0 ✅ → v1.8.0
 ```
 
-All post-v1.0 milestones through v1.6.0 complete. Next: v1.7.0 Ecosystem Expansion.
+All post-v1.0 milestones through v1.7.0 complete. Next: v1.8.0 Ecosystem Expansion.
 
 ---
 
@@ -1662,4 +1700,4 @@ All post-v1.0 milestones through v1.6.0 complete. Next: v1.7.0 Ecosystem Expansi
 ---
 
 *See [VISION.md](VISION.md) for the north star guiding all decisions.*
-*Last updated: 2026-02-10 (v1.6.0 shipped: DB-to-Brain schema training pipeline + 3 composable AI skills. 18 MCP tools, 1648 tests.)*
+*Last updated: 2026-02-11 (v1.7.0 shipped: Proactive brain intelligence — related memories, expired/stale hints. 18 MCP tools, 1696 tests.)*

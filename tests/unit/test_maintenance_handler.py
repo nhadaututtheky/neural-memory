@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -21,7 +20,6 @@ from neural_memory.unified_config import (
     MaintenanceConfig,
     UnifiedConfig,
 )
-
 
 # ========== Helpers ==========
 
@@ -416,7 +414,7 @@ class TestAutoConsolidation:
         server = _FakeServer(storage, cfg)
 
         # Set last consolidation to 30 min ago (within cooldown)
-        server._last_consolidation_at = datetime.now(timezone.utc) - timedelta(
+        server._last_consolidation_at = datetime.now(UTC) - timedelta(
             minutes=30
         )
         original_time = server._last_consolidation_at
@@ -443,7 +441,7 @@ class TestAutoConsolidation:
         server = _FakeServer(storage, cfg)
 
         # Set last consolidation to 90 min ago (past cooldown)
-        server._last_consolidation_at = datetime.now(timezone.utc) - timedelta(
+        server._last_consolidation_at = datetime.now(UTC) - timedelta(
             minutes=90
         )
 
