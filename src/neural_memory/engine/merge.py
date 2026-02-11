@@ -8,7 +8,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from neural_memory.core.brain import BrainSnapshot
 
 from neural_memory.utils.timeutils import utcnow
 
@@ -150,10 +153,10 @@ def _add_provenance(
 
 
 def merge_snapshots(
-    local: Any,
-    incoming: Any,
+    local: BrainSnapshot,
+    incoming: BrainSnapshot,
     strategy: ConflictStrategy = ConflictStrategy.PREFER_LOCAL,
-) -> tuple[Any, MergeReport]:
+) -> tuple[BrainSnapshot, MergeReport]:
     """Merge two BrainSnapshots with conflict resolution.
 
     Pure function — no side effects. Returns a new merged snapshot
@@ -335,8 +338,8 @@ def merge_snapshots(
     local_meta = dict(local.metadata)
     incoming_meta = incoming.metadata
 
-    # Merge typed_memories
-    local_typed = local_meta.get("typed_memories", [])
+    # Merge typed_memories (without mutating original lists)
+    local_typed = list(local_meta.get("typed_memories", []))
     incoming_typed = incoming_meta.get("typed_memories", [])
     local_fiber_ids = {tm.get("fiber_id") for tm in local_typed}
 
@@ -345,8 +348,8 @@ def merge_snapshots(
         if remapped_fiber_id not in local_fiber_ids:
             local_typed.append({**tm, "fiber_id": remapped_fiber_id})
 
-    # Merge projects
-    local_projects = local_meta.get("projects", [])
+    # Merge projects (without mutating original lists)
+    local_projects = list(local_meta.get("projects", []))
     incoming_projects = incoming_meta.get("projects", [])
     local_project_ids = {p.get("id") for p in local_projects}
 

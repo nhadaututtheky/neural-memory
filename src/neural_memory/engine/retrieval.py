@@ -131,6 +131,7 @@ class ReflexPipeline:
 
         if max_tokens is None:
             max_tokens = self._config.max_context_tokens
+        max_tokens = min(max_tokens, 200_000)
 
         if reference_time is None:
             reference_time = utcnow()

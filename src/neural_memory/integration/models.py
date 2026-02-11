@@ -148,7 +148,7 @@ class SyncState:
             records_imported=(
                 records_imported if records_imported is not None else self.records_imported
             ),
-            last_record_id=last_record_id or self.last_record_id,
+            last_record_id=last_record_id if last_record_id is not None else self.last_record_id,
             metadata=self.metadata,
         )
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Any, Literal
 
@@ -16,6 +17,8 @@ from neural_memory.storage.shared_store_mappers import (
     dict_to_neuron_state,
     dict_to_synapse,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class SharedStorage(SharedFiberBrainMixin, NeuralStorage):
@@ -149,14 +152,16 @@ class SharedStorage(SharedFiberBrainMixin, NeuralStorage):
             ) as response:
                 if response.status >= 400:
                     text = await response.text()
+                    logger.debug("Remote server error: %s", text)
                     raise SharedStorageError(
-                        f"Server error: {text}",
+                        "Remote server returned an error",
                         status_code=response.status,
                     )
                 result: dict[str, Any] = await response.json()
                 return result
         except aiohttp.ClientError as e:
-            raise SharedStorageError(f"Connection error: {e}") from e
+            logger.debug("Connection error: %s", e)
+            raise SharedStorageError("Failed to connect to remote server") from e
 
     # ========== Neuron Operations ==========
 

@@ -62,8 +62,12 @@ async def _index_async(
         return
 
     directory = Path(path).resolve()
+    cwd = Path.cwd().resolve()
+    if not directory.is_relative_to(cwd):
+        typer.echo("Error: Path must be within the current working directory", err=True)
+        raise typer.Exit(code=1)
     if not directory.is_dir():
-        typer.echo(f"Error: Not a directory: {directory}", err=True)
+        typer.echo("Error: Not a valid directory", err=True)
         raise typer.Exit(code=1)
 
     exts = set(extensions) if extensions else {".py"}

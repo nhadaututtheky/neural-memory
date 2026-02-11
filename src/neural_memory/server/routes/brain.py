@@ -81,7 +81,7 @@ async def get_brain(
     """Get brain by ID."""
     brain = await storage.get_brain(brain_id)
     if brain is None:
-        raise HTTPException(status_code=404, detail=f"Brain {brain_id} not found")
+        raise HTTPException(status_code=404, detail="Brain not found")
 
     # Get current stats
     stats = await storage.get_stats(brain_id)
@@ -113,7 +113,7 @@ async def get_brain_stats(
     """Get brain statistics."""
     brain = await storage.get_brain(brain_id)
     if brain is None:
-        raise HTTPException(status_code=404, detail=f"Brain {brain_id} not found")
+        raise HTTPException(status_code=404, detail="Brain not found")
 
     stats = await storage.get_enhanced_stats(brain_id)
 
@@ -157,7 +157,7 @@ async def export_brain(
     """Export brain as snapshot."""
     brain = await storage.get_brain(brain_id)
     if brain is None:
-        raise HTTPException(status_code=404, detail=f"Brain {brain_id} not found")
+        raise HTTPException(status_code=404, detail="Brain not found")
 
     snapshot = await storage.export_brain(brain_id)
 
@@ -239,7 +239,7 @@ async def merge_brain(
 
     brain = await storage.get_brain(brain_id)
     if brain is None:
-        raise HTTPException(status_code=404, detail=f"Brain {brain_id} not found")
+        raise HTTPException(status_code=404, detail="Brain not found")
 
     # Export current brain as local snapshot
     local_snapshot = await storage.export_brain(brain_id)
@@ -261,7 +261,7 @@ async def merge_brain(
     try:
         conflict_strategy = ConflictStrategy(request.strategy)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid strategy: {request.strategy}")
+        raise HTTPException(status_code=400, detail="Invalid merge strategy")
     merged_snapshot, merge_report = merge_snapshots(
         local=local_snapshot,
         incoming=incoming_snapshot,
@@ -308,7 +308,7 @@ async def delete_brain(
     """Delete a brain."""
     brain = await storage.get_brain(brain_id)
     if brain is None:
-        raise HTTPException(status_code=404, detail=f"Brain {brain_id} not found")
+        raise HTTPException(status_code=404, detail="Brain not found")
 
     await storage.clear(brain_id)
 

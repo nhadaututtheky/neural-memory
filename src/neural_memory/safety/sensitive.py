@@ -82,7 +82,7 @@ def get_default_patterns() -> list[SensitivePattern]:
         ),
         SensitivePattern(
             name="Generic Password",
-            pattern=r"(?i)(password|passwd|pwd)\s*[=:]\s*['\"]?([^\s'\"]{4,})['\"]?",
+            pattern=r"(?i)(password|passwd|pwd)\s*[=:]\s*['\"]?([^\s'\"]{4,256})['\"]?",
             type=SensitiveType.PASSWORD,
             description="Password assignment",
             severity=3,
@@ -152,7 +152,7 @@ def get_default_patterns() -> list[SensitivePattern]:
         # Long random strings (potential secrets)
         SensitivePattern(
             name="Long Base64 String",
-            pattern=r"\b[A-Za-z0-9+/]{40,}={0,2}\b",
+            pattern=r"\b[A-Za-z0-9+/]{40,512}={0,2}\b",
             type=SensitiveType.GENERIC_SECRET,
             description="Long base64-encoded string (potential secret)",
             severity=1,
@@ -160,7 +160,7 @@ def get_default_patterns() -> list[SensitivePattern]:
         # Hex strings (potential keys)
         SensitivePattern(
             name="Long Hex String",
-            pattern=r"\b[a-fA-F0-9]{32,}\b",
+            pattern=r"\b[a-fA-F0-9]{32,512}\b",
             type=SensitiveType.GENERIC_SECRET,
             description="Long hexadecimal string (potential key)",
             severity=1,

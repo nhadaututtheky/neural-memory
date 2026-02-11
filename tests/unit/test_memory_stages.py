@@ -76,12 +76,12 @@ class TestMaturationRecord:
         record = MaturationRecord(
             fiber_id="f1",
             brain_id="b1",
-            reinforcement_timestamps=[
+            reinforcement_timestamps=(
                 "2026-01-01T10:00:00",
                 "2026-01-01T14:00:00",  # same day
                 "2026-01-03T10:00:00",
                 "2026-01-05T10:00:00",
-            ],
+            ),
         )
         assert record.distinct_reinforcement_days == 3
 
@@ -105,7 +105,7 @@ class TestMaturationRecord:
             stage=MemoryStage.EPISODIC,
             stage_entered_at=datetime(2026, 1, 1, 12, 0, 0),
             rehearsal_count=5,
-            reinforcement_timestamps=["2026-01-01T10:00:00", "2026-01-03T10:00:00"],
+            reinforcement_timestamps=("2026-01-01T10:00:00", "2026-01-03T10:00:00"),
         )
         d = original.to_dict()
         restored = MaturationRecord.from_dict(d)
@@ -167,11 +167,11 @@ class TestStageTransitions:
             stage=MemoryStage.EPISODIC,
             stage_entered_at=t0,
             rehearsal_count=5,
-            reinforcement_timestamps=[
+            reinforcement_timestamps=(
                 "2026-01-02T10:00:00",
                 "2026-01-04T10:00:00",
                 "2026-01-06T10:00:00",
-            ],
+            ),
         )
         t1 = t0 + timedelta(days=8)
         advanced = compute_stage_transition(record, now=t1)
@@ -186,10 +186,10 @@ class TestStageTransitions:
             stage=MemoryStage.EPISODIC,
             stage_entered_at=t0,
             rehearsal_count=5,
-            reinforcement_timestamps=[
+            reinforcement_timestamps=(
                 "2026-01-02T10:00:00",
                 "2026-01-02T14:00:00",  # same day
-            ],
+            ),
         )
         t1 = t0 + timedelta(days=8)
         result = compute_stage_transition(record, now=t1)
@@ -204,11 +204,11 @@ class TestStageTransitions:
             stage=MemoryStage.EPISODIC,
             stage_entered_at=t0,
             rehearsal_count=5,
-            reinforcement_timestamps=[
+            reinforcement_timestamps=(
                 "2026-01-02T10:00:00",
                 "2026-01-04T10:00:00",
                 "2026-01-06T10:00:00",
-            ],
+            ),
         )
         t1 = t0 + timedelta(days=5)  # only 5 days
         result = compute_stage_transition(record, now=t1)

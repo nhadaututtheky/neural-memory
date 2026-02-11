@@ -394,8 +394,8 @@ class TestEnrich:
         """Empty storage returns EnrichmentResult with zero synapses."""
         result = await enrich(store)
         assert isinstance(result, EnrichmentResult)
-        assert result.transitive_synapses == []
-        assert result.cross_cluster_synapses == []
+        assert result.transitive_synapses == ()
+        assert result.cross_cluster_synapses == ()
         assert result.total_synapses == 0
 
 
@@ -416,12 +416,12 @@ class TestEnrichmentResult:
         s1 = Synapse.create(source_id="a", target_id="b", type=SynapseType.CAUSED_BY)
         s2 = Synapse.create(source_id="c", target_id="d", type=SynapseType.RELATED_TO)
         s3 = Synapse.create(source_id="e", target_id="f", type=SynapseType.RELATED_TO)
-        result = EnrichmentResult(transitive_synapses=[s1], cross_cluster_synapses=[s2, s3])
+        result = EnrichmentResult(transitive_synapses=(s1,), cross_cluster_synapses=(s2, s3))
         assert result.total_synapses == 3
 
     def test_defaults_empty(self) -> None:
         """Default EnrichmentResult has empty lists."""
         result = EnrichmentResult()
-        assert result.transitive_synapses == []
-        assert result.cross_cluster_synapses == []
+        assert result.transitive_synapses == ()
+        assert result.cross_cluster_synapses == ()
         assert result.total_synapses == 0

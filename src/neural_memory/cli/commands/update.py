@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 import sys
 from pathlib import Path
@@ -9,6 +10,8 @@ from pathlib import Path
 import typer
 
 from neural_memory.cli.update_check import _fetch_latest_version, _is_newer
+
+logger = logging.getLogger(__name__)
 
 
 def _detect_install_mode() -> str:
@@ -25,7 +28,7 @@ def _detect_install_mode() -> str:
         if direct_url and '"editable"' in direct_url:
             return "editable"
     except Exception:
-        pass
+        logger.debug("Failed to check distribution metadata", exc_info=True)
 
     # Check if we're running from a git repo with pyproject.toml
     try:
@@ -40,7 +43,7 @@ def _detect_install_mode() -> str:
             if parent == parent.parent:
                 break
     except Exception:
-        pass
+        logger.debug("Failed to detect editable install from filesystem", exc_info=True)
 
     # If we can import it and it's not editable, assume pip
     try:
@@ -49,6 +52,7 @@ def _detect_install_mode() -> str:
         distribution("neural-memory")
         return "pip"
     except Exception:
+        logger.debug("Failed to detect pip install", exc_info=True)
         return "unknown"
 
 
@@ -64,7 +68,7 @@ def _get_source_dir() -> Path | None:
             if parent == parent.parent:
                 break
     except Exception:
-        pass
+        logger.debug("Failed to find git source directory", exc_info=True)
     return None
 
 

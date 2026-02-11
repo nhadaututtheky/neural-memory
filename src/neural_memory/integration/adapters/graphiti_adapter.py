@@ -318,9 +318,10 @@ class GraphitiAdapter:
                 "system": "graphiti",
             }
         except Exception as e:
+            logger.warning("Graphiti health check failed: %s", e)
             return {
                 "healthy": False,
-                "message": f"Graphiti connection failed: {e}",
+                "message": "Graphiti connection failed",
                 "system": "graphiti",
             }
 

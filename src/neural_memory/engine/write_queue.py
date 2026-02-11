@@ -82,35 +82,35 @@ class DeferredWriteQueue:
                 await storage.update_fiber(fiber)
                 count += 1
             except Exception:
-                logger.debug("Deferred fiber update failed", exc_info=True)
+                logger.warning("Deferred fiber update failed", exc_info=True)
 
         for synapse in self._synapse_creates:
             try:
                 await storage.add_synapse(synapse)
                 count += 1
             except Exception:
-                logger.debug("Deferred synapse create failed", exc_info=True)
+                logger.warning("Deferred synapse create failed", exc_info=True)
 
         for synapse in self._synapse_updates:
             try:
                 await storage.update_synapse(synapse)
                 count += 1
             except Exception:
-                logger.debug("Deferred synapse update failed", exc_info=True)
+                logger.warning("Deferred synapse update failed", exc_info=True)
 
         for state in self._state_updates:
             try:
                 await storage.update_neuron_state(state)
                 count += 1
             except Exception:
-                logger.debug("Deferred state update failed", exc_info=True)
+                logger.warning("Deferred state update failed", exc_info=True)
 
         for neuron_a, neuron_b, strength, anchor in self._co_activation_records:
             try:
                 await storage.record_co_activation(neuron_a, neuron_b, strength, anchor)
                 count += 1
             except Exception:
-                logger.debug("Deferred co-activation record failed", exc_info=True)
+                logger.warning("Deferred co-activation record failed", exc_info=True)
 
         self.clear()
         return count

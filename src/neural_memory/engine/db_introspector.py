@@ -360,13 +360,15 @@ class SchemaIntrospector:
             if not path:
                 msg = "Empty path in SQLite connection string"
                 raise ValueError(msg)
-            # Security: reject path traversal
-            if ".." in path:
-                msg = "Path traversal (..) not allowed in connection string"
-                raise ValueError(msg)
             # Security: reject absolute paths
             if Path(path).is_absolute():
                 msg = "Absolute paths not allowed in connection string"
+                raise ValueError(msg)
+            # Security: resolve and verify path stays within cwd
+            resolved = Path(path).resolve()
+            cwd = Path.cwd().resolve()
+            if not resolved.is_relative_to(cwd):
+                msg = "Path traversal detected in connection string"
                 raise ValueError(msg)
             return path
         msg = f"Path extraction not implemented for {dialect_name}"

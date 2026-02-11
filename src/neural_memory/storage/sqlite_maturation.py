@@ -71,7 +71,7 @@ class SQLiteMaturationMixin:
             stage=MemoryStage(row[2]),
             stage_entered_at=datetime.fromisoformat(row[3]),
             rehearsal_count=row[4],
-            reinforcement_timestamps=json.loads(row[5]) if row[5] else [],
+            reinforcement_timestamps=tuple(json.loads(row[5])) if row[5] else (),
         )
 
     async def find_maturations(
@@ -99,7 +99,8 @@ class SQLiteMaturationMixin:
             f"""SELECT fiber_id, brain_id, stage, stage_entered_at,
                        rehearsal_count, reinforcement_timestamps
             FROM memory_maturations
-            WHERE {where_clause}""",
+            WHERE {where_clause}
+            LIMIT 1000""",
             tuple(params),
         )
 
@@ -112,7 +113,7 @@ class SQLiteMaturationMixin:
                     stage=MemoryStage(row[2]),
                     stage_entered_at=datetime.fromisoformat(row[3]),
                     rehearsal_count=row[4],
-                    reinforcement_timestamps=json.loads(row[5]) if row[5] else [],
+                    reinforcement_timestamps=tuple(json.loads(row[5])) if row[5] else (),
                 )
             )
 

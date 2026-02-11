@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -264,8 +265,7 @@ class SyncManager:
         }
 
 
-# Global sync manager instance
-_sync_manager: SyncManager | None = None
+_MAX_WS_MESSAGE_SIZE = 1_000_000  # 1 MB
 
 
 def get_sync_manager() -> SyncManager:
@@ -284,7 +284,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         3. Client subscribes to brain: {"action": "subscribe", "brain_id": "..."}
         4. Server sends events as they occur
         5. Client can send changes: {"action": "event", "event": {...}}
+
+    Access is restricted to localhost connections only.
     """
+    # Reject non-localhost connections
+    client_host = websocket.client.host if websocket.client else ""
+    if client_host not in {"127.0.0.1", "::1", "localhost"}:
+        await websocket.close(code=4003, reason="Forbidden")
+        return
+
     await websocket.accept()
     sync_manager = get_sync_manager()
 
@@ -293,11 +301,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     try:
         while True:
             data = await websocket.receive_text()
+            if len(data) > _MAX_WS_MESSAGE_SIZE:
+                logger.warning("WebSocket message too large (%d bytes), skipping", len(data))
+                continue
             message = json.loads(data)
             action = message.get("action")
 
             if action == "connect":
-                client_id = message.get("client_id", f"client-{id(websocket)}")
+                client_id = f"client-{uuid.uuid4().hex[:8]}"
                 await sync_manager.connect(client_id, websocket)
                 await websocket.send_text(
                     SyncEvent(

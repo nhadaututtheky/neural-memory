@@ -106,10 +106,12 @@ class IndexHandler:
         storage.disable_auto_save()
 
         try:
+            raw_limit = args.get("limit")
+            capped_limit = min(int(raw_limit), 10000) if raw_limit is not None else None
             result, _sync_state = await engine.sync(
                 adapter=adapter,
                 collection=args.get("collection"),
-                limit=args.get("limit"),
+                limit=capped_limit,
             )
             await storage.batch_save()
         except Exception:

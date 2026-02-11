@@ -37,7 +37,11 @@ class AWFAdapter:
     """
 
     def __init__(self, brain_dir: str | Path) -> None:
-        self._brain_dir = Path(brain_dir)
+        resolved = Path(brain_dir).resolve()
+        # Validate path is not traversing outside expected locations
+        if ".." in resolved.parts:
+            raise ValueError("Invalid brain directory: path traversal detected")
+        self._brain_dir = resolved
 
     @property
     def system_type(self) -> SourceSystemType:

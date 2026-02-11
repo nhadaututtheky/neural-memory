@@ -143,7 +143,7 @@ class BrainConfig:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class Brain:
     """
     A Brain is the top-level container for a memory system.

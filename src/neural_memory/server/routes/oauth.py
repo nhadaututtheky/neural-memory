@@ -13,8 +13,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/oauth", tags=["oauth"])
 
-# CLIProxyAPI base URL (Go service running separately)
+# CLIProxyAPI base URL (Go service running separately, restricted to localhost)
 _CLIPROXY_BASE = os.environ.get("CLIPROXY_URL", "http://127.0.0.1:8317")
+if not any(
+    _CLIPROXY_BASE.startswith(prefix)
+    for prefix in ("http://127.0.0.1", "http://localhost", "http://[::1]")
+):
+    logger.warning("CLIPROXY_URL must point to localhost, falling back to default")
+    _CLIPROXY_BASE = "http://127.0.0.1:8317"
 
 # Provider metadata — matches CLIProxyAPI supported providers
 PROVIDERS: list[dict[str, Any]] = [
@@ -108,11 +114,13 @@ async def _proxy_post(path: str, json_body: dict[str, Any]) -> dict[str, Any]:
     except httpx.ConnectError:
         raise HTTPException(
             status_code=502,
-            detail="CLIProxyAPI not reachable. Start it with: "
-            "cd CLIProxyAPI-main && go run cmd/server/main.go",
+            detail="OAuth proxy not reachable",
         )
     except httpx.HTTPStatusError as exc:
-        raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text)
+        logger.warning(
+            "CLIProxyAPI POST %s returned %s: %s", path, exc.response.status_code, exc.response.text
+        )
+        raise HTTPException(status_code=exc.response.status_code, detail="Upstream proxy error")
 
 
 async def _proxy_get(path: str) -> dict[str, Any]:
@@ -131,7 +139,10 @@ async def _proxy_get(path: str) -> dict[str, Any]:
             detail="CLIProxyAPI not reachable.",
         )
     except httpx.HTTPStatusError as exc:
-        raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text)
+        logger.warning(
+            "CLIProxyAPI GET %s returned %s: %s", path, exc.response.status_code, exc.response.text
+        )
+        raise HTTPException(status_code=exc.response.status_code, detail="Upstream proxy error")
 
 
 @router.get(
@@ -148,7 +159,7 @@ async def list_providers() -> list[dict[str, Any]]:
             status = await _check_provider_auth(provider["id"])
             entry["authenticated"] = status
         except Exception:
-            pass
+            logger.debug("Auth check failed for provider %s", provider["id"], exc_info=True)
         results.append(entry)
     return results
 
@@ -162,7 +173,7 @@ async def initiate_oauth(request: OAuthInitiateRequest) -> OAuthInitiateResponse
     """Initiate OAuth flow via CLIProxyAPI."""
     valid_ids = {p["id"] for p in PROVIDERS}
     if request.provider not in valid_ids:
-        raise HTTPException(status_code=400, detail=f"Unknown provider: {request.provider}")
+        raise HTTPException(status_code=400, detail="Unknown provider")
 
     data = await _proxy_post(
         "/v0/management/oauth-sessions/start",
@@ -191,7 +202,12 @@ async def oauth_callback(request: OAuthCallbackRequest) -> dict[str, Any]:
             "state": request.state,
         },
     )
-    return {"status": "authenticated", "provider": request.provider, **data}
+    return {
+        "status": "authenticated",
+        "provider": request.provider,
+        "token_type": data.get("token_type"),
+        "expires_in": data.get("expires_in"),
+    }
 
 
 @router.get(

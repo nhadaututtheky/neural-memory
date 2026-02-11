@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from neural_memory.integrations.openclaw_config import (
@@ -22,7 +22,20 @@ from neural_memory.integrations.openclaw_config import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/openclaw", tags=["openclaw"])
+
+async def _require_local_request(request: Request) -> None:
+    """Reject non-localhost requests to protect sensitive config endpoints."""
+    client_host = request.client.host if request.client else ""
+    allowed = {"127.0.0.1", "::1", "localhost"}
+    if client_host not in allowed:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+
+router = APIRouter(
+    prefix="/api/openclaw",
+    tags=["openclaw"],
+    dependencies=[Depends(_require_local_request)],
+)
 
 
 def _manager() -> OpenClawConfigManager:
@@ -174,7 +187,7 @@ async def toggle_function(name: str, request: FunctionToggleRequest) -> dict[str
     config = _manager().toggle_function(name, request.enabled)
     fn = next((f for f in config.functions if f.name == name), None)
     if fn is None:
-        raise HTTPException(status_code=404, detail=f"Function '{name}' not found")
+        raise HTTPException(status_code=404, detail="Function not found")
     return fn.model_dump(mode="json")
 
 

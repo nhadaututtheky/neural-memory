@@ -52,7 +52,7 @@ def create_app(
     Args:
         title: API title
         description: API description
-        cors_origins: Allowed CORS origins (default: ["*"])
+        cors_origins: Allowed CORS origins (default: localhost origins)
 
     Returns:
         Configured FastAPI application
@@ -137,8 +137,7 @@ def create_app(
 
         # Get data with limits to avoid unbounded queries
         neurons = await storage.find_neurons(limit=500)
-        synapses_all = await storage.get_all_synapses()
-        synapses = synapses_all[:1000]
+        synapses = (await storage.get_all_synapses())[:1000]
         fibers = await storage.get_fibers(limit=1000)
 
         stats = {

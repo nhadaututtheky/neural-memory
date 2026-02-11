@@ -129,7 +129,7 @@ async def get_fiber(
     """Get a specific fiber by ID."""
     fiber = await storage.get_fiber(fiber_id)
     if fiber is None:
-        raise HTTPException(status_code=404, detail=f"Fiber {fiber_id} not found")
+        raise HTTPException(status_code=404, detail="Fiber not found")
 
     return {
         "id": fiber.id,
@@ -168,7 +168,7 @@ async def list_neurons(
         try:
             neuron_type = NeuronType(type)
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid neuron type: {type}")
+            raise HTTPException(status_code=400, detail="Invalid neuron type")
 
     neurons = await storage.find_neurons(
         type=neuron_type,
@@ -204,6 +204,7 @@ async def suggest_neurons(
     type: str | None = None,
 ) -> SuggestResponse:
     """Get prefix-based neuron suggestions."""
+    limit = min(limit, 100)
     from neural_memory.core.neuron import NeuronType
 
     type_filter = None
@@ -211,7 +212,8 @@ async def suggest_neurons(
         try:
             type_filter = NeuronType(type)
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid neuron type: {type}")
+            raise HTTPException(status_code=400, detail="Invalid neuron type")
+    limit = min(limit, 100)
     suggestions = await storage.suggest_neurons(
         prefix=prefix,
         type_filter=type_filter,
@@ -241,7 +243,7 @@ async def index_codebase(
         if not path.is_relative_to(cwd):
             raise HTTPException(status_code=400, detail="Path must be within working directory")
         if not path.is_dir():
-            raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
+            raise HTTPException(status_code=400, detail="Not a directory")
 
         extensions = set(request.extensions or [".py"])
         encoder = CodebaseEncoder(storage, brain.config)
@@ -272,4 +274,4 @@ async def index_codebase(
             else "No codebase indexed yet.",
         )
 
-    raise HTTPException(status_code=400, detail=f"Unknown action: {request.action}")
+    raise HTTPException(status_code=400, detail="Unknown action")

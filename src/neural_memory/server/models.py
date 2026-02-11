@@ -171,9 +171,15 @@ class ImportBrainRequest(BaseModel):
     brain_name: str = Field(..., min_length=1, max_length=100, description="Brain name")
     exported_at: datetime = Field(..., description="When the snapshot was exported")
     version: str = Field(..., description="Snapshot version")
-    neurons: list[dict[str, Any]] = Field(default_factory=list, description="Neuron data")
-    synapses: list[dict[str, Any]] = Field(default_factory=list, description="Synapse data")
-    fibers: list[dict[str, Any]] = Field(default_factory=list, description="Fiber data")
+    neurons: list[dict[str, Any]] = Field(
+        default_factory=list, max_length=100_000, description="Neuron data"
+    )
+    synapses: list[dict[str, Any]] = Field(
+        default_factory=list, max_length=100_000, description="Synapse data"
+    )
+    fibers: list[dict[str, Any]] = Field(
+        default_factory=list, max_length=100_000, description="Fiber data"
+    )
     config: dict[str, Any] = Field(default_factory=dict, description="Brain configuration")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
 

@@ -395,6 +395,8 @@ class TemporalExtractor:
 def _resolve_vi_hour(ref: datetime, match: re.Match[str]) -> tuple[datetime, datetime]:
     """Resolve Vietnamese hour pattern."""
     hour = int(match.group(1))
+    if not (0 <= hour <= 23):
+        raise ValueError(f"Hour out of range: {hour}")
     period = match.group(2)  # sáng, chiều, tối
 
     if period:

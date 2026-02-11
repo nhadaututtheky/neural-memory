@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -140,7 +141,7 @@ class SQLiteStorage(
         try:
             await conn.execute("SELECT * FROM neurons_fts LIMIT 0")
             return True
-        except Exception:
+        except (sqlite3.OperationalError, sqlite3.DatabaseError):
             logger.debug("FTS5 table not available", exc_info=True)
             return False
 

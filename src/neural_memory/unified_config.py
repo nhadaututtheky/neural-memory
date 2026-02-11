@@ -54,10 +54,13 @@ def get_default_brain() -> str:
     """Get default brain name.
 
     Priority:
-    1. NEURALMEMORY_BRAIN environment variable
+    1. NEURALMEMORY_BRAIN environment variable (validated)
     2. "default"
     """
-    return os.environ.get("NEURALMEMORY_BRAIN", "default")
+    name = os.environ.get("NEURALMEMORY_BRAIN", "default")
+    if not _BRAIN_NAME_PATTERN.match(name):
+        return "default"
+    return name
 
 
 @dataclass
@@ -361,9 +364,15 @@ class UnifiedConfig:
         )
 
     def save(self) -> None:
-        """Save configuration to TOML file."""
+        """Save configuration to TOML file (atomic write via temp+rename)."""
+        import tempfile
+
         self.data_dir.mkdir(parents=True, exist_ok=True)
         config_path = self.data_dir / "config.toml"
+
+        # Validate brain name before writing to prevent TOML injection
+        if not _BRAIN_NAME_PATTERN.match(self.current_brain):
+            raise ValueError("Invalid brain name for config save")
 
         # Build TOML content manually (no toml write dependency)
         lines = [
@@ -439,8 +448,16 @@ class UnifiedConfig:
         if self.default_depth is not None:
             lines.append(f"default_depth = {self.default_depth}")
 
-        with open(config_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(lines) + "\n")
+        # Atomic write: write to temp file, then rename
+        content = "\n".join(lines) + "\n"
+        fd, tmp_path = tempfile.mkstemp(dir=str(self.data_dir), suffix=".toml.tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(content)
+            Path(tmp_path).replace(config_path)
+        except BaseException:
+            Path(tmp_path).unlink(missing_ok=True)
+            raise
 
     @property
     def brains_dir(self) -> Path:
@@ -467,25 +484,25 @@ class UnifiedConfig:
         name = brain_name or self.current_brain
         if not _BRAIN_NAME_PATTERN.match(name):
             raise ValueError(
-                f"Invalid brain name '{name}': must contain only "
+                "Invalid brain name: must contain only "
                 "alphanumeric characters, hyphens, underscores, or dots"
             )
         db_path = (self.brains_dir / f"{name}.db").resolve()
         if not db_path.is_relative_to(self.brains_dir.resolve()):
-            raise ValueError(f"Invalid brain name '{name}': path traversal detected")
+            raise ValueError("Invalid brain name: path traversal detected")
         return db_path
 
     def list_brains(self) -> list[str]:
         """List available brains (by database files)."""
         if not self.brains_dir.exists():
             return []
-        return [p.stem for p in self.brains_dir.glob("*.db")]
+        return sorted(p.stem for p in self.brains_dir.glob("*.db"))
 
     def switch_brain(self, brain_name: str) -> None:
         """Switch to a different brain and save config."""
         if not _BRAIN_NAME_PATTERN.match(brain_name):
             raise ValueError(
-                f"Invalid brain name '{brain_name}': must contain only "
+                "Invalid brain name: must contain only "
                 "alphanumeric characters, hyphens, underscores, or dots"
             )
         self.current_brain = brain_name
@@ -494,6 +511,9 @@ class UnifiedConfig:
 
 # Singleton instance for easy access
 _config: UnifiedConfig | None = None
+
+# Cached storage instances keyed by db_path string
+_storage_cache: dict[str, SQLiteStorage] = {}
 
 
 def get_config(reload: bool = False) -> UnifiedConfig:
@@ -515,7 +535,8 @@ async def get_shared_storage(brain_name: str | None = None) -> SQLiteStorage:
     """Get SQLite storage for shared brain access.
 
     This is the main entry point for getting storage that works
-    across CLI, MCP, and other tools.
+    across CLI, MCP, and other tools. Storage instances are cached
+    per database path to avoid connection leaks.
 
     Args:
         brain_name: Brain name, or use config's current_brain if None
@@ -528,13 +549,26 @@ async def get_shared_storage(brain_name: str | None = None) -> SQLiteStorage:
 
     config = get_config()
     db_path = config.get_brain_db_path(brain_name)
+    cache_key = str(db_path)
+
+    # Return cached storage if available and still open
+    if cache_key in _storage_cache:
+        cached = _storage_cache[cache_key]
+        if cached._conn is not None:
+            name = brain_name or config.current_brain
+            cached.set_brain(name)
+            return cached
 
     # Ensure directory exists
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Create and initialize storage
     storage = SQLiteStorage(db_path)
-    await storage.initialize()
+    try:
+        await storage.initialize()
+    except Exception:
+        await storage.close()
+        raise
 
     # Create brain if it doesn't exist
     name = brain_name or config.current_brain
@@ -554,4 +588,5 @@ async def get_shared_storage(brain_name: str | None = None) -> SQLiteStorage:
         await storage.save_brain(brain)
 
     storage.set_brain(brain.id)
+    _storage_cache[cache_key] = storage
     return storage

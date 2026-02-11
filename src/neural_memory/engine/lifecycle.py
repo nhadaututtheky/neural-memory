@@ -179,10 +179,11 @@ class DecayManager:
                 if new_weight < self.prune_threshold:
                     report.synapses_pruned += 1
                     if not dry_run:
-                        # Could delete synapse here, but just set weight to 0 for now
-                        pass
+                        # Zero out weight for pruned synapses
+                        pruned_synapse = synapse.decay(0.0)
+                        await storage.update_synapse(pruned_synapse)
 
-                if not dry_run and new_weight >= self.prune_threshold:
+                elif not dry_run:
                     decayed_synapse = synapse.decay(decay_factor)
                     await storage.update_synapse(decayed_synapse)
 

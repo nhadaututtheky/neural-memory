@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections.abc import Coroutine
 from pathlib import Path
 from typing import Any, TypeVar
@@ -12,6 +13,8 @@ import typer
 
 from neural_memory.cli.config import CLIConfig
 from neural_memory.cli.storage import PersistentStorage
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
@@ -42,7 +45,7 @@ def run_async(coro: Coroutine[Any, Any, T]) -> T:
                     try:
                         await storage.close()
                     except Exception:
-                        pass
+                        logger.debug("Failed to close storage during cleanup", exc_info=True)
             _active_storages.clear()
             # Yield once so any pending callbacks from aiosqlite worker
             # threads are drained before asyncio.run() tears down the loop.

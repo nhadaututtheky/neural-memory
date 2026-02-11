@@ -29,6 +29,17 @@ class NeuralStorage(ABC):
         """The active brain ID, or None if not set."""
         return getattr(self, "_current_brain_id", None)
 
+    # ========== Batch Operations ==========
+
+    def disable_auto_save(self) -> None:  # noqa: B027
+        """Disable auto-save for batch operations. No-op by default."""
+
+    def enable_auto_save(self) -> None:  # noqa: B027
+        """Re-enable auto-save after batch operations. No-op by default."""
+
+    async def batch_save(self) -> None:  # noqa: B027
+        """Flush pending writes from batch mode. No-op by default."""
+
     # ========== Neuron Operations ==========
 
     @abstractmethod

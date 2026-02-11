@@ -101,7 +101,7 @@ async def get_stats(
                 grade = report.grade
                 purity = report.purity_score
             except Exception:
-                pass
+                logger.debug("Diagnostics failed for brain %s", name, exc_info=True)
 
             return BrainSummary(
                 id=name,
@@ -114,6 +114,7 @@ async def get_stats(
                 is_active=name == active_name,
             )
         except Exception:
+            logger.debug("Brain analysis failed for %s", name, exc_info=True)
             return BrainSummary(id=name, name=name, is_active=name == active_name)
 
     brains = list(await asyncio.gather(*[_analyze_brain(name) for name in brain_names]))
@@ -171,6 +172,7 @@ async def list_brains_api(
                 )
             )
         except Exception:
+            logger.debug("Failed to get stats for brain %s", name, exc_info=True)
             results.append(BrainSummary(id=name, name=name, is_active=name == active_name))
 
     return results
@@ -189,7 +191,7 @@ async def switch_brain(request: SwitchBrainRequest) -> dict[str, str]:
     if request.brain_name not in available:
         raise HTTPException(
             status_code=404,
-            detail=f"Brain '{request.brain_name}' not found.",
+            detail="Brain not found.",
         )
 
     cfg.switch_brain(request.brain_name)

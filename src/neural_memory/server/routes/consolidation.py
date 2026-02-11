@@ -72,14 +72,14 @@ async def consolidate_brain(
 
     brain = await storage.get_brain(brain_id)
     if brain is None:
-        raise HTTPException(status_code=404, detail=f"Brain {brain_id} not found")
+        raise HTTPException(status_code=404, detail="Brain not found")
 
     storage.set_brain(brain_id)  # type: ignore[attr-defined]
 
     try:
         strategies = [ConsolidationStrategy(s) for s in request.strategies]
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid consolidation strategy: {e}")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid consolidation strategy")
     config = ConsolidationConfig(
         prune_weight_threshold=request.prune_weight_threshold,
         merge_overlap_threshold=request.merge_overlap_threshold,

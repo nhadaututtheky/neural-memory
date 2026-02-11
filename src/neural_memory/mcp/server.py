@@ -624,7 +624,7 @@ class MCPServer(
         if not prefix.strip():
             return {"suggestions": [], "count": 0}
 
-        limit = args.get("limit", 5)
+        limit = min(args.get("limit", 5), 20)
         type_filter = None
         if "type_filter" in args:
             from neural_memory.core.neuron import NeuronType
@@ -632,7 +632,7 @@ class MCPServer(
             try:
                 type_filter = NeuronType(args["type_filter"])
             except ValueError:
-                return {"error": f"Invalid type_filter: {args['type_filter']}"}
+                return {"error": "Invalid type_filter value"}
 
         suggestions = await storage.suggest_neurons(
             prefix=prefix, type_filter=type_filter, limit=limit
@@ -743,7 +743,7 @@ class MCPServer(
             }
 
         elif action == "list":
-            limit = args.get("limit", 20)
+            limit = min(args.get("limit", 20), 100)
             versions = await engine.list_versions(brain.id, limit=limit)
             return {
                 "versions": [
@@ -817,7 +817,7 @@ class MCPServer(
         # Find source brain
         source_brain = await storage.find_brain_by_name(source_brain_name)
         if source_brain is None:
-            return {"error": f"Source brain '{source_brain_name}' not found"}
+            return {"error": "Source brain not found"}
 
         if source_brain.id == brain.id:
             return {
@@ -956,7 +956,7 @@ async def handle_message(server: MCPServer, message: dict[str, Any]) -> dict[str
             }
 
     elif method == "notifications/initialized":
-        return None  # type: ignore
+        return None  # type: ignore[return-value]
 
     else:
         return {

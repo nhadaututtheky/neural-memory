@@ -222,7 +222,7 @@ class MemoryEncoder:
                 synapses_created.append(synapse)
 
         # 6a. Extract sentiment and create emotional synapses
-        emotion_synapses, emotion_neurons = await self._extract_emotion_synapses(
+        emotion_synapses, emotion_neurons, valence_meta = await self._extract_emotion_synapses(
             content=content,
             anchor_neuron=anchor_neuron,
             language=language,
@@ -230,6 +230,7 @@ class MemoryEncoder:
         )
         synapses_created.extend(emotion_synapses)
         neurons_created.extend(emotion_neurons)
+        effective_metadata = {**effective_metadata, **valence_meta}
 
         # 6b. Extract relation-based synapses (causal, comparative, sequential)
         relation_synapses = await self._extract_relation_synapses(
@@ -519,7 +520,7 @@ class MemoryEncoder:
         overlap = auto_tags & agent_tags
 
         if overlap:
-            for i, syn in enumerate(synapses):
+            for syn in synapses:
                 if syn.source_id == anchor_neuron.id:
                     boosted_weight = min(1.0, syn.weight + 0.1)
                     if boosted_weight != syn.weight:
@@ -539,7 +540,6 @@ class MemoryEncoder:
                             await self._storage.update_synapse(boosted)
                         except (ValueError, AttributeError):
                             logger.debug("Synapse boost update failed (non-critical)")
-                        synapses[i] = boosted
 
         divergent = agent_tags - auto_tags
         if divergent:
@@ -569,29 +569,29 @@ class MemoryEncoder:
         anchor_neuron: Neuron,
         language: str = "auto",
         metadata: dict[str, Any] | None = None,
-    ) -> tuple[list[Synapse], list[Neuron]]:
+    ) -> tuple[list[Synapse], list[Neuron], dict[str, Any]]:
         """Extract sentiment and create FELT synapses to emotion STATE neurons.
 
         Args:
             content: Original content text
             anchor_neuron: The anchor neuron for this memory
             language: Language hint
-            metadata: Mutable metadata dict to annotate with valence
+            metadata: Metadata dict (not mutated)
 
         Returns:
-            Tuple of (created synapses, created emotion neurons)
+            Tuple of (created synapses, created emotion neurons, valence metadata)
         """
         synapses: list[Synapse] = []
         neurons: list[Neuron] = []
+        valence_metadata: dict[str, Any] = {}
 
         result = self._sentiment.extract(content, language=language)
         if result.valence == Valence.NEUTRAL or not result.emotion_tags:
-            return synapses, neurons
+            return synapses, neurons, valence_metadata
 
-        # Store valence info in fiber metadata
-        if metadata is not None:
-            metadata["_valence"] = result.valence.value
-            metadata["_intensity"] = result.intensity
+        # Capture valence info for caller to merge into fiber metadata
+        valence_metadata["_valence"] = result.valence.value
+        valence_metadata["_intensity"] = result.intensity
 
         weight_scale = self._config.emotional_weight_scale
 
@@ -631,7 +631,7 @@ class MemoryEncoder:
             except ValueError:
                 logger.debug("Emotion synapse already exists, skipping")
 
-        return synapses, neurons
+        return synapses, neurons, valence_metadata
 
     async def _extract_time_neurons(
         self,

@@ -51,13 +51,19 @@ class Config:
             value = os.getenv(key)
             if value is None:
                 return default
-            return int(value)
+            try:
+                return int(value)
+            except ValueError:
+                return default
 
         def get_float(key: str, default: float) -> float:
             value = os.getenv(key)
             if value is None:
                 return default
-            return float(value)
+            try:
+                return float(value)
+            except ValueError:
+                return default
 
         def get_list(key: str, default: list[str]) -> list[str]:
             value = os.getenv(key)

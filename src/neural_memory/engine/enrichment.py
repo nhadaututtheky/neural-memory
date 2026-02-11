@@ -26,8 +26,8 @@ class EnrichmentResult:
         cross_cluster_synapses: New synapses from cross-cluster linking
     """
 
-    transitive_synapses: list[Synapse] = field(default_factory=list)
-    cross_cluster_synapses: list[Synapse] = field(default_factory=list)
+    transitive_synapses: tuple[Synapse, ...] = field(default_factory=tuple)
+    cross_cluster_synapses: tuple[Synapse, ...] = field(default_factory=tuple)
 
     @property
     def total_synapses(self) -> int:
@@ -231,6 +231,6 @@ async def enrich(
     cross_cluster = await find_cross_cluster_links(storage, max_synapses=max_synapses)
 
     return EnrichmentResult(
-        transitive_synapses=transitive,
-        cross_cluster_synapses=cross_cluster,
+        transitive_synapses=tuple(transitive),
+        cross_cluster_synapses=tuple(cross_cluster),
     )

@@ -204,8 +204,9 @@ class ChromaDBAdapter:
                 "system": "chromadb",
             }
         except Exception as e:
+            logger.warning("ChromaDB health check failed: %s", e)
             return {
                 "healthy": False,
-                "message": f"ChromaDB connection failed: {e}",
+                "message": "ChromaDB connection failed",
                 "system": "chromadb",
             }

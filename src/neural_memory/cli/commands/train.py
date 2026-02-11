@@ -52,8 +52,12 @@ async def _train_async(
     storage = await get_storage(config, force_sqlite=True)
 
     target = Path(path).resolve()
+    cwd = Path.cwd().resolve()
+    if not target.is_relative_to(cwd):
+        typer.echo("Error: Path must be within the current working directory", err=True)
+        raise typer.Exit(code=1)
     if not target.exists():
-        typer.echo(f"Error: Path not found: {target}", err=True)
+        typer.echo("Error: Path not found", err=True)
         raise typer.Exit(code=1)
 
     brain_data = await storage.get_brain(storage._current_brain_id or "")

@@ -76,6 +76,7 @@ class SQLiteActionLogMixin:
         since: datetime | None = None,
         limit: int = 1000,
     ) -> list[ActionEvent]:
+        limit = min(limit, 1000)
         """Get action events ordered by time.
 
         Args:

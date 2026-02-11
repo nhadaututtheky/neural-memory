@@ -97,11 +97,8 @@ class SyncEngine:
             collection_name,
         )
 
-        # Enable batch mode if supported
-        auto_save_disabled = False
-        if hasattr(self._storage, "disable_auto_save"):
-            self._storage.disable_auto_save()
-            auto_save_disabled = True
+        # Enable batch mode
+        self._storage.disable_auto_save()
 
         imported_count = 0
         skipped_count = 0
@@ -135,7 +132,7 @@ class SyncEngine:
                         progress_callback(i + 1, total_records, record.id)
 
                     # Batch commit
-                    if (i + 1) % self._batch_size == 0 and hasattr(self._storage, "batch_save"):
+                    if (i + 1) % self._batch_size == 0:
                         await self._storage.batch_save()
 
                 except Exception as e:
@@ -156,11 +153,9 @@ class SyncEngine:
                     logger.warning("Relationship synapse creation failed: %s", e)
 
             # Final commit
-            if hasattr(self._storage, "batch_save"):
-                await self._storage.batch_save()
+            await self._storage.batch_save()
         finally:
-            if auto_save_disabled and hasattr(self._storage, "enable_auto_save"):
-                self._storage.enable_auto_save()
+            self._storage.enable_auto_save()
 
         duration = time.monotonic() - start_time
 

@@ -97,6 +97,9 @@ class PythonExtractor:
         Returns:
             Tuple of (symbols, relationships).
         """
+        # Limit file size to 1MB to prevent memory issues
+        if file_path.stat().st_size > 1_000_000:
+            return [], []
         source = file_path.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(file_path))
 

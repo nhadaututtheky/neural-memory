@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 import zlib
 from datetime import datetime
@@ -126,7 +127,7 @@ def _decompress_snapshot(raw_data: str) -> str:
     try:
         compressed_bytes = base64.b64decode(raw_data)
         return zlib.decompress(compressed_bytes).decode("utf-8")
-    except Exception:
+    except (zlib.error, binascii.Error):
         # Legacy uncompressed data - return as-is
         return raw_data
 

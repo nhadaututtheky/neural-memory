@@ -78,10 +78,35 @@ def _snapshot_to_json(snapshot: BrainSnapshot) -> str:
 
 
 def _json_to_snapshot(json_str: str) -> BrainSnapshot:
-    """Deserialize a JSON string to BrainSnapshot."""
+    """Deserialize a JSON string to BrainSnapshot.
+
+    Raises:
+        ValueError: If required fields are missing from the JSON data.
+    """
     from neural_memory.core.brain import BrainSnapshot
 
     data = json.loads(json_str)
+
+    # Validate required fields
+    required_fields = (
+        "brain_id",
+        "brain_name",
+        "exported_at",
+        "version",
+        "neurons",
+        "synapses",
+        "fibers",
+        "config",
+    )
+    missing = [f for f in required_fields if f not in data]
+    if missing:
+        raise ValueError(f"Invalid snapshot: missing fields {missing}")
+
+    # Validate types of list fields
+    for list_field in ("neurons", "synapses", "fibers"):
+        if not isinstance(data[list_field], list):
+            raise ValueError(f"Invalid snapshot: '{list_field}' must be a list")
+
     return BrainSnapshot(
         brain_id=data["brain_id"],
         brain_name=data["brain_name"],
@@ -226,8 +251,8 @@ class VersioningEngine:
         Raises:
             ValueError: If version_name already exists for this brain
         """
-        # Check name uniqueness — fetch ALL versions, not just the default page
-        existing = await self._storage.list_versions(brain_id, limit=999999)
+        # Check name uniqueness — fetch ALL versions with a reasonable cap
+        existing = await self._storage.list_versions(brain_id, limit=10000)
         for v in existing:
             if v.version_name == version_name:
                 raise ValueError(
@@ -322,9 +347,9 @@ class VersioningEngine:
 
         # Create a rollback version entry for the current state first
         rollback_name = f"rollback-to-{target_version.version_name}"
-        # Ensure unique name — fetch ALL versions, not just the default page
+        # Ensure unique name — fetch ALL versions with a reasonable cap
         existing_names = {
-            v.version_name for v in await self._storage.list_versions(brain_id, limit=999999)
+            v.version_name for v in await self._storage.list_versions(brain_id, limit=10000)
         }
         if rollback_name in existing_names:
             suffix = 1

@@ -65,7 +65,7 @@ class MaturationRecord:
     stage: MemoryStage = MemoryStage.SHORT_TERM
     stage_entered_at: datetime = field(default_factory=utcnow)
     rehearsal_count: int = 0
-    reinforcement_timestamps: list[str] = field(default_factory=list)
+    reinforcement_timestamps: tuple[str, ...] = field(default_factory=tuple)
 
     def rehearse(self, now: datetime | None = None) -> MaturationRecord:
         """Record a rehearsal event.
@@ -83,10 +83,10 @@ class MaturationRecord:
             stage=self.stage,
             stage_entered_at=self.stage_entered_at,
             rehearsal_count=self.rehearsal_count + 1,
-            reinforcement_timestamps=[
+            reinforcement_timestamps=(
                 *self.reinforcement_timestamps,
                 now.isoformat(),
-            ],
+            ),
         )
 
     def advance_stage(
@@ -110,7 +110,7 @@ class MaturationRecord:
             stage=new_stage,
             stage_entered_at=now,
             rehearsal_count=self.rehearsal_count,
-            reinforcement_timestamps=list(self.reinforcement_timestamps),
+            reinforcement_timestamps=tuple(self.reinforcement_timestamps),
         )
 
     @property
@@ -138,7 +138,7 @@ class MaturationRecord:
             "stage": self.stage.value,
             "stage_entered_at": self.stage_entered_at.isoformat(),
             "rehearsal_count": self.rehearsal_count,
-            "reinforcement_timestamps": json.dumps(self.reinforcement_timestamps),
+            "reinforcement_timestamps": json.dumps(list(self.reinforcement_timestamps)),
         }
 
     @classmethod
@@ -146,9 +146,9 @@ class MaturationRecord:
         """Deserialize from a dict."""
         timestamps_raw = data.get("reinforcement_timestamps", "[]")
         if isinstance(timestamps_raw, str):
-            timestamps = json.loads(timestamps_raw)
+            timestamps = tuple(json.loads(timestamps_raw))
         else:
-            timestamps = list(timestamps_raw) if timestamps_raw else []  # type: ignore[call-overload]
+            timestamps = tuple(timestamps_raw) if isinstance(timestamps_raw, (list, tuple)) else ()
 
         stage_entered_raw = data.get("stage_entered_at", "")
         stage_entered = (

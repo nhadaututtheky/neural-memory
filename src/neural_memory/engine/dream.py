@@ -10,11 +10,14 @@ so only repeatedly reinforced connections survive.
 
 from __future__ import annotations
 
+import logging
 import random
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from neural_memory.core.synapse import Synapse, SynapseType
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from neural_memory.core.brain import BrainConfig
@@ -87,6 +90,7 @@ async def dream(
             for result in results.values():
                 activated_ids.add(result.neuron_id)
         except Exception:
+            logger.debug("Dream activation failed for neuron %s", neuron.id, exc_info=True)
             continue
 
     # Create pairs from activated neurons

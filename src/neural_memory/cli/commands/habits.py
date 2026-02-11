@@ -28,39 +28,44 @@ def habits_list(
     async def _list() -> None:
         config = get_config()
         storage = await get_storage(config)
-        fibers = await storage.get_fibers(limit=10000)
-        habits = [f for f in fibers if f.metadata.get("_habit_pattern")]
+        try:
+            fibers = await storage.get_fibers(limit=1000)
+            habits = [f for f in fibers if f.metadata.get("_habit_pattern")]
 
-        if json_output:
-            output_result(
-                {
-                    "habits": [
-                        {
-                            "name": h.summary or "unnamed",
-                            "steps": h.metadata.get("_workflow_actions", []),
-                            "frequency": h.metadata.get("_habit_frequency", 0),
-                            "confidence": h.metadata.get("_habit_confidence", 0.0),
-                            "fiber_id": h.id,
-                        }
-                        for h in habits
-                    ],
-                    "count": len(habits),
-                },
-                True,
-            )
-        else:
-            if not habits:
-                typer.echo("No learned habits yet. Use NeuralMemory tools to build action history.")
-                return
+            if json_output:
+                output_result(
+                    {
+                        "habits": [
+                            {
+                                "name": h.summary or "unnamed",
+                                "steps": h.metadata.get("_workflow_actions", []),
+                                "frequency": h.metadata.get("_habit_frequency", 0),
+                                "confidence": h.metadata.get("_habit_confidence", 0.0),
+                                "fiber_id": h.id,
+                            }
+                            for h in habits
+                        ],
+                        "count": len(habits),
+                    },
+                    True,
+                )
+            else:
+                if not habits:
+                    typer.echo(
+                        "No learned habits yet. Use NeuralMemory tools to build action history."
+                    )
+                    return
 
-            typer.echo(f"Learned habits ({len(habits)}):")
-            for h in habits:
-                steps = h.metadata.get("_workflow_actions", [])
-                freq = h.metadata.get("_habit_frequency", 0)
-                conf = h.metadata.get("_habit_confidence", 0.0)
-                typer.echo(f"  {h.summary or 'unnamed'}")
-                typer.echo(f"    Steps: {' → '.join(steps)}")
-                typer.echo(f"    Frequency: {freq}, Confidence: {conf:.2f}")
+                typer.echo(f"Learned habits ({len(habits)}):")
+                for h in habits:
+                    steps = h.metadata.get("_workflow_actions", [])
+                    freq = h.metadata.get("_habit_frequency", 0)
+                    conf = h.metadata.get("_habit_confidence", 0.0)
+                    typer.echo(f"  {h.summary or 'unnamed'}")
+                    typer.echo(f"    Steps: {' → '.join(steps)}")
+                    typer.echo(f"    Frequency: {freq}, Confidence: {conf:.2f}")
+        finally:
+            await storage.close()
 
     run_async(_list())
 
@@ -80,40 +85,43 @@ def habits_show(
     async def _show() -> None:
         config = get_config()
         storage = await get_storage(config)
-        fibers = await storage.get_fibers(limit=10000)
-        habits = [f for f in fibers if f.metadata.get("_habit_pattern") and f.summary == name]
+        try:
+            fibers = await storage.get_fibers(limit=1000)
+            habits = [f for f in fibers if f.metadata.get("_habit_pattern") and f.summary == name]
 
-        if not habits:
-            typer.echo(f"No habit found with name: {name}")
-            raise typer.Exit(code=1)
+            if not habits:
+                typer.echo(f"No habit found with name: {name}")
+                raise typer.Exit(code=1)
 
-        habit = habits[0]
-        steps = habit.metadata.get("_workflow_actions", [])
-        freq = habit.metadata.get("_habit_frequency", 0)
-        conf = habit.metadata.get("_habit_confidence", 0.0)
+            habit = habits[0]
+            steps = habit.metadata.get("_workflow_actions", [])
+            freq = habit.metadata.get("_habit_frequency", 0)
+            conf = habit.metadata.get("_habit_confidence", 0.0)
 
-        if json_output:
-            output_result(
-                {
-                    "name": habit.summary or "unnamed",
-                    "steps": steps,
-                    "frequency": freq,
-                    "confidence": conf,
-                    "fiber_id": habit.id,
-                    "neuron_count": len(habit.neuron_ids),
-                    "synapse_count": len(habit.synapse_ids),
-                    "created_at": habit.created_at.isoformat(),
-                },
-                True,
-            )
-        else:
-            typer.echo(f"Habit: {habit.summary or 'unnamed'}")
-            typer.echo(f"  Steps: {' → '.join(steps)}")
-            typer.echo(f"  Frequency: {freq}")
-            typer.echo(f"  Confidence: {conf:.2f}")
-            typer.echo(f"  Neurons: {len(habit.neuron_ids)}")
-            typer.echo(f"  Synapses: {len(habit.synapse_ids)}")
-            typer.echo(f"  Created: {habit.created_at.isoformat()}")
+            if json_output:
+                output_result(
+                    {
+                        "name": habit.summary or "unnamed",
+                        "steps": steps,
+                        "frequency": freq,
+                        "confidence": conf,
+                        "fiber_id": habit.id,
+                        "neuron_count": len(habit.neuron_ids),
+                        "synapse_count": len(habit.synapse_ids),
+                        "created_at": habit.created_at.isoformat(),
+                    },
+                    True,
+                )
+            else:
+                typer.echo(f"Habit: {habit.summary or 'unnamed'}")
+                typer.echo(f"  Steps: {' → '.join(steps)}")
+                typer.echo(f"  Frequency: {freq}")
+                typer.echo(f"  Confidence: {conf:.2f}")
+                typer.echo(f"  Neurons: {len(habit.neuron_ids)}")
+                typer.echo(f"  Synapses: {len(habit.synapse_ids)}")
+                typer.echo(f"  Created: {habit.created_at.isoformat()}")
+        finally:
+            await storage.close()
 
     run_async(_show())
 
@@ -135,24 +143,27 @@ def habits_clear(
     async def _clear() -> None:
         config = get_config()
         storage = await get_storage(config)
-        fibers = await storage.get_fibers(limit=10000)
-        habits = [f for f in fibers if f.metadata.get("_habit_pattern")]
+        try:
+            fibers = await storage.get_fibers(limit=1000)
+            habits = [f for f in fibers if f.metadata.get("_habit_pattern")]
 
-        if not habits:
-            typer.echo("No habits to clear.")
-            return
-
-        if not force:
-            confirm = typer.confirm(f"Clear {len(habits)} learned habits?")
-            if not confirm:
-                typer.echo("Cancelled.")
+            if not habits:
+                typer.echo("No habits to clear.")
                 return
 
-        cleared = 0
-        for h in habits:
-            await storage.delete_fiber(h.id)
-            cleared += 1
+            if not force:
+                confirm = typer.confirm(f"Clear {len(habits)} learned habits?")
+                if not confirm:
+                    typer.echo("Cancelled.")
+                    return
 
-        typer.echo(f"Cleared {cleared} learned habits.")
+            cleared = 0
+            for h in habits:
+                await storage.delete_fiber(h.id)
+                cleared += 1
+
+            typer.echo(f"Cleared {cleared} learned habits.")
+        finally:
+            await storage.close()
 
     run_async(_clear())

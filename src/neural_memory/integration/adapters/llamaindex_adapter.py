@@ -186,8 +186,9 @@ class LlamaIndexAdapter:
                 "system": "llamaindex",
             }
         except Exception as e:
+            logger.warning("LlamaIndex health check failed: %s", e)
             return {
                 "healthy": False,
-                "message": f"LlamaIndex index failed: {e}",
+                "message": "LlamaIndex index failed",
                 "system": "llamaindex",
             }

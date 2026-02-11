@@ -10,7 +10,7 @@ Zero storage calls — receives data, returns data. Trivially testable.
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass
 
 from neural_memory.core.synapse import Direction, Synapse, SynapseType
@@ -194,9 +194,9 @@ def generate_associative_tags(
         if node in visited:
             continue
         cluster: set[str] = set()
-        queue = [node]
+        queue = deque([node])
         while queue:
-            current = queue.pop(0)
+            current = queue.popleft()
             if current in visited:
                 continue
             visited.add(current)

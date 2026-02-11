@@ -184,8 +184,9 @@ class CogneeAdapter:
                 "system": "cognee",
             }
         except Exception as e:
+            logger.warning("Cognee health check failed: %s", e)
             return {
                 "healthy": False,
-                "message": f"Cognee connection failed: {e}",
+                "message": "Cognee connection failed",
                 "system": "cognee",
             }

@@ -39,11 +39,15 @@ class SyncEvent:
     source_client_id: str | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> SyncEvent:
-        """Create from dictionary."""
+    def from_dict(cls, data: dict[str, Any]) -> SyncEvent | None:
+        """Create from dictionary. Returns None if required fields missing."""
+        event_type = data.get("type")
+        brain_id = data.get("brain_id")
+        if not event_type or not brain_id:
+            return None
         return cls(
-            type=data["type"],
-            brain_id=data["brain_id"],
+            type=event_type,
+            brain_id=brain_id,
             timestamp=datetime.fromisoformat(data["timestamp"])
             if data.get("timestamp")
             else utcnow(),
@@ -100,9 +104,13 @@ class SyncClient:
         """
         # Normalize WebSocket URL
         if server_url.startswith("http://"):
-            server_url = server_url.replace("http://", "ws://")
+            server_url = server_url.replace("http://", "ws://", 1)
         elif server_url.startswith("https://"):
-            server_url = server_url.replace("https://", "wss://")
+            server_url = server_url.replace("https://", "wss://", 1)
+
+        # Validate URL scheme
+        if not server_url.startswith(("ws://", "wss://")):
+            raise ValueError("Invalid WebSocket URL scheme: must start with ws:// or wss://")
 
         if not server_url.endswith("/sync/ws"):
             server_url = server_url.rstrip("/") + "/sync/ws"
@@ -339,7 +347,11 @@ class SyncClient:
             if response.type == aiohttp.WSMsgType.TEXT:
                 data = json.loads(response.data)
                 if data.get("type") == "history":
-                    return [SyncEvent.from_dict(e) for e in data.get("events", [])]
+                    return [
+                        evt
+                        for e in data.get("events", [])
+                        if (evt := SyncEvent.from_dict(e)) is not None
+                    ]
 
         return []
 
@@ -383,6 +395,11 @@ class SyncClient:
             except asyncio.CancelledError:
                 break
             except Exception:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "WebSocket receive error, state → DISCONNECTED", exc_info=True
+                )
                 self._state = SyncClientState.DISCONNECTED
                 if self._auto_reconnect:
                     continue
@@ -402,6 +419,8 @@ class SyncClient:
 
         # Convert to SyncEvent
         event = SyncEvent.from_dict(data)
+        if event is None:
+            return
 
         # Skip events we originated
         if event.source_client_id == self._client_id:

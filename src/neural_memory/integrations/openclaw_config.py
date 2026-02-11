@@ -159,10 +159,15 @@ class OpenClawConfigManager:
             return self._with_defaults(OpenClawConfig())
 
     def save(self, config: OpenClawConfig) -> None:
-        """Save config to disk."""
+        """Save config to disk with restrictive permissions (contains secrets)."""
         self._path.parent.mkdir(parents=True, exist_ok=True)
         data = config.model_dump(mode="json")
         self._path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        # Restrict file permissions — config contains API keys and bot tokens
+        try:
+            self._path.chmod(0o600)
+        except OSError:
+            pass  # Windows may not support chmod
 
     def update_api_key(self, provider: str, key: str, label: str = "") -> OpenClawConfig:
         """Add or update an API key for a provider."""

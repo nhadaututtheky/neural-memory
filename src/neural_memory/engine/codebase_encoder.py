@@ -20,6 +20,7 @@ Synapse mapping:
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -28,6 +29,8 @@ from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.engine.encoder import EncodingResult
 from neural_memory.extraction.codebase import CodeSymbolType, get_extractor
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from neural_memory.core.brain import BrainConfig
@@ -232,9 +235,13 @@ class CodebaseEncoder:
         exts = extensions if extensions is not None else set(_DEFAULT_EXTENSIONS)
         excludes = exclude_patterns if exclude_patterns is not None else set(_DEFAULT_EXCLUDE)
 
+        resolved_base = directory.resolve()
         results: list[EncodingResult] = []
         for file_path in sorted(directory.rglob("*")):
             if not file_path.is_file():
+                continue
+            # Validate resolved path stays within base directory (symlink escape prevention)
+            if not file_path.resolve().is_relative_to(resolved_base):
                 continue
             if file_path.suffix not in exts:
                 continue
@@ -245,6 +252,7 @@ class CodebaseEncoder:
                 result = await self.index_file(file_path, tags=tags)
                 results.append(result)
             except (SyntaxError, UnicodeDecodeError):
+                logger.debug("Skipping %s due to parse/decode error", file_path, exc_info=True)
                 continue
 
         return results
