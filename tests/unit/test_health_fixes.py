@@ -471,4 +471,4 @@ class TestVersionBump:
     def test_version_is_current(self) -> None:
         import neural_memory
 
-        assert neural_memory.__version__ == "1.7.4"
+        assert neural_memory.__version__ == "1.8.0"
