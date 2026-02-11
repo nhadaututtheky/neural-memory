@@ -218,7 +218,7 @@ def get_tool_schemas() -> list[dict[str, Any]]:
         },
         {
             "name": "nmem_index",
-            "description": "Index codebase into neural memory for code-aware recall. Scans Python files and creates neurons for functions, classes, imports. Enables 'where is X implemented?' queries.",
+            "description": "Index codebase into neural memory for code-aware recall. Scans source files (Python, JS/TS, Go, Rust, Java, C/C++) and creates neurons for functions, classes, imports. Enables 'where is X implemented?' queries.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -234,7 +234,7 @@ def get_tool_schemas() -> list[dict[str, Any]]:
                     "extensions": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": 'File extensions to index (default: [".py"])',
+                        "description": 'File extensions to index (default: [".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".rs", ".java", ".kt", ".c", ".h", ".cpp", ".hpp", ".cc"])',
                     },
                 },
                 "required": ["action"],

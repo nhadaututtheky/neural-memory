@@ -11,6 +11,8 @@ import pytest
 from neural_memory.extraction.codebase import (
     CodeSymbolType,
     PythonExtractor,
+    RegexExtractor,
+    get_extractor,
 )
 from neural_memory.git_context import GitContext, detect_git_context
 
@@ -315,3 +317,443 @@ class TestCodebaseEncoder:
         # Fiber should reference all neurons and synapses
         assert len(result.fiber.neuron_ids) == len(result.neurons_created)
         assert len(result.fiber.synapse_ids) == len(result.synapses_created)
+
+
+class TestRegexExtractor:
+    """Tests for regex-based extraction of non-Python languages."""
+
+    # -- JavaScript --
+
+    def test_javascript_functions(self, tmp_path: Path) -> None:
+        """Finds function declarations and arrow functions."""
+        source = textwrap.dedent("""\
+            export async function fetchUser(id) {
+                return await fetch(`/users/${id}`);
+            }
+
+            const processData = async (items) => {
+                return items.map(x => x * 2);
+            }
+
+            function helper() { return 1; }
+        """)
+        f = tmp_path / "app.js"
+        f.write_text(source, encoding="utf-8")
+
+        ext = RegexExtractor("javascript")
+        symbols, rels = ext.extract_file(f)
+
+        names = {s.name for s in symbols}
+        assert "fetchUser" in names
+        assert "processData" in names
+        assert "helper" in names
+
+    def test_javascript_classes(self, tmp_path: Path) -> None:
+        """Finds class declarations with inheritance."""
+        source = textwrap.dedent("""\
+            export class Animal {
+                speak() { return "..."; }
+            }
+
+            class Dog extends Animal {
+                speak() { return "woof"; }
+            }
+        """)
+        f = tmp_path / "models.js"
+        f.write_text(source, encoding="utf-8")
+
+        ext = RegexExtractor("javascript")
+        symbols, rels = ext.extract_file(f)
+
+        class_names = {s.name for s in symbols if s.symbol_type == CodeSymbolType.CLASS}
+        assert "Animal" in class_names
+        assert "Dog" in class_names
+
+        is_a = [r for r in rels if r.relation == "is_a"]
+        assert any(r.source == "Dog" and r.target == "Animal" for r in is_a)
+
+    def test_javascript_imports(self, tmp_path: Path) -> None:
+        """Finds ES module imports and require()."""
+        source = textwrap.dedent("""\
+            import React from 'react';
+            import { useState } from 'react';
+            const fs = require('fs');
+        """)
+        f = tmp_path / "index.js"
+        f.write_text(source, encoding="utf-8")
+
+        ext = RegexExtractor("javascript")
+        symbols, _ = ext.extract_file(f)
+
+        import_names = {s.name for s in symbols if s.symbol_type == CodeSymbolType.IMPORT}
+        assert "react" in import_names
+        assert "fs" in import_names
+
+    def test_javascript_constants(self, tmp_path: Path) -> None:
+        """Finds SCREAMING_SNAKE constants."""
+        source = "export const MAX_RETRIES = 3;\nconst API_URL = 'http://localhost';\n"
+        f = tmp_path / "config.js"
+        f.write_text(source, encoding="utf-8")
+
+        ext = RegexExtractor("javascript")
+        symbols, _ = ext.extract_file(f)
+
+        const_names = {s.name for s in symbols if s.symbol_type == CodeSymbolType.CONSTANT}
+        assert "MAX_RETRIES" in const_names
+        assert "API_URL" in const_names
+
+    # -- TypeScript --
+
+    def test_typescript_functions(self, tmp_path: Path) -> None:
+        """TS uses same patterns as JS."""
+        source = "export function greet(name: string): string { return `Hello ${name}`; }\n"
+        f = tmp_path / "utils.ts"
+        f.write_text(source, encoding="utf-8")
+
+        ext = RegexExtractor("typescript")
+        symbols, _ = ext.extract_file(f)
+
+        names = {s.name for s in symbols}
+        assert "greet" in names
+
+    # -- Go --
+
+    def test_go_functions(self, tmp_path: Path) -> None:
+        """Finds Go func declarations."""
+        source = textwrap.dedent("""\
+            package main
+
+            func main() {
+                fmt.Println("hello")
+            }
+
+            func helper(x int) int {
+                return x + 1
+            }
+        """)
+        f = tmp_path / "main.go"
+        f.write_text(source, encoding="utf-8")
+
+        ext = RegexExtractor("go")
+        symbols, _ = ext.extract_file(f)
+
+        func_names = {s.name for s in symbols if s.symbol_type == CodeSymbolType.FUNCTION}
+        assert "main" in func_names
+        assert "helper" in func_names
+
+    def test_go_structs(self, tmp_path: Path) -> None:
+        """Finds Go struct and interface types."""
+        source = textwrap.dedent("""\
+            type User struct {
+                Name string
+                Age  int
+            }
+
+            type Reader interface {
+                Read(p []byte) (n int, err error)
+            }
+        """)
+        f = tmp_path / "types.go"
+        f.write_text(source, encoding="utf-8")
+
+        ext = RegexExtractor("go")
+        symbols, _ = ext.extract_file(f)
+
+        class_names = {s.name for s in symbols if s.symbol_type == CodeSymbolType.CLASS}
+        assert "User" in class_names
+        assert "Reader" in class_names
+
+    def test_go_methods(self, tmp_path: Path) -> None:
+        """Finds Go methods with receiver."""
+        source = textwrap.dedent("""\
+            func (u *User) String() string {
+                return u.Name
+            }
+        """)
+        f = tmp_path / "methods.go"
+        f.write_text(source, encoding="utf-8")
+
+        ext = RegexExtractor("go")
+        symbols, _ = ext.extract_file(f)
+
+        methods = [s for s in symbols if s.symbol_type == CodeSymbolType.METHOD]
+        assert len(methods) == 1
+        assert methods[0].name == "String"
+        assert methods[0].parent == "User"
+
+    # -- Rust --
+
+    def test_rust_functions(self, tmp_path: Path) -> None:
+        """Finds Rust fn declarations."""
+        source = textwrap.dedent("""\
+            pub fn process(data: &[u8]) -> Result<(), Error> {
+                Ok(())
+            }
+
+            async fn fetch_data(url: &str) -> String {
+                String::new()
+            }
+        """)
+        f = tmp_path / "lib.rs"
+        f.write_text(source, encoding="utf-8")
+
+        ext = RegexExtractor("rust")
+        symbols, _ = ext.extract_file(f)
+
+        func_names = {s.name for s in symbols if s.symbol_type == CodeSymbolType.FUNCTION}
+        assert "process" in func_names
+        assert "fetch_data" in func_names
+
+    def test_rust_structs_and_traits(self, tmp_path: Path) -> None:
+        """Finds struct, enum, trait."""
+        source = textwrap.dedent("""\
+            pub struct Config {
+                name: String,
+            }
+
+            pub enum Status {
+                Active,
+                Inactive,
+            }
+
+            pub trait Processor {
+                fn process(&self);
+            }
+        """)
+        f = tmp_path / "types.rs"
+        f.write_text(source, encoding="utf-8")
+
+        ext = RegexExtractor("rust")
+        symbols, _ = ext.extract_file(f)
+
+        class_names = {s.name for s in symbols if s.symbol_type == CodeSymbolType.CLASS}
+        assert "Config" in class_names
+        assert "Status" in class_names
+        assert "Processor" in class_names
+
+    def test_rust_imports(self, tmp_path: Path) -> None:
+        """Finds use statements."""
+        source = "use std::collections::HashMap;\nuse crate::config::Settings;\n"
+        f = tmp_path / "imports.rs"
+        f.write_text(source, encoding="utf-8")
+
+        ext = RegexExtractor("rust")
+        symbols, _ = ext.extract_file(f)
+
+        import_names = {s.name for s in symbols if s.symbol_type == CodeSymbolType.IMPORT}
+        assert "std::collections::HashMap" in import_names
+        assert "crate::config::Settings" in import_names
+
+    # -- Java --
+
+    def test_java_classes(self, tmp_path: Path) -> None:
+        """Finds Java class declarations."""
+        source = textwrap.dedent("""\
+            public class UserService {
+                public String getName(int id) {
+                    return "user";
+                }
+            }
+
+            public abstract class BaseService {
+            }
+        """)
+        f = tmp_path / "UserService.java"
+        f.write_text(source, encoding="utf-8")
+
+        ext = RegexExtractor("java")
+        symbols, _ = ext.extract_file(f)
+
+        class_names = {s.name for s in symbols if s.symbol_type == CodeSymbolType.CLASS}
+        assert "UserService" in class_names
+        assert "BaseService" in class_names
+
+    def test_java_methods(self, tmp_path: Path) -> None:
+        """Finds Java methods."""
+        source = textwrap.dedent("""\
+            public class Foo {
+                public String bar() { return ""; }
+                private int baz(String s) { return 0; }
+            }
+        """)
+        f = tmp_path / "Foo.java"
+        f.write_text(source, encoding="utf-8")
+
+        ext = RegexExtractor("java")
+        symbols, _ = ext.extract_file(f)
+
+        method_names = {s.name for s in symbols if s.symbol_type == CodeSymbolType.METHOD}
+        assert "bar" in method_names
+        assert "baz" in method_names
+
+    def test_java_imports(self, tmp_path: Path) -> None:
+        """Finds Java import statements."""
+        source = "import java.util.List;\nimport com.example.User;\n"
+        f = tmp_path / "App.java"
+        f.write_text(source, encoding="utf-8")
+
+        ext = RegexExtractor("java")
+        symbols, _ = ext.extract_file(f)
+
+        import_names = {s.name for s in symbols if s.symbol_type == CodeSymbolType.IMPORT}
+        assert "java.util.List" in import_names
+        assert "com.example.User" in import_names
+
+    # -- C/C++ --
+
+    def test_c_functions(self, tmp_path: Path) -> None:
+        """Finds C function definitions."""
+        source = textwrap.dedent("""\
+            #include <stdio.h>
+            #include "utils.h"
+
+            #define MAX_SIZE 1024
+
+            int main(int argc, char *argv[]) {
+                return 0;
+            }
+
+            void helper(int x) {
+                printf("%d", x);
+            }
+        """)
+        f = tmp_path / "main.c"
+        f.write_text(source, encoding="utf-8")
+
+        ext = RegexExtractor("c")
+        symbols, _ = ext.extract_file(f)
+
+        names = {s.name for s in symbols}
+        assert "main" in names
+        assert "helper" in names
+
+    def test_c_includes(self, tmp_path: Path) -> None:
+        """Finds #include directives."""
+        source = '#include <stdio.h>\n#include "mylib.h"\n'
+        f = tmp_path / "test.c"
+        f.write_text(source, encoding="utf-8")
+
+        ext = RegexExtractor("c")
+        symbols, _ = ext.extract_file(f)
+
+        import_names = {s.name for s in symbols if s.symbol_type == CodeSymbolType.IMPORT}
+        assert "stdio.h" in import_names
+        assert "mylib.h" in import_names
+
+    def test_c_defines(self, tmp_path: Path) -> None:
+        """Finds #define constants."""
+        source = "#define MAX_SIZE 1024\n#define BUFFER_LEN 256\n"
+        f = tmp_path / "defs.h"
+        f.write_text(source, encoding="utf-8")
+
+        ext = RegexExtractor("c")
+        symbols, _ = ext.extract_file(f)
+
+        const_names = {s.name for s in symbols if s.symbol_type == CodeSymbolType.CONSTANT}
+        assert "MAX_SIZE" in const_names
+        assert "BUFFER_LEN" in const_names
+
+    def test_cpp_classes(self, tmp_path: Path) -> None:
+        """Finds C++ class/struct."""
+        source = textwrap.dedent("""\
+            class Widget {
+            public:
+                void draw();
+            };
+
+            struct Point {
+                int x, y;
+            };
+        """)
+        f = tmp_path / "widget.cpp"
+        f.write_text(source, encoding="utf-8")
+
+        ext = RegexExtractor("cpp")
+        symbols, _ = ext.extract_file(f)
+
+        class_names = {s.name for s in symbols if s.symbol_type == CodeSymbolType.CLASS}
+        assert "Widget" in class_names
+        assert "Point" in class_names
+
+    # -- Generic fallback --
+
+    def test_unsupported_extension_fallback(self, tmp_path: Path) -> None:
+        """Unknown language uses generic patterns."""
+        source = textwrap.dedent("""\
+            function hello() {
+                return 1
+            }
+
+            class MyClass {
+            }
+        """)
+        f = tmp_path / "script.lua"
+        f.write_text(source, encoding="utf-8")
+
+        ext = RegexExtractor("generic")
+        symbols, _ = ext.extract_file(f)
+
+        names = {s.name for s in symbols}
+        assert "hello" in names
+        assert "MyClass" in names
+
+    def test_empty_file(self, tmp_path: Path) -> None:
+        """Empty file returns empty lists."""
+        f = tmp_path / "empty.js"
+        f.write_text("", encoding="utf-8")
+
+        ext = RegexExtractor("javascript")
+        symbols, rels = ext.extract_file(f)
+
+        assert symbols == []
+        assert rels == []
+
+
+class TestGetExtractor:
+    """Tests for the get_extractor() dispatcher."""
+
+    def test_python_returns_python_extractor(self) -> None:
+        """Python extension returns PythonExtractor."""
+        ext = get_extractor(".py")
+        assert isinstance(ext, PythonExtractor)
+
+    def test_js_returns_regex_extractor(self) -> None:
+        """JS extension returns RegexExtractor."""
+        ext = get_extractor(".js")
+        assert isinstance(ext, RegexExtractor)
+
+    def test_ts_returns_regex_extractor(self) -> None:
+        """TS extension returns RegexExtractor."""
+        ext = get_extractor(".ts")
+        assert isinstance(ext, RegexExtractor)
+
+    def test_go_returns_regex_extractor(self) -> None:
+        """Go extension returns RegexExtractor."""
+        ext = get_extractor(".go")
+        assert isinstance(ext, RegexExtractor)
+
+    def test_rust_returns_regex_extractor(self) -> None:
+        """Rust extension returns RegexExtractor."""
+        ext = get_extractor(".rs")
+        assert isinstance(ext, RegexExtractor)
+
+    def test_java_returns_regex_extractor(self) -> None:
+        """Java extension returns RegexExtractor."""
+        ext = get_extractor(".java")
+        assert isinstance(ext, RegexExtractor)
+
+    def test_c_returns_regex_extractor(self) -> None:
+        """C extension returns RegexExtractor."""
+        ext = get_extractor(".c")
+        assert isinstance(ext, RegexExtractor)
+
+    def test_unknown_returns_generic(self) -> None:
+        """Unknown extension returns generic RegexExtractor."""
+        ext = get_extractor(".xyz")
+        assert isinstance(ext, RegexExtractor)
+
+    def test_python_singleton(self) -> None:
+        """Python extractor is reused (singleton)."""
+        ext1 = get_extractor(".py")
+        ext2 = get_extractor(".py")
+        assert ext1 is ext2

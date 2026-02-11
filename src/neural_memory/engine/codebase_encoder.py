@@ -1,6 +1,6 @@
 """Codebase encoder: converts extracted code symbols into neural graph structures.
 
-Maps Python source code into neurons, synapses, and fibers using the
+Maps source code into neurons, synapses, and fibers using the
 existing NeuralMemory types. No external dependencies.
 
 Neuron type mapping:
@@ -27,7 +27,7 @@ from neural_memory.core.fiber import Fiber
 from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.engine.encoder import EncodingResult
-from neural_memory.extraction.codebase import CodeSymbolType, PythonExtractor
+from neural_memory.extraction.codebase import CodeSymbolType, get_extractor
 
 if TYPE_CHECKING:
     from neural_memory.core.brain import BrainConfig
@@ -48,35 +48,65 @@ _RELATION_TO_SYNAPSE: dict[str, tuple[SynapseType, float]] = {
     "co_occurs": (SynapseType.CO_OCCURS, 0.5),
 }
 
-_DEFAULT_EXTENSIONS: frozenset[str] = frozenset({".py"})
+_DEFAULT_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        ".py",
+        ".js",
+        ".ts",
+        ".jsx",
+        ".tsx",
+        ".go",
+        ".rs",
+        ".java",
+        ".kt",
+        ".c",
+        ".h",
+        ".cpp",
+        ".hpp",
+        ".cc",
+    }
+)
 _DEFAULT_EXCLUDE: frozenset[str] = frozenset(
-    {"__pycache__", ".git", "node_modules", ".venv", "venv", ".mypy_cache", ".ruff_cache"}
+    {
+        "__pycache__",
+        ".git",
+        "node_modules",
+        ".venv",
+        "venv",
+        ".mypy_cache",
+        ".ruff_cache",
+        "target",
+        "build",
+        "dist",
+        ".next",
+        "vendor",
+    }
 )
 
 
 class CodebaseEncoder:
-    """Encodes Python source code into the neural memory graph."""
+    """Encodes source code into the neural memory graph."""
 
     def __init__(self, storage: NeuralStorage, config: BrainConfig) -> None:
         self._storage = storage
         self._config = config
-        self._extractor = PythonExtractor()
 
     async def index_file(
         self,
         file_path: Path,
         tags: set[str] | None = None,
     ) -> EncodingResult:
-        """Index a single Python file into neural graph.
+        """Index a single source file into neural graph.
 
         Args:
-            file_path: Path to the Python file.
+            file_path: Path to the source file.
             tags: Optional tags for the fiber.
 
         Returns:
             EncodingResult with created neurons, synapses, and fiber.
         """
-        symbols, relationships = self._extractor.extract_file(file_path)
+        extractor = get_extractor(file_path.suffix)
+        symbols, relationships = extractor.extract_file(file_path)
 
         neurons_created: list[Neuron] = []
         synapses_created: list[Synapse] = []
@@ -192,7 +222,7 @@ class CodebaseEncoder:
 
         Args:
             directory: Root directory to scan.
-            extensions: File extensions to index. Defaults to {".py"}.
+            extensions: File extensions to index. Defaults to common source extensions.
             exclude_patterns: Directory names to skip.
             tags: Optional tags for all created fibers.
 

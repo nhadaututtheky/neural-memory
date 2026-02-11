@@ -124,9 +124,10 @@ User: "I always use 4-space indentation"
 
 ## Codebase Indexing (nmem_index)
 
-Index code for code-aware recall:
+Index code for code-aware recall. Supports Python (AST), JS/TS, Go, Rust, Java/Kotlin, and C/C++ (regex):
 - **First time**: `nmem_index(action="scan", path="./src")` to index codebase
 - **Check status**: `nmem_index(action="status")` to see what's indexed
+- **Custom extensions**: `nmem_index(action="scan", extensions=[".py", ".ts", ".go"])`
 - **After indexing**: `nmem_recall(query="authentication")` finds related files, functions, classes
 
 Indexed code becomes neurons in the memory graph. Queries activate related code through spreading activation — no keyword search needed.
@@ -179,7 +180,7 @@ COMPACT_PROMPT = """You have NeuralMemory for persistent memory across sessions.
 **Context** (nmem_context): Load recent memories at session start.
 **Auto-capture** (nmem_auto): `nmem_auto(action="process", text="...")` after important conversations.
 **Session** (nmem_session): Track task/feature/progress. `get` at start, `set` during, `end` when done.
-**Index** (nmem_index): Scan codebase into memory. `scan` once, then recall finds code.
+**Index** (nmem_index): Scan codebase into memory (Python, JS/TS, Go, Rust, Java, C/C++). `scan` once, then recall finds code.
 **Recap** (nmem_recap): Resume session context. `nmem_recap()` quick, `nmem_recap(level=2)` detailed, `nmem_recap(topic="X")` search.
 **Eternal** (nmem_eternal): Save project context, decisions, instructions into neural graph. `status` to view, `save` to persist.
 
