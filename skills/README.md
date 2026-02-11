@@ -12,16 +12,24 @@ Composable AI agent skills for NeuralMemory, following the [ship-faster](https:/
 
 ## Install
 
-Copy to your Claude Code skills directory:
+Skills are bundled with the pip package and can be installed with one command:
 
 ```bash
-# Linux/macOS
-cp -r skills/memory-* ~/.claude/skills/
+nmem install-skills
+```
 
-# Windows
-xcopy /E /I skills\memory-intake %USERPROFILE%\.claude\skills\memory-intake
-xcopy /E /I skills\memory-audit %USERPROFILE%\.claude\skills\memory-audit
-xcopy /E /I skills\memory-evolution %USERPROFILE%\.claude\skills\memory-evolution
+Or as part of full setup:
+
+```bash
+nmem init
+```
+
+Other options:
+
+```bash
+nmem install-skills --list     # Show available skills
+nmem install-skills --force    # Overwrite with latest versions
+nmem init --skip-skills        # Skip skills during init
 ```
 
 ## Usage

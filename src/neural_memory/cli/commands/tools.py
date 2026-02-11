@@ -138,16 +138,21 @@ def init(
         bool,
         typer.Option("--skip-mcp", help="Skip MCP auto-configuration"),
     ] = False,
+    skip_skills: Annotated[
+        bool,
+        typer.Option("--skip-skills", help="Skip skills installation"),
+    ] = False,
 ) -> None:
     """Set up NeuralMemory in one command.
 
-    Creates config, default brain, and auto-configures MCP for
-    Claude Code and Cursor. After this, memory tools work everywhere.
+    Creates config, default brain, auto-configures MCP for
+    Claude Code and Cursor, and installs agent skills.
 
     Examples:
-        nmem init              # Full setup
-        nmem init --force      # Overwrite existing config
-        nmem init --skip-mcp   # Skip MCP auto-config
+        nmem init                # Full setup
+        nmem init --force        # Overwrite existing config
+        nmem init --skip-mcp     # Skip MCP auto-config
+        nmem init --skip-skills  # Skip skills installation
     """
     from neural_memory.cli.setup import (
         print_summary,
@@ -155,6 +160,7 @@ def init(
         setup_config,
         setup_mcp_claude,
         setup_mcp_cursor,
+        setup_skills,
     )
     from neural_memory.unified_config import get_neuralmemory_dir
 
@@ -191,6 +197,21 @@ def init(
             "failed": "failed to write config",
         }
         results["Cursor"] = cursor_labels.get(cursor_status, cursor_status)
+
+    # 4. Skills
+    if skip_skills:
+        results["Skills"] = "skipped (--skip-skills)"
+    else:
+        skill_results = setup_skills(force=force)
+        if "Skills" in skill_results:
+            # Error case (e.g. ~/.claude/ not found)
+            results["Skills"] = skill_results["Skills"]
+        else:
+            counts: dict[str, int] = {}
+            for status in skill_results.values():
+                counts[status] = counts.get(status, 0) + 1
+            parts = [f"{count} {status}" for status, count in counts.items()]
+            results["Skills"] = ", ".join(parts) if parts else "none found"
 
     print_summary(results)
 
@@ -476,6 +497,109 @@ def hooks(
         raise typer.Exit(1)
 
 
+def install_skills(
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="Overwrite existing skills with latest version"),
+    ] = False,
+    list_only: Annotated[
+        bool,
+        typer.Option("--list", "-l", help="List available skills without installing"),
+    ] = False,
+) -> None:
+    """Install NeuralMemory skills to ~/.claude/skills/.
+
+    Skills add AI agent workflows for memory management:
+      memory-intake     Structured memory creation from messy notes
+      memory-audit      6-dimension quality review with graded findings
+      memory-evolution   Evidence-based optimization from usage patterns
+
+    Examples:
+        nmem install-skills            # Install all skills
+        nmem install-skills --force    # Overwrite with latest
+        nmem install-skills --list     # Show available skills
+    """
+    from neural_memory.cli.setup import _discover_bundled_skills, setup_skills
+
+    bundled = _discover_bundled_skills()
+    if not bundled:
+        typer.secho("No bundled skills found.", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
+
+    if list_only:
+        typer.secho("  Available skills", bold=True)
+        typer.echo()
+        for name, path in bundled.items():
+            # Extract description from SKILL.md frontmatter
+            desc = _extract_skill_description(path)
+            typer.echo(f"  {name:<22}{desc}")
+        typer.echo()
+        return
+
+    results = setup_skills(force=force)
+
+    # Check for ~/.claude/ not found
+    if "Skills" in results:
+        typer.secho(f"  {results['Skills']}", fg=typer.colors.YELLOW, err=True)
+        typer.echo("  Install Claude Code first, then retry.")
+        raise typer.Exit(1)
+
+    typer.echo()
+    for name, status in results.items():
+        if status in ("installed", "updated"):
+            icon = typer.style("[OK]", fg=typer.colors.GREEN)
+        elif status == "exists":
+            icon = typer.style("[--]", fg=typer.colors.YELLOW)
+        elif status == "update available":
+            icon = typer.style("[!!]", fg=typer.colors.CYAN)
+        else:
+            icon = typer.style("[!!]", fg=typer.colors.RED)
+        typer.echo(f"  {icon} {name:<22}{status}")
+
+    update_available = [n for n, s in results.items() if s == "update available"]
+    if update_available:
+        typer.echo()
+        typer.echo("  Use --force to overwrite with latest versions.")
+
+    typer.echo()
+
+
+def _extract_skill_description(skill_path: object) -> str:
+    """Extract description from SKILL.md YAML frontmatter."""
+    try:
+        content = skill_path.read_text(encoding="utf-8")
+        in_frontmatter = False
+        in_desc = False
+        desc_lines: list[str] = []
+
+        for line in content.splitlines():
+            if line.strip() == "---":
+                if in_frontmatter:
+                    break
+                in_frontmatter = True
+                continue
+            if not in_frontmatter:
+                continue
+            if line.startswith("description:"):
+                rest = line[len("description:"):].strip()
+                if rest and rest != "|":
+                    return rest
+                in_desc = True
+                continue
+            if in_desc:
+                stripped = line.strip()
+                if stripped and not line.startswith(" "):
+                    break
+                if stripped:
+                    desc_lines.append(stripped)
+
+        if desc_lines:
+            return desc_lines[0]
+    except OSError:
+        pass
+    return ""
+
+
 def register(app: typer.Typer) -> None:
     """Register tool commands on the app."""
     app.command()(mcp)
@@ -487,3 +611,4 @@ def register(app: typer.Typer) -> None:
     app.command()(decay)
     app.command()(consolidate)
     app.command()(hooks)
+    app.command(name="install-skills")(install_skills)

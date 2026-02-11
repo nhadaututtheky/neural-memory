@@ -5,6 +5,16 @@ All notable changes to NeuralMemory are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.3] - 2026-02-11
+
+### Added
+
+- **Bundled skills** — 3 Claude Code agent skills (memory-intake, memory-audit, memory-evolution) ship inside the pip package
+- **`nmem install-skills`** — install skills to `~/.claude/skills/` with `--list`, `--force` options
+- **`nmem init`** now includes skills installation (`--skip-skills` to opt out)
+
+---
+
 ## [1.7.2] - 2026-02-11
 
 ### Security

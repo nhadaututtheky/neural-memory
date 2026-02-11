@@ -8,15 +8,18 @@ MCP (Model Context Protocol) is a standard for AI tools to communicate with lang
 
 ## Setup
 
-### 1. Install NeuralMemory
+### Quick Setup (Recommended)
 
 ```bash
 pip install neural-memory
+nmem init
 ```
 
-### 2. Configure Claude Code
+This auto-configures MCP for Claude Code and Cursor, and installs agent skills to `~/.claude/skills/`.
 
-Add to `~/.claude/mcp_servers.json`:
+### Manual Setup
+
+If you prefer manual configuration, add to `~/.claude/mcp_servers.json`:
 
 ```json
 {
@@ -26,7 +29,13 @@ Add to `~/.claude/mcp_servers.json`:
 }
 ```
 
-### 3. Restart Claude Code
+Then install skills separately:
+
+```bash
+nmem install-skills
+```
+
+### Restart Claude Code
 
 After restarting, Claude will have access to NeuralMemory tools.
 

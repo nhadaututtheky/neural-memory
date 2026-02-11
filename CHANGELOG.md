@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.3] - 2026-02-11
+
+### Added
+
+- **Bundled skills** — 3 Claude Code agent skills (memory-intake, memory-audit, memory-evolution) now ship inside the pip package under `src/neural_memory/skills/`
+- **`nmem install-skills`** — new CLI command to install skills to `~/.claude/skills/`
+  - `--list` shows available skills with descriptions
+  - `--force` overwrites existing with latest version
+  - Detects unchanged files (skip), changed files (report "update available"), missing `~/.claude/` (graceful error)
+- **`nmem init --skip-skills`** — skills are now installed as part of `nmem init`; use `--skip-skills` to opt out
+- Tests: 25 new unit tests for `setup_skills`, `_discover_bundled_skills`, `_classify_status`, `_extract_skill_description`
+
+### Changed
+
+- `_classify_status()` now recognizes "installed" and "updated" as success states
+- `skills/README.md` updated: manual copy instructions replaced with `nmem install-skills`
+
 ## [1.7.2] - 2026-02-11
 
 ### Security

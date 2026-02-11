@@ -393,6 +393,29 @@ Show MCP configuration.
 nmem mcp-config
 ```
 
+### nmem install-skills
+
+Install bundled agent skills to `~/.claude/skills/`.
+
+```bash
+nmem install-skills [OPTIONS]
+```
+
+**Options:**
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--force` | `-f` | Overwrite existing skills with latest version |
+| `--list` | `-l` | List available skills without installing |
+
+**Examples:**
+
+```bash
+nmem install-skills            # Install all skills
+nmem install-skills --force    # Overwrite with latest
+nmem install-skills --list     # Show available skills
+```
+
 ---
 
 ## Memory Types

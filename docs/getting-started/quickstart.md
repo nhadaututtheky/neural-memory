@@ -2,6 +2,14 @@
 
 This guide walks you through basic NeuralMemory usage in 5 minutes.
 
+## 0. One-Command Setup
+
+```bash
+nmem init
+```
+
+This creates config, default brain, configures MCP for Claude Code/Cursor, and installs agent skills — all in one command.
+
 ## 1. Store Your First Memory
 
 ```bash

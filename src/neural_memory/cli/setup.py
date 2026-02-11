@@ -142,6 +142,68 @@ def setup_mcp_cursor() -> str:
         return "failed"
 
 
+def _discover_bundled_skills() -> dict[str, Path]:
+    """Find all bundled skills (dirs containing SKILL.md).
+
+    Returns mapping of skill name to SKILL.md path.
+    """
+    from neural_memory.skills import SKILLS_DIR
+
+    skills: dict[str, Path] = {}
+    for child in sorted(SKILLS_DIR.iterdir()):
+        skill_file = child / "SKILL.md"
+        if child.is_dir() and skill_file.is_file():
+            skills[child.name] = skill_file
+    return skills
+
+
+def setup_skills(*, force: bool = False) -> dict[str, str]:
+    """Install bundled skills to ~/.claude/skills/.
+
+    Args:
+        force: Overwrite existing files even if different.
+
+    Returns:
+        Mapping of skill name to status string:
+        "installed", "exists", "updated", "update available", or "failed".
+        Returns {"Skills": "not_found ..."} if ~/.claude/ doesn't exist.
+    """
+    claude_dir = Path.home() / ".claude"
+    if not claude_dir.exists():
+        return {"Skills": "not_found (~/.claude/ not found)"}
+
+    bundled = _discover_bundled_skills()
+    if not bundled:
+        return {"Skills": "no bundled skills found"}
+
+    target_dir = claude_dir / "skills"
+    results: dict[str, str] = {}
+
+    for name, source_path in bundled.items():
+        dest_dir = target_dir / name
+        dest_file = dest_dir / "SKILL.md"
+
+        try:
+            source_content = source_path.read_text(encoding="utf-8")
+            if dest_file.exists():
+                existing_content = dest_file.read_text(encoding="utf-8")
+                if existing_content == source_content:
+                    results[name] = "exists"
+                elif force:
+                    dest_file.write_text(source_content, encoding="utf-8")
+                    results[name] = "updated"
+                else:
+                    results[name] = "update available"
+            else:
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                dest_file.write_text(source_content, encoding="utf-8")
+                results[name] = "installed"
+        except OSError:
+            results[name] = "failed"
+
+    return results
+
+
 def print_summary(results: dict[str, str]) -> None:
     """Print formatted setup summary."""
     typer.echo()
@@ -164,7 +226,7 @@ def print_summary(results: dict[str, str]) -> None:
 def _classify_status(detail: str) -> str:
     """Classify a result detail string into ok/skip/fail."""
     lower = detail.lower()
-    if any(word in lower for word in ("created", "added", "ready")):
+    if any(word in lower for word in ("created", "added", "ready", "installed", "updated")):
         return "ok"
     if any(word in lower for word in ("exists", "already")):
         return "ok"
