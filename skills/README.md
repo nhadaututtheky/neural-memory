@@ -12,24 +12,28 @@ Composable AI agent skills for NeuralMemory, following the [ship-faster](https:/
 
 ## Install
 
-Skills are bundled with the pip package and can be installed with one command:
+### Claude Code (Plugin — Recommended)
+
+Skills are included automatically when you install the plugin:
+
+```bash
+/plugin marketplace add nhadaututtheky/neural-memory
+/plugin install neural-memory@neural-memory-marketplace
+```
+
+### Manual Install
+
+If not using the plugin, install skills separately:
 
 ```bash
 nmem install-skills
 ```
 
-Or as part of full setup:
-
-```bash
-nmem init
-```
-
-Other options:
+Options:
 
 ```bash
 nmem install-skills --list     # Show available skills
 nmem install-skills --force    # Overwrite with latest versions
-nmem init --skip-skills        # Skip skills during init
 ```
 
 ## Usage

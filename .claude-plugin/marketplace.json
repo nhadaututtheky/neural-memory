@@ -1,0 +1,21 @@
+{
+  "name": "neural-memory-marketplace",
+  "owner": {
+    "name": "NeuralMemory Contributors",
+    "email": "nhadaututtheky@users.noreply.github.com"
+  },
+  "metadata": {
+    "description": "NeuralMemory — persistent memory system for AI agents"
+  },
+  "plugins": [
+    {
+      "name": "neural-memory",
+      "source": ".",
+      "description": "Persistent memory for AI agents — remember decisions, recall context, learn habits across sessions",
+      "version": "1.0.0",
+      "category": "productivity",
+      "tags": ["memory", "ai", "agents", "persistence", "mcp"],
+      "license": "MIT"
+    }
+  ]
+}

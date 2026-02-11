@@ -45,11 +45,32 @@ pip install neural-memory[all]      # All features
 
 ## Quick Setup
 
+### Claude Code (Plugin — Recommended)
+
 ```bash
-nmem init    # Creates config, brain, and auto-configures MCP for Claude Code & Cursor
+/plugin marketplace add nhadaututtheky/neural-memory
+/plugin install neural-memory@neural-memory-marketplace
 ```
 
-That's it. Memory tools are now available in your AI editor.
+That's it. MCP server, skills, commands, and agent are all configured automatically via `uvx`.
+
+### Cursor / Windsurf / Other MCP Clients
+
+```bash
+pip install neural-memory
+```
+
+Then add to your editor's MCP config:
+
+```json
+{
+  "neural-memory": {
+    "command": "nmem-mcp"
+  }
+}
+```
+
+No `nmem init` needed — the MCP server auto-initializes on first use.
 
 ## Usage
 
@@ -126,7 +147,7 @@ asyncio.run(main())
 
 ### MCP Tools (Claude Code / Cursor)
 
-After `nmem init`, these tools are available to your AI assistant:
+Once configured, these tools are available to your AI assistant:
 
 | Tool | Description |
 |------|-------------|

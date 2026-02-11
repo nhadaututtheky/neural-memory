@@ -268,17 +268,15 @@ Neural Memory là **pure algorithmic** — 1,352 tests, Python thuần, SQLite s
 
 ```bash
 pip install neural-memory
-nmem init
 npm install -g @neuralmemory/openclaw-plugin
 ```
 
-Plugin tự động register 6 tools, inject context trước session, auto-capture sau session. Zero config.
+Plugin tự động register 6 tools, inject context trước session, auto-capture sau session. Zero config. Brain auto-init khi dùng lần đầu.
 
 ### Cách 2: MCP Skill (manual)
 
 ```bash
 pip install neural-memory
-nmem init
 ```
 
 Tạo file `.openclaw/skills/neural-memory/SKILL.md`:
@@ -457,7 +455,6 @@ Cài đặt mất 5 phút. Cải thiện kéo dài mãi mãi.
 
 ```bash
 pip install neural-memory
-nmem init
 ```
 
 OpenClaw đã có đôi tay tuyệt vời. Giờ hãy cho nó một bộ não.

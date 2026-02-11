@@ -25,10 +25,9 @@ A biologically-inspired memory system that uses spreading activation instead of 
 
 ```bash
 pip install neural-memory
-nmem init
 ```
 
-This creates `~/.neuralmemory/` with a default brain.
+The brain and config at `~/.neuralmemory/` are auto-created on first use.
 
 ### 2. Install the OpenClaw Plugin (Recommended)
 

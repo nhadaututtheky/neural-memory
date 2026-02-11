@@ -228,7 +228,9 @@ def status(
 
         brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
-            return {"error": "No brain configured. Run: nmem init"}
+            return {
+                "error": "No brain configured. Run: nmem brain create default && nmem brain use default"
+            }
 
         stats_data = await storage.get_stats(brain.id)
 
@@ -353,7 +355,9 @@ def health(
 
         brain = await storage.get_brain(storage._current_brain_id or "")
         if not brain:
-            return {"error": "No brain configured. Run: nmem init"}
+            return {
+                "error": "No brain configured. Run: nmem brain create default && nmem brain use default"
+            }
 
         from neural_memory.engine.diagnostics import DiagnosticsEngine
 

@@ -2,13 +2,28 @@
 
 This guide walks you through basic NeuralMemory usage in 5 minutes.
 
-## 0. One-Command Setup
+## 0. Setup
+
+### Claude Code (Plugin)
 
 ```bash
-nmem init
+/plugin marketplace add nhadaututtheky/neural-memory
+/plugin install neural-memory@neural-memory-marketplace
 ```
 
-This creates config, default brain, configures MCP for Claude Code/Cursor, and installs agent skills — all in one command.
+### Cursor / Windsurf / Other MCP Clients
+
+```bash
+pip install neural-memory
+```
+
+Then add `nmem-mcp` to your editor's MCP config. No `nmem init` needed — the MCP server auto-initializes on first use.
+
+### Optional: Explicit Init
+
+```bash
+nmem init    # Only needed if you want to pre-create config and brain
+```
 
 ## 1. Store Your First Memory
 

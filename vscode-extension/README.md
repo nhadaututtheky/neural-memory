@@ -85,7 +85,7 @@ WebSocket connection keeps your tree view, graph, and status bar updated in real
 
 - [NeuralMemory](https://pypi.org/project/neural-memory/) v0.9.5+ (`pip install neural-memory`)
 - Python 3.11+
-- A configured brain (`nmem init` or `nmem brain create my-brain && nmem brain use my-brain`)
+- A configured brain (auto-created on first use, or manually via `nmem brain create my-brain && nmem brain use my-brain`)
 
 ## Configuration
 
@@ -102,8 +102,7 @@ WebSocket connection keeps your tree view, graph, and status bar updated in real
 
 1. Install the extension
 2. Install NeuralMemory: `pip install neural-memory`
-3. Run setup: `nmem init` (creates config, brain, and auto-configures MCP)
-4. Start the server: run **NeuralMemory: Start Server** from the command palette, or enable `neuralmemory.autoStart`
+3. Start the server: run **NeuralMemory: Start Server** from the command palette, or enable `neuralmemory.autoStart`
 5. Open the NeuralMemory sidebar (brain icon in the activity bar)
 
 ## Status Bar
