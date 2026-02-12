@@ -197,7 +197,7 @@
         },
         "neuralmemory.autoStart": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Automatically start the NeuralMemory server on activation"
         },
         "neuralmemory.serverUrl": {
