@@ -44,8 +44,18 @@
   <!-- Cytoscape.js -->
   <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30.4/dist/cytoscape.min.js"></script>
 
+  <!-- Cytoscape fCOSE layout (GPU-accelerated) -->
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape-fcose@2.2.0/cytoscape-fcose.js"></script>
+
+  <!-- Mermaid.js for diagrams -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+
+  <!-- noUiSlider for timeline range -->
+  <link href="https://cdn.jsdelivr.net/npm/nouislider@15.8.1/dist/nouislider.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/nouislider@15.8.1/dist/nouislider.min.js"></script>
+
   <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@0.460.0"></script>
 
   <!-- Dashboard CSS -->
   <link rel="stylesheet" href="/static/css/dashboard.css">
@@ -88,8 +98,14 @@
         <span class="text-xs text-nm-muted font-code bg-nm-secondary px-2 py-0.5 rounded" x-text="version"></span>
       </div>
 
-      <!-- Brain Selector + Locale -->
+      <!-- Brain Selector + WS Status + Locale -->
       <div class="flex items-center gap-4">
+        <!-- WebSocket Status -->
+        <div class="flex items-center gap-1.5" :title="wsStatusText()">
+          <span class="ws-indicator" :class="wsStatusClass()"></span>
+          <span class="text-xs text-nm-muted font-code hidden sm:inline" x-text="wsStatusText()"></span>
+        </div>
+
         <!-- Brain Selector -->
         <div class="relative" x-data="{ open: false }">
           <button @click="open = !open"
@@ -311,7 +327,12 @@
       <!-- ═══ Graph Tab ═════════════════════════════════ -->
       <section x-show="activeTab === 'graph'" x-transition role="tabpanel" aria-label="Neural Graph">
         <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-          <h2 class="text-2xl font-code font-bold" x-text="t('neural_graph')"></h2>
+          <div class="flex items-center gap-3">
+            <h2 class="text-2xl font-code font-bold" x-text="t('neural_graph')"></h2>
+            <!-- Node count badge -->
+            <span x-show="graphNodeCount > 0" class="text-xs bg-nm-secondary px-2 py-0.5 rounded font-code text-nm-muted"
+                  x-text="graphNodeCount + ' ' + t('nodes') + ' / ' + graphEdgeCount + ' ' + t('edges') + (graphTotalNodes > graphNodeCount ? ' (' + t('of') + ' ' + graphTotalNodes + ')' : '')"></span>
+          </div>
 
           <!-- Graph Toolbar -->
           <div class="flex items-center gap-2 graph-toolbar flex-wrap">
@@ -339,6 +360,35 @@
               <option value="intent">Intent</option>
             </select>
 
+            <!-- Layout switcher -->
+            <select x-model="graphLayout" @change="changeGraphLayout(graphLayout)"
+                    aria-label="Graph layout"
+                    class="bg-nm-secondary border border-nm-border rounded-lg px-3 py-1.5 text-sm font-code text-nm-text focus:outline-none focus:border-nm-cta cursor-pointer">
+              <option value="fcose">fCOSE</option>
+              <option value="cose">COSE</option>
+              <option value="concentric">Concentric</option>
+              <option value="breadthfirst">Breadthfirst</option>
+            </select>
+
+            <!-- Node limit slider -->
+            <div class="flex items-center gap-1.5">
+              <input type="range" min="50" max="2000" step="50"
+                     x-model="graphNodeLimit"
+                     @change="applyNodeLimit()"
+                     class="node-limit-slider"
+                     aria-label="Node limit">
+              <span class="text-xs font-code text-nm-muted w-10" x-text="graphNodeLimit"></span>
+            </div>
+
+            <!-- Clustering toggle -->
+            <button @click="toggleGraphClustering()"
+                    :class="graphClustering ? 'bg-nm-cta/20 border-nm-cta text-nm-cta' : ''"
+                    class="graph-toolbar-btn text-xs"
+                    :aria-label="t('clustering')"
+                    :title="t('clustering')">
+              <i data-lucide="boxes" class="w-4 h-4"></i>
+            </button>
+
             <!-- Zoom / Fit / Reload -->
             <button @click="graphZoomIn()" class="graph-toolbar-btn" :aria-label="t('zoom_in')">
               <i data-lucide="zoom-in" class="w-4 h-4"></i>
@@ -351,6 +401,14 @@
             </button>
             <button @click="reloadGraph()" class="graph-toolbar-btn" :aria-label="t('reload')">
               <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            </button>
+
+            <!-- Load More -->
+            <button x-show="graphHasMore()" @click="loadMoreNodes()"
+                    class="bg-nm-secondary hover:bg-nm-border px-3 py-1.5 rounded-lg font-code text-xs transition-colors duration-200 cursor-pointer flex items-center gap-1.5"
+                    :aria-label="t('load_more')">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span x-text="t('load_more')"></span>
             </button>
           </div>
         </div>
@@ -393,6 +451,176 @@
               <div class="mt-2 text-nm-muted text-xs leading-relaxed max-h-40 overflow-y-auto" x-text="selectedNode.content"></div>
             </div>
           </template>
+        </div>
+      </section>
+
+      <!-- ═══ Timeline Tab ════════════════════════════════ -->
+      <section x-show="activeTab === 'timeline'" x-transition role="tabpanel" aria-label="Timeline">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div>
+            <h2 class="text-2xl font-code font-bold" x-text="t('timeline')"></h2>
+            <p class="text-nm-muted text-sm mt-1" x-text="t('timeline_desc')"></p>
+          </div>
+          <span class="text-xs bg-nm-secondary px-2 py-0.5 rounded font-code text-nm-muted"
+                x-text="t('showing_x_of_y') + ' ' + timelineFilteredCount + ' ' + t('of') + ' ' + timelineTotalCount + ' ' + t('memories')"></span>
+        </div>
+
+        <!-- Timeline loading -->
+        <div x-show="loading.timeline" class="flex items-center justify-center py-16">
+          <div class="spinner spinner-lg"></div>
+        </div>
+
+        <!-- Timeline controls -->
+        <div x-show="!loading.timeline" class="bg-nm-primary border border-nm-border rounded-xl p-5 mb-6">
+          <!-- Time range slider -->
+          <div class="mb-4">
+            <label class="text-xs text-nm-muted font-code mb-2 block" x-text="t('time_range')"></label>
+            <div id="timeline-slider" class="mt-6 mb-4"></div>
+          </div>
+
+          <!-- Playback + Filter controls -->
+          <div class="flex items-center gap-3 flex-wrap">
+            <!-- Playback buttons -->
+            <div class="flex items-center gap-1">
+              <button @click="timelineStepBackward()" class="graph-toolbar-btn" :aria-label="t('step_backward')">
+                <i data-lucide="skip-back" class="w-4 h-4"></i>
+              </button>
+              <button x-show="!timelinePlaying" @click="timelinePlay()" class="graph-toolbar-btn" :aria-label="t('play')">
+                <i data-lucide="play" class="w-4 h-4"></i>
+              </button>
+              <button x-show="timelinePlaying" @click="timelinePause()" class="graph-toolbar-btn" :aria-label="t('pause')">
+                <i data-lucide="pause" class="w-4 h-4"></i>
+              </button>
+              <button @click="timelineStepForward()" class="graph-toolbar-btn" :aria-label="t('step_forward')">
+                <i data-lucide="skip-forward" class="w-4 h-4"></i>
+              </button>
+            </div>
+
+            <!-- Speed selector -->
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs text-nm-muted font-code" x-text="t('speed') + ':'"></span>
+              <select x-model="timelineSpeed" @change="setTimelineSpeed(Number(timelineSpeed))"
+                      class="bg-nm-secondary border border-nm-border rounded-lg px-2 py-1 text-xs font-code text-nm-text cursor-pointer">
+                <option value="0.5">0.5x</option>
+                <option value="1">1x</option>
+                <option value="2">2x</option>
+                <option value="4">4x</option>
+                <option value="8">8x</option>
+              </select>
+            </div>
+
+            <!-- Type filter -->
+            <div class="flex items-center gap-1.5 ml-auto">
+              <span class="text-xs text-nm-muted font-code" x-text="t('filter_by_type') + ':'"></span>
+              <select x-model="timelineTypeFilter" @change="setTimelineTypeFilter(timelineTypeFilter)"
+                      class="bg-nm-secondary border border-nm-border rounded-lg px-2 py-1 text-xs font-code text-nm-text cursor-pointer">
+                <option value="" x-text="t('all_types')"></option>
+                <option value="concept">Concept</option>
+                <option value="entity">Entity</option>
+                <option value="time">Time</option>
+                <option value="action">Action</option>
+                <option value="state">State</option>
+                <option value="spatial">Spatial</option>
+                <option value="sensory">Sensory</option>
+                <option value="intent">Intent</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Timeline entries -->
+        <div x-show="!loading.timeline" class="space-y-1 max-w-3xl">
+          <!-- Empty state -->
+          <div x-show="timelineGroups.length === 0" class="empty-state">
+            <i data-lucide="clock"></i>
+            <p class="font-code text-lg mb-2" x-text="t('no_timeline_data')"></p>
+            <p class="text-sm" x-text="t('timeline_empty_hint')"></p>
+          </div>
+
+          <!-- Date groups -->
+          <template x-for="group in timelineGroups" :key="group.date">
+            <div>
+              <!-- Date header -->
+              <div class="timeline-date-header">
+                <span class="text-xs font-code text-nm-muted bg-nm-bg px-2 py-0.5"
+                      x-text="group.date"></span>
+              </div>
+
+              <!-- Entries -->
+              <template x-for="entry in group.entries" :key="entry.id">
+                <div class="timeline-entry py-2">
+                  <div class="bg-nm-primary border border-nm-border rounded-lg px-4 py-3 hover:border-nm-cta/30 transition-colors duration-150">
+                    <div class="flex items-start gap-3">
+                      <i :data-lucide="timelineIcon(entry.neuron_type)" class="w-4 h-4 mt-0.5 flex-shrink-0"
+                         :style="'color: ' + timelineColor(entry.neuron_type)"></i>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 mb-1">
+                          <span class="text-xs font-code px-1.5 py-0.5 rounded"
+                                :style="'background: ' + timelineColor(entry.neuron_type) + '15; color: ' + timelineColor(entry.neuron_type)"
+                                x-text="entry.neuron_type"></span>
+                          <span class="text-xs text-nm-muted font-code" x-text="formatTime(entry.created_at)"></span>
+                        </div>
+                        <p class="text-sm text-nm-text leading-relaxed" x-text="entry.content"></p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <!-- ═══ Diagrams Tab ════════════════════════════════ -->
+      <section x-show="activeTab === 'diagrams'" x-transition role="tabpanel" aria-label="Diagrams">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div>
+            <h2 class="text-2xl font-code font-bold" x-text="t('diagrams')"></h2>
+            <p class="text-nm-muted text-sm mt-1" x-text="t('diagrams_desc')"></p>
+          </div>
+        </div>
+
+        <!-- Diagram controls -->
+        <div class="bg-nm-primary border border-nm-border rounded-xl p-5 mb-6">
+          <div class="flex items-center gap-4 flex-wrap">
+            <!-- Diagram type selector -->
+            <div class="flex items-center gap-1.5">
+              <button @click="changeDiagramType('fiber_structure')"
+                      :class="diagramType === 'fiber_structure' ? 'bg-nm-cta/20 text-nm-cta border-nm-cta' : 'bg-nm-secondary text-nm-muted border-nm-border'"
+                      class="border px-3 py-1.5 rounded-lg text-xs font-code cursor-pointer transition-colors duration-200"
+                      x-text="t('fiber_structure')"></button>
+              <button @click="changeDiagramType('type_distribution')"
+                      :class="diagramType === 'type_distribution' ? 'bg-nm-cta/20 text-nm-cta border-nm-cta' : 'bg-nm-secondary text-nm-muted border-nm-border'"
+                      class="border px-3 py-1.5 rounded-lg text-xs font-code cursor-pointer transition-colors duration-200"
+                      x-text="t('type_distribution')"></button>
+              <button @click="changeDiagramType('synapse_flow')"
+                      :class="diagramType === 'synapse_flow' ? 'bg-nm-cta/20 text-nm-cta border-nm-cta' : 'bg-nm-secondary text-nm-muted border-nm-border'"
+                      class="border px-3 py-1.5 rounded-lg text-xs font-code cursor-pointer transition-colors duration-200"
+                      x-text="t('synapse_flow')"></button>
+            </div>
+
+            <!-- Fiber selector (hidden for type_distribution) -->
+            <div x-show="diagramType !== 'type_distribution'" class="flex items-center gap-1.5">
+              <select x-model="diagramSelectedFiber" @change="selectDiagramFiber(diagramSelectedFiber)"
+                      class="bg-nm-secondary border border-nm-border rounded-lg px-3 py-1.5 text-sm font-code text-nm-text focus:outline-none focus:border-nm-cta cursor-pointer min-w-[200px]">
+                <option value="" x-text="t('select_fiber')"></option>
+                <template x-for="fiber in diagramFibers" :key="fiber.id">
+                  <option :value="fiber.id" x-text="fiber.summary + ' (' + fiber.neuron_count + ')'"></option>
+                </template>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Diagram container -->
+        <div class="bg-nm-primary border border-nm-border rounded-xl p-6 min-h-[400px]">
+          <div id="diagram-container" class="mermaid-container">
+            <!-- Empty state -->
+            <div class="empty-state" x-show="!diagramSelectedFiber && diagramType !== 'type_distribution'">
+              <i data-lucide="git-branch"></i>
+              <p class="text-sm" x-text="t('diagram_select_hint')"></p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -677,7 +905,10 @@
 
   <!-- JS Modules -->
   <script src="/static/js/i18n.js"></script>
+  <script src="/static/js/websocket.js"></script>
   <script src="/static/js/graph.js"></script>
+  <script src="/static/js/timeline.js"></script>
+  <script src="/static/js/diagrams.js"></script>
   <script src="/static/js/oauth.js"></script>
   <script src="/static/js/openclaw.js"></script>
   <script src="/static/js/app.js"></script>

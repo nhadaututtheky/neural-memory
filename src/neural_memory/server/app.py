@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, Depends, FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -127,34 +127,40 @@ def create_app(
             "ui": "/ui",
         }
 
-    # Graph visualization API
+    # Graph visualization API (supports limit/offset for progressive loading)
     @app.get("/api/graph", tags=["visualization"])
-    async def get_graph_data() -> dict[str, Any]:
-        """Get graph data for visualization."""
-        from neural_memory.unified_config import get_shared_storage
+    async def get_graph_data(
+        storage: NeuralStorage = Depends(shared_get_storage),
+        limit: int = Query(default=500, ge=1, le=2000),
+        offset: int = Query(default=0, ge=0),
+    ) -> dict[str, Any]:
+        """Get graph data for visualization with pagination."""
+        capped_limit = min(limit, 2000)
 
-        storage = await get_shared_storage()
+        # Fetch paginated neurons (offset + limit + 1 to detect if more exist)
+        all_neurons = await storage.find_neurons(limit=offset + capped_limit)
+        total_neurons = len(all_neurons)
+        paginated = all_neurons[offset : offset + capped_limit]
 
-        # Get data with limits to avoid unbounded queries
-        neurons = await storage.find_neurons(limit=500)
-        synapses = (await storage.get_all_synapses())[:1000]
+        # Fetch synapses with a capped limit
+        synapses = await storage.get_all_synapses()
+        capped_synapses = synapses[:2000] if len(synapses) > 2000 else synapses
+        total_synapses = len(synapses)
         fibers = await storage.get_fibers(limit=1000)
 
-        stats = {
-            "neuron_count": len(neurons),
-            "synapse_count": len(synapses),
-            "fiber_count": len(fibers),
-        }
+        # Build neuron ID set for filtering synapses to visible nodes
+        neuron_ids = {n.id for n in paginated}
+        visible_synapses = [s for s in capped_synapses if s.source_id in neuron_ids and s.target_id in neuron_ids]
 
         return {
             "neurons": [
                 {
                     "id": n.id,
                     "type": n.type.value,
-                    "content": n.content,
-                    "metadata": n.metadata,
+                    "content": n.content or "",
+                    "metadata": n.metadata or {},
                 }
-                for n in neurons
+                for n in paginated
             ],
             "synapses": [
                 {
@@ -165,17 +171,23 @@ def create_app(
                     "weight": s.weight,
                     "direction": s.direction.value,
                 }
-                for s in synapses
+                for s in visible_synapses
             ],
             "fibers": [
                 {
                     "id": f.id,
-                    "summary": f.summary,
+                    "summary": f.summary or f.id[:20],
                     "neuron_count": len(f.neuron_ids) if f.neuron_ids else 0,
                 }
                 for f in fibers
             ],
-            "stats": stats,
+            "total_neurons": total_neurons,
+            "total_synapses": total_synapses,
+            "stats": {
+                "neuron_count": len(paginated),
+                "synapse_count": len(visible_synapses),
+                "fiber_count": len(fibers),
+            },
         }
 
     # UI endpoint (legacy vis.js graph)

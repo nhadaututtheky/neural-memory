@@ -1,6 +1,7 @@
 /**
  * NeuralMemory Dashboard — Core Alpine.js application
- * Orchestrates tabs, stats, health, integrations status, brain management, i18n, toasts.
+ * Orchestrates tabs, stats, health, integrations status, brain management,
+ * i18n, toasts, WebSocket real-time, timeline, diagrams.
  */
 
 /** Global toast dispatch — usable from any module */
@@ -31,15 +32,43 @@ function dashboardApp() {
     graphFilter: '',
     graphEmpty: false,
     toasts: [],
-    loading: { stats: true, health: true, graph: false, integrations: false, activity: false },
+    loading: { stats: true, health: true, graph: false, integrations: false, activity: false, timeline: false },
     _radarChart: null,
     _graphLoaded: false,
     _healthData: null,
 
-    // Tab definitions (5 tabs)
+    // WebSocket state
+    wsState: 'disconnected',
+
+    // Graph controls
+    graphLayout: 'fcose',
+    graphNodeLimit: 500,
+    graphClustering: false,
+    graphNodeCount: 0,
+    graphTotalNodes: 0,
+    graphEdgeCount: 0,
+
+    // Timeline state
+    timelineGroups: [],
+    timelineFilteredCount: 0,
+    timelineTotalCount: 0,
+    timelineTypeFilter: '',
+    timelinePlaying: false,
+    timelineSpeed: 1,
+    _timelineLoaded: false,
+
+    // Diagrams state
+    diagramFibers: [],
+    diagramSelectedFiber: '',
+    diagramType: 'fiber_structure',
+    _diagramsLoaded: false,
+
+    // Tab definitions (7 tabs)
     tabs: [
       { id: 'overview', label: 'overview', icon: 'layout-dashboard' },
       { id: 'graph', label: 'neural_graph', icon: 'share-2' },
+      { id: 'timeline', label: 'timeline', icon: 'clock' },
+      { id: 'diagrams', label: 'diagrams', icon: 'git-branch' },
       { id: 'integrations', label: 'integrations', icon: 'puzzle' },
       { id: 'health', label: 'brain_health', icon: 'heart-pulse' },
       { id: 'settings', label: 'settings', icon: 'sliders-horizontal' },
@@ -55,6 +84,17 @@ function dashboardApp() {
         this.toast(e.detail.message, e.detail.type);
       });
 
+      // Listen for timeline updates
+      document.addEventListener('nm-timeline-update', (e) => {
+        this.timelineGroups = e.detail.entries || [];
+        this.timelineFilteredCount = NM_TIMELINE.entryCount;
+        this.timelineTotalCount = NM_TIMELINE.totalCount;
+      });
+
+      document.addEventListener('nm-timeline-playback', (e) => {
+        this.timelinePlaying = e.detail.playing;
+      });
+
       // Fetch version
       try {
         const resp = await fetch('/');
@@ -68,6 +108,9 @@ function dashboardApp() {
 
       // Watch tab changes
       this.$watch('activeTab', (tab) => this.onTabChange(tab));
+
+      // Init WebSocket connection
+      this._initWebSocket();
 
       // Init Lucide icons
       this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
@@ -98,6 +141,74 @@ function dashboardApp() {
       return map[type] || 'border-nm-border text-nm-muted';
     },
 
+    // ── WebSocket ────────────────────────────────────────
+
+    _initWebSocket() {
+      if (typeof NM_WS === 'undefined') return;
+
+      NM_WS.on('state_change', (data) => {
+        this.wsState = data.state;
+      });
+
+      // Auto-update stats on memory events
+      NM_WS.on('memory_encoded', () => {
+        this.loadStats();
+        if (this.activeTab === 'timeline' && this._timelineLoaded) {
+          NM_TIMELINE.loadEntries().then(() => {
+            this.timelineFilteredCount = NM_TIMELINE.entryCount;
+            this.timelineTotalCount = NM_TIMELINE.totalCount;
+          });
+        }
+      });
+
+      NM_WS.on('neuron_created', (data) => {
+        if (this._graphLoaded && data.data) {
+          NM_GRAPH.addNode(data.data);
+          this._updateGraphCounts();
+        }
+        this.loadStats();
+      });
+
+      NM_WS.on('synapse_created', (data) => {
+        if (this._graphLoaded && data.data) {
+          NM_GRAPH.addEdge(data.data);
+          this._updateGraphCounts();
+        }
+      });
+
+      // Connect with active brain
+      if (this.activeBrain) {
+        NM_WS.connect(this.activeBrain);
+      } else {
+        // Will connect once we know the brain
+        this.$watch('activeBrain', (brain) => {
+          if (brain) {
+            NM_WS.connect(brain);
+          }
+        });
+      }
+    },
+
+    wsStatusClass() {
+      const map = {
+        connected: 'connected',
+        connecting: 'connecting',
+        disconnected: 'disconnected',
+        reconnecting: 'reconnecting',
+      };
+      return map[this.wsState] || 'disconnected';
+    },
+
+    wsStatusText() {
+      const map = {
+        connected: 'ws_connected',
+        connecting: 'ws_connecting',
+        disconnected: 'ws_disconnected',
+        reconnecting: 'ws_reconnecting',
+      };
+      return this.t(map[this.wsState] || 'ws_disconnected');
+    },
+
     // ── Tab change handlers ────────────────────────────
 
     async onTabChange(tab) {
@@ -110,8 +221,29 @@ function dashboardApp() {
         const cy = await NM_GRAPH.init('cy-graph');
         this.loading = { ...this.loading, graph: false };
         this.graphEmpty = NM_GRAPH.isEmpty();
+        this._updateGraphCounts();
         if (cy) {
           NM_GRAPH.onNodeClick((node) => { this.selectedNode = node; });
+        }
+      }
+
+      if (tab === 'timeline' && !this._timelineLoaded) {
+        this._timelineLoaded = true;
+        this.loading = { ...this.loading, timeline: true };
+        await this.$nextTick();
+        await NM_TIMELINE.init('timeline-slider');
+        this.timelineFilteredCount = NM_TIMELINE.entryCount;
+        this.timelineTotalCount = NM_TIMELINE.totalCount;
+        this.loading = { ...this.loading, timeline: false };
+      }
+
+      if (tab === 'diagrams' && !this._diagramsLoaded) {
+        this._diagramsLoaded = true;
+        await NM_DIAGRAMS.init();
+        this.diagramFibers = NM_DIAGRAMS.fibers;
+        // Render type pie if stats available
+        if (this._healthData) {
+          await this._renderTypePie();
         }
       }
 
@@ -262,9 +394,16 @@ function dashboardApp() {
           body: JSON.stringify({ brain_name: name }),
         });
         if (resp.ok) {
+          // Update WS subscription
+          if (typeof NM_WS !== 'undefined' && this.activeBrain) {
+            NM_WS.unsubscribe(this.activeBrain);
+          }
           this.activeBrain = name;
+          if (typeof NM_WS !== 'undefined') {
+            NM_WS.subscribe(name);
+          }
           await Promise.all([this.loadStats(), this.loadHealth()]);
-          this.toast(`Switched to ${name}`, 'success');
+          this.toast(NM_I18N.t('brain_switched') || 'Brain switched', 'success');
         }
       } catch {
         this.toast(NM_I18N.t('error_occurred'), 'error');
@@ -274,7 +413,7 @@ function dashboardApp() {
     async exportBrain() {
       if (!this.activeBrain) return;
       try {
-        const resp = await fetch(`/brain/${this.activeBrain}/export`);
+        const resp = await fetch(`/brain/${encodeURIComponent(this.activeBrain)}/export`);
         if (resp.ok) {
           const data = await resp.json();
           const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -286,8 +425,8 @@ function dashboardApp() {
           URL.revokeObjectURL(url);
           this.toast(NM_I18N.t('export_success'), 'success');
         }
-      } catch (err) {
-        this.toast(NM_I18N.t('error_occurred') + ': ' + err.message, 'error');
+      } catch {
+        this.toast(NM_I18N.t('error_occurred'), 'error');
       }
     },
 
@@ -295,10 +434,16 @@ function dashboardApp() {
       const file = event.target.files?.[0];
       if (!file || !this.activeBrain) return;
 
+      // Guard against excessively large files (50MB max)
+      if (file.size > 50 * 1024 * 1024) {
+        this.toast(NM_I18N.t('error_occurred'), 'error');
+        return;
+      }
+
       try {
         const text = await file.text();
         const snapshot = JSON.parse(text);
-        const resp = await fetch(`/brain/${this.activeBrain}/import`, {
+        const resp = await fetch(`/brain/${encodeURIComponent(this.activeBrain)}/import`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(snapshot),
@@ -307,8 +452,8 @@ function dashboardApp() {
           await Promise.all([this.loadStats(), this.loadHealth()]);
           this.toast(NM_I18N.t('import_success'), 'success');
         }
-      } catch (err) {
-        this.toast(NM_I18N.t('error_occurred') + ': ' + err.message, 'error');
+      } catch {
+        this.toast(NM_I18N.t('error_occurred'), 'error');
       }
       event.target.value = '';
     },
@@ -319,7 +464,7 @@ function dashboardApp() {
       await this.loadHealth();
       this.activeTab = 'health';
       this.$nextTick(() => this.renderRadar());
-      this.toast(NM_I18N.t('run_health_check') + ' done', 'success');
+      this.toast(NM_I18N.t('health_check_done') || 'Health check done', 'success');
     },
 
     viewWarnings() {
@@ -349,12 +494,127 @@ function dashboardApp() {
       this.selectedNode = null;
       this.graphSearch = '';
       this.graphFilter = '';
+      NM_GRAPH._currentLimit = this.graphNodeLimit;
       const cy = await NM_GRAPH.reload();
       this.loading = { ...this.loading, graph: false };
       this.graphEmpty = NM_GRAPH.isEmpty();
+      this._updateGraphCounts();
       if (cy) {
         NM_GRAPH.onNodeClick((node) => { this.selectedNode = node; });
       }
+    },
+
+    changeGraphLayout(layout) {
+      this.graphLayout = layout;
+      NM_GRAPH.setLayout(layout);
+    },
+
+    changeNodeLimit(limit) {
+      this.graphNodeLimit = parseInt(limit, 10);
+    },
+
+    async applyNodeLimit() {
+      this.loading = { ...this.loading, graph: true };
+      NM_GRAPH._currentLimit = this.graphNodeLimit;
+      const cy = await NM_GRAPH.reload();
+      this.loading = { ...this.loading, graph: false };
+      this.graphEmpty = NM_GRAPH.isEmpty();
+      this._updateGraphCounts();
+      if (cy) {
+        NM_GRAPH.onNodeClick((node) => { this.selectedNode = node; });
+      }
+    },
+
+    async loadMoreNodes() {
+      const count = await NM_GRAPH.loadMore(200);
+      if (count > 0) {
+        this._updateGraphCounts();
+        this.toast(NM_I18N.t('nodes_loaded') || `Loaded ${count} more nodes`, 'info');
+      }
+    },
+
+    toggleGraphClustering() {
+      NM_GRAPH.toggleClustering();
+      this.graphClustering = NM_GRAPH.isClusteringEnabled();
+    },
+
+    graphHasMore() {
+      return NM_GRAPH.hasMore();
+    },
+
+    _updateGraphCounts() {
+      this.graphNodeCount = NM_GRAPH.nodeCount();
+      this.graphTotalNodes = NM_GRAPH.totalNodeCount();
+      this.graphEdgeCount = NM_GRAPH.edgeCount();
+    },
+
+    // ── Timeline controls ──────────────────────────────
+
+    timelinePlay() { NM_TIMELINE.play(); },
+    timelinePause() { NM_TIMELINE.pause(); },
+    timelineStepForward() { NM_TIMELINE.stepForward(); },
+    timelineStepBackward() { NM_TIMELINE.stepBackward(); },
+
+    setTimelineSpeed(speed) {
+      this.timelineSpeed = speed;
+      NM_TIMELINE.setSpeed(speed);
+    },
+
+    setTimelineTypeFilter(type) {
+      this.timelineTypeFilter = type;
+      NM_TIMELINE.setTypeFilter(type);
+    },
+
+    timelineIcon(type) {
+      return NM_TIMELINE.getIcon(type);
+    },
+
+    timelineColor(type) {
+      return NM_TIMELINE.getColor(type);
+    },
+
+    // ── Diagram controls ───────────────────────────────
+
+    async selectDiagramFiber(fiberId) {
+      this.diagramSelectedFiber = fiberId;
+      if (!fiberId) return;
+
+      if (this.diagramType === 'fiber_structure') {
+        await NM_DIAGRAMS.renderFiberStructure(fiberId, 'diagram-container');
+      } else if (this.diagramType === 'synapse_flow') {
+        await NM_DIAGRAMS.renderSynapseFlow(fiberId, 'diagram-container');
+      }
+      this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+    },
+
+    async changeDiagramType(type) {
+      this.diagramType = type;
+
+      if (type === 'type_distribution') {
+        await this._renderTypePie();
+      } else if (this.diagramSelectedFiber) {
+        await this.selectDiagramFiber(this.diagramSelectedFiber);
+      }
+    },
+
+    async _renderTypePie() {
+      // Build type counts from health data or stats
+      const typeCounts = {};
+      if (this._healthData) {
+        // Use neuron count by type — we'll estimate from graph data
+        try {
+          const resp = await fetch('/api/graph?limit=5000&offset=0');
+          if (resp.ok) {
+            const data = await resp.json();
+            for (const n of (data.neurons || [])) {
+              typeCounts[n.type] = (typeCounts[n.type] || 0) + 1;
+            }
+          }
+        } catch {
+          // Fallback — empty pie
+        }
+      }
+      await NM_DIAGRAMS.renderTypePie('diagram-container', typeCounts);
     },
 
     // ── Integrations refresh ───────────────────────────

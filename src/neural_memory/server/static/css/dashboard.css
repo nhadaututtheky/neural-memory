@@ -253,6 +253,139 @@ pre code {
   }
 }
 
+/* ── WebSocket status indicator ───────────────────────── */
+
+.ws-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  transition: background-color 300ms ease;
+}
+
+.ws-indicator.connected { background: #22C55E; }
+.ws-indicator.connecting { background: #F59E0B; animation: pulse-green 1s ease-in-out infinite; }
+.ws-indicator.disconnected { background: #EF4444; }
+.ws-indicator.reconnecting { background: #F59E0B; animation: pulse-green 0.5s ease-in-out infinite; }
+
+/* ── Timeline styles ─────────────────────────────────── */
+
+.timeline-entry {
+  position: relative;
+  padding-left: 2rem;
+}
+
+.timeline-entry::before {
+  content: '';
+  position: absolute;
+  left: 0.5rem;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #334155;
+}
+
+.timeline-entry::after {
+  content: '';
+  position: absolute;
+  left: 0.25rem;
+  top: 0.75rem;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #475569;
+  background: #0F172A;
+}
+
+.timeline-date-header {
+  position: relative;
+  padding-left: 2rem;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.timeline-date-header::before {
+  content: '';
+  position: absolute;
+  left: 0.5rem;
+  top: 50%;
+  width: 12px;
+  height: 2px;
+  background: #475569;
+}
+
+/* noUiSlider dark theme overrides */
+.noUi-target {
+  background: #1E293B !important;
+  border-color: #475569 !important;
+  box-shadow: none !important;
+}
+
+.noUi-connect {
+  background: #22C55E !important;
+}
+
+.noUi-handle {
+  background: #334155 !important;
+  border-color: #22C55E !important;
+  box-shadow: none !important;
+  cursor: grab;
+}
+
+.noUi-handle:active {
+  cursor: grabbing;
+}
+
+.noUi-tooltip {
+  background: #1E293B !important;
+  border-color: #475569 !important;
+  color: #F8FAFC !important;
+  font-family: 'Fira Code', monospace !important;
+  font-size: 11px !important;
+}
+
+/* ── Mermaid diagram overrides ───────────────────────── */
+
+.mermaid-container svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-container .nodeLabel {
+  font-family: 'Fira Code', monospace !important;
+}
+
+/* ── Node limit slider ───────────────────────────────── */
+
+input[type="range"].node-limit-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 120px;
+  height: 4px;
+  background: #334155;
+  border-radius: 2px;
+  outline: none;
+}
+
+input[type="range"].node-limit-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: #22C55E;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+input[type="range"].node-limit-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: #22C55E;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
 /* ── Reduced motion ──────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,4 +1,4 @@
-"""Dashboard API routes — brain stats, health, brain management."""
+"""Dashboard API routes — brain stats, health, brain management, timeline, diagrams."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from neural_memory.server.dependencies import get_storage
@@ -242,4 +242,178 @@ async def get_health(
             for w in report.warnings
         ],
         recommendations=list(report.recommendations),
+    )
+
+
+# ── Timeline API ─────────────────────────────────────────
+
+
+class TimelineEntry(BaseModel):
+    """A single timeline entry."""
+
+    id: str
+    content: str
+    neuron_type: str
+    created_at: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class TimelineResponse(BaseModel):
+    """Timeline API response."""
+
+    entries: list[TimelineEntry] = Field(default_factory=list)
+    total: int = 0
+
+
+@router.get(
+    "/timeline",
+    response_model=TimelineResponse,
+    summary="Get chronological memory timeline",
+)
+async def get_timeline(
+    storage: Annotated[NeuralStorage, Depends(get_storage)],
+    limit: int = Query(default=500, ge=1, le=2000),
+    start: str | None = Query(default=None, description="ISO datetime start"),
+    end: str | None = Query(default=None, description="ISO datetime end"),
+) -> TimelineResponse:
+    """Get chronological list of memories for timeline visualization."""
+    neurons = await storage.find_neurons(limit=min(limit, 2000))
+
+    entries: list[TimelineEntry] = []
+    for n in neurons:
+        created = n.metadata.get("_created_at", "") if n.metadata else ""
+        if not created and hasattr(n, "created_at") and n.created_at:
+            created = n.created_at.isoformat() if hasattr(n.created_at, "isoformat") else str(n.created_at)
+
+        if start and created and created < start:
+            continue
+        if end and created and created > end:
+            continue
+
+        entries.append(
+            TimelineEntry(
+                id=n.id,
+                content=n.content or "",
+                neuron_type=n.type.value,
+                created_at=created,
+                metadata=n.metadata or {},
+            )
+        )
+
+    # Sort by created_at descending
+    entries.sort(key=lambda e: e.created_at, reverse=True)
+
+    return TimelineResponse(entries=entries[:limit], total=len(entries))
+
+
+# ── Fiber Diagram API ────────────────────────────────────
+
+
+class FiberListItem(BaseModel):
+    """Brief fiber summary for dropdown."""
+
+    id: str
+    summary: str
+    neuron_count: int = 0
+
+
+class FiberListResponse(BaseModel):
+    """Fiber list API response."""
+
+    fibers: list[FiberListItem] = Field(default_factory=list)
+
+
+@router.get(
+    "/fibers",
+    response_model=FiberListResponse,
+    summary="List fibers for dropdown",
+)
+async def list_fibers(
+    storage: Annotated[NeuralStorage, Depends(get_storage)],
+    limit: int = Query(default=100, ge=1, le=500),
+) -> FiberListResponse:
+    """Get lightweight fiber list for diagram dropdown."""
+    fibers = await storage.get_fibers(limit=min(limit, 500))
+
+    return FiberListResponse(
+        fibers=[
+            FiberListItem(
+                id=f.id,
+                summary=f.summary or f.id[:20],
+                neuron_count=len(f.neuron_ids) if f.neuron_ids else 0,
+            )
+            for f in fibers
+        ]
+    )
+
+
+class FiberDiagramResponse(BaseModel):
+    """Fiber diagram data for Mermaid rendering."""
+
+    fiber_id: str
+    neurons: list[dict[str, Any]] = Field(default_factory=list)
+    synapses: list[dict[str, Any]] = Field(default_factory=list)
+
+
+@router.get(
+    "/fiber/{fiber_id}/diagram",
+    response_model=FiberDiagramResponse,
+    summary="Get fiber structure for diagram",
+)
+async def get_fiber_diagram(
+    fiber_id: str,
+    storage: Annotated[NeuralStorage, Depends(get_storage)],
+) -> FiberDiagramResponse:
+    """Get neurons and synapses for a fiber to render as a diagram."""
+    # Direct lookup by iterating a small batch rather than scanning all fibers
+    target = None
+    try:
+        fibers = await storage.get_fibers(limit=500)
+        for f in fibers:
+            if f.id == fiber_id:
+                target = f
+                break
+    except Exception:
+        logger.debug("Failed to get fibers for diagram", exc_info=True)
+
+    if target is None:
+        raise HTTPException(status_code=404, detail="Fiber not found.")
+
+    neuron_ids = list(target.neuron_ids) if target.neuron_ids else []
+    if not neuron_ids:
+        return FiberDiagramResponse(fiber_id=fiber_id, neurons=[], synapses=[])
+
+    neurons_batch = await storage.get_neurons_batch(neuron_ids)
+
+    neuron_list = [
+        {
+            "id": n.id,
+            "type": n.type.value,
+            "content": n.content or "",
+            "metadata": n.metadata or {},
+        }
+        for n in neurons_batch.values()
+    ]
+
+    # Get synapses between these neurons (cap to prevent unbounded load)
+    all_synapses = await storage.get_all_synapses()
+    capped_synapses = all_synapses[:5000] if len(all_synapses) > 5000 else all_synapses
+    id_set = set(neuron_ids)
+    fiber_synapses = [
+        {
+            "id": s.id,
+            "source_id": s.source_id,
+            "target_id": s.target_id,
+            "type": s.type.value,
+            "weight": s.weight,
+            "direction": s.direction.value,
+        }
+        for s in capped_synapses
+        if s.source_id in id_set and s.target_id in id_set
+    ]
+
+    return FiberDiagramResponse(
+        fiber_id=fiber_id,
+        neurons=neuron_list,
+        synapses=fiber_synapses,
     )
