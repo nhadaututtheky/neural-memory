@@ -5,6 +5,7 @@
   "type": "module",
   "main": "src/index.ts",
   "openclaw": {
+    "id": "neuralmemory",
     "extensions": ["./src/index.ts"]
   },
   "scripts": {

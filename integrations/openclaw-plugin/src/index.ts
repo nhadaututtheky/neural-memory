@@ -32,6 +32,7 @@ type PluginConfig = {
   autoCapture?: boolean;
   contextDepth?: number;
   maxContextTokens?: number;
+  timeout?: number;
 };
 
 const DEFAULT_CONFIG: Readonly<Required<PluginConfig>> = {
@@ -41,6 +42,7 @@ const DEFAULT_CONFIG: Readonly<Required<PluginConfig>> = {
   autoCapture: true,
   contextDepth: 1,
   maxContextTokens: 500,
+  timeout: 30_000,
 };
 
 function resolveConfig(raw?: Record<string, unknown>): Required<PluginConfig> {
@@ -64,6 +66,7 @@ const plugin: OpenClawPluginDefinition = {
       pythonPath: cfg.pythonPath,
       brain: cfg.brain,
       logger: api.logger,
+      timeout: cfg.timeout,
     });
 
     // ── Service: MCP process lifecycle ───────────────────

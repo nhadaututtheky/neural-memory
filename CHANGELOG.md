@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **OpenClaw plugin ID mismatch** — Added explicit `"id": "neuralmemory"` to `openclaw` section in `package.json`, fixing the `plugin id mismatch (manifest uses "neuralmemory", entry hints "openclaw-plugin")` warning
+
+### Added
+
+- **Configurable MCP timeout** — New `timeout` plugin config option (default: 30s, max: 120s) for users on slow machines or first-time init
+- **Actionable MCP error messages** — Initialize failures now include Python stderr output and specific hints:
+  - `ENOENT` → tells user to check `pythonPath` in plugin config
+  - Exit code 1 → suggests `pip install neural-memory`
+  - Timeout → prints captured stderr + verify command (`python -m neural_memory.mcp`)
+
 ## [1.7.4] - 2026-02-11
 
 ### Fixed

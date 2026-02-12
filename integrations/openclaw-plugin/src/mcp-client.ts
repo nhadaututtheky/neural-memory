@@ -83,29 +83,53 @@ export class NeuralMemoryMcpClient {
       this.drainBuffer();
     });
 
+    let stderrChunks: string[] = [];
+
     this.proc.stderr!.on("data", (chunk: Buffer) => {
       const msg = chunk.toString("utf-8").trim();
-      if (msg) this.logger.warn(`[mcp stderr] ${msg}`);
+      if (msg) {
+        stderrChunks.push(msg);
+        this.logger.warn(`[mcp stderr] ${msg}`);
+      }
     });
 
     this.proc.on("exit", (code) => {
       this._connected = false;
-      this.rejectAll(new Error(`MCP process exited with code ${code}`));
-      this.logger.info(`MCP process exited (code: ${code})`);
+      const hint =
+        code === 1
+          ? " — check that neural-memory is installed: pip install neural-memory"
+          : "";
+      this.rejectAll(new Error(`MCP process exited with code ${code}${hint}`));
+      this.logger.error(`MCP process exited (code: ${code})${hint}`);
     });
 
     this.proc.on("error", (err) => {
       this._connected = false;
-      this.rejectAll(err);
-      this.logger.error(`MCP process error: ${err.message}`);
+      const hint =
+        err.message.includes("ENOENT")
+          ? ` — "${this.pythonPath}" not found. Check pythonPath in plugin config.`
+          : "";
+      this.rejectAll(new Error(`MCP process error: ${err.message}${hint}`));
+      this.logger.error(`MCP process error: ${err.message}${hint}`);
     });
 
     // MCP initialize handshake
-    await this.send("initialize", {
-      protocolVersion: PROTOCOL_VERSION,
-      capabilities: {},
-      clientInfo: { name: CLIENT_NAME, version: CLIENT_VERSION },
-    });
+    try {
+      await this.send("initialize", {
+        protocolVersion: PROTOCOL_VERSION,
+        capabilities: {},
+        clientInfo: { name: CLIENT_NAME, version: CLIENT_VERSION },
+      });
+    } catch (err) {
+      const stderr = stderrChunks.join("\n");
+      const detail = stderr
+        ? `\nPython stderr:\n${stderr}`
+        : "\nNo stderr output — the Python process may have hung.";
+      throw new Error(
+        `MCP initialize failed: ${(err as Error).message}${detail}\n` +
+          `Verify: ${this.pythonPath} -m neural_memory.mcp`,
+      );
+    }
 
     // Send initialized notification (no response expected)
     this.notify("notifications/initialized", {});

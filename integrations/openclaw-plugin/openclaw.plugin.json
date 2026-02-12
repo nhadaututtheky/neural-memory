@@ -41,6 +41,13 @@
           "maximum": 10000,
           "description": "Maximum tokens for auto-context injection",
           "default": 500
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 5000,
+          "maximum": 120000,
+          "description": "MCP request timeout in milliseconds",
+          "default": 30000
         }
       }
     },
@@ -70,6 +77,10 @@
       "maxContextTokens": {
         "label": "Max Context Tokens",
         "help": "Maximum tokens to inject as context (higher = more context but uses more prompt space)"
+      },
+      "timeout": {
+        "label": "MCP Timeout (ms)",
+        "help": "How long to wait for MCP server responses. Increase if you see timeout errors on slow machines (default: 30000)"
       }
     }
   }
