@@ -45,10 +45,10 @@ const DEFAULT_CONFIG: Readonly<PluginConfig> = {
   timeout: 30_000,
 };
 
-const BRAIN_NAME_RE = /^[a-zA-Z0-9_\-.]{1,64}$/;
-const MAX_AUTO_CAPTURE_CHARS = 50_000;
+export const BRAIN_NAME_RE = /^[a-zA-Z0-9_\-.]{1,64}$/;
+export const MAX_AUTO_CAPTURE_CHARS = 50_000;
 
-function resolveConfig(raw?: Record<string, unknown>): PluginConfig {
+export function resolveConfig(raw?: Record<string, unknown>): PluginConfig {
   const merged = { ...DEFAULT_CONFIG, ...(raw ?? {}) };
 
   return {

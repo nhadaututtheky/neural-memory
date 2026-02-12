@@ -43,7 +43,7 @@ const MAX_BUFFER_BYTES = 10 * 1024 * 1024; // 10 MB safety cap
 const MAX_STDERR_LINES = 50;
 
 /** Env vars forwarded to the MCP child process (least-privilege). */
-const ALLOWED_ENV_KEYS: ReadonlySet<string> = new Set([
+export const ALLOWED_ENV_KEYS: ReadonlySet<string> = new Set([
   "PATH",
   "PATHEXT",
   "HOME",
@@ -318,7 +318,7 @@ export class NeuralMemoryMcpClient {
 // ── Helpers ─────────────────────────────────────────────────
 
 /** Build a minimal env for the child process (least-privilege). */
-function buildChildEnv(brain: string): Record<string, string> {
+export function buildChildEnv(brain: string): Record<string, string> {
   const env: Record<string, string> = {};
 
   for (const key of ALLOWED_ENV_KEYS) {
