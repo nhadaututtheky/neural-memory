@@ -13,8 +13,10 @@ Brain data is stored in ~/.neuralmemory/brains/<name>.db (SQLite)
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
+import shutil
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -531,6 +533,63 @@ def get_config(reload: bool = False) -> UnifiedConfig:
     return _config
 
 
+_MIN_LEGACY_DB_BYTES = 8192  # skip empty-schema-only files
+
+
+def _migrate_legacy_db(config: UnifiedConfig, brain_name: str | None) -> None:
+    """Auto-migrate flat-layout default.db → brains/default.db.
+
+    Before the brains/ directory was introduced, NeuralMemory stored its
+    database at ``~/.neuralmemory/default.db``.  The new layout puts each
+    brain in ``~/.neuralmemory/brains/<name>.db``.
+
+    This function copies the old file into the new location **once**, so
+    users upgrading from older versions keep their data.  The old file is
+    preserved as a backup.
+
+    Only the ``"default"`` brain is eligible — it was the only brain that
+    existed in the flat layout.
+    """
+    name = brain_name or config.current_brain
+    if name != "default":
+        return
+
+    old_path = config.data_dir / "default.db"
+    new_path = config.brains_dir / "default.db"
+
+    if new_path.exists():
+        return
+    if not old_path.is_file():
+        return
+    if old_path.stat().st_size < _MIN_LEGACY_DB_BYTES:
+        return
+
+    logger = logging.getLogger(__name__)
+    try:
+        new_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(old_path, new_path)
+
+        # Also copy WAL/SHM if present so SQLite sees a consistent state.
+        for suffix in ("-wal", "-shm"):
+            wal = old_path.with_name(old_path.name + suffix)
+            if wal.is_file():
+                shutil.copy2(wal, new_path.with_name(new_path.name + suffix))
+
+        logger.info(
+            "Migrated legacy database: %s → %s (%d bytes)",
+            old_path,
+            new_path,
+            new_path.stat().st_size,
+        )
+    except Exception:
+        logger.warning(
+            "Failed to migrate legacy database %s — data is still safe "
+            "in the original location",
+            old_path,
+            exc_info=True,
+        )
+
+
 async def get_shared_storage(brain_name: str | None = None) -> SQLiteStorage:
     """Get SQLite storage for shared brain access.
 
@@ -548,6 +607,10 @@ async def get_shared_storage(brain_name: str | None = None) -> SQLiteStorage:
     from neural_memory.storage.sqlite_store import SQLiteStorage
 
     config = get_config()
+
+    # Auto-migrate flat-layout DB → brains/ layout (one-time, non-blocking)
+    _migrate_legacy_db(config, brain_name)
+
     db_path = config.get_brain_db_path(brain_name)
     cache_key = str(db_path)
 
