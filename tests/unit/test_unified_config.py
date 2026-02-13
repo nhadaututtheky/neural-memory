@@ -1,4 +1,4 @@
-"""Tests for unified_config.py — legacy DB migration."""
+"""Tests for unified_config.py — legacy DB migration + config sync."""
 
 import sqlite3
 from pathlib import Path
@@ -10,7 +10,9 @@ from neural_memory.unified_config import (
     _MIN_LEGACY_DB_BYTES,
     UnifiedConfig,
     _migrate_legacy_db,
+    _read_current_brain_from_toml,
 )
+from neural_memory.cli.config import _sync_brain_to_toml
 
 
 def _create_fake_db(path: Path, *, size: int = 0) -> None:
@@ -154,3 +156,111 @@ class TestMigrateLegacyDb:
 
         new_db = tmp_data_dir / "brains" / "default.db"
         assert new_db.exists()
+
+
+# ── Config sync tests ────────────────────────────────────────────
+
+
+def _write_toml(data_dir: Path, brain_name: str = "default") -> Path:
+    """Write a minimal config.toml and return its path."""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    toml_path = data_dir / "config.toml"
+    toml_path.write_text(
+        f'version = "1.0"\ncurrent_brain = "{brain_name}"\n\n[brain]\ndecay_rate = 0.1\n',
+        encoding="utf-8",
+    )
+    return toml_path
+
+
+class TestSyncBrainToToml:
+    """Tests for CLI → TOML sync via _sync_brain_to_toml."""
+
+    def test_updates_current_brain_in_toml(self, tmp_data_dir: Path) -> None:
+        _write_toml(tmp_data_dir, "default")
+
+        _sync_brain_to_toml(tmp_data_dir, "work")
+
+        content = (tmp_data_dir / "config.toml").read_text(encoding="utf-8")
+        assert 'current_brain = "work"' in content
+
+    def test_preserves_other_toml_content(self, tmp_data_dir: Path) -> None:
+        _write_toml(tmp_data_dir, "default")
+
+        _sync_brain_to_toml(tmp_data_dir, "work")
+
+        content = (tmp_data_dir / "config.toml").read_text(encoding="utf-8")
+        assert "decay_rate = 0.1" in content
+        assert 'version = "1.0"' in content
+
+    def test_noop_when_toml_missing(self, tmp_data_dir: Path) -> None:
+        tmp_data_dir.mkdir(parents=True, exist_ok=True)
+        # Should not raise
+        _sync_brain_to_toml(tmp_data_dir, "work")
+
+    def test_rejects_invalid_brain_name(self, tmp_data_dir: Path) -> None:
+        _write_toml(tmp_data_dir, "default")
+
+        _sync_brain_to_toml(tmp_data_dir, "../escape")
+
+        # Should not have changed
+        content = (tmp_data_dir / "config.toml").read_text(encoding="utf-8")
+        assert 'current_brain = "default"' in content
+
+    def test_handles_write_error_gracefully(self, tmp_data_dir: Path) -> None:
+        _write_toml(tmp_data_dir, "default")
+
+        with patch("neural_memory.cli.config.Path.write_text", side_effect=OSError("perm")):
+            # Should not raise
+            _sync_brain_to_toml(tmp_data_dir, "work")
+
+
+class TestReadCurrentBrainFromToml:
+    """Tests for MCP-side toml reading via _read_current_brain_from_toml."""
+
+    def test_reads_brain_name(self, tmp_data_dir: Path) -> None:
+        _write_toml(tmp_data_dir, "my-brain")
+
+        with patch("neural_memory.unified_config.get_neuralmemory_dir", return_value=tmp_data_dir):
+            result = _read_current_brain_from_toml()
+        assert result == "my-brain"
+
+    def test_returns_none_when_missing(self, tmp_path: Path) -> None:
+        with patch("neural_memory.unified_config.get_neuralmemory_dir", return_value=tmp_path):
+            result = _read_current_brain_from_toml()
+        assert result is None
+
+    def test_returns_none_for_invalid_name(self, tmp_data_dir: Path) -> None:
+        data_dir = tmp_data_dir
+        data_dir.mkdir(parents=True, exist_ok=True)
+        toml_path = data_dir / "config.toml"
+        toml_path.write_text(
+            'current_brain = "../hacked"\n', encoding="utf-8"
+        )
+
+        with patch("neural_memory.unified_config.get_neuralmemory_dir", return_value=data_dir):
+            result = _read_current_brain_from_toml()
+        assert result is None
+
+
+class TestEndToEndBrainSync:
+    """Integration test: CLI save → TOML sync → MCP reads new brain."""
+
+    def test_cli_save_syncs_to_toml_and_mcp_reads_it(self, tmp_data_dir: Path) -> None:
+        _write_toml(tmp_data_dir, "default")
+
+        # Simulate CLI brain switch
+        _sync_brain_to_toml(tmp_data_dir, "work")
+
+        # Simulate MCP reading the toml
+        with patch("neural_memory.unified_config.get_neuralmemory_dir", return_value=tmp_data_dir):
+            result = _read_current_brain_from_toml()
+        assert result == "work"
+
+        # Verify the config singleton would pick it up
+        config = _make_config(tmp_data_dir)
+        assert config.current_brain == "default"  # old value in memory
+
+        # After sync detection, config updates
+        if result is not None and result != config.current_brain:
+            config.current_brain = result
+        assert config.current_brain == "work"

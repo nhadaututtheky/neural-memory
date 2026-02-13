@@ -666,6 +666,33 @@ def get_config(reload: bool = False) -> UnifiedConfig:
     return _config
 
 
+def _read_current_brain_from_toml() -> str | None:
+    """Read just the current_brain value from config.toml on disk.
+
+    This is a lightweight read used by ``get_shared_storage`` to detect
+    brain switches made by the CLI (which writes to config.toml via
+    ``_sync_brain_to_toml``).  It avoids a full config reload.
+
+    Returns:
+        The current_brain string, or ``None`` if the file is missing
+        or cannot be parsed.
+    """
+    toml_path = get_neuralmemory_dir() / "config.toml"
+    if not toml_path.exists():
+        return None
+    try:
+        import tomllib
+
+        with open(toml_path, "rb") as f:
+            data = tomllib.load(f)
+        name = data.get("current_brain")
+        if isinstance(name, str) and _BRAIN_NAME_PATTERN.match(name):
+            return name
+    except Exception:
+        pass
+    return None
+
+
 _MIN_LEGACY_DB_BYTES = 8192  # skip empty-schema-only files
 
 
@@ -739,6 +766,19 @@ async def get_shared_storage(brain_name: str | None = None) -> SQLiteStorage:
     from neural_memory.storage.sqlite_store import SQLiteStorage
 
     config = get_config()
+
+    # When no explicit brain is requested, re-read current_brain from
+    # config.toml on disk.  This picks up brain switches made by the CLI
+    # (which writes to both config.json and config.toml) without
+    # requiring a full MCP server restart.
+    if brain_name is None:
+        disk_brain = _read_current_brain_from_toml()
+        if disk_brain is not None and disk_brain != config.current_brain:
+            logger = logging.getLogger(__name__)
+            logger.info(
+                "Brain changed on disk: %s → %s", config.current_brain, disk_brain
+            )
+            config.current_brain = disk_brain
 
     # Auto-migrate flat-layout DB → brains/ layout (one-time, non-blocking)
     _migrate_legacy_db(config, brain_name)

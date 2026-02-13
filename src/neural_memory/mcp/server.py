@@ -41,6 +41,7 @@ from neural_memory.core.memory_types import (
     suggest_memory_type,
 )
 from neural_memory.engine.encoder import MemoryEncoder
+from neural_memory.engine.hooks import HookEvent, HookRegistry
 from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline
 from neural_memory.mcp.auto_handler import AutoHandler
 from neural_memory.mcp.conflict_handler import ConflictHandler
@@ -96,11 +97,18 @@ class MCPServer(
         self.config: UnifiedConfig = get_config()
         self._storage: SQLiteStorage | None = None
         self._eternal_ctx = None
+        self.hooks: HookRegistry = HookRegistry()
 
     async def get_storage(self) -> SQLiteStorage:
-        """Get or create shared SQLite storage instance."""
-        if self._storage is None:
-            self._storage = await get_shared_storage()
+        """Get or create shared SQLite storage instance.
+
+        Re-reads ``current_brain`` from disk on each call so that
+        brain switches made by the CLI are picked up without
+        restarting the MCP server.
+        """
+        # get_shared_storage() handles brain-change detection internally
+        # and returns the correct (possibly cached) storage instance.
+        self._storage = await get_shared_storage()
         return self._storage
 
     def get_resources(self) -> list[dict[str, Any]]:
@@ -254,6 +262,9 @@ class MCPServer(
             dedup_pipeline = None
 
         encoder = MemoryEncoder(storage, brain.config, dedup_pipeline=dedup_pipeline)
+
+        await self.hooks.emit(HookEvent.PRE_REMEMBER, {"content": content, "type": mem_type.value})
+
         storage.disable_auto_save()
 
         try:
@@ -310,6 +321,14 @@ class MCPServer(
         await self._record_tool_action("remember", content[:100])
 
         pulse = await self._check_maintenance()
+
+        await self.hooks.emit(HookEvent.POST_REMEMBER, {
+            "fiber_id": result.fiber.id,
+            "content": content,
+            "type": mem_type.value,
+            "neurons_created": len(result.neurons_created),
+            "conflicts_detected": result.conflicts_detected,
+        })
 
         response: dict[str, Any] = {
             "success": True,
@@ -451,6 +470,8 @@ class MCPServer(
             except (ValueError, TypeError):
                 return {"error": f"Invalid valid_at datetime: {args['valid_at']}"}
 
+        await self.hooks.emit(HookEvent.PRE_RECALL, {"query": query, "depth": depth.value})
+
         pipeline = ReflexPipeline(storage, brain.config)
         result = await pipeline.query(
             query=effective_query,
@@ -517,6 +538,13 @@ class MCPServer(
         hint = self._get_maintenance_hint(pulse)
         if hint:
             response["maintenance_hint"] = hint
+
+        await self.hooks.emit(HookEvent.POST_RECALL, {
+            "query": query,
+            "confidence": result.confidence,
+            "neurons_activated": result.neurons_activated,
+            "fibers_matched": result.fibers_matched,
+        })
 
         return response
 

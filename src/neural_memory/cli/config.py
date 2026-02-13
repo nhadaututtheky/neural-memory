@@ -15,12 +15,16 @@ The CLI automatically migrates to the new unified config when:
 from __future__ import annotations
 
 import json
+import logging
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from neural_memory.utils.timeutils import utcnow
+
+logger = logging.getLogger(__name__)
 
 
 def get_default_data_dir() -> Path:
@@ -84,6 +88,38 @@ class SharedModeConfig:
         )
 
 
+_BRAIN_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
+
+
+def _sync_brain_to_toml(data_dir: Path, brain_name: str) -> None:
+    """Sync current_brain value into config.toml so MCP server picks it up.
+
+    Uses a regex replacement on the existing TOML file to avoid
+    needing a full TOML parser for writing. Only touches the
+    ``current_brain`` line.
+    """
+    toml_path = data_dir / "config.toml"
+    if not toml_path.exists():
+        return
+    if not _BRAIN_NAME_RE.match(brain_name):
+        return
+
+    try:
+        content = toml_path.read_text(encoding="utf-8")
+        updated = re.sub(
+            r'^current_brain\s*=\s*"[^"]*"',
+            f'current_brain = "{brain_name}"',
+            content,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        if updated != content:
+            toml_path.write_text(updated, encoding="utf-8")
+            logger.debug("Synced current_brain=%s to config.toml", brain_name)
+    except Exception:
+        logger.warning("Failed to sync current_brain to config.toml", exc_info=True)
+
+
 @dataclass
 class CLIConfig:
     """CLI configuration."""
@@ -126,7 +162,12 @@ class CLIConfig:
         )
 
     def save(self) -> None:
-        """Save configuration to file."""
+        """Save configuration to file.
+
+        Writes to config.json (CLI) and also syncs current_brain
+        to config.toml (unified config) so the MCP server stays
+        in sync.
+        """
         self.data_dir.mkdir(parents=True, exist_ok=True)
         config_file = self.data_dir / "config.json"
 
@@ -141,6 +182,9 @@ class CLIConfig:
 
         with open(config_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
+
+        # Sync current_brain to config.toml so MCP server picks it up
+        _sync_brain_to_toml(self.data_dir, self.current_brain)
 
     @property
     def brains_dir(self) -> Path:

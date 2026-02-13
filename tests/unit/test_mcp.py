@@ -1046,8 +1046,9 @@ class TestMCPStorage:
             storage1 = await server.get_storage()
             storage2 = await server.get_storage()
 
-        # Should only load once
-        mock_load.assert_called_once()
+        # get_shared_storage is called each time to detect brain switches,
+        # but returns the same cached instance for the same brain/db_path.
+        assert mock_load.call_count == 2
         assert storage1 is storage2
 
 
