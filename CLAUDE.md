@@ -70,6 +70,27 @@ src/neural_memory/
 - Use `neuron_type` in **new internal code** to avoid shadowing the builtin.
 - `snake_case` for functions/variables, `PascalCase` for classes, `SCREAMING_SNAKE` for constants.
 
+## Migration Rules
+
+When changing config formats, storage paths, or schema:
+
+- **Test the upgrade path**: existing data (old format) → new code must work seamlessly.
+- **Test fresh install**: no prior data → new code creates correct defaults.
+- **Test mixed state**: partial migration (e.g. `config.json` exists but `config.toml` doesn't) must resolve correctly.
+- **Never silently discard user state.** If a legacy file contains `current_brain = "work"`, the migration must carry it forward — not reset to `"default"`.
+- **Write migration tests before merging.** Every `load()` / `migrate()` function needs tests for: old→new, fresh, already-migrated, corrupt input, and invalid values.
+- **Log migrations.** Use `logger.info()` when migrating data so users can diagnose issues.
+
+## Pre-release Smoke Test
+
+Before tagging a release, verify these scenarios manually or via integration tests:
+
+1. **Fresh install**: delete data dir, run MCP server, confirm default brain created.
+2. **Upgrade from previous version**: keep old data dir intact, run new code, confirm brain name and memories preserved.
+3. **Brain switch round-trip**: switch brain via CLI → confirm MCP reads the new brain → switch back → confirm again.
+4. **Config file conflicts**: both `config.json` and `config.toml` exist → confirm `config.toml` wins.
+5. **Recall after upgrade**: store a memory, upgrade, recall it — confirm it's still there with correct brain context.
+
 ## Commit Messages
 
 Format: `<type>: <description>` — types: feat, fix, refactor, docs, test, chore, perf, ci
