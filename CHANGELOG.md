@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-02-13
+
+### Added
+
+- **Config presets** — Three built-in profiles: `safe-cost` (token-efficient), `balanced` (defaults), `max-recall` (maximum retention). CLI: `nmem config preset <name> [--list] [--dry-run]`
+- **Consolidation delta report** — `run_with_delta()` wrapper computes before/after health snapshots around consolidation, showing purity, connectivity, and orphan rate changes. CLI consolidate now shows health delta.
+
+### Fixed
+
+- **CI lint parity** — CI now passes: fixed 14 lint errors in test files (unused imports, sorting, Yoda conditions)
+- **Release workflow idempotency** — `gh release create` no longer fails when release already exists; uploads assets to existing release instead
+- **CI test timeouts** — Added `pytest-timeout` (60s default) and `timeout-minutes: 15` to prevent stuck CI jobs
+
+### Changed
+
+- **Makefile** — Added `verify` target matching CI exactly (lint + format-check + typecheck + test-cov + security)
+- **Auto-consolidation observability** — Background auto-consolidation now logs purity delta for monitoring
+
 ## [2.1.0] - 2026-02-13
 
 ### Fixed
