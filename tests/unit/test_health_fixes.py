@@ -23,6 +23,8 @@ from neural_memory.core.synapse import SynapseType
 from neural_memory.engine.activation import ActivationResult
 from neural_memory.engine.diagnostics import DiagnosticsEngine
 from neural_memory.engine.encoder import MemoryEncoder
+from neural_memory.engine.pipeline import PipelineContext
+from neural_memory.engine.pipeline_steps import TemporalLinkingStep
 from neural_memory.engine.retrieval_context import _TOKEN_RATIO, _estimate_tokens, format_context
 from neural_memory.storage.memory_store import InMemoryStorage
 from neural_memory.utils.timeutils import utcnow
@@ -321,22 +323,32 @@ class TestTokenEstimation:
 
 
 class TestTemporalNeighborSynapses:
-    """Verify _link_temporal_neighbors creates BEFORE/AFTER synapses."""
+    """Verify TemporalLinkingStep creates BEFORE/AFTER synapses."""
 
     @pytest_asyncio.fixture
-    async def encoder_and_storage(self) -> tuple[MemoryEncoder, InMemoryStorage]:
-        """Set up a MemoryEncoder with real InMemoryStorage."""
+    async def step_and_storage(self) -> tuple[TemporalLinkingStep, InMemoryStorage, BrainConfig]:
+        """Set up a TemporalLinkingStep with real InMemoryStorage."""
         store = InMemoryStorage()
         brain = Brain.create(name="temporal-test", config=BrainConfig(), owner_id="test")
         await store.save_brain(brain)
         store.set_brain(brain.id)
         config = BrainConfig()
-        encoder = MemoryEncoder(storage=store, config=config)
-        return encoder, store
+        step = TemporalLinkingStep()
+        return step, store, config
+
+    def _make_ctx(self, anchor: Neuron, timestamp: datetime) -> PipelineContext:
+        return PipelineContext(
+            content="",
+            timestamp=timestamp,
+            metadata={},
+            tags=set(),
+            language="auto",
+            anchor_neuron=anchor,
+        )
 
     @pytest.mark.asyncio
     async def test_temporal_neighbor_before_synapse(
-        self, encoder_and_storage: tuple[MemoryEncoder, InMemoryStorage]
+        self, step_and_storage: tuple[TemporalLinkingStep, InMemoryStorage, BrainConfig]
     ) -> None:
         """A fiber created BEFORE the current memory gets AFTER synapse type.
 
@@ -344,7 +356,7 @@ class TestTemporalNeighborSynapses:
         current anchor -> older_fiber.anchor gets synapse type AFTER
         (meaning: current happened AFTER older).
         """
-        encoder, store = encoder_and_storage
+        step, store, config = step_and_storage
         now = utcnow()
 
         # Create an older fiber (1 hour before 'now')
@@ -363,11 +375,12 @@ class TestTemporalNeighborSynapses:
         current_anchor = _make_neuron("current memory content", neuron_id="n-current")
         await store.add_neuron(current_anchor)
 
-        # Link temporal neighbors
-        linked = await encoder._link_temporal_neighbors(current_anchor, now)
+        # Link temporal neighbors via TemporalLinkingStep
+        ctx = self._make_ctx(current_anchor, now)
+        result_ctx = await step.execute(ctx, store, config)
 
         # Should have linked to the older fiber
-        assert older_anchor.id in linked
+        assert older_anchor.id in result_ctx.neurons_linked
 
         # Check the created synapse type
         synapses = await store.get_synapses(
@@ -379,7 +392,7 @@ class TestTemporalNeighborSynapses:
 
     @pytest.mark.asyncio
     async def test_temporal_neighbor_after_synapse(
-        self, encoder_and_storage: tuple[MemoryEncoder, InMemoryStorage]
+        self, step_and_storage: tuple[TemporalLinkingStep, InMemoryStorage, BrainConfig]
     ) -> None:
         """A fiber created AFTER the current memory gets BEFORE synapse type.
 
@@ -387,7 +400,7 @@ class TestTemporalNeighborSynapses:
         current anchor -> newer_fiber.anchor gets synapse type BEFORE
         (meaning: current happened BEFORE newer).
         """
-        encoder, store = encoder_and_storage
+        step, store, config = step_and_storage
         now = utcnow()
 
         # Create a newer fiber (1 hour after 'now')
@@ -406,11 +419,12 @@ class TestTemporalNeighborSynapses:
         current_anchor = _make_neuron("current memory content", neuron_id="n-current")
         await store.add_neuron(current_anchor)
 
-        # Link temporal neighbors
-        linked = await encoder._link_temporal_neighbors(current_anchor, now)
+        # Link temporal neighbors via TemporalLinkingStep
+        ctx = self._make_ctx(current_anchor, now)
+        result_ctx = await step.execute(ctx, store, config)
 
         # Should have linked to the newer fiber
-        assert newer_anchor.id in linked
+        assert newer_anchor.id in result_ctx.neurons_linked
 
         # Check the created synapse type
         synapses = await store.get_synapses(
@@ -422,14 +436,14 @@ class TestTemporalNeighborSynapses:
 
     @pytest.mark.asyncio
     async def test_temporal_neighbor_same_time_related(
-        self, encoder_and_storage: tuple[MemoryEncoder, InMemoryStorage]
+        self, step_and_storage: tuple[TemporalLinkingStep, InMemoryStorage, BrainConfig]
     ) -> None:
         """Same timestamp defaults to RELATED_TO.
 
         When fiber.time_start == current timestamp (neither before nor after),
         the synapse type should be RELATED_TO.
         """
-        encoder, store = encoder_and_storage
+        step, store, config = step_and_storage
         now = utcnow()
 
         # Create a fiber with the exact same timestamp
@@ -447,11 +461,12 @@ class TestTemporalNeighborSynapses:
         current_anchor = _make_neuron("current memory content", neuron_id="n-current")
         await store.add_neuron(current_anchor)
 
-        # Link temporal neighbors
-        linked = await encoder._link_temporal_neighbors(current_anchor, now)
+        # Link temporal neighbors via TemporalLinkingStep
+        ctx = self._make_ctx(current_anchor, now)
+        result_ctx = await step.execute(ctx, store, config)
 
         # Should have linked
-        assert same_anchor.id in linked
+        assert same_anchor.id in result_ctx.neurons_linked
 
         # Check synapse type is RELATED_TO (same timestamp)
         synapses = await store.get_synapses(

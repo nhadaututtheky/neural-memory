@@ -242,60 +242,66 @@ class TestAutoTagsWithConflictDetection:
 
 
 class TestGenerateAutoTagsUnit:
-    """Unit tests for the _generate_auto_tags method directly."""
+    """Unit tests for the AutoTagStep directly."""
 
-    def test_empty_neurons_returns_empty(self) -> None:
-        """No neurons and empty content should produce empty tags."""
+    async def _run_auto_tag(
+        self,
+        content: str,
+        entity_neurons: list | None = None,
+        concept_neurons: list | None = None,
+    ) -> set[str]:
+        """Helper to run AutoTagStep and return auto_tags."""
+        from neural_memory.engine.pipeline import PipelineContext
+        from neural_memory.engine.pipeline_steps import AutoTagStep
+        from neural_memory.utils.tag_normalizer import TagNormalizer
+        from neural_memory.utils.timeutils import utcnow
+
         storage = InMemoryStorage()
         config = BrainConfig()
-        enc = MemoryEncoder(storage, config)
-
-        result = enc._generate_auto_tags(
-            entity_neurons=[],
-            concept_neurons=[],
-            content="",
+        step = AutoTagStep(tag_normalizer=TagNormalizer())
+        ctx = PipelineContext(
+            content=content,
+            timestamp=utcnow(),
+            metadata={},
+            tags=set(),
+            language="auto",
+            entity_neurons=entity_neurons or [],
+            concept_neurons=concept_neurons or [],
         )
+        result_ctx = await step.execute(ctx, storage, config)
+        return result_ctx.auto_tags
+
+    async def test_empty_neurons_returns_empty(self) -> None:
+        """No neurons and empty content should produce empty tags."""
+        result = await self._run_auto_tag(content="")
         assert result == set()
 
-    def test_entity_neurons_become_tags(self) -> None:
+    async def test_entity_neurons_become_tags(self) -> None:
         """Entity neuron content should become lowercase tags."""
         from neural_memory.core.neuron import Neuron
-
-        storage = InMemoryStorage()
-        config = BrainConfig()
-        enc = MemoryEncoder(storage, config)
 
         entities = [
             Neuron.create(type=NeuronType.ENTITY, content="Alice"),
             Neuron.create(type=NeuronType.ENTITY, content="Microsoft"),
         ]
 
-        result = enc._generate_auto_tags(
-            entity_neurons=entities,
-            concept_neurons=[],
+        result = await self._run_auto_tag(
             content="Alice works at Microsoft",
+            entity_neurons=entities,
         )
 
         assert "alice" in result
         assert "microsoft" in result
 
-    def test_keywords_limited_to_top_5(self) -> None:
+    async def test_keywords_limited_to_top_5(self) -> None:
         """At most 5 keywords should be included as tags."""
-        storage = InMemoryStorage()
-        config = BrainConfig()
-        enc = MemoryEncoder(storage, config)
-
         # Long content with many keywords
         content = (
             "Redis PostgreSQL MySQL MongoDB Cassandra Elasticsearch "
             "Kubernetes Docker Terraform Ansible Jenkins GitHub"
         )
 
-        result = enc._generate_auto_tags(
-            entity_neurons=[],
-            concept_neurons=[],
-            content=content,
-        )
+        result = await self._run_auto_tag(content=content)
 
         # Keywords from extract_weighted_keywords limited to 5,
         # but entities may add more. With no entities, should be <= 5 keywords
@@ -303,23 +309,18 @@ class TestGenerateAutoTagsUnit:
         # Just verify it's bounded
         assert len(result) <= 15  # reasonable upper bound
 
-    def test_short_tags_filtered(self) -> None:
+    async def test_short_tags_filtered(self) -> None:
         """Tags shorter than 2 chars should be excluded."""
         from neural_memory.core.neuron import Neuron
-
-        storage = InMemoryStorage()
-        config = BrainConfig()
-        enc = MemoryEncoder(storage, config)
 
         entities = [
             Neuron.create(type=NeuronType.ENTITY, content="A"),  # too short
             Neuron.create(type=NeuronType.ENTITY, content="DB"),  # ok
         ]
 
-        result = enc._generate_auto_tags(
-            entity_neurons=entities,
-            concept_neurons=[],
+        result = await self._run_auto_tag(
             content="A and DB",
+            entity_neurons=entities,
         )
 
         assert "a" not in result

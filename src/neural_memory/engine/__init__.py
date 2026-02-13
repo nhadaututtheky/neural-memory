@@ -4,7 +4,8 @@ from neural_memory.engine.activation import (
     ActivationResult,
     SpreadingActivation,
 )
-from neural_memory.engine.encoder import EncodingResult, MemoryEncoder
+from neural_memory.engine.encoder import EncodingResult, MemoryEncoder, build_default_pipeline
+from neural_memory.engine.pipeline import Pipeline, PipelineContext, PipelineStep
 from neural_memory.engine.reflex_activation import (
     CoActivation,
     ReflexActivation,
@@ -17,8 +18,12 @@ __all__ = [
     "DepthLevel",
     "EncodingResult",
     "MemoryEncoder",
+    "Pipeline",
+    "PipelineContext",
+    "PipelineStep",
     "ReflexActivation",
     "ReflexPipeline",
     "RetrievalResult",
     "SpreadingActivation",
+    "build_default_pipeline",
 ]

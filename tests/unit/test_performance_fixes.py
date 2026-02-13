@@ -398,31 +398,18 @@ class TestInvertedIndexMerge:
 @requires_encoder
 @requires_core
 class TestEncoderPathways:
-    """Test that encoder builds multi-node fiber pathways."""
+    """Test that _build_pathway builds multi-node fiber pathways."""
 
-    @pytest.fixture
-    def encoder(self):
-        storage = AsyncMock()
-        storage.find_neurons = AsyncMock(return_value=[])
-        storage.add_neuron = AsyncMock()
-        storage.add_synapse = AsyncMock()
-        storage.add_fiber = AsyncMock()
-        storage.find_fibers = AsyncMock(return_value=[])
-        storage.save_maturation = AsyncMock()
-        storage._current_brain_id = "brain1"
-
-        config = MagicMock()
-        config.emotional_weight_scale = 1.0
-        return MemoryEncoder(storage=storage, config=config)
-
-    def test_build_pathway_order(self, encoder):
+    def test_build_pathway_order(self):
         """Pathway should follow time -> entity -> concept -> anchor order."""
+        from neural_memory.engine.pipeline_steps import _build_pathway
+
         time_n = Neuron.create(type=NeuronType.TIME, content="2024-01-01")
         entity_n = Neuron.create(type=NeuronType.ENTITY, content="Alice")
         concept_n = Neuron.create(type=NeuronType.CONCEPT, content="meeting")
         anchor_n = Neuron.create(type=NeuronType.CONCEPT, content="full content")
 
-        pathway = encoder._build_pathway(
+        pathway = _build_pathway(
             time_neurons=[time_n],
             entity_neurons=[entity_n],
             concept_neurons=[concept_n],
@@ -434,10 +421,12 @@ class TestEncoderPathways:
         assert pathway[2] == concept_n.id
         assert pathway[3] == anchor_n.id
 
-    def test_build_pathway_deduplicates(self, encoder):
+    def test_build_pathway_deduplicates(self):
         """Pathway should not contain duplicates."""
+        from neural_memory.engine.pipeline_steps import _build_pathway
+
         shared = Neuron.create(type=NeuronType.CONCEPT, content="shared")
-        pathway = encoder._build_pathway(
+        pathway = _build_pathway(
             time_neurons=[],
             entity_neurons=[shared],
             concept_neurons=[shared],
