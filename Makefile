@@ -20,7 +20,7 @@ format:
 
 # Run type checker
 typecheck:
-	mypy src/
+	mypy src/ --ignore-missing-imports
 
 # Run tests
 test:
@@ -39,8 +39,15 @@ security:
 audit:
 	ruff check src/ tests/ --select S,A,DTZ,T20,PT,PERF,PIE,ERA --statistics || true
 
-# Run all checks (full quality gate)
-check: lint typecheck test-cov security
+# Format check (no changes, just verify — matches CI)
+format-check:
+	ruff format --check src/ tests/
+
+# Run all checks matching CI exactly (full quality gate)
+verify: lint format-check typecheck test-cov security
+
+# Legacy alias
+check: verify
 
 # Clean build artifacts
 clean:

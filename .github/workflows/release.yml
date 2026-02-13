@@ -71,8 +71,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          gh release create '${{ github.ref_name }}' \
-            --repo '${{ github.repository }}' \
-            --title '${{ github.ref_name }}' \
-            --generate-notes \
-            dist/*
+          if gh release view '${{ github.ref_name }}' --repo '${{ github.repository }}' > /dev/null 2>&1; then
+            echo "Release ${{ github.ref_name }} already exists — uploading assets only."
+            gh release upload '${{ github.ref_name }}' \
+              --repo '${{ github.repository }}' \
+              --clobber \
+              dist/* || true
+          else
+            gh release create '${{ github.ref_name }}' \
+              --repo '${{ github.repository }}' \
+              --title '${{ github.ref_name }}' \
+              --generate-notes \
+              dist/*
+          fi

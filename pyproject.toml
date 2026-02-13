@@ -97,6 +97,7 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.5",
     "pre-commit>=3.0",
+    "pytest-timeout>=2.2",
     "httpx>=0.24",
 ]
 docs = [
@@ -226,6 +227,7 @@ disallow_untyped_decorators = false
 testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "-v --tb=short"
+timeout = 60
 filterwarnings = [
     "ignore::DeprecationWarning:pyvi",
     "ignore::DeprecationWarning:numpy",
