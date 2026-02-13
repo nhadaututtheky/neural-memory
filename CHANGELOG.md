@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-02-13
+
+### Fixed
+
+- **Brain reset on config migration** — When upgrading to unified config (config.toml), `current_brain` is now migrated from legacy config.json so users don't lose their active brain selection
+- **EternalHandler stale brain cache** — Eternal context now detects brain switches and re-creates the context instead of caching the initial brain ID indefinitely
+- **Ruff lint errors** — Fixed 7 pre-existing lint violations (unused imports, naming convention, import ordering)
+- **Mypy type errors** — Fixed 2 pre-existing type errors (`Any` import, `set()` arg-type)
+
+### Added
+
+- **CLI `--version` flag** — `nmem --version` / `nmem -V` now prints version and exits (standard CLI convention)
+- **Actionable health scoring** — `nmem_health` now returns `top_penalties`: top 3 ranked penalty factors with estimated gain and suggested action
+- **Semantic stage progress** — `nmem_evolution` now returns `stage_distribution` (fiber counts per maturation stage) and `closest_to_semantic` (top 3 EPISODIC fibers with progress % and next step)
+- **Composable encoding pipeline** — Refactored monolithic `encode()` into 14 composable async pipeline steps (`PipelineContext` / `PipelineStep` / `Pipeline`)
+
+### Changed
+
+- **Dependency warning suppression** — pyvi/NumPy DeprecationWarnings are now suppressed at import time with targeted `filterwarnings`
+
 ## [Unreleased]
 
 ### Fixed
