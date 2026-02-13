@@ -250,19 +250,18 @@ class MaintenanceHandler:
     async def _run_auto_consolidation_dynamic(self, strategy_names: tuple[str, ...]) -> None:
         """Background task: run dynamically selected consolidation strategies."""
         try:
-            from neural_memory.engine.consolidation import (
-                ConsolidationEngine,
-                ConsolidationStrategy,
-            )
+            from neural_memory.engine.consolidation import ConsolidationStrategy
+            from neural_memory.engine.consolidation_delta import run_with_delta
 
             storage = await self.get_storage()  # type: ignore[attr-defined]
+            brain_id = storage._current_brain_id or ""
             strategies = [ConsolidationStrategy(s) for s in strategy_names]
-            engine = ConsolidationEngine(storage)
-            report = await engine.run(strategies=strategies)
+            delta = await run_with_delta(storage, brain_id, strategies=strategies)
             logger.info(
-                "Auto-consolidation complete (strategies=%s): %s",
+                "Auto-consolidation complete (strategies=%s): %s | purity delta: %+.1f",
                 strategy_names,
-                report.summary(),
+                delta.report.summary(),
+                delta.purity_delta,
             )
 
             # Reset adaptive interval after successful consolidation

@@ -345,9 +345,9 @@ def consolidate(
     """
     from neural_memory.engine.consolidation import (
         ConsolidationConfig,
-        ConsolidationEngine,
         ConsolidationStrategy,
     )
+    from neural_memory.engine.consolidation_delta import run_with_delta
 
     async def _consolidate() -> None:
         config = get_config()
@@ -358,6 +358,8 @@ def consolidate(
             typer.echo("(dry run - no changes will be saved)")
 
         storage = await get_storage(config, brain_name=brain_name)
+        brain_obj = await storage.get_brain(brain_name)
+        brain_id = brain_obj.id if brain_obj else brain_name
 
         strategies = [ConsolidationStrategy(strategy)]
         cons_config = ConsolidationConfig(
@@ -366,11 +368,16 @@ def consolidate(
             merge_overlap_threshold=merge_overlap,
         )
 
-        engine = ConsolidationEngine(storage, cons_config)
-        report = await engine.run(strategies=strategies, dry_run=dry_run)
+        delta = await run_with_delta(
+            storage,
+            brain_id,
+            strategies=strategies,
+            dry_run=dry_run,
+            config=cons_config,
+        )
 
         typer.echo("")
-        typer.echo(report.summary())
+        typer.echo(delta.summary())
 
     run_async(_consolidate())
 
