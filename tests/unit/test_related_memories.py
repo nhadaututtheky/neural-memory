@@ -124,7 +124,7 @@ class TestRelatedMemoryDiscovery:
 
         # SpreadingActivation returns empty (no related neurons)
         with (
-            patch("neural_memory.mcp.server.MemoryEncoder") as mock_encoder,
+            patch("neural_memory.mcp.tool_handlers.MemoryEncoder") as mock_encoder,
             patch("neural_memory.safety.sensitive.check_sensitive_content", return_value=[]),
             patch("neural_memory.engine.activation.SpreadingActivation") as mock_activation,
         ):
@@ -189,7 +189,7 @@ class TestRelatedMemoryDiscovery:
         server.get_storage = AsyncMock(return_value=mock_storage)
 
         with (
-            patch("neural_memory.mcp.server.MemoryEncoder") as mock_encoder,
+            patch("neural_memory.mcp.tool_handlers.MemoryEncoder") as mock_encoder,
             patch("neural_memory.safety.sensitive.check_sensitive_content", return_value=[]),
             patch("neural_memory.engine.activation.SpreadingActivation") as mock_activation,
         ):
@@ -258,7 +258,7 @@ class TestRelatedMemoryDiscovery:
         server.get_storage = AsyncMock(return_value=mock_storage)
 
         with (
-            patch("neural_memory.mcp.server.MemoryEncoder") as mock_encoder,
+            patch("neural_memory.mcp.tool_handlers.MemoryEncoder") as mock_encoder,
             patch("neural_memory.safety.sensitive.check_sensitive_content", return_value=[]),
             patch("neural_memory.engine.activation.SpreadingActivation") as mock_activation,
         ):
@@ -327,7 +327,7 @@ class TestRelatedMemoryDiscovery:
         server.get_storage = AsyncMock(return_value=mock_storage)
 
         with (
-            patch("neural_memory.mcp.server.MemoryEncoder") as mock_encoder,
+            patch("neural_memory.mcp.tool_handlers.MemoryEncoder") as mock_encoder,
             patch("neural_memory.safety.sensitive.check_sensitive_content", return_value=[]),
             patch("neural_memory.engine.activation.SpreadingActivation") as mock_activation,
         ):

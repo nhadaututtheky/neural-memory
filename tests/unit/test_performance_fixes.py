@@ -480,13 +480,13 @@ class TestMCPTimeout:
     @pytest.mark.asyncio
     async def test_timeout_returns_error(self):
         """Timed-out tool calls should return JSON-RPC error."""
-        server = MagicMock()
 
-        async def slow_tool(*args, **kwargs):
-            await asyncio.sleep(60)
-            return {}
+        class FakeServer:
+            async def call_tool(self, name, args):
+                await asyncio.sleep(60)
+                return {}
 
-        server.call_tool = slow_tool
+        server = FakeServer()
 
         message = {
             "jsonrpc": "2.0",
@@ -495,9 +495,12 @@ class TestMCPTimeout:
             "params": {"name": "nmem_remember", "arguments": {"content": "test"}},
         }
 
-        with patch("neural_memory.mcp.server.asyncio.wait_for", wraps=asyncio.wait_for):
+        # Use a very short timeout so the test completes quickly
+        with patch("neural_memory.mcp.server._TOOL_CALL_TIMEOUT", 0.5):
             result = await handle_message(server, message)
             assert result is not None
+            assert "error" in result
+            assert "timed out" in result["error"]["message"]
 
     @pytest.mark.asyncio
     async def test_normal_tool_call_succeeds(self):

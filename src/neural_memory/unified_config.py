@@ -17,6 +17,7 @@ import logging
 import os
 import re
 import shutil
+import tomllib
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -31,12 +32,6 @@ _BRAIN_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 # Valid sync identifier: alphanumeric, hyphens, underscores, dots, @ (for emails)
 _SYNC_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.@]*$")
 _SYNC_ID_MAX_LEN = 128
-
-# Try to import tomllib (Python 3.11+) or fallback
-try:
-    import tomllib
-except ImportError:
-    import tomli as tomllib  # type: ignore
 
 
 def get_neuralmemory_dir() -> Path:
