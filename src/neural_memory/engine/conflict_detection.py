@@ -31,6 +31,16 @@ from neural_memory.utils.timeutils import utcnow
 if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
 
+# Shared stop words used by both _extract_search_terms and _extract_implicit_tags.
+_STOP_WORDS: frozenset[str] = frozenset({
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "could",
+    "should", "may", "might", "shall", "can", "we", "i", "they", "you",
+    "he", "she", "it", "our", "my", "to", "of", "in", "for", "on",
+    "with", "at", "by", "from", "that", "this", "not", "but", "and",
+    "or", "if", "then", "use", "using", "used", "chose", "decided",
+})
+
 
 class ConflictType(StrEnum):
     """Types of memory conflicts."""
@@ -382,69 +392,10 @@ async def resolve_conflicts(
 
 def _extract_search_terms(content: str) -> list[str]:
     """Extract key terms from content for searching existing memories."""
-    # Remove common stop words and short tokens
-    stop_words = {
-        "the",
-        "a",
-        "an",
-        "is",
-        "are",
-        "was",
-        "were",
-        "be",
-        "been",
-        "being",
-        "have",
-        "has",
-        "had",
-        "do",
-        "does",
-        "did",
-        "will",
-        "would",
-        "could",
-        "should",
-        "may",
-        "might",
-        "shall",
-        "can",
-        "we",
-        "i",
-        "they",
-        "you",
-        "he",
-        "she",
-        "it",
-        "our",
-        "my",
-        "to",
-        "of",
-        "in",
-        "for",
-        "on",
-        "with",
-        "at",
-        "by",
-        "from",
-        "that",
-        "this",
-        "not",
-        "but",
-        "and",
-        "or",
-        "if",
-        "then",
-        "use",
-        "using",
-        "used",
-        "chose",
-        "decided",
-    }
-
     words = re.findall(r"\b[a-zA-Z][a-zA-Z0-9_.-]+\b", content)
-    terms = [w for w in words if w.lower() not in stop_words and len(w) >= 3]
+    terms = [w for w in words if w.lower() not in _STOP_WORDS and len(w) >= 3]
 
-    # Deduplicate while preserving order
+    # Deduplicate (case-insensitive) while preserving original case and order
     seen: set[str] = set()
     unique: list[str] = []
     for term in terms:
@@ -452,7 +403,6 @@ def _extract_search_terms(content: str) -> list[str]:
         if lower not in seen:
             seen.add(lower)
             unique.append(term)
-
     return unique
 
 
@@ -533,44 +483,6 @@ def _extract_implicit_tags(neuron: Neuron) -> set[str]:
 
     # Extract key terms as implicit tags (exclude common stop words)
     words = re.findall(r"\b[a-zA-Z][a-zA-Z0-9_.-]+\b", neuron.content)
-    implicit_stop = {
-        "the",
-        "a",
-        "an",
-        "is",
-        "are",
-        "was",
-        "were",
-        "we",
-        "i",
-        "they",
-        "use",
-        "using",
-        "used",
-        "for",
-        "our",
-        "with",
-        "and",
-        "but",
-        "or",
-        "to",
-        "of",
-        "in",
-        "on",
-        "at",
-        "by",
-        "from",
-        "that",
-        "this",
-        "has",
-        "have",
-        "had",
-        "not",
-        "will",
-        "would",
-        "could",
-        "should",
-    }
-    tags.update(w.lower() for w in words if w.lower() not in implicit_stop and len(w) >= 3)
+    tags.update(w.lower() for w in words if w.lower() not in _STOP_WORDS and len(w) >= 3)
 
     return tags

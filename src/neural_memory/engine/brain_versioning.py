@@ -86,6 +86,8 @@ def _json_to_snapshot(json_str: str) -> BrainSnapshot:
     from neural_memory.core.brain import BrainSnapshot
 
     data = json.loads(json_str)
+    if not isinstance(data, dict):
+        raise ValueError("Invalid snapshot: expected a JSON object")
 
     # Validate required fields
     required_fields = (

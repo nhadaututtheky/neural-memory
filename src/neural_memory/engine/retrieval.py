@@ -29,15 +29,21 @@ from neural_memory.engine.reconstruction import (
 from neural_memory.engine.reflex_activation import CoActivation, ReflexActivation
 from neural_memory.engine.retrieval_context import format_context
 from neural_memory.engine.retrieval_types import DepthLevel, RetrievalResult, Subgraph
-
-__all__ = ["DepthLevel", "ReflexPipeline", "RetrievalResult"]
 from neural_memory.engine.stabilization import StabilizationConfig, stabilize
 from neural_memory.engine.write_queue import DeferredWriteQueue
 from neural_memory.extraction.parser import QueryIntent, QueryParser, Stimulus
 from neural_memory.extraction.router import QueryRouter
 from neural_memory.utils.timeutils import utcnow
 
+__all__ = ["DepthLevel", "ReflexPipeline", "RetrievalResult"]
+
 logger = logging.getLogger(__name__)
+
+# Morphological expansion constants for query term expansion.
+_EXPANSION_SUFFIXES: tuple[str, ...] = (
+    "tion", "ment", "ing", "ed", "er", "ity", "ness", "ize", "ise", "ate",
+)
+_EXPANSION_PREFIXES: tuple[str, ...] = ("un", "re", "pre", "de", "dis")
 
 if TYPE_CHECKING:
     from neural_memory.core.brain import BrainConfig
@@ -220,11 +226,11 @@ class ReflexPipeline:
             try:
                 top_neuron_ids = [
                     nid
-                    for nid, _ in sorted(
+                    for nid, _ in heapq.nlargest(
+                        10,
                         activations.items(),
                         key=lambda x: x[1].activation_level,
-                        reverse=True,
-                    )[:10]
+                    )
                 ]
                 top_synapse_ids = subgraph.synapse_ids[:20] if subgraph.synapse_ids else None
                 await self._reinforcer.reinforce(self._storage, top_neuron_ids, top_synapse_ids)
@@ -762,15 +768,11 @@ class ReflexPipeline:
         expanded: list[str] = list(keywords)
         seen = {k.lower() for k in keywords}
 
-        # Common suffix expansions
-        _suffixes = ("tion", "ment", "ing", "ed", "er", "ity", "ness", "ize", "ise", "ate")
-        _prefixes = ("un", "re", "pre", "de", "dis")
-
         for kw in keywords:
             kw_lower = kw.lower()
             # If keyword looks like a stem (short), try common expansions
             if 3 <= len(kw_lower) <= 6:
-                for suffix in _suffixes:
+                for suffix in _EXPANSION_SUFFIXES:
                     candidate = kw_lower + suffix
                     if candidate not in seen:
                         expanded.append(candidate)
@@ -778,7 +780,7 @@ class ReflexPipeline:
                         break  # Only add first plausible expansion
 
             # If keyword is long, try extracting stem
-            for suffix in _suffixes:
+            for suffix in _EXPANSION_SUFFIXES:
                 if kw_lower.endswith(suffix) and len(kw_lower) - len(suffix) >= 3:
                     stem = kw_lower[: -len(suffix)]
                     if stem not in seen:

@@ -1,14 +1,11 @@
-"""Context formatting and answer reconstitution for retrieval."""
+"""Context formatting for retrieval."""
 
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING
 
 from neural_memory.core.neuron import NeuronType
 from neural_memory.engine.activation import ActivationResult
-from neural_memory.engine.retrieval_types import ScoreBreakdown
-from neural_memory.utils.timeutils import utcnow
 
 # Average tokens per whitespace-separated word (accounts for subword tokenization)
 _TOKEN_RATIO = 1.3
@@ -21,83 +18,7 @@ def _estimate_tokens(text: str) -> int:
 
 if TYPE_CHECKING:
     from neural_memory.core.fiber import Fiber
-    from neural_memory.extraction.parser import Stimulus
     from neural_memory.storage.base import NeuralStorage
-
-
-async def reconstitute_answer(
-    storage: NeuralStorage,
-    activations: dict[str, ActivationResult],
-    intersections: list[str],
-    stimulus: Stimulus,
-) -> tuple[str | None, float, ScoreBreakdown | None]:
-    """
-    Attempt to reconstitute an answer from activated neurons.
-
-    Returns (answer_text, confidence, score_breakdown)
-    """
-    if not activations:
-        return None, 0.0, None
-
-    # Find the most relevant neurons
-    candidates: list[tuple[str, float]] = []
-
-    # Prioritize intersection neurons
-    for neuron_id in intersections:
-        if neuron_id in activations:
-            candidates.append((neuron_id, activations[neuron_id].activation_level * 1.5))
-
-    # Add highly activated neurons
-    for neuron_id, result in activations.items():
-        if neuron_id not in intersections:
-            candidates.append((neuron_id, result.activation_level))
-
-    # Sort by score
-    candidates.sort(key=lambda x: x[1], reverse=True)
-
-    if not candidates:
-        return None, 0.0, None
-
-    # Get the top neuron's content as answer
-    top_neuron_id = candidates[0][0]
-    top_neuron = await storage.get_neuron(top_neuron_id)
-
-    if top_neuron is None:
-        return None, 0.0, None
-
-    # Multi-factor confidence scoring
-    base_confidence = min(1.0, candidates[0][1])
-
-    # Intersection boost (neurons reached from multiple anchor sets)
-    intersection_boost = 0.05 * len(intersections) if intersections else 0.0
-
-    # Freshness + frequency boosts from neuron state
-    freshness_boost = 0.0
-    frequency_boost = 0.0
-    top_state = await storage.get_neuron_state(top_neuron_id)
-    if top_state:
-        # Freshness: sigmoid decay — ~0.15 at <1h, ~0.08 at 3d, ~0.02 at 7d
-        if top_state.last_activated:
-            hours_since = (utcnow() - top_state.last_activated).total_seconds() / 3600
-            freshness_boost = 0.15 / (1.0 + math.exp((hours_since - 72) / 36))
-
-        # Frequency: logarithmic — diminishing returns past ~10 accesses
-        if top_state.access_frequency > 0:
-            frequency_boost = min(0.1, 0.03 * math.log1p(top_state.access_frequency))
-
-    raw_total = base_confidence + intersection_boost + freshness_boost + frequency_boost
-    confidence = min(1.0, raw_total)
-
-    breakdown = ScoreBreakdown(
-        base_activation=base_confidence,
-        intersection_boost=intersection_boost,
-        freshness_boost=freshness_boost,
-        frequency_boost=frequency_boost,
-        emotional_resonance=0.0,
-        raw_total=raw_total,
-    )
-
-    return top_neuron.content, confidence, breakdown
 
 
 async def format_context(

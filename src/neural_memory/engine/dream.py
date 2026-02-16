@@ -98,9 +98,14 @@ async def dream(
     pairs_explored = 0
     new_synapses: list[Synapse] = []
 
+    max_dream_pairs = 50_000
     for i in range(len(activated_list)):
+        if pairs_explored > max_dream_pairs:
+            break
         for j in range(i + 1, len(activated_list)):
             pairs_explored += 1
+            if pairs_explored > max_dream_pairs:
+                break
             a_id = activated_list[i]
             b_id = activated_list[j]
 
