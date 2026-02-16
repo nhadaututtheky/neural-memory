@@ -15,7 +15,7 @@ _MIN_TEXT_LENGTH = 20
 _MAX_REGEX_TEXT_LENGTH = 50_000
 
 # Type prefixes used for deduplication
-_TYPE_PREFIXES = ("decision: ", "error: ", "todo: ", "insight: ")
+_TYPE_PREFIXES = ("decision: ", "error: ", "todo: ", "insight: ", "preference: ")
 
 DECISION_PATTERNS = [
     # English
@@ -63,6 +63,29 @@ FACT_PATTERNS = [
     r"(?:learned|discovered|found out)[:\s]+(.+?)(?:\.|$)",
     # Vietnamese
     r"(?:đáp án|giải pháp|cách fix) (?:là|:)[:\s]+(.+?)(?:\.|$)",
+]
+
+PREFERENCE_PATTERNS = [
+    # English — explicit preferences
+    r"(?:I |we )(?:prefer|like|want|favor)[:\s]+(.+?)(?:\.|$)",
+    r"(?:I |we )(?:don\'t like|dislike|hate|avoid)[:\s]+(.+?)(?:\.|$)",
+    r"(?:always|never) (?:use|do|include|add|write)[:\s]+(.+?)(?:\.|$)",
+    r"(?:don\'t |do not |never )(?:use|do|include|add|write)[:\s]+(.+?)(?:\.|$)",
+    r"(?:please |pls )?(?:stop|quit|avoid) (?:using|doing|adding)[:\s]+(.+?)(?:\.|$)",
+    # English — corrections
+    r"(?:that\'s |it\'s |this is )(?:wrong|incorrect|not right)[,:\s]+(.+?)(?:\.|$)",
+    r"(?:actually|no)[,:\s]+(?:it |that )?should (?:be|have)[:\s]+(.+?)(?:\.|$)",
+    r"(?:change|update|fix|correct) (?:it |that |this )?(?:to|from .+? to)[:\s]+(.+?)(?:\.|$)",
+    r"(?:instead of .+?)[,:\s]+(?:use|do|try)[:\s]+(.+?)(?:\.|$)",
+    # Vietnamese — preferences
+    r"(?:tôi |mình |em |anh )?(?:thích|muốn|ưu tiên|prefer)[:\s]+(.+?)(?:\.|$)",
+    r"(?:tôi |mình |em |anh )?(?:không thích|ghét|không muốn|tránh)[:\s]+(.+?)(?:\.|$)",
+    r"(?:luôn luôn|luôn|lúc nào cũng) (?:dùng|làm|viết|thêm)[:\s]+(.+?)(?:\.|$)",
+    r"(?:đừng|không được|cấm|không nên) (?:dùng|làm|viết|thêm)[:\s]+(.+?)(?:\.|$)",
+    # Vietnamese — corrections
+    r"(?:sai rồi|không đúng|chưa đúng)[,:\s]+(.+?)(?:\.|$)",
+    r"(?:phải là|nên là|đúng ra là)[:\s]+(.+?)(?:\.|$)",
+    r"(?:sửa|đổi|chuyển) (?:lại |thành )[:\s]*(.+?)(?:\.|$)",
 ]
 
 INSIGHT_PATTERNS = [
@@ -148,6 +171,7 @@ def analyze_text_for_memories(
     capture_todos: bool = True,
     capture_facts: bool = True,
     capture_insights: bool = True,
+    capture_preferences: bool = True,
 ) -> list[dict[str, Any]]:
     """Analyze text and detect potential memories.
 
@@ -182,6 +206,13 @@ def analyze_text_for_memories(
     if capture_insights:
         detected.extend(
             _detect_patterns(text_lower, INSIGHT_PATTERNS, "insight", 0.8, 6, 15, "Insight: ")
+        )
+
+    if capture_preferences:
+        detected.extend(
+            _detect_patterns(
+                text_lower, PREFERENCE_PATTERNS, "preference", 0.85, 7, 10, "Preference: "
+            )
         )
 
     # Remove duplicates: exact MD5 match + SimHash near-duplicate

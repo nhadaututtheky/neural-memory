@@ -54,6 +54,21 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_surrogates(obj: Any) -> Any:
+    """Remove lone surrogate characters from strings in tool arguments.
+
+    On Windows, stdio pipes can introduce surrogate characters (U+D800–U+DFFF)
+    that cause UnicodeEncodeError when passed to UTF-8 encoders or SQLite.
+    """
+    if isinstance(obj, str):
+        return obj.encode("utf-8", errors="surrogatepass").decode("utf-8", errors="replace")
+    if isinstance(obj, dict):
+        return {k: _sanitize_surrogates(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_surrogates(item) for item in obj]
+    return obj
+
+
 class MCPServer(
     ToolHandler,
     SessionHandler,
@@ -208,7 +223,7 @@ async def handle_message(server: MCPServer, message: dict[str, Any]) -> dict[str
 
     elif method == "tools/call":
         tool_name = params.get("name", "")
-        tool_args = params.get("arguments", {})
+        tool_args = _sanitize_surrogates(params.get("arguments", {}))
 
         try:
             result = await asyncio.wait_for(

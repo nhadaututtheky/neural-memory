@@ -70,6 +70,7 @@ class AutoConfig:
     capture_todos: bool = True
     capture_facts: bool = True
     capture_insights: bool = True
+    capture_preferences: bool = True
     min_confidence: float = 0.7
 
     def to_dict(self) -> dict[str, Any]:
@@ -80,6 +81,7 @@ class AutoConfig:
             "capture_todos": self.capture_todos,
             "capture_facts": self.capture_facts,
             "capture_insights": self.capture_insights,
+            "capture_preferences": self.capture_preferences,
             "min_confidence": self.min_confidence,
         }
 
@@ -92,6 +94,7 @@ class AutoConfig:
             capture_todos=data.get("capture_todos", True),
             capture_facts=data.get("capture_facts", True),
             capture_insights=data.get("capture_insights", True),
+            capture_preferences=data.get("capture_preferences", True),
             min_confidence=data.get("min_confidence", 0.7),
         )
 
@@ -517,6 +520,7 @@ class UnifiedConfig:
             f"capture_todos = {'true' if self.auto.capture_todos else 'false'}",
             f"capture_facts = {'true' if self.auto.capture_facts else 'false'}",
             f"capture_insights = {'true' if self.auto.capture_insights else 'false'}",
+            f"capture_preferences = {'true' if self.auto.capture_preferences else 'false'}",
             f"min_confidence = {self.auto.min_confidence}",
             "",
             "# Eternal context settings",

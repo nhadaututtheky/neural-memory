@@ -1097,6 +1097,85 @@ class TestAutoCapture:
         types = [d["type"] for d in detected]
         assert "error" in types
 
+    def test_preference_pattern_i_prefer(self) -> None:
+        """Test preference detection for explicit 'I prefer' statements."""
+        text = "I prefer using PostgreSQL over MySQL for all new projects."
+        detected = analyze_text_for_memories(text, capture_preferences=True)
+        types = [d["type"] for d in detected]
+        assert "preference" in types
+
+    def test_preference_pattern_dont_use(self) -> None:
+        """Test preference detection for negative preference 'don't use'."""
+        text = "Don't use global variables in the codebase, they cause bugs."
+        detected = analyze_text_for_memories(text, capture_preferences=True)
+        types = [d["type"] for d in detected]
+        assert "preference" in types
+
+    def test_preference_pattern_always(self) -> None:
+        """Test preference detection for 'always use' patterns."""
+        text = "Always use type hints when writing Python functions."
+        detected = analyze_text_for_memories(text, capture_preferences=True)
+        types = [d["type"] for d in detected]
+        assert "preference" in types
+
+    def test_preference_pattern_correction(self) -> None:
+        """Test preference detection for correction patterns."""
+        text = "Actually, it should be snake_case not camelCase for Python."
+        detected = analyze_text_for_memories(text, capture_preferences=True)
+        types = [d["type"] for d in detected]
+        assert "preference" in types
+
+    def test_preference_pattern_thats_wrong(self) -> None:
+        """Test preference detection for 'that's wrong' correction."""
+        text = "That's wrong, the timeout should be 30 seconds not 10."
+        detected = analyze_text_for_memories(text, capture_preferences=True)
+        types = [d["type"] for d in detected]
+        assert "preference" in types
+
+    def test_preference_pattern_vietnamese_thich(self) -> None:
+        """Test Vietnamese preference pattern 'thích/muốn'."""
+        text = "Mình thích dùng dark mode hơn khi code vào ban đêm."
+        detected = analyze_text_for_memories(text, capture_preferences=True)
+        types = [d["type"] for d in detected]
+        assert "preference" in types
+
+    def test_preference_pattern_vietnamese_dung(self) -> None:
+        """Test Vietnamese negative preference 'đừng dùng'."""
+        text = "Đừng dùng var trong JavaScript, luôn dùng const hoặc let."
+        detected = analyze_text_for_memories(text, capture_preferences=True)
+        types = [d["type"] for d in detected]
+        assert "preference" in types
+
+    def test_preference_pattern_vietnamese_correction(self) -> None:
+        """Test Vietnamese correction pattern 'sai rồi'."""
+        text = "Sai rồi, phải dùng async/await thay vì callback ở đây."
+        detected = analyze_text_for_memories(text, capture_preferences=True)
+        types = [d["type"] for d in detected]
+        assert "preference" in types
+
+    def test_preference_disabled(self) -> None:
+        """Test that preferences are not captured when disabled."""
+        text = "I prefer using PostgreSQL over MySQL for all new projects."
+        detected = analyze_text_for_memories(text, capture_preferences=False)
+        types = [d["type"] for d in detected]
+        assert "preference" not in types
+
+    def test_preference_high_confidence(self) -> None:
+        """Test that preference patterns have appropriate confidence."""
+        text = "Always use parameterized SQL queries to prevent injection."
+        detected = analyze_text_for_memories(text, capture_preferences=True)
+        prefs = [d for d in detected if d["type"] == "preference"]
+        assert len(prefs) >= 1
+        assert prefs[0]["confidence"] >= 0.7
+
+    def test_preference_has_priority_7(self) -> None:
+        """Test that preferences get priority 7 (above normal 5)."""
+        text = "I prefer tabs over spaces for indentation in this project."
+        detected = analyze_text_for_memories(text, capture_preferences=True)
+        prefs = [d for d in detected if d["type"] == "preference"]
+        assert len(prefs) >= 1
+        assert prefs[0]["priority"] == 7
+
     def test_minimum_text_length_guard(self) -> None:
         """Test that very short text returns empty."""
         text = "short text"

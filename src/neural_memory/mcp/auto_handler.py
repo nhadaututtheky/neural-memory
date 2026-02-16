@@ -50,6 +50,7 @@ class AutoHandler:
             "capture_todos": self.config.auto.capture_todos,
             "capture_facts": self.config.auto.capture_facts,
             "capture_insights": self.config.auto.capture_insights,
+            "capture_preferences": self.config.auto.capture_preferences,
             "min_confidence": self.config.auto.min_confidence,
         }
 
@@ -120,7 +121,12 @@ class AutoHandler:
         try:
             detected = self._run_detection(text)
             if detected:
-                type_thresholds = {"error": 0.7, "decision": 0.75, "insight": 0.75}
+                type_thresholds = {
+                    "error": 0.7,
+                    "decision": 0.75,
+                    "insight": 0.75,
+                    "preference": 0.75,
+                }
                 high_confidence = [
                     item
                     for item in detected
@@ -182,4 +188,5 @@ class AutoHandler:
             capture_todos=self.config.auto.capture_todos,
             capture_facts=self.config.auto.capture_facts,
             capture_insights=self.config.auto.capture_insights,
+            capture_preferences=self.config.auto.capture_preferences,
         )

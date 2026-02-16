@@ -58,8 +58,9 @@ def simhash(text: str) -> int:
     v = [0] * _BITS
 
     for shingle in _shingles(text):
-        # Use MD5 for deterministic hashing (not security-sensitive here)
-        digest = hashlib.md5(shingle.encode("utf-8")).digest()
+        # Use MD5 for deterministic hashing (not security-sensitive here).
+        # surrogatepass handles lone surrogates that can appear on Windows.
+        digest = hashlib.md5(shingle.encode("utf-8", errors="surrogatepass")).digest()
         h = struct.unpack("<Q", digest[:8])[0]
         for i in range(_BITS):
             if h & (1 << i):
