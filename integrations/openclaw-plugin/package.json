@@ -3,16 +3,20 @@
   "version": "1.4.1",
   "description": "NeuralMemory plugin for OpenClaw — brain-inspired persistent memory for AI agents",
   "type": "module",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "openclaw": {
     "id": "neuralmemory",
     "extensions": [
-      "./src/index.ts"
-    ]
+      "./dist/index.js"
+    ],
+    "source": "./src/index.ts"
   },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build",
+    "postinstall": "npm run build 2>/dev/null || true",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
@@ -35,6 +39,7 @@
   },
   "files": [
     "src/",
+    "dist/",
     "openclaw.plugin.json"
   ],
   "engines": {

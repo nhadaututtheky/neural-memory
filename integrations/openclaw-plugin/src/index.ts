@@ -17,11 +17,27 @@ import type {
   OpenClawPluginDefinition,
   OpenClawPluginApi,
   BeforeAgentStartEvent,
+  BeforeAgentStartResult,
   AgentContext,
   AgentEndEvent,
 } from "./types.js";
 import { NeuralMemoryMcpClient } from "./mcp-client.js";
 import { createTools } from "./tools.js";
+
+// ── System prompt for tool awareness ──────────────────────
+
+const TOOL_INSTRUCTIONS = `You have NeuralMemory tools for persistent memory across sessions. Call these as TOOL CALLS (not CLI commands):
+
+- nmem_remember(content, type?, priority?, tags?) — Store a memory (fact, decision, error, preference, etc.)
+- nmem_recall(query, depth?, max_tokens?) — Query memories via spreading activation
+- nmem_context(limit?, fresh_only?) — Get recent memories
+- nmem_todo(task, priority?) — Quick TODO with 30-day expiry
+- nmem_stats() — Brain statistics
+- nmem_health() — Brain health diagnostics
+
+IMPORTANT: These are tool calls, NOT shell commands. Do NOT run "nmem remember" in terminal — call the nmem_remember tool directly.
+
+Use nmem_remember proactively after decisions, errors, and insights. Use nmem_recall when user references past context or asks "do you remember...".`;
 
 // ── Config ─────────────────────────────────────────────────
 
@@ -143,17 +159,19 @@ const plugin: OpenClawPluginDefinition = {
       api.registerTool(t, { name: t.name });
     }
 
-    // ── Hook: auto-context before agent start ───────────
+    // ── Hook: tool awareness + auto-context before agent start ───
 
-    if (cfg.autoContext) {
-      api.on(
-        "before_agent_start",
-        async (
-          event: unknown,
-          _ctx: unknown,
-        ): Promise<{ prependContext?: string } | void> => {
-          if (!mcp.connected) return;
+    api.on(
+      "before_agent_start",
+      async (
+        event: unknown,
+        _ctx: unknown,
+      ): Promise<BeforeAgentStartResult | void> => {
+        const result: BeforeAgentStartResult = {
+          systemPrompt: TOOL_INSTRUCTIONS,
+        };
 
+        if (cfg.autoContext && mcp.connected) {
           const ev = event as BeforeAgentStartEvent;
 
           try {
@@ -169,19 +187,19 @@ const plugin: OpenClawPluginDefinition = {
             };
 
             if (data.answer && (data.confidence ?? 0) > 0.1) {
-              return {
-                prependContext: `[NeuralMemory — relevant context]\n${data.answer}`,
-              };
+              result.prependContext = `[NeuralMemory — relevant context]\n${data.answer}`;
             }
           } catch (err) {
             api.logger.warn(
               `Auto-context failed: ${(err as Error).message}`,
             );
           }
-        },
-        { priority: 10 },
-      );
-    }
+        }
+
+        return result;
+      },
+      { priority: 10 },
+    );
 
     // ── Hook: auto-capture after agent completes ────────
 

@@ -66,9 +66,43 @@ Add to `~/.openclaw/openclaw.json`:
 
 **Plugin features:**
 - 6 tools registered automatically (nmem_remember, nmem_recall, nmem_context, nmem_todo, nmem_stats, nmem_health)
-- `before_agent_start` hook: queries relevant memories and injects them as context
+- `before_agent_start` hook: injects tool instructions + relevant memories as context (persists across `/new`)
 - `agent_end` hook: auto-extracts facts, decisions, and TODOs from the conversation
 - Configurable: `contextDepth` (0-3), `maxContextTokens` (100-10000)
+
+**After installing, build the plugin:**
+
+```bash
+cd <path-to-installed-plugin>
+npm run build
+```
+
+This compiles TypeScript to JavaScript in `dist/`. The plugin entry point is `dist/index.js`.
+
+#### Windows Installation
+
+On Windows, use forward slashes or escaped backslashes in `openclaw.json` paths:
+
+```json
+{
+  "plugins": {
+    "load": {
+      "paths": ["C:/Users/<you>/AppData/Roaming/npm/node_modules/@neuralmemory/openclaw-plugin"]
+    }
+  }
+}
+```
+
+To find the installed path:
+
+```powershell
+npm list -g @neuralmemory/openclaw-plugin --parseable
+```
+
+If `openclaw plugins list` doesn't show the plugin:
+1. Verify the path in `openclaw.json` points to the package root (where `package.json` is)
+2. Ensure `npm run build` was run (the `dist/` folder must exist with compiled `.js` files)
+3. Use `python` instead of `python3` in the plugin config (Windows default)
 
 ### Alternative: MCP Configuration (Manual)
 
@@ -78,7 +112,7 @@ If you prefer MCP over the plugin, add to `~/.openclaw/mcp.json`:
 {
   "mcpServers": {
     "neural-memory": {
-      "command": "python3",
+      "command": "python",
       "args": ["-m", "neural_memory.mcp"],
       "env": {
         "NEURALMEMORY_BRAIN": "default"
@@ -88,7 +122,7 @@ If you prefer MCP over the plugin, add to `~/.openclaw/mcp.json`:
 }
 ```
 
-This gives you all 16 MCP tools but without the auto-context/auto-capture hooks.
+On Windows, use `"python"` (not `"python3"`). This gives you all 20 MCP tools but without the auto-context/auto-capture hooks.
 
 ### 3. Verify
 
@@ -97,6 +131,16 @@ nmem stats
 ```
 
 You should see brain statistics (neurons, synapses, fibers).
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `openclaw plugins list` doesn't show plugin | Plugin path wrong or not built | Run `npm run build`, verify path in `openclaw.json` |
+| Agent runs `nmem remember` in terminal | Agent confused CLI vs tool | Plugin now auto-injects tool instructions via `systemPrompt` |
+| Agent forgets tools after `/new` | No tool instructions in new session | Plugin now injects `systemPrompt` on every `before_agent_start` |
+| `python3 not found` (Windows) | Windows uses `python` not `python3` | Set `pythonPath: "python"` in plugin config |
+| Timeout errors | Slow machine or large brain | Increase `timeout` in plugin config (max 120000ms) |
 
 ## Tools Reference
 
