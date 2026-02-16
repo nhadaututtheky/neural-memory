@@ -57,7 +57,7 @@ logger = logging.getLogger(__name__)
 def _sanitize_surrogates(obj: Any) -> Any:
     """Remove lone surrogate characters from strings in tool arguments.
 
-    On Windows, stdio pipes can introduce surrogate characters (U+D800–U+DFFF)
+    On Windows, stdio pipes can introduce surrogate characters (U+D800-U+DFFF)
     that cause UnicodeEncodeError when passed to UTF-8 encoders or SQLite.
     """
     if isinstance(obj, str):

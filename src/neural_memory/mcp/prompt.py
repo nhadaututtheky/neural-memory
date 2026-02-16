@@ -140,7 +140,17 @@ Context is **automatically saved** on these events:
 - Error fixes ("fixed by...", "resolved")
 - User leaving ("bye", "tam nghi")
 - Every 15 messages (background checkpoint)
-- Context > 80% full (emergency save)
+- Context > 80% full → call `nmem_auto(action="flush")` for emergency capture
+
+### Emergency Flush (Pre-Compaction)
+Before `/compact`, `/new`, or when context is nearly full, call:
+```
+nmem_auto(action="flush", text="<paste recent conversation>")
+```
+This captures ALL memory types with a lower threshold (0.5), skips dedup, and boosts priority. Use it to prevent post-compaction amnesia.
+
+### Session Gap Detection
+When `nmem_session(action="get")` returns `gap_detected: true`, it means content may have been lost between sessions (e.g. user ran `/new` without saving). Run `nmem_auto(action="flush")` with recent conversation to recover.
 
 ### Session Start
 Always call `nmem_recap()` to resume where you left off:

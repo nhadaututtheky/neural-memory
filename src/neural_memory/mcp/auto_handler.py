@@ -39,6 +39,8 @@ class AutoHandler:
             return await self._auto_analyze(args, save=args.get("save", False))
         elif action == "process":
             return await self._auto_process(args)
+        elif action == "flush":
+            return await self._auto_flush(args)
         return {"error": f"Unknown action: {action}"}
 
     def _auto_status(self) -> dict[str, Any]:
@@ -115,6 +117,92 @@ class AutoHandler:
             if saved
             else "No memories met confidence threshold",
         }
+
+    async def _auto_flush(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Emergency flush: aggressive capture before context is lost.
+
+        Designed to be called before compaction or session end.
+        Skips dedup, lowers confidence threshold, captures all memory types.
+        """
+        text = args.get("text", "")
+        if not text:
+            return {"error": "Text required for flush action"}
+        if len(text) > MAX_CONTENT_LENGTH:
+            return {"error": f"Text too long ({len(text)} chars). Max: {MAX_CONTENT_LENGTH}."}
+
+        # Run detection with ALL types enabled regardless of config
+        detected = analyze_text_for_memories(
+            text,
+            capture_decisions=True,
+            capture_errors=True,
+            capture_todos=True,
+            capture_facts=True,
+            capture_insights=True,
+            capture_preferences=True,
+        )
+
+        if not detected:
+            return {"saved": 0, "message": "No memorable content detected in flush"}
+
+        # Emergency mode: lower confidence threshold to 0.5 (vs normal min_confidence)
+        emergency_threshold = 0.5
+        eligible = [item for item in detected if item["confidence"] >= emergency_threshold]
+
+        if not eligible:
+            return {"saved": 0, "message": "No memories met emergency threshold (0.5)"}
+
+        # Boost priority for emergency-captured memories
+        boosted = [{**item, "priority": min(item.get("priority", 5) + 2, 10)} for item in eligible]
+
+        saved = await self._save_detected_memories_no_dedup(boosted)
+        return {
+            "saved": len(saved),
+            "memories": saved,
+            "mode": "emergency_flush",
+            "threshold": emergency_threshold,
+            "message": f"Emergency flush: captured {len(saved)} memories"
+            if saved
+            else "No memories saved",
+        }
+
+    async def _save_detected_memories_no_dedup(
+        self, detected: list[dict[str, Any]]
+    ) -> list[str]:
+        """Save detected memories WITHOUT dedup checks. For emergency flush only.
+
+        Auto-redacts high-severity sensitive content before saving.
+        """
+        from neural_memory.safety.sensitive import auto_redact_content
+
+        auto_redact_severity = self.config.safety.auto_redact_min_severity
+        redacted: list[dict[str, Any]] = []
+        for item in detected:
+            content = item["content"]
+            redacted_content, matches, _ = auto_redact_content(
+                content, min_severity=auto_redact_severity
+            )
+            if matches:
+                logger.debug("Auto-redacted %d matches in flush memory", len(matches))
+            redacted.append({**item, "content": redacted_content})
+
+        results = await asyncio.gather(
+            *[
+                self._remember(
+                    {
+                        "content": item["content"],
+                        "type": item["type"],
+                        "priority": item.get("priority", 5),
+                        "tags": ["emergency_flush"],
+                    }
+                )
+                for item in redacted
+            ]
+        )
+        return [
+            item["content"][:50]
+            for item, result in zip(redacted, results, strict=False)
+            if "error" not in result
+        ]
 
     async def _passive_capture(self, text: str) -> None:
         """Silently analyze text and capture high-confidence memories."""

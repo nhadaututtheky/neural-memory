@@ -134,8 +134,8 @@ def get_tool_schemas() -> list[dict[str, Any]]:
                 "properties": {
                     "action": {
                         "type": "string",
-                        "enum": ["status", "enable", "disable", "analyze", "process"],
-                        "description": "Action: 'process' analyzes and saves, 'analyze' only detects",
+                        "enum": ["status", "enable", "disable", "analyze", "process", "flush"],
+                        "description": "Action: 'process' analyzes and saves, 'analyze' only detects, 'flush' emergency capture before compaction (skips dedup, lower threshold)",
                     },
                     "text": {
                         "type": "string",

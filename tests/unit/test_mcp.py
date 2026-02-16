@@ -651,6 +651,7 @@ class TestMCPToolCalls:
             side_effect=[
                 MagicMock(fiber=MagicMock(id="tombstone-123"), neurons_created=[]),
                 MagicMock(fiber=MagicMock(id="summary-123"), neurons_created=[]),
+                MagicMock(fiber=MagicMock(id="fingerprint-123"), neurons_created=[]),
             ]
         )
 
@@ -664,8 +665,8 @@ class TestMCPToolCalls:
         assert "auth" in result["summary"]
         assert "75%" in result["summary"]
         assert "message" in result
-        # Two typed memories: tombstone + summary
-        assert mock_storage.add_typed_memory.call_count == 2
+        # Three typed memories: tombstone + summary + fingerprint
+        assert mock_storage.add_typed_memory.call_count == 3
 
     @pytest.mark.asyncio
     async def test_session_end_no_active(self, server: MCPServer) -> None:

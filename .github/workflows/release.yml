@@ -6,8 +6,74 @@ on:
       - "v*"
 
 jobs:
+  # ── Gate: validate version consistency ──────────────────────────
+  validate:
+    name: Validate version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tag matches source version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          PYPROJECT=$(python3 -c "
+          import re, pathlib
+          text = pathlib.Path('pyproject.toml').read_text()
+          m = re.search(r'^version\s*=\s*\"([^\"]+)\"', text, re.M)
+          print(m.group(1))
+          ")
+          INIT=$(python3 -c "
+          import re, pathlib
+          text = pathlib.Path('src/neural_memory/__init__.py').read_text()
+          m = re.search(r'^__version__\s*=\s*\"([^\"]+)\"', text, re.M)
+          print(m.group(1))
+          ")
+
+          echo "Tag version:        $TAG"
+          echo "pyproject.toml:     $PYPROJECT"
+          echo "__init__.py:        $INIT"
+
+          if [ "$TAG" != "$PYPROJECT" ]; then
+            echo "::error::Tag v$TAG does not match pyproject.toml version $PYPROJECT"
+            exit 1
+          fi
+          if [ "$TAG" != "$INIT" ]; then
+            echo "::error::Tag v$TAG does not match __init__.py version $INIT"
+            exit 1
+          fi
+          echo "Version $TAG is consistent across all sources."
+
+  # ── Gate: run full CI before publishing ─────────────────────────
+  ci:
+    name: CI checks
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev,server]"
+
+      - name: Lint
+        run: |
+          ruff check src/ tests/
+          ruff format --check src/ tests/
+
+      - name: Type check
+        run: mypy src/ --ignore-missing-imports
+
+      - name: Test
+        run: pytest tests/ -v --timeout=60 --cov=neural_memory --cov-report=term-missing --cov-fail-under=67
+
+  # ── Build distribution ──────────────────────────────────────────
   build:
     name: Build distribution
+    needs: ci
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,6 +95,7 @@ jobs:
           name: python-package-distributions
           path: dist/
 
+  # ── Publish to PyPI ─────────────────────────────────────────────
   publish:
     name: Publish to PyPI
     needs: build
@@ -51,6 +118,7 @@ jobs:
         with:
           skip-existing: true
 
+  # ── GitHub Release ──────────────────────────────────────────────
   github-release:
     name: Create GitHub Release
     needs: publish
