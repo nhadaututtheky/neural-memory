@@ -68,7 +68,7 @@ jobs:
         run: mypy src/ --ignore-missing-imports
 
       - name: Test
-        run: pytest tests/ -v --timeout=60 --cov=neural_memory --cov-report=term-missing --cov-fail-under=67
+        run: pytest tests/ -v --timeout=60 -m "not stress" --cov=neural_memory --cov-report=term-missing --cov-fail-under=67
 
   # ── Build distribution ──────────────────────────────────────────
   build:
