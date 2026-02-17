@@ -274,6 +274,15 @@ class ConsolidationEngine:
                 for nid in fib.neuron_ids:
                     fiber_salience_cache.setdefault(nid, []).append(fib)
 
+        # Pre-fetch neighbor counts for bridge detection (avoid N+1 queries)
+        # Collect all unique source neuron IDs from synapses eligible for pruning
+        candidate_source_ids = list({s.source_id for s in all_synapses if s.weight >= 0.02})
+        neighbor_synapses_map: dict[str, list[Synapse]] = {}
+        if candidate_source_ids:
+            neighbor_synapses_map = await self._storage.get_synapses_for_neurons(
+                candidate_source_ids, direction="out"
+            )
+
         for synapse in all_synapses:
             # Apply time-based decay before checking weight threshold
             decayed = synapse.time_decay(reference_time=reference_time)
@@ -314,8 +323,8 @@ class ConsolidationEngine:
             if should_prune:
                 # Protect bridge synapses (only connection between source and target)
                 if synapse.weight >= 0.02:
-                    neighbors = await self._storage.get_neighbors(synapse.source_id)
-                    neighbor_ids = {n.id for n, _syn in neighbors}
+                    out_synapses = neighbor_synapses_map.get(synapse.source_id, [])
+                    neighbor_ids = {s.target_id for s in out_synapses}
                     if synapse.target_id in neighbor_ids and len(neighbor_ids) <= 1:
                         continue  # Bridge synapse — don't prune
 

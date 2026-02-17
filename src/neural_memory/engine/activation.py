@@ -111,6 +111,9 @@ class SpreadingActivation:
         # Frequency cache: neuron_id -> access_frequency (myelination boost)
         freq_cache: dict[str, int] = {}
 
+        # Neighbor cache: avoid re-fetching neighbors for the same neuron
+        neighbor_cache: dict[str, list[tuple[Neuron, Synapse]]] = {}
+
         # Priority queue for BFS with activation ordering
         queue: list[ActivationState] = []
 
@@ -157,12 +160,16 @@ class SpreadingActivation:
             if current.hops >= max_hops:
                 continue
 
-            # Get neighbors
-            neighbors = await self._storage.get_neighbors(
-                current.neuron_id,
-                direction="both",
-                min_weight=0.1,
-            )
+            # Get neighbors (with cache to avoid N+1 re-fetching)
+            if current.neuron_id in neighbor_cache:
+                neighbors = neighbor_cache[current.neuron_id]
+            else:
+                neighbors = await self._storage.get_neighbors(
+                    current.neuron_id,
+                    direction="both",
+                    min_weight=0.1,
+                )
+                neighbor_cache[current.neuron_id] = neighbors
 
             # Batch-prefetch neuron states for uncached neighbors
             uncached_ids = [n.id for n, _ in neighbors if n.id not in freq_cache]

@@ -18,6 +18,7 @@ Resolution actions:
 
 from __future__ import annotations
 
+import asyncio
 import re
 from dataclasses import dataclass, field, replace as dc_replace
 from enum import StrEnum
@@ -216,13 +217,17 @@ async def detect_conflicts(
     search_terms = _extract_search_terms(content)
 
     candidates: list[Neuron] = []
-    for term in search_terms[:5]:
-        found = await storage.find_neurons(
-            content_contains=term,
-            limit=max_candidates,
-        )
+    # Batch-fetch candidates for all search terms in parallel (avoid N+1)
+    term_tasks = [
+        storage.find_neurons(content_contains=term, limit=max_candidates)
+        for term in search_terms[:5]
+    ]
+    term_results = await asyncio.gather(*term_tasks) if term_tasks else []
+    seen_ids: set[str] = set()
+    for found in term_results:
         for neuron in found:
-            if neuron.content != content and neuron.id not in {c.id for c in candidates}:
+            if neuron.content != content and neuron.id not in seen_ids:
+                seen_ids.add(neuron.id)
                 candidates.append(neuron)
 
     # Check each candidate for conflicts

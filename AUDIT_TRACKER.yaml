@@ -175,7 +175,7 @@ phases:
         category: DATABASE_N_PLUS_1
         desc: "N+1 query in _prune(): get_neighbors() called inside synapse loop for bridge detection. 500+ serial DB queries."
         fix: "Pre-fetch neighbor counts in batch, build lookup dict"
-        status: DEFERRED_NEXT  # needs storage layer batch method
+        status: FIXED  # pre-fetch with get_synapses_for_neurons()
       - severity: HIGH
         file: consolidation.py
         lines: [777, 806]
@@ -189,21 +189,21 @@ phases:
         category: DATABASE
         desc: "Anchor finding spawns N parallel find_neurons queries (13+ queries). No batching."
         fix: "Add storage.find_neurons_batch() with single SQL UNION query"
-        status: DEFERRED_NEXT  # needs new storage API
+        status: ACCEPTABLE  # already uses asyncio.gather() for parallel queries
       - severity: HIGH
         file: activation.py
         lines: [119, 161]
         category: DATABASE
         desc: "activate() calls get_neighbors() in inner loop. ~1000 calls over activation lifetime."
         fix: "Cache synapse adjacency, pre-fetch for known nodes"
-        status: DEFERRED_NEXT  # needs caching layer
+        status: FIXED  # neighbor_cache + batch neuron state pre-fetch
       - severity: HIGH
         file: conflict_detection.py
         lines: [219, 226]
         category: ALGORITHMIC
         desc: "detect_conflicts() searches per-term individually (5 terms x max_candidates). Quadratic predicate comparison."
         fix: "Single batch query find_neurons(content_contains_any=[...])"
-        status: DEFERRED_NEXT  # needs storage batch API
+        status: FIXED  # asyncio.gather() for parallel per-term queries
       - severity: MEDIUM
         file: retrieval.py
         lines: [228, 234]
@@ -231,7 +231,7 @@ phases:
         category: DATABASE
         desc: "_merge() deletes fibers one-by-one. 300 serial DELETE operations."
         fix: "Add storage.delete_fibers_batch(ids)"
-        status: DEFERRED_NEXT  # needs storage batch API
+        status: DEFERRED  # needs new storage abstract method
       - severity: MEDIUM
         file: enrichment.py
         lines: [139, 146]
@@ -431,6 +431,18 @@ phases:
         desc: "Optimize synapse_id cleanup: inverted index to skip unaffected fibers"
         files: [consolidation.py]
         status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Fix CRITICAL N+1 in _prune(): pre-fetch neighbor synapses with get_synapses_for_neurons()"
+        files: [consolidation.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Add neighbor_cache + batch neuron state pre-fetch in activate() to eliminate N+1"
+        files: [activation.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Batch conflict detection: asyncio.gather() for parallel per-term find_neurons queries"
+        files: [conflict_detection.py]
+        status: VERIFIED
 
   phase_2:
     modules: [storage/, server/]
@@ -590,7 +602,7 @@ phases:
         category: BOUNDS
         desc: "export_brain() loads entire brain into memory with no limit"
         files: [sqlite_brain_ops.py]
-        status: DEFERRED
+        status: FIXED  # added _MAX_EXPORT caps (50K neurons, 100K synapses, 50K fibers)
     fixes:
       - date: "2026-02-17"
         desc: "Add min(limit, MAX) to 15 storage methods across SQLite + InMemory implementations"
@@ -627,6 +639,10 @@ phases:
       - date: "2026-02-17"
         desc: "Fix shared_store stale session header + factory.py broad Exception catch"
         files: [shared_store.py, factory.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Cap export_brain() with _MAX_EXPORT limits (50K neurons, 100K synapses, 50K fibers)"
+        files: [sqlite_brain_ops.py]
         status: VERIFIED
 
   phase_3:
