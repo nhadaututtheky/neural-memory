@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from neural_memory.core.brain import Brain
 from neural_memory.engine.encoder import MemoryEncoder
@@ -157,12 +157,10 @@ async def list_neurons(
     storage: Annotated[NeuralStorage, Depends(get_storage)],
     type: str | None = None,
     content_contains: str | None = None,
-    limit: int = 50,
+    limit: int = Query(default=50, ge=1, le=1000),
 ) -> dict[str, Any]:
     """List neurons with optional filters."""
     from neural_memory.core.neuron import NeuronType
-
-    limit = min(limit, 1000)
     neuron_type = None
     if type:
         try:
@@ -200,11 +198,10 @@ async def suggest_neurons(
     brain: Annotated[Brain, Depends(get_brain)],
     storage: Annotated[NeuralStorage, Depends(get_storage)],
     prefix: str,
-    limit: int = 5,
+    limit: int = Query(default=5, ge=1, le=100),
     type: str | None = None,
 ) -> SuggestResponse:
     """Get prefix-based neuron suggestions."""
-    limit = min(limit, 100)
     from neural_memory.core.neuron import NeuronType
 
     type_filter = None
@@ -213,7 +210,6 @@ async def suggest_neurons(
             type_filter = NeuronType(type)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid neuron type")
-    limit = min(limit, 100)
     suggestions = await storage.suggest_neurons(
         prefix=prefix,
         type_filter=type_filter,

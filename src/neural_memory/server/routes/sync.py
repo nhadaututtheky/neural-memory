@@ -11,11 +11,19 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
 from neural_memory.utils.timeutils import utcnow
 
 logger = logging.getLogger(__name__)
+
+async def _require_local_request(request: Request) -> None:
+    """Reject non-localhost requests to protect sync endpoints."""
+    client_host = request.client.host if request.client else ""
+    allowed = {"127.0.0.1", "::1", "localhost"}
+    if client_host not in allowed:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
 
 router = APIRouter(prefix="/sync", tags=["sync"])
 
@@ -398,7 +406,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             await sync_manager.disconnect(client_id)
 
 
-@router.get("/stats")
+@router.get("/stats", dependencies=[Depends(_require_local_request)])
 async def get_sync_stats() -> dict[str, Any]:
     """Get sync manager statistics."""
     sync_manager = get_sync_manager()

@@ -76,7 +76,6 @@ class SQLiteActionLogMixin:
         since: datetime | None = None,
         limit: int = 1000,
     ) -> list[ActionEvent]:
-        limit = min(limit, 1000)
         """Get action events ordered by time.
 
         Args:
@@ -87,6 +86,7 @@ class SQLiteActionLogMixin:
         Returns:
             List of ActionEvent objects ordered by created_at
         """
+        limit = min(limit, 1000)
         conn = self._ensure_conn()
         brain_id = self._get_brain_id()
 

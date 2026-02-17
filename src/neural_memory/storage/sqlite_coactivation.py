@@ -74,6 +74,7 @@ class SQLiteCoActivationMixin:
                 GROUP BY neuron_a, neuron_b
                 HAVING cnt >= ?
                 ORDER BY cnt DESC
+                LIMIT 10000
             """
             params = (brain_id, since.isoformat(), min_count)
         else:
@@ -84,6 +85,7 @@ class SQLiteCoActivationMixin:
                 GROUP BY neuron_a, neuron_b
                 HAVING cnt >= ?
                 ORDER BY cnt DESC
+                LIMIT 10000
             """
             params = (brain_id, min_count)  # type: ignore[assignment]
 

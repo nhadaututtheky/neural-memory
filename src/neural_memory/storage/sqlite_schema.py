@@ -387,7 +387,6 @@ CREATE TABLE IF NOT EXISTS typed_memories (
 CREATE INDEX IF NOT EXISTS idx_typed_memories_type ON typed_memories(brain_id, memory_type);
 CREATE INDEX IF NOT EXISTS idx_typed_memories_project ON typed_memories(brain_id, project_id);
 CREATE INDEX IF NOT EXISTS idx_typed_memories_expires ON typed_memories(brain_id, expires_at);
-CREATE INDEX IF NOT EXISTS idx_typed_memories_expiry ON typed_memories(brain_id, expires_at);
 
 -- Projects table
 CREATE TABLE IF NOT EXISTS projects (

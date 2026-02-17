@@ -114,6 +114,8 @@ class SQLiteSynapseMixin:
             query += " AND weight >= ?"
             params.append(min_weight)
 
+        query += " LIMIT 10000"
+
         async with conn.execute(query, params) as cursor:
             rows = await cursor.fetchall()
             return [row_to_synapse(row) for row in rows]

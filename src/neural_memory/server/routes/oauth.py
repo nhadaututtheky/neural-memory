@@ -6,12 +6,24 @@ import logging
 import os
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/oauth", tags=["oauth"])
+async def _require_local_request(request: Request) -> None:
+    """Reject non-localhost requests to protect OAuth endpoints."""
+    client_host = request.client.host if request.client else ""
+    allowed = {"127.0.0.1", "::1", "localhost"}
+    if client_host not in allowed:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+
+router = APIRouter(
+    prefix="/api/oauth",
+    tags=["oauth"],
+    dependencies=[Depends(_require_local_request)],
+)
 
 # CLIProxyAPI base URL (Go service running separately, restricted to localhost)
 _CLIPROXY_BASE = os.environ.get("CLIPROXY_URL", "http://127.0.0.1:8317")

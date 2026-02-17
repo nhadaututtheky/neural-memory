@@ -369,17 +369,7 @@ async def get_fiber_diagram(
     storage: Annotated[NeuralStorage, Depends(get_storage)],
 ) -> FiberDiagramResponse:
     """Get neurons and synapses for a fiber to render as a diagram."""
-    # Direct lookup by iterating a small batch rather than scanning all fibers
-    target = None
-    try:
-        fibers = await storage.get_fibers(limit=500)
-        for f in fibers:
-            if f.id == fiber_id:
-                target = f
-                break
-    except Exception:
-        logger.debug("Failed to get fibers for diagram", exc_info=True)
-
+    target = await storage.get_fiber(fiber_id)
     if target is None:
         raise HTTPException(status_code=404, detail="Fiber not found.")
 
@@ -399,10 +389,9 @@ async def get_fiber_diagram(
         for n in neurons_batch.values()
     ]
 
-    # Get synapses between these neurons (cap to prevent unbounded load)
-    all_synapses = await storage.get_all_synapses()
-    capped_synapses = all_synapses[:5000] if len(all_synapses) > 5000 else all_synapses
+    # Get synapses between this fiber's neurons using targeted batch query
     id_set = set(neuron_ids)
+    outgoing = await storage.get_synapses_for_neurons(neuron_ids, direction="out")
     fiber_synapses = [
         {
             "id": s.id,
@@ -412,8 +401,9 @@ async def get_fiber_diagram(
             "weight": s.weight,
             "direction": s.direction.value,
         }
-        for s in capped_synapses
-        if s.source_id in id_set and s.target_id in id_set
+        for synapse_list in outgoing.values()
+        for s in synapse_list
+        if s.target_id in id_set
     ]
 
     return FiberDiagramResponse(

@@ -91,6 +91,7 @@ class SQLiteFiberMixin:
         min_salience: float | None = None,
         limit: int = 100,
     ) -> list[Fiber]:
+        limit = min(limit, 1000)
         conn = self._ensure_conn()
         brain_id = self._get_brain_id()
 
@@ -245,6 +246,7 @@ class SQLiteFiberMixin:
         order_by: Literal["created_at", "salience", "frequency"] = "created_at",
         descending: bool = True,
     ) -> list[Fiber]:
+        limit = min(limit, 1000)
         conn = self._ensure_conn()
         brain_id = self._get_brain_id()
 

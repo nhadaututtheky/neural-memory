@@ -68,7 +68,16 @@ def create_app(
 
     # CORS middleware
     if cors_origins is None:
-        cors_origins = ["http://localhost:*", "http://127.0.0.1:*"]
+        cors_origins = [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://localhost:8000",
+            "http://localhost:8080",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:8000",
+            "http://127.0.0.1:8080",
+        ]
 
     is_wildcard = cors_origins == ["*"]
     app.add_middleware(

@@ -152,7 +152,6 @@ class SQLiteBrainMixin:
             config=config,
             brain_id=brain_id,
         )
-        await self.save_brain(brain)
 
         old_brain_id = self._current_brain_id
         self.set_brain(brain_id)
@@ -161,6 +160,37 @@ class SQLiteBrainMixin:
             conn = self._ensure_conn()
             await conn.execute("BEGIN IMMEDIATE")
             try:
+                # Save brain record inside the transaction to prevent orphans
+                await conn.execute(
+                    """INSERT OR REPLACE INTO brains
+                       (id, name, config, owner_id, is_public, shared_with, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        brain.id,
+                        brain.name,
+                        json.dumps(
+                            {
+                                "decay_rate": brain.config.decay_rate,
+                                "reinforcement_delta": brain.config.reinforcement_delta,
+                                "activation_threshold": brain.config.activation_threshold,
+                                "max_spread_hops": brain.config.max_spread_hops,
+                                "max_context_tokens": brain.config.max_context_tokens,
+                                "default_synapse_weight": brain.config.default_synapse_weight,
+                                "hebbian_delta": brain.config.hebbian_delta,
+                                "hebbian_threshold": brain.config.hebbian_threshold,
+                                "hebbian_initial_weight": brain.config.hebbian_initial_weight,
+                                "consolidation_prune_threshold": brain.config.consolidation_prune_threshold,
+                                "prune_min_inactive_days": brain.config.prune_min_inactive_days,
+                                "merge_overlap_threshold": brain.config.merge_overlap_threshold,
+                            }
+                        ),
+                        brain.owner_id,
+                        1 if brain.is_public else 0,
+                        json.dumps(brain.shared_with),
+                        brain.created_at.isoformat(),
+                        brain.updated_at.isoformat(),
+                    ),
+                )
                 await self._import_neurons(snapshot.neurons)
                 await self._import_synapses(snapshot.synapses)
                 await self._import_fibers(snapshot.fibers)

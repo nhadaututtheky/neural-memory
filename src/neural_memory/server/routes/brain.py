@@ -270,7 +270,16 @@ async def merge_brain(
 
     # Reset brain data then reimport merged snapshot
     await storage.clear(brain_id)
-    await storage.import_brain(merged_snapshot, brain_id)
+    try:
+        await storage.import_brain(merged_snapshot, brain_id)
+    except Exception:
+        # Restore from pre-merge backup to prevent data loss
+        await storage.clear(brain_id)
+        await storage.import_brain(local_snapshot, brain_id)
+        raise HTTPException(
+            status_code=500,
+            detail="Merge import failed; brain restored to pre-merge state",
+        )
 
     return MergeReportResponse(
         neurons_added=merge_report.neurons_added,

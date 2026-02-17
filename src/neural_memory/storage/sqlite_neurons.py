@@ -133,6 +133,7 @@ class SQLiteNeuronMixin:
         time_range: tuple[datetime, datetime] | None = None,
         limit: int = 100,
     ) -> list[Neuron]:
+        limit = min(limit, 1000)
         conn = self._ensure_conn()
         brain_id = self._get_brain_id()
 
@@ -304,6 +305,7 @@ class SQLiteNeuronMixin:
         limit: int = 5,
     ) -> list[dict[str, Any]]:
         """Suggest neurons matching a prefix, ranked by relevance + frequency."""
+        limit = min(limit, 100)
         if not prefix.strip():
             return []
 

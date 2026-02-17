@@ -93,6 +93,7 @@ class InMemoryStorage(InMemoryCollectionsMixin, InMemoryBrainMixin, NeuralStorag
         time_range: tuple[datetime, datetime] | None = None,
         limit: int = 100,
     ) -> list[Neuron]:
+        limit = min(limit, 1000)
         brain_id = self._get_brain_id()
         results: list[Neuron] = []
 
@@ -577,6 +578,7 @@ class InMemoryStorage(InMemoryCollectionsMixin, InMemoryBrainMixin, NeuralStorag
         since: datetime | None = None,
         limit: int = 1000,
     ) -> list[Any]:
+        limit = min(limit, 1000)
         from neural_memory.core.action_event import ActionEvent
 
         brain_id = self._get_brain_id()

@@ -83,6 +83,7 @@ class SQLiteProjectMixin:
         tags: set[str] | None = None,
         limit: int = 100,
     ) -> list[Project]:
+        limit = min(limit, 1000)
         conn = self._ensure_conn()
         brain_id = self._get_brain_id()
 

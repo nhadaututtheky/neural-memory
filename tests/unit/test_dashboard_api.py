@@ -70,7 +70,9 @@ def mock_storage() -> AsyncMock:
     storage = AsyncMock()
     storage.find_neurons = AsyncMock(return_value=[])
     storage.get_fibers = AsyncMock(return_value=[])
+    storage.get_fiber = AsyncMock(return_value=None)
     storage.get_all_synapses = AsyncMock(return_value=[])
+    storage.get_synapses_for_neurons = AsyncMock(return_value={})
     storage.get_neurons_batch = AsyncMock(return_value={})
     return storage
 
@@ -194,7 +196,7 @@ class TestFiberDiagramEndpoint:
 
     def test_fiber_diagram_success(self, client: TestClient, mock_storage: AsyncMock) -> None:
         fiber = FakeFiber(id="f1", summary="Test", neuron_ids=["n1", "n2"])
-        mock_storage.get_fibers.return_value = [fiber]
+        mock_storage.get_fiber.return_value = fiber
 
         n1 = FakeNeuron(id="n1", content="Node 1", type=FakeType("concept"))
         n2 = FakeNeuron(id="n2", content="Node 2", type=FakeType("entity"))
@@ -208,7 +210,7 @@ class TestFiberDiagramEndpoint:
             weight=0.8,
             direction=FakeDirection("forward"),
         )
-        mock_storage.get_all_synapses.return_value = [syn]
+        mock_storage.get_synapses_for_neurons.return_value = {"n1": [syn], "n2": []}
 
         resp = client.get("/api/dashboard/fiber/f1/diagram")
         assert resp.status_code == 200
@@ -221,11 +223,11 @@ class TestFiberDiagramEndpoint:
 
     def test_fiber_diagram_no_synapses(self, client: TestClient, mock_storage: AsyncMock) -> None:
         fiber = FakeFiber(id="f1", summary="Test", neuron_ids=["n1"])
-        mock_storage.get_fibers.return_value = [fiber]
+        mock_storage.get_fiber.return_value = fiber
 
         n1 = FakeNeuron(id="n1", content="Alone", type=FakeType("concept"))
         mock_storage.get_neurons_batch.return_value = {"n1": n1}
-        mock_storage.get_all_synapses.return_value = []
+        mock_storage.get_synapses_for_neurons.return_value = {"n1": []}
 
         resp = client.get("/api/dashboard/fiber/f1/diagram")
         assert resp.status_code == 200
@@ -238,7 +240,7 @@ class TestFiberDiagramEndpoint:
     ) -> None:
         """Synapses referencing external neurons should be excluded."""
         fiber = FakeFiber(id="f1", summary="Test", neuron_ids=["n1"])
-        mock_storage.get_fibers.return_value = [fiber]
+        mock_storage.get_fiber.return_value = fiber
 
         n1 = FakeNeuron(id="n1", content="Inside", type=FakeType("concept"))
         mock_storage.get_neurons_batch.return_value = {"n1": n1}
@@ -250,7 +252,7 @@ class TestFiberDiagramEndpoint:
             type=FakeType("related"),
             direction=FakeDirection("forward"),
         )
-        mock_storage.get_all_synapses.return_value = [syn]
+        mock_storage.get_synapses_for_neurons.return_value = {"n1": [syn]}
 
         resp = client.get("/api/dashboard/fiber/f1/diagram")
         assert resp.status_code == 200

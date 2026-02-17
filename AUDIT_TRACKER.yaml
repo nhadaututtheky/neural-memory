@@ -436,9 +436,198 @@ phases:
     modules: [storage/, server/]
     loc: 9539
     files: 36
-    status: PENDING
-    findings: []
-    fixes: []
+    status: COMPLETE
+    findings:
+      # --- BOUNDS (systematic) ---
+      - id: P2-001
+        severity: HIGH
+        category: BOUNDS
+        desc: "15 storage methods missing min(limit, MAX) cap"
+        files: [sqlite_neurons.py, sqlite_fibers.py, sqlite_typed.py, sqlite_projects.py, sqlite_versioning.py, sqlite_coactivation.py, memory_store.py, memory_collections.py]
+        status: FIXED
+      - id: P2-002
+        severity: HIGH
+        category: BOUNDS
+        desc: "get_synapses() has no LIMIT clause at all"
+        files: [sqlite_synapses.py]
+        status: FIXED
+      # --- SECURITY ---
+      - id: P2-003
+        severity: HIGH
+        category: SECURITY
+        desc: "CORS wildcard 'http://localhost:*' not supported by Starlette — dashboard requests blocked"
+        files: [app.py]
+        status: FIXED
+      - id: P2-004
+        severity: MEDIUM
+        category: SECURITY
+        desc: "OAuth endpoints (initiate, callback, providers) missing localhost restriction"
+        files: [oauth.py]
+        status: FIXED
+      - id: P2-005
+        severity: MEDIUM
+        category: SECURITY
+        desc: "sync/stats endpoint missing localhost restriction"
+        files: [sync.py]
+        status: FIXED
+      - id: P2-006
+        severity: MEDIUM
+        category: SECURITY
+        desc: "WebSocket subscribe allows any brain_id without validation"
+        files: [sync.py]
+        status: DEFERRED
+      - id: P2-007
+        severity: MEDIUM
+        category: SECURITY
+        desc: "shared_store.py bakes stale X-Brain-ID in session headers"
+        files: [shared_store.py]
+        status: FIXED
+      # --- CORRECTNESS ---
+      - id: P2-008
+        severity: HIGH
+        category: CORRECTNESS
+        desc: "merge_brain() non-atomic: clear() then import_brain() — data loss if import fails"
+        files: [brain.py]
+        status: FIXED
+      - id: P2-009
+        severity: HIGH
+        category: CORRECTNESS
+        desc: "import_brain() saves brain record before transaction — orphaned on failure"
+        files: [sqlite_brain_ops.py]
+        status: FIXED
+      - id: P2-010
+        severity: MEDIUM
+        category: CORRECTNESS
+        desc: "sqlite_action_log docstring placed after limit cap statement (broken __doc__)"
+        files: [sqlite_action_log.py]
+        status: FIXED
+      - id: P2-011
+        severity: LOW
+        category: CORRECTNESS
+        desc: "export_brain() loses auto_tags/agent_tags distinction on roundtrip"
+        files: [sqlite_brain_ops.py]
+        status: DEFERRED
+      # --- PERFORMANCE ---
+      - id: P2-012
+        severity: MEDIUM
+        category: PERFORMANCE
+        desc: "dashboard fiber diagram loads ALL synapses via get_all_synapses()"
+        files: [dashboard_api.py]
+        status: FIXED
+      - id: P2-013
+        severity: MEDIUM
+        category: PERFORMANCE
+        desc: "dashboard fiber diagram scans 500 fibers to find one by ID"
+        files: [dashboard_api.py]
+        status: FIXED
+      - id: P2-014
+        severity: MEDIUM
+        category: PERFORMANCE
+        desc: "get_graph_data fetches ALL neurons up to offset+limit, get_all_synapses unbounded"
+        files: [app.py]
+        status: DEFERRED
+      - id: P2-015
+        severity: MEDIUM
+        category: PERFORMANCE
+        desc: "BFS path-finding issues one SQL query per node expansion (N+1)"
+        files: [sqlite_synapses.py]
+        status: DEFERRED
+      # --- DEAD CODE ---
+      - id: P2-016
+        severity: LOW
+        category: DEAD_CODE
+        desc: "Duplicate index: idx_typed_memories_expires vs idx_typed_memories_expiry"
+        files: [sqlite_schema.py]
+        status: FIXED
+      - id: P2-017
+        severity: LOW
+        category: DEAD_CODE
+        desc: "Duplicate limit cap in suggest_neurons route (line 207 and 216)"
+        files: [memory.py]
+        status: FIXED
+      # --- TYPE SAFETY ---
+      - id: P2-018
+        severity: MEDIUM
+        category: TYPE_SAFETY
+        desc: "HybridStorage does not inherit NeuralStorage (type:ignore hack)"
+        files: [factory.py]
+        status: DEFERRED
+      - id: P2-019
+        severity: LOW
+        category: TYPE_SAFETY
+        desc: "HybridStorage methods use bare Any return types"
+        files: [factory.py]
+        status: DEFERRED
+      # --- ERROR HANDLING ---
+      - id: P2-020
+        severity: MEDIUM
+        category: ERROR_HANDLING
+        desc: "HybridStorage.sync() catches bare Exception for remote brain lookup"
+        files: [factory.py]
+        status: FIXED
+      - id: P2-021
+        severity: MEDIUM
+        category: ERROR_HANDLING
+        desc: "list_neurons endpoint lacks Query() validation — negative limits pass"
+        files: [memory.py]
+        status: FIXED
+      # --- PATH SECURITY ---
+      - id: P2-022
+        severity: MEDIUM
+        category: PATH_SECURITY
+        desc: "SQLiteStorage db_path not validated with resolve() + is_relative_to()"
+        files: [sqlite_store.py]
+        status: DEFERRED
+      # --- BOUNDS (deferred) ---
+      - id: P2-023
+        severity: MEDIUM
+        category: BOUNDS
+        desc: "get_all_neuron_states() and get_all_synapses() have no limit"
+        files: [sqlite_neurons.py, sqlite_synapses.py]
+        status: DEFERRED
+      - id: P2-024
+        severity: HIGH
+        category: BOUNDS
+        desc: "export_brain() loads entire brain into memory with no limit"
+        files: [sqlite_brain_ops.py]
+        status: DEFERRED
+    fixes:
+      - date: "2026-02-17"
+        desc: "Add min(limit, MAX) to 15 storage methods across SQLite + InMemory implementations"
+        files: [sqlite_neurons.py, sqlite_fibers.py, sqlite_typed.py, sqlite_projects.py, sqlite_versioning.py, sqlite_coactivation.py, sqlite_action_log.py, memory_store.py, memory_collections.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Add LIMIT 10000 safety cap to get_synapses() and get_co_activation_counts()"
+        files: [sqlite_synapses.py, sqlite_coactivation.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Fix CORS: replace wildcard patterns with explicit localhost origins"
+        files: [app.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Add localhost restriction to OAuth router and sync/stats endpoint"
+        files: [oauth.py, sync.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Fix merge_brain() atomicity: restore from backup on import failure"
+        files: [brain.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Fix import_brain() orphan: move brain INSERT inside transaction"
+        files: [sqlite_brain_ops.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Fix dashboard fiber diagram: use get_fiber() + get_synapses_for_neurons()"
+        files: [dashboard_api.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Remove duplicate index, fix docstring placement, add Query() validation"
+        files: [sqlite_schema.py, sqlite_action_log.py, memory.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Fix shared_store stale session header + factory.py broad Exception catch"
+        files: [shared_store.py, factory.py]
+        status: VERIFIED
 
   phase_3a:
     modules: [unified_config - loading/migration]

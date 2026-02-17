@@ -86,6 +86,7 @@ class SQLiteVersioningMixin:
         limit: int = 20,
     ) -> list[BrainVersion]:
         """List versions for a brain, most recent first."""
+        limit = min(limit, 100)
         conn = self._ensure_conn()
         async with conn.execute(
             """SELECT * FROM brain_versions

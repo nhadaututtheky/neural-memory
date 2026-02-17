@@ -87,7 +87,7 @@ class SharedStorage(SharedFiberBrainMixin, NeuralStorage):
     async def connect(self) -> None:
         """Establish connection to server."""
         if self._session is None:
-            headers = {"X-Brain-ID": self._brain_id}
+            headers: dict[str, str] = {}
             if self._api_key:
                 headers["Authorization"] = f"Bearer {self._api_key}"
 

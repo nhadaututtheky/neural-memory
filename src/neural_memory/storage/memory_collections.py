@@ -43,6 +43,7 @@ class InMemoryCollectionsMixin:
         min_salience: float | None = None,
         limit: int = 100,
     ) -> list[Fiber]:
+        limit = min(limit, 1000)
         brain_id = self._get_brain_id()
         results: list[Fiber] = []
 
@@ -144,6 +145,7 @@ class InMemoryCollectionsMixin:
         tags: set[str] | None = None,
         limit: int = 100,
     ) -> list[TypedMemory]:
+        limit = min(limit, 1000)
         brain_id = self._get_brain_id()
         results: list[TypedMemory] = []
 
@@ -238,6 +240,7 @@ class InMemoryCollectionsMixin:
         tags: set[str] | None = None,
         limit: int = 100,
     ) -> list[Project]:
+        limit = min(limit, 1000)
         brain_id = self._get_brain_id()
         results: list[Project] = []
 
