@@ -68,6 +68,9 @@ class ToolHandler:
         async def _check_onboarding(self) -> dict[str, Any] | None:
             raise NotImplementedError
 
+        def get_update_hint(self) -> dict[str, Any] | None:
+            raise NotImplementedError
+
     # ──────────────────── Core tool handlers ────────────────────
 
     async def _remember(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -258,6 +261,10 @@ class ToolHandler:
         hint = self._get_maintenance_hint(pulse)
         if hint:
             response["maintenance_hint"] = hint
+
+        update_hint = self.get_update_hint()
+        if update_hint:
+            response["update_hint"] = update_hint
 
         # Related memory discovery via 2-hop spreading activation
         try:
@@ -468,6 +475,10 @@ class ToolHandler:
         if hint:
             response["maintenance_hint"] = hint
 
+        update_hint = self.get_update_hint()
+        if update_hint:
+            response["update_hint"] = update_hint
+
         await self.hooks.emit(
             HookEvent.POST_RECALL,
             {
@@ -605,6 +616,10 @@ class ToolHandler:
         onboarding = await self._check_onboarding()
         if onboarding:
             response["onboarding"] = onboarding
+
+        update_hint = self.get_update_hint()
+        if update_hint:
+            response["update_hint"] = update_hint
 
         return response
 

@@ -48,6 +48,7 @@ from neural_memory.mcp.session_handler import SessionHandler
 from neural_memory.mcp.tool_handlers import ToolHandler
 from neural_memory.mcp.tool_schemas import get_tool_schemas
 from neural_memory.mcp.train_handler import TrainHandler
+from neural_memory.mcp.version_check_handler import VersionCheckHandler
 from neural_memory.unified_config import get_config, get_shared_storage
 
 if TYPE_CHECKING:
@@ -86,6 +87,7 @@ class MCPServer(
     OnboardingHandler,
     ExpiryCleanupHandler,
     ScheduledConsolidationHandler,
+    VersionCheckHandler,
 ):
     """MCP server that exposes NeuralMemory tools.
 
@@ -105,6 +107,7 @@ class MCPServer(
         OnboardingHandler   — _check_onboarding, fresh-brain guidance
         ExpiryCleanupHandler — _maybe_run_expiry_cleanup, auto-delete expired
         ScheduledConsolidationHandler — periodic background consolidation
+        VersionCheckHandler  — background PyPI version check + update hints
     """
 
     def __init__(self) -> None:
@@ -292,6 +295,12 @@ async def run_mcp_server() -> None:
     except Exception:
         logger.debug("Scheduled consolidation startup failed (non-critical)", exc_info=True)
 
+    # Start background version check if configured
+    try:
+        await server.maybe_start_version_check()
+    except Exception:
+        logger.debug("Version check startup failed (non-critical)", exc_info=True)
+
     try:
         while True:
             try:
@@ -329,6 +338,7 @@ async def run_mcp_server() -> None:
         server.cancel_mem0_sync()
         server.cancel_expiry_cleanup()
         server.cancel_scheduled_consolidation()
+        server.cancel_version_check()
 
         # Close aiosqlite connection before event loop exits to prevent
         # "Event loop is closed" noise from the background thread.

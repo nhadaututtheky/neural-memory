@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-02-18
+
+### Added
+
+- **Onboarding flow** — Detects fresh brain (0 neurons + 0 fibers) and surfaces a 4-step getting-started guide on the first tool call (`_remember`, `_recall`, `_context`, `_stats`). Shows once per server instance.
+- **Background expiry cleanup** — Fire-and-forget task auto-deletes expired `TypedMemory` + underlying fibers on a configurable interval (default 12h, max 100/run). Fires `MEMORY_EXPIRED` hooks. Piggybacks on `_check_maintenance()`.
+- **Scheduled consolidation** — Background `asyncio` loop runs consolidation every 24h (configurable strategies: prune, merge, enrich). Shares `_last_consolidation_at` with `MaintenanceHandler` to prevent overlap. Initial delay of one full interval avoids triggering on restart.
+- **Version check handler** — Background task checks PyPI every 24h for newer versions of `neural-memory`. Caches result and surfaces `update_hint` in `_remember`, `_recall`, `_stats` responses when an update is available. Uses `urllib` (no extra deps), validates HTTPS scheme.
+- **Expiry alerts** — `warn_expiry_days` parameter on `nmem_recall`; expiring-soon count in health pulse thresholds
+- **Evolution dashboard** — `/api/evolution` REST endpoint + dashboard UI tab for brain maturation metrics (stage distribution, plasticity, proficiency)
+
+### Changed
+
+- **MaintenanceConfig** — Added 8 new config fields: `expiry_cleanup_enabled`, `expiry_cleanup_interval_hours`, `expiry_cleanup_max_per_run`, `scheduled_consolidation_enabled`, `scheduled_consolidation_interval_hours`, `scheduled_consolidation_strategies`, `version_check_enabled`, `version_check_interval_hours`
+- **MCPServer mixin chain** — Added `OnboardingHandler`, `ExpiryCleanupHandler`, `ScheduledConsolidationHandler`, `VersionCheckHandler` mixins
+- **Server lifecycle** — `run_mcp_server()` now starts scheduled consolidation + version check at startup, cancels all background tasks on shutdown
+
 ## [2.4.0] - 2026-02-17
 
 ### Security
