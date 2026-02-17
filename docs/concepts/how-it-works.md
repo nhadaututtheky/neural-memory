@@ -196,6 +196,54 @@ Compressed: [1 summary neuron: "API design meeting with Alice"]
 | Multi-hop | Multiple queries | Single traversal |
 | Memory lifecycle | Static | Dynamic decay/reinforce |
 
+## Smart Context Optimization (v2.6.0+)
+
+When you request context (`nmem_context`), NeuralMemory doesn't just return the most recent memories. It uses a **5-factor composite scoring** system to select the most relevant items:
+
+```
+Score = 0.30 * activation     # How recently/actively recalled
+      + 0.25 * priority       # User-assigned importance (0-10)
+      + 0.20 * frequency      # How often accessed
+      + 0.15 * conductivity   # Fiber signal quality
+      + 0.10 * freshness      # Creation recency
+```
+
+After scoring, the pipeline:
+
+1. **Sorts** items by composite score (highest first)
+2. **Deduplicates** using SimHash fingerprints (removes near-duplicates)
+3. **Allocates token budgets** proportionally to scores (higher-scored items get more tokens)
+4. **Truncates** oversized items to fit their budget
+
+This ensures you get the most relevant, diverse context within your token limit.
+
+## Recall Pattern Learning (v2.6.0+)
+
+NeuralMemory learns from your query patterns. When you repeatedly look up related topics in sequence (e.g., "authentication" followed by "middleware"), the system detects these co-occurrence patterns and materializes them as CONCEPT neurons connected by BEFORE synapses.
+
+```
+Session 1: recall "auth"     → recall "middleware"
+Session 2: recall "jwt"      → recall "express routing"
+Session 3: recall "tokens"   → recall "middleware setup"
+                    ↓
+           Pattern detected: auth topics → middleware topics
+                    ↓
+           CONCEPT("auth") ──BEFORE──► CONCEPT("middleware")
+```
+
+On subsequent recalls, NeuralMemory suggests **related queries** by following these learned patterns, helping you discover information you frequently need together.
+
+## Proactive Alerts (v2.6.0+)
+
+NeuralMemory monitors brain health and creates persistent alerts when issues are detected:
+
+- **High neuron/fiber/synapse count** — Brain needs consolidation
+- **Low connectivity** — Neurons are isolated, needs enrichment
+- **Expired memories** — Stale content needs cleanup
+- **Stale fibers** — Unused pathways degrading
+
+Alerts follow a lifecycle: `active → seen → acknowledged → resolved`. They're surfaced as a `pending_alerts` count in regular tool responses, and can be managed via `nmem_alerts`.
+
 ## Training from External Sources
 
 Beyond encoding individual memories, NeuralMemory can learn domain knowledge from structured sources.

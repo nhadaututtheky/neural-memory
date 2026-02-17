@@ -150,6 +150,7 @@ pip install neural-memory[all]      # All features
     - `nmem_stats` - Brain statistics
     - `nmem_auto` - Auto-capture memories
     - `nmem_train_db` - Train brain from database schema
+    - `nmem_alerts` - View and manage brain health alerts
 
 ## VS Code Extension
 
@@ -192,6 +193,9 @@ nmem serve
 - **Brain Sharing** - Export, import, merge brains
 - **DB-to-Brain Training** - Teach brains to understand database schemas (v1.6.0+)
 - **AI Agent Skills** - Composable memory-intake, memory-audit, memory-evolution workflows (v1.6.0+)
+- **Smart Context Optimizer** - 5-factor composite scoring + SimHash dedup + token budgeting (v2.6.0+)
+- **Proactive Alerts** - Persistent brain health alerts with lifecycle management (v2.6.0+)
+- **Recall Pattern Learning** - Topic co-occurrence mining + follow-up suggestions (v2.6.0+)
 
 ## Next Steps
 

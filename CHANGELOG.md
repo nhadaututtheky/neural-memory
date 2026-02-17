@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-02-18
+
+### Added
+
+- **Smart Context Optimizer** — Composite scoring replaces naive loop in `nmem_context`
+  - 5-factor weighted score: activation (0.30) + priority (0.25) + frequency (0.20) + conductivity (0.15) + freshness (0.10)
+  - SimHash-based deduplication removes near-duplicate content before token budgeting
+  - Proportional token budget allocation: items get budget proportional to their composite score
+  - Items below minimum budget (20 tokens) are dropped; oversized items are truncated
+  - `optimization_stats` field in response shows `items_dropped` and `top_score`
+- **Proactive Alerts Queue** — Persistent brain health alerts with full lifecycle management
+  - `Alert` frozen dataclass with `AlertStatus` (active → seen → acknowledged → resolved) and 7 `AlertType` enum values
+  - `SQLiteAlertsMixin` with CRUD operations: `record_alert` (6h dedup cooldown), `get_active_alerts`, `mark_alerts_seen`, `mark_alert_acknowledged`, `resolve_alerts_by_type`
+  - `AlertHandler` MCP mixin: `nmem_alerts` tool (list/acknowledge actions)
+  - Auto-creation from health pulse hints; auto-resolution when conditions clear
+  - Pending alert count surfaced in `nmem_remember`, `nmem_recall`, `nmem_context` responses
+  - Schema migration v13 → v14 (alerts table + indexes)
+- **Recall Pattern Learning** — Discover and materialize query topic co-occurrence patterns
+  - `extract_topics()` — keyword-based topic extraction from recall queries (min_length=3, cap 10)
+  - `mine_query_topic_pairs()` — session-grouped, time-windowed (600s default) pair mining
+  - `extract_pattern_candidates()` — frequency filtering + confidence scoring
+  - `learn_query_patterns()` — materializes patterns as CONCEPT neurons + BEFORE synapses with `{"_query_pattern": True}` metadata
+  - `suggest_follow_up_queries()` — follows BEFORE synapses for related topic suggestions
+  - Integrated into LEARN_HABITS consolidation strategy
+  - `related_queries` field added to `nmem_recall` response
+
+### Changed
+
+- **MCPServer mixin chain** — Added `AlertHandler` mixin (15 → 16 handler mixins)
+- **MCP tools** — Expanded from 20 to 21 (`nmem_alerts`)
+- **SQLite schema** — Version 13 → 14 (alerts table)
+- **`nmem_context` response** — Now includes `optimization_stats` when items are dropped
+- **`nmem_recall` response** — Now includes `related_queries` from learned patterns
+- Tests: 2314 passed (up from 2291)
+
 ## [2.5.0] - 2026-02-18
 
 ### Added

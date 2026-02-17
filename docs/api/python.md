@@ -403,6 +403,94 @@ for table in snapshot.tables:
 print(f"Fingerprint: {snapshot.schema_fingerprint}")
 ```
 
+### ContextOptimizer
+
+Smart context selection with composite scoring (v2.6.0+).
+
+```python
+from neural_memory.engine.context_optimizer import (
+    optimize_context,
+    compute_composite_score,
+    ContextItem,
+    ContextPlan,
+)
+
+# Optimize fibers for context injection
+plan = await optimize_context(storage, fibers, max_tokens=4000)
+
+print(f"Items: {len(plan.items)}")
+print(f"Tokens used: {plan.total_tokens}")
+print(f"Dropped: {plan.dropped_count}")
+
+for item in plan.items:
+    print(f"  {item.fiber_id}: score={item.score:.3f}, tokens={item.token_count}")
+```
+
+**Composite Score Weights:**
+
+| Factor | Weight | Description |
+|--------|--------|-------------|
+| Activation | 0.30 | Neuron activation level |
+| Priority | 0.25 | TypedMemory priority (0-10) |
+| Frequency | 0.20 | Fiber access count (capped at 20) |
+| Conductivity | 0.15 | Fiber signal quality (0.0-1.0) |
+| Freshness | 0.10 | Creation recency score |
+
+### QueryPatternMining
+
+Learn topic co-occurrence patterns from recall history (v2.6.0+).
+
+```python
+from neural_memory.engine.query_pattern_mining import (
+    extract_topics,
+    mine_query_topic_pairs,
+    learn_query_patterns,
+    suggest_follow_up_queries,
+)
+
+# Extract topics from a query
+topics = extract_topics("authentication jwt tokens")
+# → ["authentication", "jwt", "tokens"]
+
+# Mine patterns from recall events (called during consolidation)
+report = await learn_query_patterns(storage, brain.config, utcnow())
+print(f"Topics: {report.topics_extracted}")
+print(f"Patterns: {report.patterns_learned}")
+
+# Get follow-up suggestions based on learned patterns
+suggestions = await suggest_follow_up_queries(storage, topics, brain.config)
+# → ["middleware", "routing", "express"] (if learned)
+```
+
+### Alert
+
+Proactive brain health alert (v2.6.0+).
+
+```python
+from neural_memory.core.alert import Alert, AlertType, AlertStatus
+
+# Alerts are created automatically by the health pulse system
+# Manage them via storage methods:
+
+# List active alerts
+alerts = await storage.get_active_alerts(limit=50)
+for alert in alerts:
+    print(f"[{alert.severity}] {alert.alert_type}: {alert.message}")
+
+# Mark as seen
+await storage.mark_alerts_seen([alert.id for alert in alerts])
+
+# Acknowledge (prevents auto-resolution)
+await storage.mark_alert_acknowledged(alert_id)
+
+# Auto-resolve by type
+await storage.resolve_alerts_by_type(["high_neuron_count"])
+```
+
+**Alert Types:** `high_neuron_count`, `high_fiber_count`, `high_synapse_count`, `low_connectivity`, `high_orphan_ratio`, `expired_memories`, `stale_fibers`
+
+**Alert Statuses:** `active` → `seen` → `acknowledged` → `resolved`
+
 ## Typed Memories
 
 ```python

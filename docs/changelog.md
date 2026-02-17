@@ -5,6 +5,32 @@ All notable changes to NeuralMemory are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-02-18
+
+### Added
+
+- **Smart Context Optimizer** — Composite 5-factor scoring replaces naive loop in `nmem_context`
+  - Weighted score: activation (0.30) + priority (0.25) + frequency (0.20) + conductivity (0.15) + freshness (0.10)
+  - SimHash deduplication + proportional token budget allocation
+  - `optimization_stats` in response when items are dropped
+- **Proactive Alerts Queue** — Persistent brain health alerts (`nmem_alerts` tool)
+  - Full lifecycle: active → seen → acknowledged → resolved
+  - 7 alert types, 6h dedup cooldown, auto-create from health pulse, auto-resolve
+  - Pending count surfaced in `nmem_remember`, `nmem_recall`, `nmem_context`
+  - Schema migration v13 → v14
+- **Recall Pattern Learning** — Query topic co-occurrence mining
+  - Session-grouped topic pair mining with time-window filtering
+  - Materializes patterns as CONCEPT neurons + BEFORE synapses
+  - `related_queries` suggestions in `nmem_recall` response
+  - Integrated into LEARN_HABITS consolidation
+
+### Changed
+
+- MCP tools: 20 → 21 (`nmem_alerts`)
+- Tests: 2314 passed
+
+---
+
 ## [2.0.0] - 2026-02-13
 
 ### Added

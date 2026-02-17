@@ -19,6 +19,11 @@ NeuralMemory's layered architecture for memory management.
 │  │              │  │              │  │   Engine     │       │
 │  └──────────────┘  └──────────────┘  └──────────────┘       │
 │                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │  Context     │  │  Query       │  │  Alert       │       │
+│  │  Optimizer   │  │  Patterns    │  │  Handler     │       │
+│  └──────────────┘  └──────────────┘  └──────────────┘       │
+│                                                              │
 ├─────────────────────────────────────────────────────────────┤
 │                    Extraction Layer                          │
 │  ┌───────────┐  ┌────────────┐  ┌──────────────────┐        │
@@ -66,6 +71,9 @@ Specialized pipelines for training brains from external sources:
 - **SchemaIntrospector** - Database schema metadata extraction (SQLite dialect)
 - **KnowledgeExtractor** - Transform schema snapshots into confidence-scored teachable knowledge
 - **ConsolidationEngine** - ENRICH, DREAM, LEARN_HABITS, MATURE, INFER, PRUNE strategies
+- **ContextOptimizer** - Composite scoring, SimHash dedup, token budget allocation for `nmem_context`
+- **QueryPatternMining** - Topic co-occurrence mining from recall events, pattern materialization
+- **AlertHandler** - Persistent alert lifecycle (active → seen → acknowledged → resolved)
 
 ### Extraction Layer
 
@@ -269,6 +277,7 @@ src/neural_memory/
 │   ├── synapse.py             # Synapse, SynapseType, Direction
 │   ├── fiber.py               # Fiber (with pathway, conductivity)
 │   ├── memory_types.py        # TypedMemory, MemoryType, Priority
+│   ├── alert.py               # Alert, AlertType, AlertStatus
 │   └── project.py             # Project
 ├── engine/
 │   ├── encoder.py             # MemoryEncoder
@@ -282,7 +291,9 @@ src/neural_memory/
 │   ├── db_knowledge.py           # Schema → teachable knowledge extraction
 │   ├── db_trainer.py             # DB-to-Brain training orchestrator
 │   ├── doc_chunker.py            # Document chunking
-│   └── doc_trainer.py            # Doc-to-Brain training pipeline
+│   ├── doc_trainer.py            # Doc-to-Brain training pipeline
+│   ├── context_optimizer.py      # Smart context scoring + dedup + budgeting
+│   └── query_pattern_mining.py   # Recall topic co-occurrence mining
 ├── extraction/
 │   ├── parser.py              # QueryParser, Stimulus
 │   ├── router.py              # QueryRouter
@@ -300,6 +311,7 @@ src/neural_memory/
 │   ├── sqlite_typed.py        # TypedMemory/Project mixin
 │   ├── sqlite_projects.py     # Project CRUD mixin
 │   ├── sqlite_brain_ops.py    # Brain import/export mixin
+│   ├── sqlite_alerts.py       # Proactive alerts CRUD mixin
 │   ├── memory_store.py        # InMemoryStorage (core)
 │   ├── memory_brain_ops.py    # InMemory brain operations
 │   ├── memory_collections.py  # InMemory neuron/synapse/fiber ops
@@ -315,6 +327,7 @@ src/neural_memory/
 │   ├── tool_schemas.py        # MCP tool definitions
 │   ├── auto_capture.py        # Pattern-based memory detection
 │   ├── db_train_handler.py       # Database schema training handler
+│   ├── alert_handler.py          # Proactive alerts lifecycle
 │   └── prompt.py              # System prompts
 ├── cli/
 │   ├── main.py                # Entry point, app registration

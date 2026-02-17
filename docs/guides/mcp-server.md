@@ -161,6 +161,65 @@ Auto-capture memories from conversation text.
 - `save` - Save previously detected items
 - `process` - Analyze and save in one call
 
+### nmem_alerts
+
+View and manage brain health alerts.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `action` | string | Yes | "list" or "acknowledge" |
+| `alert_id` | string | No | Alert ID (required for acknowledge) |
+| `limit` | integer | No | Max alerts to list (default: 50) |
+
+**Actions:**
+
+- `list` — View active and seen alerts, sorted by severity
+- `acknowledge` — Mark an alert as handled (prevents auto-resolution)
+
+**Example — List:**
+```json
+{
+  "action": "list",
+  "limit": 10
+}
+```
+
+**Response:**
+```json
+{
+  "alerts": [
+    {
+      "id": "a1b2c3d4",
+      "alert_type": "high_neuron_count",
+      "severity": "medium",
+      "message": "High neuron count (5000). Consider running consolidation.",
+      "recommended_action": "prune",
+      "status": "active",
+      "created_at": "2026-02-18T10:30:00"
+    }
+  ],
+  "total": 1
+}
+```
+
+**Alert Types:** `high_neuron_count`, `high_fiber_count`, `high_synapse_count`, `low_connectivity`, `high_orphan_ratio`, `expired_memories`, `stale_fibers`
+
+**Alert Lifecycle:**
+
+```
+active → seen → acknowledged → resolved
+  │         │         │              │
+  │  (auto on    (manual via    (auto when
+  │   next tool   acknowledge)   condition
+  │   call)                      clears)
+  │
+  └── 6h dedup cooldown (same type suppressed)
+```
+
+Alerts are created automatically from health checks and surfaced as `pending_alerts` count in `nmem_remember`, `nmem_recall`, and `nmem_context` responses.
+
 ### nmem_train_db
 
 Train a brain from database schema knowledge.
