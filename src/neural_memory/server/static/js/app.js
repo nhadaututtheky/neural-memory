@@ -32,7 +32,7 @@ function dashboardApp() {
     graphFilter: '',
     graphEmpty: false,
     toasts: [],
-    loading: { stats: true, health: true, graph: false, integrations: false, activity: false, timeline: false },
+    loading: { stats: true, health: true, graph: false, integrations: false, activity: false, timeline: false, evolution: false },
     _radarChart: null,
     _graphLoaded: false,
     _healthData: null,
@@ -63,7 +63,12 @@ function dashboardApp() {
     diagramType: 'fiber_structure',
     _diagramsLoaded: false,
 
-    // Tab definitions (7 tabs)
+    // Evolution state
+    _evolutionData: null,
+    _evolutionChart: null,
+    _evolutionLoaded: false,
+
+    // Tab definitions (8 tabs)
     tabs: [
       { id: 'overview', label: 'overview', icon: 'layout-dashboard' },
       { id: 'graph', label: 'neural_graph', icon: 'share-2' },
@@ -71,6 +76,7 @@ function dashboardApp() {
       { id: 'diagrams', label: 'diagrams', icon: 'git-branch' },
       { id: 'integrations', label: 'integrations', icon: 'puzzle' },
       { id: 'health', label: 'brain_health', icon: 'heart-pulse' },
+      { id: 'evolution', label: 'evolution', icon: 'trending-up' },
       { id: 'settings', label: 'settings', icon: 'sliders-horizontal' },
     ],
 
@@ -254,6 +260,11 @@ function dashboardApp() {
         this.initSetupWizards();
         this.initImportSources();
         await this.loadActivity();
+      }
+
+      if (tab === 'evolution' && !this._evolutionLoaded) {
+        this._evolutionLoaded = true;
+        await this.loadEvolution();
       }
 
       if (tab === 'health') {
@@ -830,6 +841,82 @@ function dashboardApp() {
           },
         },
       });
+    },
+
+    // ── Evolution ──────────────────────────────────────
+
+    async loadEvolution() {
+      this.loading = { ...this.loading, evolution: true };
+      try {
+        const resp = await fetch('/api/dashboard/evolution');
+        if (resp.ok) {
+          this._evolutionData = await resp.json();
+          this.$nextTick(() => this.renderStageChart());
+        }
+      } catch (e) {
+        console.error('Failed to load evolution data', e);
+      }
+      this.loading = { ...this.loading, evolution: false };
+      this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+    },
+
+    renderStageChart() {
+      const canvas = document.getElementById('evolution-stage-chart');
+      if (!canvas || !this._evolutionData?.stage_distribution) return;
+
+      if (this._evolutionChart) {
+        this._evolutionChart.destroy();
+      }
+
+      const sd = this._evolutionData.stage_distribution;
+      this._evolutionChart = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+          labels: ['Short-term', 'Working', 'Episodic', 'Semantic'],
+          datasets: [{
+            data: [sd.short_term, sd.working, sd.episodic, sd.semantic],
+            backgroundColor: ['#94A3B8', '#F59E0B', '#3B82F6', '#22C55E'],
+            borderColor: '#0F172A',
+            borderWidth: 2,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                color: '#F8FAFC',
+                font: { family: 'JetBrains Mono, monospace', size: 11 },
+                padding: 16,
+              },
+            },
+          },
+        },
+      });
+    },
+
+    stageList() {
+      const sd = this._evolutionData?.stage_distribution;
+      if (!sd) return [];
+      const total = sd.total || 1;
+      return [
+        { key: 'short_term', label: 'Short-term', count: sd.short_term, color: '#94A3B8', pct: ((sd.short_term / total) * 100).toFixed(0) },
+        { key: 'working', label: 'Working', count: sd.working, color: '#F59E0B', pct: ((sd.working / total) * 100).toFixed(0) },
+        { key: 'episodic', label: 'Episodic', count: sd.episodic, color: '#3B82F6', pct: ((sd.episodic / total) * 100).toFixed(0) },
+        { key: 'semantic', label: 'Semantic', count: sd.semantic, color: '#22C55E', pct: ((sd.semantic / total) * 100).toFixed(0) },
+      ];
+    },
+
+    proficiencyColor(level) {
+      const map = { junior: 'text-nm-muted', senior: 'text-nm-info', expert: 'text-nm-cta' };
+      return map[level] || 'text-nm-muted';
+    },
+
+    proficiencyBarColor(level) {
+      const map = { junior: 'bg-slate-400', senior: 'bg-blue-400', expert: 'bg-emerald-400' };
+      return map[level] || 'bg-slate-400';
     },
 
     // ── Utility ────────────────────────────────────────

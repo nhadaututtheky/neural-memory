@@ -83,6 +83,12 @@ def get_tool_schemas() -> list[dict[str, Any]]:
                         "type": "boolean",
                         "description": "Include full conflict details in response (default: false). When false, only has_conflicts flag and conflict_count are returned.",
                     },
+                    "warn_expiry_days": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 90,
+                        "description": "If set, warn about memories expiring within this many days. Adds expiry_warnings to response.",
+                    },
                 },
                 "required": ["query"],
             },
@@ -102,6 +108,12 @@ def get_tool_schemas() -> list[dict[str, Any]]:
                     "fresh_only": {
                         "type": "boolean",
                         "description": "Only include memories < 30 days old",
+                    },
+                    "warn_expiry_days": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 90,
+                        "description": "If set, warn about memories expiring within this many days. Adds expiry_warnings to response.",
                     },
                 },
             },

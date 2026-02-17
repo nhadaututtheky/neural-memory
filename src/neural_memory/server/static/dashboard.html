@@ -859,6 +859,182 @@
         </div>
       </section>
 
+      <!-- ═══ Evolution Tab ════════════════════════════ -->
+      <section x-show="activeTab === 'evolution'" x-transition role="tabpanel" aria-label="Brain Evolution">
+        <h2 class="text-2xl font-code font-bold mb-6" x-text="t('evolution')"></h2>
+
+        <!-- Loading -->
+        <div x-show="loading.evolution" class="flex items-center justify-center py-16">
+          <div class="spinner spinner-lg"></div>
+        </div>
+
+        <!-- Evolution content -->
+        <template x-if="!loading.evolution && _evolutionData">
+          <div>
+            <!-- Row 1: Proficiency + Agent Signals + Internal Metrics -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+              <!-- Proficiency Gauge -->
+              <div class="bg-nm-primary border border-nm-border rounded-xl p-6 flex flex-col items-center justify-center">
+                <div class="text-xs text-nm-muted font-code uppercase tracking-wider mb-2" x-text="t('proficiency_level')"></div>
+                <div class="text-4xl font-code font-bold mb-1"
+                     :class="proficiencyColor(_evolutionData.proficiency_level)"
+                     x-text="_evolutionData.proficiency_level.toUpperCase()"></div>
+                <div class="text-3xl font-code font-bold" x-text="_evolutionData.proficiency_index + '/100'"></div>
+                <div class="w-full mt-4 bg-nm-secondary rounded-full h-3">
+                  <div class="h-3 rounded-full transition-all duration-500"
+                       :class="proficiencyBarColor(_evolutionData.proficiency_level)"
+                       :style="'width: ' + _evolutionData.proficiency_index + '%'"></div>
+                </div>
+              </div>
+
+              <!-- Agent Signals -->
+              <div class="bg-nm-primary border border-nm-border rounded-xl p-6">
+                <div class="text-xs text-nm-muted font-code uppercase tracking-wider mb-4" x-text="t('agent_signals')"></div>
+                <div class="space-y-4">
+                  <div>
+                    <div class="flex justify-between text-sm mb-1">
+                      <span class="text-nm-muted" x-text="t('maturity')"></span>
+                      <span class="font-code" x-text="(_evolutionData.maturity_level * 100).toFixed(0) + '%'"></span>
+                    </div>
+                    <div class="w-full bg-nm-secondary rounded-full h-2">
+                      <div class="bg-emerald-400 h-2 rounded-full transition-all" :style="'width: ' + (_evolutionData.maturity_level * 100) + '%'"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="flex justify-between text-sm mb-1">
+                      <span class="text-nm-muted" x-text="t('evo_plasticity')"></span>
+                      <span class="font-code" x-text="(_evolutionData.plasticity * 100).toFixed(0) + '%'"></span>
+                    </div>
+                    <div class="w-full bg-nm-secondary rounded-full h-2">
+                      <div class="bg-blue-400 h-2 rounded-full transition-all" :style="'width: ' + (_evolutionData.plasticity * 100) + '%'"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="flex justify-between text-sm mb-1">
+                      <span class="text-nm-muted" x-text="t('evo_density')"></span>
+                      <span class="font-code" x-text="(_evolutionData.density * 100).toFixed(0) + '%'"></span>
+                    </div>
+                    <div class="w-full bg-nm-secondary rounded-full h-2">
+                      <div class="bg-amber-400 h-2 rounded-full transition-all" :style="'width: ' + (_evolutionData.density * 100) + '%'"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Internal Metrics -->
+              <div class="bg-nm-primary border border-nm-border rounded-xl p-6">
+                <div class="text-xs text-nm-muted font-code uppercase tracking-wider mb-4" x-text="t('internal_metrics')"></div>
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span class="text-nm-muted" x-text="t('semantic_ratio')"></span>
+                    <div class="font-code font-bold" x-text="(_evolutionData.semantic_ratio * 100).toFixed(1) + '%'"></div>
+                  </div>
+                  <div>
+                    <span class="text-nm-muted" x-text="t('topology_coherence')"></span>
+                    <div class="font-code font-bold" x-text="(_evolutionData.topology_coherence * 100).toFixed(1) + '%'"></div>
+                  </div>
+                  <div>
+                    <span class="text-nm-muted" x-text="t('reinforcement_days')"></span>
+                    <div class="font-code font-bold" x-text="_evolutionData.reinforcement_days.toFixed(1)"></div>
+                  </div>
+                  <div>
+                    <span class="text-nm-muted" x-text="t('activity_score')"></span>
+                    <div class="font-code font-bold" x-text="(_evolutionData.activity_score * 100).toFixed(1) + '%'"></div>
+                  </div>
+                  <div>
+                    <span class="text-nm-muted" x-text="t('knowledge_density')"></span>
+                    <div class="font-code font-bold" x-text="_evolutionData.knowledge_density.toFixed(2)"></div>
+                  </div>
+                  <div>
+                    <span class="text-nm-muted" x-text="t('plasticity_index')"></span>
+                    <div class="font-code font-bold" x-text="(_evolutionData.plasticity_index * 100).toFixed(1) + '%'"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Row 2: Stage Distribution Chart + Counts -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6" x-show="_evolutionData.stage_distribution">
+              <div class="bg-nm-primary border border-nm-border rounded-xl p-6">
+                <div class="text-xs text-nm-muted font-code uppercase tracking-wider mb-4" x-text="t('stage_distribution')"></div>
+                <div class="max-w-xs mx-auto">
+                  <canvas id="evolution-stage-chart" width="280" height="280"></canvas>
+                </div>
+              </div>
+
+              <div class="bg-nm-primary border border-nm-border rounded-xl p-6">
+                <div class="text-xs text-nm-muted font-code uppercase tracking-wider mb-4" x-text="t('stage_counts')"></div>
+                <div class="space-y-3">
+                  <template x-for="stage in stageList()" :key="stage.key">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center gap-3">
+                        <div class="w-3 h-3 rounded-full" :style="'background:' + stage.color"></div>
+                        <span class="font-code text-sm" x-text="stage.label"></span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <span class="font-code font-bold" x-text="stage.count"></span>
+                        <span class="text-xs text-nm-muted font-code" x-text="stage.pct + '%'"></span>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+
+            <!-- Row 3: Closest to Semantic -->
+            <div x-show="_evolutionData.closest_to_semantic && _evolutionData.closest_to_semantic.length > 0"
+                 class="bg-nm-primary border border-nm-border rounded-xl p-6 mb-6">
+              <div class="text-xs text-nm-muted font-code uppercase tracking-wider mb-4" x-text="t('closest_to_semantic')"></div>
+              <div class="space-y-4">
+                <template x-for="(prog, i) in _evolutionData.closest_to_semantic" :key="i">
+                  <div class="border border-nm-border rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="font-code text-xs text-nm-muted" x-text="prog.fiber_id.slice(0, 16) + '...'"></span>
+                      <span class="text-xs font-code px-2 py-0.5 rounded bg-nm-secondary" x-text="prog.stage"></span>
+                    </div>
+                    <div class="w-full bg-nm-secondary rounded-full h-2 mb-2">
+                      <div class="bg-emerald-400 h-2 rounded-full transition-all duration-500"
+                           :style="'width: ' + (prog.progress_pct * 100) + '%'"></div>
+                    </div>
+                    <div class="flex justify-between text-xs text-nm-muted">
+                      <span x-text="(prog.progress_pct * 100).toFixed(0) + '%'"></span>
+                      <span x-text="prog.next_step"></span>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <!-- Row 4: Summary KPI cards -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div class="bg-nm-primary border border-nm-border rounded-xl p-4 text-center">
+                <div class="text-2xl font-code font-bold" x-text="_evolutionData.total_fibers"></div>
+                <div class="text-xs text-nm-muted" x-text="t('total_fibers')"></div>
+              </div>
+              <div class="bg-nm-primary border border-nm-border rounded-xl p-4 text-center">
+                <div class="text-2xl font-code font-bold text-emerald-400" x-text="_evolutionData.fibers_at_semantic"></div>
+                <div class="text-xs text-nm-muted" x-text="t('at_semantic')"></div>
+              </div>
+              <div class="bg-nm-primary border border-nm-border rounded-xl p-4 text-center">
+                <div class="text-2xl font-code font-bold text-blue-400" x-text="_evolutionData.fibers_at_episodic"></div>
+                <div class="text-xs text-nm-muted" x-text="t('at_episodic')"></div>
+              </div>
+              <div class="bg-nm-primary border border-nm-border rounded-xl p-4 text-center">
+                <div class="text-2xl font-code font-bold text-amber-400" x-text="(_evolutionData.activity_score * 100).toFixed(0) + '%'"></div>
+                <div class="text-xs text-nm-muted" x-text="t('activity_7d')"></div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- Empty state -->
+        <div x-show="!loading.evolution && !_evolutionData" class="text-center py-16">
+          <i data-lucide="trending-up" class="w-12 h-12 text-nm-muted mx-auto mb-4"></i>
+          <p class="font-code text-lg mb-2" x-text="t('no_evolution_data')"></p>
+          <p class="text-sm text-nm-muted" x-text="t('evolution_empty_hint')"></p>
+        </div>
+      </section>
+
       <!-- ═══ Settings Tab ══════════════════════════════ -->
       <section x-show="activeTab === 'settings'" x-transition role="tabpanel" aria-label="Settings">
         <h2 class="text-2xl font-code font-bold mb-6" x-text="t('settings')"></h2>

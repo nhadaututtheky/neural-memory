@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Literal
 
 from neural_memory.core.fiber import Fiber
 from neural_memory.core.memory_types import MemoryType, Priority, TypedMemory
 from neural_memory.core.project import Project
+from neural_memory.utils.timeutils import utcnow
 
 
 class InMemoryCollectionsMixin:
@@ -185,13 +186,50 @@ class InMemoryCollectionsMixin:
         del self._typed_memories[brain_id][fiber_id]
         return True
 
-    async def get_expired_memories(self) -> list[TypedMemory]:
+    async def get_expired_memories(self, limit: int = 100) -> list[TypedMemory]:
         brain_id = self._get_brain_id()
-        return [tm for tm in self._typed_memories[brain_id].values() if tm.is_expired]
+        limit = min(limit, 1000)
+        result: list[TypedMemory] = []
+        for tm in self._typed_memories[brain_id].values():
+            if tm.is_expired:
+                result.append(tm)
+                if len(result) >= limit:
+                    break
+        return result
 
     async def get_expired_memory_count(self) -> int:
         brain_id = self._get_brain_id()
         return sum(1 for tm in self._typed_memories[brain_id].values() if tm.is_expired)
+
+    async def get_expiring_memories_for_fibers(
+        self,
+        fiber_ids: list[str],
+        within_days: int = 7,
+    ) -> list[TypedMemory]:
+        if not fiber_ids:
+            return []
+        brain_id = self._get_brain_id()
+        now = utcnow()
+        deadline = now + timedelta(days=within_days)
+        fiber_set = set(fiber_ids)
+
+        return [
+            tm
+            for tm in self._typed_memories[brain_id].values()
+            if tm.fiber_id in fiber_set
+            and tm.expires_at is not None
+            and now < tm.expires_at <= deadline
+        ]
+
+    async def get_expiring_memory_count(self, within_days: int = 7) -> int:
+        brain_id = self._get_brain_id()
+        now = utcnow()
+        deadline = now + timedelta(days=within_days)
+        return sum(
+            1
+            for tm in self._typed_memories[brain_id].values()
+            if tm.expires_at is not None and now < tm.expires_at <= deadline
+        )
 
     async def get_project_memories(
         self,

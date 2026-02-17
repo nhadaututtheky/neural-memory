@@ -191,6 +191,12 @@ class MaintenanceConfig:
     auto_consolidate_strategies: tuple[str, ...] = ("prune", "merge")
     consolidate_cooldown_minutes: int = 60
     dream_cooldown_hours: int = 24
+    expiry_cleanup_enabled: bool = True
+    expiry_cleanup_interval_hours: int = 12
+    expiry_cleanup_max_per_run: int = 100
+    scheduled_consolidation_enabled: bool = True
+    scheduled_consolidation_interval_hours: int = 24
+    scheduled_consolidation_strategies: tuple[str, ...] = ("prune", "merge", "enrich")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -207,6 +213,12 @@ class MaintenanceConfig:
             "auto_consolidate_strategies": list(self.auto_consolidate_strategies),
             "consolidate_cooldown_minutes": self.consolidate_cooldown_minutes,
             "dream_cooldown_hours": self.dream_cooldown_hours,
+            "expiry_cleanup_enabled": self.expiry_cleanup_enabled,
+            "expiry_cleanup_interval_hours": self.expiry_cleanup_interval_hours,
+            "expiry_cleanup_max_per_run": self.expiry_cleanup_max_per_run,
+            "scheduled_consolidation_enabled": self.scheduled_consolidation_enabled,
+            "scheduled_consolidation_interval_hours": self.scheduled_consolidation_interval_hours,
+            "scheduled_consolidation_strategies": list(self.scheduled_consolidation_strategies),
         }
 
     @classmethod
@@ -214,6 +226,9 @@ class MaintenanceConfig:
         strategies = data.get("auto_consolidate_strategies", ("prune", "merge"))
         if isinstance(strategies, list):
             strategies = tuple(strategies)
+        sched_strategies = data.get("scheduled_consolidation_strategies", ("prune", "merge", "enrich"))
+        if isinstance(sched_strategies, list):
+            sched_strategies = tuple(sched_strategies)
         return cls(
             enabled=data.get("enabled", True),
             check_interval=data.get("check_interval", 25),
@@ -228,6 +243,12 @@ class MaintenanceConfig:
             auto_consolidate_strategies=strategies,
             consolidate_cooldown_minutes=data.get("consolidate_cooldown_minutes", 60),
             dream_cooldown_hours=data.get("dream_cooldown_hours", 24),
+            expiry_cleanup_enabled=data.get("expiry_cleanup_enabled", True),
+            expiry_cleanup_interval_hours=data.get("expiry_cleanup_interval_hours", 12),
+            expiry_cleanup_max_per_run=data.get("expiry_cleanup_max_per_run", 100),
+            scheduled_consolidation_enabled=data.get("scheduled_consolidation_enabled", True),
+            scheduled_consolidation_interval_hours=data.get("scheduled_consolidation_interval_hours", 24),
+            scheduled_consolidation_strategies=sched_strategies,
         )
 
 
@@ -565,6 +586,12 @@ class UnifiedConfig:
             f"auto_consolidate_strategies = {json.dumps(list(self.maintenance.auto_consolidate_strategies))}",
             f"consolidate_cooldown_minutes = {self.maintenance.consolidate_cooldown_minutes}",
             f"dream_cooldown_hours = {self.maintenance.dream_cooldown_hours}",
+            f"expiry_cleanup_enabled = {'true' if self.maintenance.expiry_cleanup_enabled else 'false'}",
+            f"expiry_cleanup_interval_hours = {self.maintenance.expiry_cleanup_interval_hours}",
+            f"expiry_cleanup_max_per_run = {self.maintenance.expiry_cleanup_max_per_run}",
+            f"scheduled_consolidation_enabled = {'true' if self.maintenance.scheduled_consolidation_enabled else 'false'}",
+            f"scheduled_consolidation_interval_hours = {self.maintenance.scheduled_consolidation_interval_hours}",
+            f"scheduled_consolidation_strategies = {json.dumps(list(self.maintenance.scheduled_consolidation_strategies))}",
             "",
             "# Conflict resolution settings",
             "[conflict]",

@@ -65,6 +65,9 @@ class _FakeServer(MaintenanceHandler):
     async def get_storage(self) -> InMemoryStorage:
         return self._storage
 
+    async def _maybe_run_expiry_cleanup(self) -> int:
+        return 0
+
 
 # ========== MaintenanceConfig tests ==========
 

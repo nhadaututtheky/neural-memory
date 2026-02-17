@@ -65,6 +65,9 @@ class ToolHandler:
         async def _get_active_session(self, storage: SQLiteStorage) -> dict[str, Any] | None:
             raise NotImplementedError
 
+        async def _check_onboarding(self) -> dict[str, Any] | None:
+            raise NotImplementedError
+
     # ──────────────────── Core tool handlers ────────────────────
 
     async def _remember(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -327,6 +330,11 @@ class ToolHandler:
         except Exception:
             logger.warning("Related memory discovery failed (non-critical)", exc_info=True)
 
+        # Onboarding hint for fresh brains
+        onboarding = await self._check_onboarding()
+        if onboarding:
+            response["onboarding"] = onboarding
+
         return response
 
     async def _recall(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -431,6 +439,28 @@ class ToolHandler:
                     if n is not None
                 ]
 
+        # Expiry warnings (opt-in)
+        warn_expiry_days = args.get("warn_expiry_days")
+        if warn_expiry_days is not None and result.fibers_matched:
+            try:
+                expiring = await storage.get_expiring_memories_for_fibers(
+                    fiber_ids=result.fibers_matched,
+                    within_days=int(warn_expiry_days),
+                )
+                if expiring:
+                    response["expiry_warnings"] = [
+                        {
+                            "fiber_id": tm.fiber_id,
+                            "memory_type": tm.memory_type.value,
+                            "days_until_expiry": tm.days_until_expiry,
+                            "priority": tm.priority.value,
+                            "suggestion": "Re-store this memory if still relevant, or set a new expires_days.",
+                        }
+                        for tm in expiring
+                    ]
+            except Exception:
+                logger.debug("Expiry warning check failed", exc_info=True)
+
         await self._record_tool_action("recall", query[:100])
 
         pulse = await self._check_maintenance()
@@ -448,6 +478,11 @@ class ToolHandler:
             },
         )
 
+        # Onboarding hint for fresh brains
+        onboarding = await self._check_onboarding()
+        if onboarding:
+            response["onboarding"] = onboarding
+
         return response
 
     async def _context(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -459,7 +494,11 @@ class ToolHandler:
 
         fibers = await storage.get_fibers(limit=limit * 2 if fresh_only else limit)
         if not fibers:
-            return {"context": "No memories stored yet.", "count": 0}
+            result: dict[str, Any] = {"context": "No memories stored yet.", "count": 0}
+            onboarding = await self._check_onboarding()
+            if onboarding:
+                result["onboarding"] = onboarding
+            return result
 
         if fresh_only:
             from neural_memory.safety.freshness import FreshnessLevel, evaluate_freshness
@@ -487,11 +526,36 @@ class ToolHandler:
 
         await self._record_tool_action("context")
 
-        return {
+        response: dict[str, Any] = {
             "context": context_text,
             "count": len(context_parts),
             "tokens_used": len(context_text.split()),
         }
+
+        # Expiry warnings (opt-in)
+        warn_expiry_days = args.get("warn_expiry_days")
+        if warn_expiry_days is not None and fibers:
+            try:
+                fiber_ids = [f.id for f in fibers]
+                expiring = await storage.get_expiring_memories_for_fibers(
+                    fiber_ids=fiber_ids,
+                    within_days=int(warn_expiry_days),
+                )
+                if expiring:
+                    response["expiry_warnings"] = [
+                        {
+                            "fiber_id": tm.fiber_id,
+                            "memory_type": tm.memory_type.value,
+                            "days_until_expiry": tm.days_until_expiry,
+                            "priority": tm.priority.value,
+                            "suggestion": "Re-store this memory if still relevant, or set a new expires_days.",
+                        }
+                        for tm in expiring
+                    ]
+            except Exception:
+                logger.debug("Expiry warning check failed", exc_info=True)
+
+        return response
 
     async def _todo(self, args: dict[str, Any]) -> dict[str, Any]:
         """Add a TODO."""
@@ -525,7 +589,7 @@ class ToolHandler:
         except Exception:
             logger.debug("Conflict count failed (non-critical)", exc_info=True)
 
-        return {
+        response = {
             "brain": brain.name,
             "neuron_count": stats["neuron_count"],
             "synapse_count": stats["synapse_count"],
@@ -536,6 +600,13 @@ class ToolHandler:
             "newest_memory": stats.get("newest_memory"),
             "conflicts_active": conflicts_active,
         }
+
+        # Onboarding hint for fresh brains
+        onboarding = await self._check_onboarding()
+        if onboarding:
+            response["onboarding"] = onboarding
+
+        return response
 
     async def _health(self, args: dict[str, Any]) -> dict[str, Any]:
         """Run brain health diagnostics."""

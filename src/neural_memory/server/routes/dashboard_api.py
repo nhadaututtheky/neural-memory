@@ -411,3 +411,121 @@ async def get_fiber_diagram(
         neurons=neuron_list,
         synapses=fiber_synapses,
     )
+
+
+# ── Evolution API ────────────────────────────────────
+
+
+class SemanticProgressItem(BaseModel):
+    """Progress of a fiber toward SEMANTIC stage."""
+
+    fiber_id: str
+    stage: str
+    days_in_stage: float
+    days_required: float
+    reinforcement_days: int
+    reinforcement_required: int
+    progress_pct: float
+    next_step: str
+
+
+class StageDistributionResponse(BaseModel):
+    """Distribution of fibers across maturation stages."""
+
+    short_term: int = 0
+    working: int = 0
+    episodic: int = 0
+    semantic: int = 0
+    total: int = 0
+
+
+class EvolutionResponse(BaseModel):
+    """Brain evolution metrics for dashboard."""
+
+    brain: str
+    proficiency_level: str
+    proficiency_index: int
+    maturity_level: float
+    plasticity: float
+    density: float
+    activity_score: float
+    semantic_ratio: float
+    reinforcement_days: float
+    topology_coherence: float
+    plasticity_index: float
+    knowledge_density: float
+    total_neurons: int
+    total_synapses: int
+    total_fibers: int
+    fibers_at_semantic: int
+    fibers_at_episodic: int
+    stage_distribution: StageDistributionResponse | None = None
+    closest_to_semantic: list[SemanticProgressItem] = Field(default_factory=list)
+
+
+@router.get(
+    "/evolution",
+    response_model=EvolutionResponse,
+    summary="Get brain evolution metrics",
+)
+async def get_evolution(
+    storage: Annotated[NeuralStorage, Depends(get_storage)],
+) -> EvolutionResponse:
+    """Get evolution dynamics for the active brain."""
+    from neural_memory.engine.brain_evolution import EvolutionEngine
+    from neural_memory.unified_config import get_config
+
+    brain_name = get_config().current_brain
+
+    try:
+        engine = EvolutionEngine(storage)
+        evo = await engine.analyze(brain_name)
+    except Exception as exc:
+        logger.warning("Evolution analysis failed for brain %s: %s", brain_name, exc)
+        raise HTTPException(status_code=500, detail="Evolution analysis failed")
+
+    stage_dist = None
+    if evo.stage_distribution is not None:
+        stage_dist = StageDistributionResponse(
+            short_term=evo.stage_distribution.short_term,
+            working=evo.stage_distribution.working,
+            episodic=evo.stage_distribution.episodic,
+            semantic=evo.stage_distribution.semantic,
+            total=evo.stage_distribution.total,
+        )
+
+    closest = [
+        SemanticProgressItem(
+            fiber_id=p.fiber_id,
+            stage=p.stage,
+            days_in_stage=round(p.days_in_stage, 2),
+            days_required=round(p.days_required, 2),
+            reinforcement_days=p.reinforcement_days,
+            reinforcement_required=p.reinforcement_required,
+            progress_pct=round(p.progress_pct, 4),
+            next_step=p.next_step,
+        )
+        for p in evo.closest_to_semantic
+    ]
+
+    return EvolutionResponse(
+        brain=evo.brain_name,
+        proficiency_level=evo.proficiency_level.value,
+        proficiency_index=evo.proficiency_index,
+        maturity_level=round(evo.maturity_level, 4),
+        plasticity=round(evo.plasticity, 4),
+        density=round(evo.density, 4),
+        activity_score=round(evo.activity_score, 4),
+        semantic_ratio=round(evo.semantic_ratio, 4),
+        reinforcement_days=round(evo.reinforcement_days, 2),
+        topology_coherence=round(evo.topology_coherence, 4),
+        plasticity_index=round(evo.plasticity_index, 4),
+        knowledge_density=round(evo.knowledge_density, 4),
+        total_neurons=evo.total_neurons,
+        total_synapses=evo.total_synapses,
+        total_fibers=evo.total_fibers,
+        fibers_at_semantic=evo.fibers_at_semantic,
+        fibers_at_episodic=evo.fibers_at_episodic,
+        stage_distribution=stage_dist,
+        closest_to_semantic=closest,
+    )

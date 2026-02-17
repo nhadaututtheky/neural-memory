@@ -18,12 +18,11 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-
-from neural_memory.utils.timeutils import utcnow
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from neural_memory.core.trigger_engine import TriggerResult, TriggerType
+from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
     from neural_memory.unified_config import MaintenanceConfig
@@ -138,6 +137,13 @@ class MaintenanceHandler:
         except Exception:
             logger.debug("Health pulse: get_expired_memory_count failed", exc_info=True)
 
+        # Expiring-soon count (cheap COUNT query)
+        expiring_soon_count = 0
+        try:
+            expiring_soon_count = await storage.get_expiring_memory_count(within_days=7)
+        except Exception:
+            logger.debug("Health pulse: get_expiring_memory_count failed", exc_info=True)
+
         # Stale fiber count (cheap COUNT query)
         stale_fiber_count = 0
         try:
@@ -154,6 +160,7 @@ class MaintenanceHandler:
             connectivity=connectivity,
             orphan_ratio=orphan_ratio,
             expired_memory_count=expired_memory_count,
+            expiring_soon_count=expiring_soon_count,
             stale_fiber_ratio=stale_fiber_ratio,
             cfg=cfg,
         )
@@ -322,6 +329,9 @@ class MaintenanceHandler:
             if pulse.should_consolidate:
                 await self._maybe_auto_consolidate(pulse)
 
+            # Trigger expiry cleanup if due
+            await self._maybe_run_expiry_cleanup()  # type: ignore[attr-defined]
+
         return pulse
 
 
@@ -333,6 +343,7 @@ def _evaluate_thresholds(
     connectivity: float,
     orphan_ratio: float,
     expired_memory_count: int = 0,
+    expiring_soon_count: int = 0,
     stale_fiber_ratio: float = 0.0,
     cfg: MaintenanceConfig,
 ) -> list[HealthHint]:
@@ -398,6 +409,16 @@ def _evaluate_thresholds(
                 "Consider cleanup via nmem list --expired.",
                 severity=HintSeverity.LOW,
                 recommended_strategy="prune",
+            )
+        )
+
+    if expiring_soon_count > 0:
+        hints.append(
+            HealthHint(
+                message=f"{expiring_soon_count} memories expiring within 7 days. "
+                "Use nmem_recall with warn_expiry_days=7 to identify them.",
+                severity=HintSeverity.LOW,
+                recommended_strategy="none",
             )
         )
 

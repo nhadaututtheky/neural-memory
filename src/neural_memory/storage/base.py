@@ -663,8 +663,11 @@ class NeuralStorage(ABC):
         """
         raise NotImplementedError
 
-    async def get_expired_memories(self) -> list[TypedMemory]:
-        """Get all expired typed memories for the current brain.
+    async def get_expired_memories(self, limit: int = 100) -> list[TypedMemory]:
+        """Get expired typed memories for the current brain.
+
+        Args:
+            limit: Maximum number of expired memories to return.
 
         Returns:
             List of expired typed memories
@@ -678,6 +681,38 @@ class NeuralStorage(ABC):
 
         Returns:
             Number of expired typed memories
+        """
+        raise NotImplementedError
+
+    async def get_expiring_memories_for_fibers(
+        self,
+        fiber_ids: list[str],
+        within_days: int = 7,
+    ) -> list[TypedMemory]:
+        """Get typed memories expiring within N days for given fibers.
+
+        Returns only memories that are NOT yet expired but WILL expire
+        within the specified window.
+
+        Args:
+            fiber_ids: Fiber IDs to check
+            within_days: Number of days from now to check
+
+        Returns:
+            List of TypedMemory objects expiring within the window
+        """
+        raise NotImplementedError
+
+    async def get_expiring_memory_count(self, within_days: int = 7) -> int:
+        """Count typed memories expiring within N days for current brain.
+
+        Cheap COUNT query — avoids materializing full objects.
+
+        Args:
+            within_days: Days from now
+
+        Returns:
+            Count of soon-to-expire memories
         """
         raise NotImplementedError
 

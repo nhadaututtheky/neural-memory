@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from neural_memory.core.memory_types import MemoryType, Priority, TypedMemory
@@ -152,14 +153,16 @@ class SQLiteTypedMemoryMixin:
 
         return cursor.rowcount > 0
 
-    async def get_expired_memories(self) -> list[TypedMemory]:
+    async def get_expired_memories(self, limit: int = 100) -> list[TypedMemory]:
         conn = self._ensure_conn()
         brain_id = self._get_brain_id()
+        limit = min(limit, 1000)
 
         async with conn.execute(
             """SELECT * FROM typed_memories
-               WHERE brain_id = ? AND expires_at IS NOT NULL AND expires_at <= ?""",
-            (brain_id, utcnow().isoformat()),
+               WHERE brain_id = ? AND expires_at IS NOT NULL AND expires_at <= ?
+               LIMIT ?""",
+            (brain_id, utcnow().isoformat(), limit),
         ) as cursor:
             rows = await cursor.fetchall()
             return [row_to_typed_memory(row) for row in rows]
@@ -172,6 +175,48 @@ class SQLiteTypedMemoryMixin:
             """SELECT COUNT(*) FROM typed_memories
                WHERE brain_id = ? AND expires_at IS NOT NULL AND expires_at <= ?""",
             (brain_id, utcnow().isoformat()),
+        ) as cursor:
+            row = await cursor.fetchone()
+            return row[0] if row else 0
+
+    async def get_expiring_memories_for_fibers(
+        self,
+        fiber_ids: list[str],
+        within_days: int = 7,
+    ) -> list[TypedMemory]:
+        if not fiber_ids:
+            return []
+        conn = self._ensure_conn()
+        brain_id = self._get_brain_id()
+        now = utcnow()
+        now_iso = now.isoformat()
+        deadline_iso = (now + timedelta(days=within_days)).isoformat()
+
+        placeholders = ",".join("?" for _ in fiber_ids)
+        query = f"""SELECT * FROM typed_memories
+                    WHERE brain_id = ?
+                      AND fiber_id IN ({placeholders})
+                      AND expires_at IS NOT NULL
+                      AND expires_at > ?
+                      AND expires_at <= ?"""
+        params: list[Any] = [brain_id, *fiber_ids, now_iso, deadline_iso]
+
+        async with conn.execute(query, params) as cursor:
+            rows = await cursor.fetchall()
+            return [row_to_typed_memory(row) for row in rows]
+
+    async def get_expiring_memory_count(self, within_days: int = 7) -> int:
+        conn = self._ensure_conn()
+        brain_id = self._get_brain_id()
+        now = utcnow()
+        now_iso = now.isoformat()
+        deadline_iso = (now + timedelta(days=within_days)).isoformat()
+
+        async with conn.execute(
+            """SELECT COUNT(*) FROM typed_memories
+               WHERE brain_id = ? AND expires_at IS NOT NULL
+                 AND expires_at > ? AND expires_at <= ?""",
+            (brain_id, now_iso, deadline_iso),
         ) as cursor:
             row = await cursor.fetchone()
             return row[0] if row else 0

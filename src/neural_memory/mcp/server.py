@@ -37,10 +37,13 @@ from neural_memory.mcp.auto_handler import AutoHandler
 from neural_memory.mcp.conflict_handler import ConflictHandler
 from neural_memory.mcp.db_train_handler import DBTrainHandler
 from neural_memory.mcp.eternal_handler import EternalHandler
+from neural_memory.mcp.expiry_cleanup_handler import ExpiryCleanupHandler
 from neural_memory.mcp.index_handler import IndexHandler
 from neural_memory.mcp.maintenance_handler import MaintenanceHandler
 from neural_memory.mcp.mem0_sync_handler import Mem0SyncHandler
+from neural_memory.mcp.onboarding_handler import OnboardingHandler
 from neural_memory.mcp.prompt import get_system_prompt
+from neural_memory.mcp.scheduled_consolidation_handler import ScheduledConsolidationHandler
 from neural_memory.mcp.session_handler import SessionHandler
 from neural_memory.mcp.tool_handlers import ToolHandler
 from neural_memory.mcp.tool_schemas import get_tool_schemas
@@ -80,6 +83,9 @@ class MCPServer(
     DBTrainHandler,
     MaintenanceHandler,
     Mem0SyncHandler,
+    OnboardingHandler,
+    ExpiryCleanupHandler,
+    ScheduledConsolidationHandler,
 ):
     """MCP server that exposes NeuralMemory tools.
 
@@ -96,6 +102,9 @@ class MCPServer(
         DBTrainHandler      — _train_db (train DB schema into brain, status)
         MaintenanceHandler  — _check_maintenance, health pulse
         Mem0SyncHandler     — maybe_start_mem0_sync, background auto-sync
+        OnboardingHandler   — _check_onboarding, fresh-brain guidance
+        ExpiryCleanupHandler — _maybe_run_expiry_cleanup, auto-delete expired
+        ScheduledConsolidationHandler — periodic background consolidation
     """
 
     def __init__(self) -> None:
@@ -277,6 +286,12 @@ async def run_mcp_server() -> None:
     except Exception:
         logger.debug("Mem0 auto-sync startup failed (non-critical)", exc_info=True)
 
+    # Start scheduled consolidation loop if configured
+    try:
+        await server.maybe_start_scheduled_consolidation()
+    except Exception:
+        logger.debug("Scheduled consolidation startup failed (non-critical)", exc_info=True)
+
     try:
         while True:
             try:
@@ -310,8 +325,10 @@ async def run_mcp_server() -> None:
             except KeyboardInterrupt:
                 break
     finally:
-        # Cancel background Mem0 sync if still running
+        # Cancel background tasks
         server.cancel_mem0_sync()
+        server.cancel_expiry_cleanup()
+        server.cancel_scheduled_consolidation()
 
         # Close aiosqlite connection before event loop exits to prevent
         # "Event loop is closed" noise from the background thread.
