@@ -44,7 +44,7 @@ def run_async(coro: Coroutine[Any, Any, T]) -> T:
                 if hasattr(storage, "close"):
                     try:
                         await storage.close()
-                    except Exception:
+                    except (OSError, RuntimeError):
                         logger.debug("Failed to close storage during cleanup", exc_info=True)
             _active_storages.clear()
             # Yield once so any pending callbacks from aiosqlite worker

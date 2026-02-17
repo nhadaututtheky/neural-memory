@@ -751,9 +751,150 @@ phases:
     modules: [mcp/, cli/]
     loc: 10749
     files: 41
-    status: PENDING
-    findings: []
-    fixes: []
+    status: COMPLETE
+    findings:
+      # --- PATH TRAVERSAL (CRITICAL/HIGH) ---
+      - id: P4-001
+        severity: CRITICAL
+        category: PATH_SECURITY
+        desc: "cli/commands/tools.py:481 — hooks --path param used directly without resolve()"
+        files: [cli/commands/tools.py]
+        status: FIXED
+      - id: P4-002
+        severity: CRITICAL
+        category: PATH_SECURITY
+        desc: "cli/commands/brain.py:226 — import file path opened without validation"
+        files: [cli/commands/brain.py]
+        status: FIXED
+      - id: P4-003
+        severity: CRITICAL
+        category: PATH_SECURITY
+        desc: "cli/commands/shortcuts.py:327 — import input_file path used without resolve()"
+        files: [cli/commands/shortcuts.py]
+        status: FIXED
+      - id: P4-004
+        severity: HIGH
+        category: PATH_SECURITY
+        desc: "mcp/db_train_handler.py — SQLite connection_string path not validated for existence"
+        files: [mcp/db_train_handler.py]
+        status: FIXED
+      - id: P4-005
+        severity: HIGH
+        category: PATH_SECURITY
+        desc: "mcp/index_handler.py — adapter connection paths (ChromaDB, AWF, LlamaIndex) not validated"
+        files: [mcp/index_handler.py]
+        status: FIXED
+      # --- DATETIME ---
+      - id: P4-006
+        severity: MEDIUM
+        category: CORRECTNESS
+        desc: "maintenance_handler.py:188 — datetime.now(UTC) instead of utcnow()"
+        files: [mcp/maintenance_handler.py]
+        status: FIXED
+      - id: P4-007
+        severity: MEDIUM
+        category: CORRECTNESS
+        desc: "mem0_sync_handler.py:92 — datetime.now(UTC) instead of utcnow()"
+        files: [mcp/mem0_sync_handler.py]
+        status: FIXED
+      # --- BOUNDS ---
+      - id: P4-008
+        severity: MEDIUM
+        category: BOUNDS
+        desc: "tool_schemas.py — nmem_context.limit missing maximum (unbounded)"
+        files: [mcp/tool_schemas.py]
+        status: FIXED
+      - id: P4-009
+        severity: MEDIUM
+        category: BOUNDS
+        desc: "tool_schemas.py — nmem_import.limit missing maximum (unbounded)"
+        files: [mcp/tool_schemas.py]
+        status: FIXED
+      # --- INFO LEAK ---
+      - id: P4-010
+        severity: MEDIUM
+        category: SECURITY
+        desc: "conflict_handler.py:146 — internal synapse.source_id leaked in error message"
+        files: [mcp/conflict_handler.py]
+        status: FIXED
+      # --- ERROR HANDLING ---
+      - id: P4-011
+        severity: MEDIUM
+        category: ERROR_HANDLING
+        desc: "brain.py:191 — export file write has no error handling"
+        files: [cli/commands/brain.py]
+        status: FIXED
+      - id: P4-012
+        severity: MEDIUM
+        category: ERROR_HANDLING
+        desc: "shortcuts.py:290 — export file write has no error handling"
+        files: [cli/commands/shortcuts.py]
+        status: FIXED
+      - id: P4-013
+        severity: LOW
+        category: ERROR_HANDLING
+        desc: "update_check.py — 4 bare except Exception: blocks (narrowed to specific types)"
+        files: [cli/update_check.py]
+        status: FIXED
+      - id: P4-014
+        severity: LOW
+        category: ERROR_HANDLING
+        desc: "_helpers.py:47 — bare except in storage cleanup (narrowed)"
+        files: [cli/_helpers.py]
+        status: FIXED
+      # --- CORRECTNESS (lower) ---
+      - id: P4-015
+        severity: MEDIUM
+        category: CORRECTNESS
+        desc: "unified_config.py — logger not defined (bare except → logging added in Phase 3 but logger missing)"
+        files: [unified_config.py]
+        status: FIXED
+      # --- DEFERRED ---
+      - id: P4-016
+        severity: MEDIUM
+        category: CORRECTNESS
+        desc: "update.py:184 — hardcoded 'main' branch in git pull"
+        files: [cli/commands/update.py]
+        status: DEFERRED
+      - id: P4-017
+        severity: LOW
+        category: PATH_SECURITY
+        desc: "setup.py — .claude/.cursor path symlink attack vectors"
+        files: [cli/setup.py]
+        status: DEFERRED
+    fixes:
+      - date: "2026-02-17"
+        desc: "Resolve + validate path in tools.py hooks, brain.py import, shortcuts.py import"
+        files: [cli/commands/tools.py, cli/commands/brain.py, cli/commands/shortcuts.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Add SQLite file existence check in db_train_handler + path validation in index_handler"
+        files: [mcp/db_train_handler.py, mcp/index_handler.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Replace datetime.now(UTC) with utcnow() in maintenance_handler and mem0_sync_handler"
+        files: [mcp/maintenance_handler.py, mcp/mem0_sync_handler.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Add maximum bounds to nmem_context.limit (200) and nmem_import.limit (10000)"
+        files: [mcp/tool_schemas.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Remove internal synapse.source_id from error message in conflict_handler"
+        files: [mcp/conflict_handler.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Add error handling on export file writes in brain.py and shortcuts.py"
+        files: [cli/commands/brain.py, cli/commands/shortcuts.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Narrow bare except blocks in update_check.py (4 spots) and _helpers.py"
+        files: [cli/update_check.py, cli/_helpers.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Add logger = logging.getLogger(__name__) to unified_config.py"
+        files: [unified_config.py]
+        status: VERIFIED
 
   phase_5:
     modules: [integration/, extraction/]

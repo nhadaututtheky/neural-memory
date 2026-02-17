@@ -478,11 +478,14 @@ def hooks(
     """
     from pathlib import Path
 
-    repo_path = Path(path) if path else Path.cwd()
+    repo_path = Path(path).resolve() if path else Path.cwd().resolve()
+    if not repo_path.is_dir():
+        typer.secho("Not a valid directory", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
     git_dir = repo_path / ".git"
 
     if not git_dir.is_dir():
-        typer.secho(f"Not a git repository: {repo_path}", fg=typer.colors.RED, err=True)
+        typer.secho("Not a git repository", fg=typer.colors.RED, err=True)
         raise typer.Exit(1)
 
     hooks_dir = git_dir / "hooks"

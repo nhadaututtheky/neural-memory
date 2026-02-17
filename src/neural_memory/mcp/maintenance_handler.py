@@ -17,7 +17,9 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
+
+from neural_memory.utils.timeutils import utcnow
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -185,7 +187,7 @@ class MaintenanceHandler:
         if not cfg.auto_consolidate or not pulse.should_consolidate:
             return
 
-        now = datetime.now(UTC)
+        now = utcnow()
 
         # Compute effective cooldown based on severity
         effective_cooldown_minutes = _compute_effective_cooldown(

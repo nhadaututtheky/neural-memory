@@ -137,6 +137,19 @@ class IndexHandler:
         }
 
 
+def _validate_local_path(path_str: str) -> str | None:
+    """Validate a local filesystem path for adapter connections.
+
+    Returns resolved path string if valid, None if invalid.
+    """
+    from pathlib import Path
+
+    resolved = Path(path_str).resolve()
+    if not resolved.exists():
+        return None
+    return str(resolved)
+
+
 def _build_adapter_kwargs(source: str, args: dict[str, Any]) -> dict[str, Any]:
     """Build adapter-specific kwargs from tool args.
 
@@ -151,7 +164,9 @@ def _build_adapter_kwargs(source: str, args: dict[str, Any]) -> dict[str, Any]:
     connection = args.get("connection")
 
     if source == "chromadb" and connection:
-        kwargs["path"] = connection
+        validated = _validate_local_path(connection)
+        if validated:
+            kwargs["path"] = validated
     elif source == "mem0":
         api_key = os.environ.get("MEM0_API_KEY", "")
         if api_key:
@@ -159,7 +174,9 @@ def _build_adapter_kwargs(source: str, args: dict[str, Any]) -> dict[str, Any]:
         if args.get("user_id"):
             kwargs["user_id"] = args["user_id"]
     elif source == "awf" and connection:
-        kwargs["brain_dir"] = connection
+        validated = _validate_local_path(connection)
+        if validated:
+            kwargs["brain_dir"] = validated
     elif source == "cognee":
         api_key = os.environ.get("COGNEE_API_KEY", "")
         if api_key:
@@ -170,6 +187,8 @@ def _build_adapter_kwargs(source: str, args: dict[str, Any]) -> dict[str, Any]:
         if args.get("group_id"):
             kwargs["group_id"] = args["group_id"]
     elif source == "llamaindex" and connection:
-        kwargs["persist_dir"] = connection
+        validated = _validate_local_path(connection)
+        if validated:
+            kwargs["persist_dir"] = validated
 
     return kwargs

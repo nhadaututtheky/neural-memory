@@ -26,6 +26,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from neural_memory.storage.sqlite_store import SQLiteStorage
 
+logger = logging.getLogger(__name__)
+
 # Valid brain name: alphanumeric, hyphens, underscores, dots (no path separators)
 _BRAIN_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 

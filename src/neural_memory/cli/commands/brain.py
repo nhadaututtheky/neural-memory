@@ -188,9 +188,16 @@ def brain_export(
         }
 
         if output:
-            with open(output, "w", encoding="utf-8") as f:
-                json.dump(export_data, f, indent=2, default=str)
-            typer.secho(f"Exported to: {output}", fg=typer.colors.GREEN)
+            from pathlib import Path
+
+            output_path = Path(output).resolve()
+            try:
+                with open(output_path, "w", encoding="utf-8") as f:
+                    json.dump(export_data, f, indent=2, default=str)
+            except OSError as exc:
+                typer.secho(f"Failed to write export file: {exc}", fg=typer.colors.RED, err=True)
+                raise typer.Exit(1) from exc
+            typer.secho(f"Exported to: {output_path}", fg=typer.colors.GREEN)
             if excluded_count > 0:
                 typer.secho(
                     f"Excluded {excluded_count} neurons with sensitive content",
@@ -223,7 +230,13 @@ def brain_import(
     from neural_memory.core.brain import BrainSnapshot
 
     async def _import() -> None:
-        with open(file, encoding="utf-8") as f:
+        from pathlib import Path
+
+        file_path = Path(file).resolve()
+        if not file_path.is_file():
+            typer.secho("File not found or not a regular file", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1)
+        with open(file_path, encoding="utf-8") as f:
             data = json.load(f)
 
         # Scan for sensitive content

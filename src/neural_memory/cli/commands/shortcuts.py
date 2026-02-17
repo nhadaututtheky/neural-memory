@@ -274,7 +274,7 @@ def export_brain_cmd(
 
         snapshot = await storage.export_brain(brain_name)
 
-        output_path = Path(output)
+        output_path = Path(output).resolve()
         export_data = {
             "brain_id": snapshot.brain_id,
             "brain_name": snapshot.brain_name,
@@ -287,7 +287,11 @@ def export_brain_cmd(
             "metadata": snapshot.metadata,
         }
 
-        output_path.write_text(json.dumps(export_data, indent=2, default=str))
+        try:
+            output_path.write_text(json.dumps(export_data, indent=2, default=str))
+        except OSError as exc:
+            typer.echo(f"Failed to write export file: {exc}", err=True)
+            raise typer.Exit(1) from exc
 
         typer.echo(f"Exported brain '{brain_name}' to {output_path}")
         typer.echo(f"  Neurons: {len(snapshot.neurons)}")
@@ -324,9 +328,9 @@ def import_brain_cmd(
     from neural_memory.core.brain import BrainSnapshot
 
     async def _import() -> None:
-        input_path = Path(input_file)
-        if not input_path.exists():
-            typer.echo(f"Error: File not found: {input_path}", err=True)
+        input_path = Path(input_file).resolve()
+        if not input_path.is_file():
+            typer.echo("Error: File not found or not a regular file", err=True)
             raise typer.Exit(1)
 
         data = json.loads(input_path.read_text())

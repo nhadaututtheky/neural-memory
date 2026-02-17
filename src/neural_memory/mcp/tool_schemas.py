@@ -95,6 +95,8 @@ def get_tool_schemas() -> list[dict[str, Any]]:
                 "properties": {
                     "limit": {
                         "type": "integer",
+                        "minimum": 1,
+                        "maximum": 200,
                         "description": "Number of recent memories (default: 10)",
                     },
                     "fresh_only": {
@@ -262,6 +264,7 @@ def get_tool_schemas() -> list[dict[str, Any]]:
                     "limit": {
                         "type": "integer",
                         "minimum": 1,
+                        "maximum": 10000,
                         "description": "Maximum records to import",
                     },
                     "user_id": {

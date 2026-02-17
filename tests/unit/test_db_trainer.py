@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -729,8 +730,10 @@ class TestHandlerHappyPath:
         return handler, mock_storage
 
     @pytest.mark.asyncio
-    async def test_successful_train_returns_result(self) -> None:
+    async def test_successful_train_returns_result(self, tmp_path: Path) -> None:
         handler, _ = self._make_handler()
+        db_file = tmp_path / "test.db"
+        db_file.write_bytes(b"")  # Create a dummy file
         mock_result = DBTrainingResult(
             tables_processed=3,
             relationships_mapped=2,
@@ -743,7 +746,9 @@ class TestHandlerHappyPath:
             mock_instance = AsyncMock()
             mock_instance.train = AsyncMock(return_value=mock_result)
             mock_trainer_cls.return_value = mock_instance
-            result = await handler._train_db_schema({"connection_string": "sqlite:///test.db"})
+            result = await handler._train_db_schema(
+                {"connection_string": f"sqlite:///{db_file}"}
+            )
         assert result["tables_processed"] == 3
         assert result["relationships_mapped"] == 2
         assert "message" in result
@@ -788,25 +793,33 @@ class TestHandlerErrorPaths:
         return handler
 
     @pytest.mark.asyncio
-    async def test_value_error_returns_generic_message(self) -> None:
+    async def test_value_error_returns_generic_message(self, tmp_path: Path) -> None:
         handler = self._make_handler()
+        db_file = tmp_path / "test.db"
+        db_file.write_bytes(b"")
         with patch("neural_memory.engine.db_trainer.DBTrainer") as mock_trainer_cls:
             mock_instance = AsyncMock()
             mock_instance.train = AsyncMock(side_effect=ValueError("secret path /etc/shadow"))
             mock_trainer_cls.return_value = mock_instance
-            result = await handler._train_db_schema({"connection_string": "sqlite:///test.db"})
+            result = await handler._train_db_schema(
+                {"connection_string": f"sqlite:///{db_file}"}
+            )
         assert "error" in result
         assert "invalid configuration" in result["error"]
         assert "secret" not in result["error"]  # no info leakage
 
     @pytest.mark.asyncio
-    async def test_generic_exception_returns_generic_message(self) -> None:
+    async def test_generic_exception_returns_generic_message(self, tmp_path: Path) -> None:
         handler = self._make_handler()
+        db_file = tmp_path / "test.db"
+        db_file.write_bytes(b"")
         with patch("neural_memory.engine.db_trainer.DBTrainer") as mock_trainer_cls:
             mock_instance = AsyncMock()
             mock_instance.train = AsyncMock(side_effect=RuntimeError("internal error details"))
             mock_trainer_cls.return_value = mock_instance
-            result = await handler._train_db_schema({"connection_string": "sqlite:///test.db"})
+            result = await handler._train_db_schema(
+                {"connection_string": f"sqlite:///{db_file}"}
+            )
         assert "error" in result
         assert "unexpectedly" in result["error"]
         assert "internal" not in result["error"]

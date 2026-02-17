@@ -143,7 +143,7 @@ class ConflictHandler:
                 # Get the disputing (source) neuron
                 disputing = await storage.get_neuron(synapse.source_id)
                 if disputing is None:
-                    return {"error": f"Disputing neuron {synapse.source_id} not found"}
+                    return {"error": "Disputing neuron not found"}
 
                 if resolution == "keep_existing":
                     await self._resolve_keep_existing(storage, neuron, disputing, synapse)

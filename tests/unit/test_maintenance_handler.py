@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
+
+from neural_memory.utils.timeutils import utcnow
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -419,7 +421,7 @@ class TestAutoConsolidation:
         server = _FakeServer(storage, cfg)
 
         # Set last consolidation to 30 min ago (within cooldown)
-        server._last_consolidation_at = datetime.now(UTC) - timedelta(minutes=30)
+        server._last_consolidation_at = utcnow() - timedelta(minutes=30)
         original_time = server._last_consolidation_at
 
         pulse = HealthPulse(
@@ -444,7 +446,7 @@ class TestAutoConsolidation:
         server = _FakeServer(storage, cfg)
 
         # Set last consolidation to 90 min ago (past cooldown)
-        server._last_consolidation_at = datetime.now(UTC) - timedelta(minutes=90)
+        server._last_consolidation_at = utcnow() - timedelta(minutes=90)
 
         pulse = HealthPulse(
             fiber_count=0,

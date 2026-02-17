@@ -1773,8 +1773,9 @@ class TestMCPImport:
         assert "failed unexpectedly" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_import_adapter_kwargs_awf(self) -> None:
+    async def test_import_adapter_kwargs_awf(self, tmp_path: object) -> None:
         """Test that AWF source passes brain_dir kwarg."""
+        brain_dir = str(tmp_path)  # Real directory for path validation
         server = self._make_server()
         mock_storage = AsyncMock()
         mock_brain = MagicMock(id="test-brain", config=MagicMock())
@@ -1800,9 +1801,12 @@ class TestMCPImport:
             patch("neural_memory.integration.sync_engine.SyncEngine", return_value=mock_engine),
         ):
             mock_get_adapter.return_value = MagicMock()
-            await server.call_tool("nmem_import", {"source": "awf", "connection": "/path/to/brain"})
+            await server.call_tool("nmem_import", {"source": "awf", "connection": brain_dir})
 
-        mock_get_adapter.assert_called_once_with("awf", brain_dir="/path/to/brain")
+        from pathlib import Path as _P
+
+        resolved_brain_dir = str(_P(brain_dir).resolve())
+        mock_get_adapter.assert_called_once_with("awf", brain_dir=resolved_brain_dir)
 
 
 class TestMCPAutoExtended:

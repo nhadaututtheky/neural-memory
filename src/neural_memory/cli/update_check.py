@@ -37,7 +37,7 @@ def _read_cache() -> dict[str, Any]:
             return {}
         result: dict[str, Any] = json.loads(cache_path.read_text(encoding="utf-8"))
         return result
-    except Exception:
+    except (OSError, json.JSONDecodeError, ValueError):
         logger.debug("Failed to read update cache", exc_info=True)
         return {}
 
@@ -48,7 +48,7 @@ def _write_cache(data: dict[str, Any]) -> None:
         cache_path = _get_cache_path()
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         cache_path.write_text(json.dumps(data), encoding="utf-8")
-    except Exception:
+    except OSError:
         logger.debug("Failed to write update cache", exc_info=True)
 
 
@@ -87,7 +87,7 @@ def _fetch_latest_version() -> str | None:
             data = json.loads(resp.read())
             version: str | None = data.get("info", {}).get("version")
             return version
-    except Exception:
+    except (OSError, ValueError, KeyError):
         logger.debug("Failed to fetch latest version from PyPI", exc_info=True)
         return None
 
@@ -126,7 +126,7 @@ def _check_and_notify() -> None:
 
         if _is_newer(latest, __version__):
             _print_update_notice(__version__, latest)
-    except Exception:
+    except (OSError, ValueError, KeyError):
         logger.debug("Update check failed", exc_info=True)
 
 

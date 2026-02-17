@@ -10,7 +10,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
+
+from neural_memory.utils.timeutils import utcnow
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -85,11 +87,11 @@ class Mem0SyncHandler:
             # Check cooldown
             if sync_state and sync_state.last_sync_at:
                 cooldown = timedelta(minutes=cfg.cooldown_minutes)
-                # Ensure timezone-aware comparison: normalize both sides to UTC
+                # Normalize to naive UTC for comparison
                 last_sync = sync_state.last_sync_at
-                if last_sync.tzinfo is None:
-                    last_sync = last_sync.replace(tzinfo=UTC)
-                elapsed = datetime.now(UTC) - last_sync
+                if last_sync.tzinfo is not None:
+                    last_sync = last_sync.replace(tzinfo=None)
+                elapsed = utcnow() - last_sync
                 if elapsed < cooldown:
                     remaining = cooldown - elapsed
                     logger.info(
