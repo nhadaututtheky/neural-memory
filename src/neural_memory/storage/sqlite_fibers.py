@@ -20,6 +20,9 @@ class SQLiteFiberMixin:
     def _ensure_conn(self) -> aiosqlite.Connection:
         raise NotImplementedError
 
+    def _ensure_read_conn(self) -> aiosqlite.Connection:
+        raise NotImplementedError
+
     def _get_brain_id(self) -> str:
         raise NotImplementedError
 
@@ -71,7 +74,7 @@ class SQLiteFiberMixin:
             raise ValueError(f"Fiber {fiber.id} already exists")
 
     async def get_fiber(self, fiber_id: str) -> Fiber | None:
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
         async with conn.execute(
@@ -92,7 +95,7 @@ class SQLiteFiberMixin:
         limit: int = 100,
     ) -> list[Fiber]:
         limit = min(limit, 1000)
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
         query = "SELECT * FROM fibers WHERE brain_id = ?"
@@ -135,7 +138,7 @@ class SQLiteFiberMixin:
         if not neuron_ids:
             return []
 
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
         placeholders = ",".join("?" for _ in neuron_ids)
@@ -223,7 +226,7 @@ class SQLiteFiberMixin:
         return cursor.rowcount > 0
 
     async def get_stale_fiber_count(self, brain_id: str, stale_days: int = 90) -> int:
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         from neural_memory.utils.timeutils import utcnow
 
         cutoff = (utcnow() - timedelta(days=stale_days)).isoformat()
@@ -247,7 +250,7 @@ class SQLiteFiberMixin:
         descending: bool = True,
     ) -> list[Fiber]:
         limit = min(limit, 1000)
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
         order_dir = "DESC" if descending else "ASC"

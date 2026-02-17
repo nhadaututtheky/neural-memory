@@ -90,6 +90,30 @@ class NeuralStorage(ABC):
                 results[nid] = neuron
         return results
 
+    async def find_neurons_exact_batch(
+        self,
+        contents: list[str],
+        type: NeuronType | None = None,
+    ) -> dict[str, Neuron]:
+        """Find neurons by exact content match for multiple contents at once.
+
+        Default falls back to sequential find_neurons calls.
+        Backends should override for batch efficiency.
+
+        Args:
+            contents: List of exact content strings to match
+            type: Optional neuron type filter
+
+        Returns:
+            Dict mapping content string to first matching Neuron
+        """
+        results: dict[str, Neuron] = {}
+        for content in contents:
+            matches = await self.find_neurons(type=type, content_exact=content, limit=1)
+            if matches:
+                results[content] = matches[0]
+        return results
+
     @abstractmethod
     async def find_neurons(
         self,

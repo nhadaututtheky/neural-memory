@@ -22,6 +22,9 @@ class SQLiteSynapseMixin:
     def _ensure_conn(self) -> aiosqlite.Connection:
         raise NotImplementedError
 
+    def _ensure_read_conn(self) -> aiosqlite.Connection:
+        raise NotImplementedError
+
     def _get_brain_id(self) -> str:
         raise NotImplementedError
 
@@ -73,7 +76,7 @@ class SQLiteSynapseMixin:
             raise ValueError(f"Synapse {synapse.id} already exists")
 
     async def get_synapse(self, synapse_id: str) -> Synapse | None:
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
         async with conn.execute(
@@ -92,7 +95,7 @@ class SQLiteSynapseMixin:
         type: SynapseType | None = None,
         min_weight: float | None = None,
     ) -> list[Synapse]:
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
         query = "SELECT * FROM synapses WHERE brain_id = ?"
@@ -170,7 +173,7 @@ class SQLiteSynapseMixin:
         if not neuron_ids:
             return {}
 
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
         col = "source_id" if direction == "out" else "target_id"
@@ -196,7 +199,7 @@ class SQLiteSynapseMixin:
         synapse_types: list[SynapseType] | None = None,
         min_weight: float | None = None,
     ) -> list[tuple[Neuron, Synapse]]:
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
         results: list[tuple[Neuron, Synapse]] = []
 
@@ -301,7 +304,7 @@ class SQLiteSynapseMixin:
         max_hops: int = 4,
     ) -> list[tuple[Neuron, Synapse]] | None:
         """Find shortest path using BFS."""
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
         async with conn.execute(
@@ -360,7 +363,7 @@ class SQLiteSynapseMixin:
         """Batch fetch synapses by ID list."""
         if not synapse_ids:
             return {}
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
         placeholders = ",".join("?" for _ in synapse_ids)
         query = f"SELECT * FROM synapses WHERE brain_id = ? AND id IN ({placeholders})"

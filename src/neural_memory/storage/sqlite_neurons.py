@@ -56,10 +56,18 @@ class SQLiteNeuronMixin:
     def _ensure_conn(self) -> aiosqlite.Connection:
         raise NotImplementedError
 
+    def _ensure_read_conn(self) -> aiosqlite.Connection:
+        raise NotImplementedError
+
     def _get_brain_id(self) -> str:
         raise NotImplementedError
 
     _has_fts: bool
+
+    if TYPE_CHECKING:
+        from neural_memory.storage.neuron_cache import NeuronLookupCache
+
+        _neuron_cache: NeuronLookupCache
 
     # ========== Neuron Operations ==========
 
@@ -92,12 +100,13 @@ class SQLiteNeuronMixin:
             )
 
             await conn.commit()
+            self._neuron_cache.invalidate()
             return neuron.id
         except sqlite3.IntegrityError:
             raise ValueError(f"Neuron {neuron.id} already exists")
 
     async def get_neuron(self, neuron_id: str) -> Neuron | None:
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
         async with conn.execute(
@@ -114,7 +123,7 @@ class SQLiteNeuronMixin:
         if not neuron_ids:
             return {}
 
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
         placeholders = ",".join("?" for _ in neuron_ids)
@@ -125,6 +134,36 @@ class SQLiteNeuronMixin:
             rows = await cursor.fetchall()
             return {row["id"]: row_to_neuron(row) for row in rows}
 
+    async def find_neurons_exact_batch(
+        self,
+        contents: list[str],
+        type: NeuronType | None = None,
+    ) -> dict[str, Neuron]:
+        """Find neurons by exact content for multiple contents in one query."""
+        if not contents:
+            return {}
+
+        conn = self._ensure_read_conn()
+        brain_id = self._get_brain_id()
+
+        placeholders = ",".join("?" for _ in contents)
+        query = f"SELECT * FROM neurons WHERE brain_id = ? AND content IN ({placeholders})"
+        params: list[Any] = [brain_id, *contents]
+
+        if type is not None:
+            query += " AND type = ?"
+            params.append(type.value)
+
+        results: dict[str, Neuron] = {}
+        async with conn.execute(query, params) as cursor:
+            rows = await cursor.fetchall()
+            for row in rows:
+                neuron = row_to_neuron(row)
+                # First match per content wins
+                if neuron.content not in results:
+                    results[neuron.content] = neuron
+        return results
+
     async def find_neurons(
         self,
         type: NeuronType | None = None,
@@ -133,8 +172,19 @@ class SQLiteNeuronMixin:
         time_range: tuple[datetime, datetime] | None = None,
         limit: int = 100,
     ) -> list[Neuron]:
+        # Cache shortcut for exact-match lookups (most repeated pattern)
+        if (
+            content_exact is not None
+            and content_contains is None
+            and time_range is None
+        ):
+            type_val = type.value if type is not None else None
+            cached = self._neuron_cache.get(content_exact, type_val)
+            if cached is not None:
+                return cached[:limit]
+
         limit = min(limit, 1000)
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
         use_fts = self._has_fts and content_contains is not None and content_exact is None
@@ -189,7 +239,18 @@ class SQLiteNeuronMixin:
 
         async with conn.execute(query, params) as cursor:
             rows = await cursor.fetchall()
-            return [row_to_neuron(row) for row in rows]
+            result = [row_to_neuron(row) for row in rows]
+
+        # Populate cache for exact-match queries
+        if (
+            content_exact is not None
+            and content_contains is None
+            and time_range is None
+        ):
+            type_val = type.value if type is not None else None
+            self._neuron_cache.put(content_exact, type_val, result)
+
+        return result
 
     async def update_neuron(self, neuron: Neuron) -> None:
         conn = self._ensure_conn()
@@ -212,6 +273,7 @@ class SQLiteNeuronMixin:
             raise ValueError(f"Neuron {neuron.id} does not exist")
 
         await conn.commit()
+        self._neuron_cache.invalidate()
 
     async def delete_neuron(self, neuron_id: str) -> bool:
         conn = self._ensure_conn()
@@ -222,13 +284,14 @@ class SQLiteNeuronMixin:
             (neuron_id, brain_id),
         )
         await conn.commit()
+        self._neuron_cache.invalidate()
 
         return cursor.rowcount > 0
 
     # ========== Neuron State Operations ==========
 
     async def get_neuron_state(self, neuron_id: str) -> NeuronState | None:
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
         async with conn.execute(
@@ -245,7 +308,7 @@ class SQLiteNeuronMixin:
         if not neuron_ids:
             return {}
 
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
         placeholders = ",".join("?" for _ in neuron_ids)
@@ -288,7 +351,7 @@ class SQLiteNeuronMixin:
 
     async def get_all_neuron_states(self) -> list[NeuronState]:
         """Get all neuron states for current brain."""
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
         async with conn.execute(
@@ -309,7 +372,7 @@ class SQLiteNeuronMixin:
         if not prefix.strip():
             return []
 
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
         if self._has_fts:

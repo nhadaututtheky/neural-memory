@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from neural_memory.core.brain import BrainConfig
+    from neural_memory.core.neuron import Neuron
+    from neural_memory.core.synapse import Synapse
     from neural_memory.storage.base import NeuralStorage
 
 # Safety cap: maximum queue entries to prevent memory exhaustion on dense graphs
@@ -117,10 +119,10 @@ class SpreadingActivation:
         # Priority queue for BFS with activation ordering
         queue: list[ActivationState] = []
 
-        # Initialize with anchor neurons
+        # Initialize with anchor neurons (batch fetch)
+        anchor_neurons_map = await self._storage.get_neurons_batch(list(anchor_neurons))
         for anchor_id in anchor_neurons:
-            neuron = await self._storage.get_neuron(anchor_id)
-            if neuron is None:
+            if anchor_id not in anchor_neurons_map:
                 continue
 
             state = ActivationState(

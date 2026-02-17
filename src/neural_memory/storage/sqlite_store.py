@@ -10,6 +10,8 @@ from typing import Any
 import aiosqlite
 
 from neural_memory.storage.base import NeuralStorage
+from neural_memory.storage.neuron_cache import NeuronLookupCache
+from neural_memory.storage.read_pool import ReadPool
 from neural_memory.storage.sqlite_action_log import SQLiteActionLogMixin
 from neural_memory.storage.sqlite_brain_ops import SQLiteBrainMixin
 from neural_memory.storage.sqlite_coactivation import SQLiteCoActivationMixin
@@ -56,6 +58,8 @@ class SQLiteStorage(
         self._conn: aiosqlite.Connection | None = None
         self._current_brain_id: str | None = None
         self._has_fts: bool = False
+        self._neuron_cache = NeuronLookupCache(ttl_seconds=30.0, max_entries=500)
+        self._read_pool: ReadPool | None = None
 
     async def initialize(self) -> None:
         """Initialize database connection and schema.
@@ -104,8 +108,15 @@ class SQLiteStorage(
                 )
                 await self._conn.commit()
 
+        # Initialize read-only connection pool for parallel reads
+        self._read_pool = ReadPool(self._db_path)
+        await self._read_pool.initialize()
+
     async def close(self) -> None:
-        """Close database connection."""
+        """Close database connection and reader pool."""
+        if self._read_pool:
+            await self._read_pool.close()
+            self._read_pool = None
         if self._conn:
             await self._conn.close()
             self._conn = None
@@ -126,10 +137,16 @@ class SQLiteStorage(
         return self._current_brain_id
 
     def _ensure_conn(self) -> aiosqlite.Connection:
-        """Ensure connection is available."""
+        """Ensure writer connection is available."""
         if self._conn is None:
             raise RuntimeError("Database not initialized. Call initialize() first.")
         return self._conn
+
+    def _ensure_read_conn(self) -> aiosqlite.Connection:
+        """Get a read-only connection from the pool (falls back to writer)."""
+        if self._read_pool is not None:
+            return self._read_pool.acquire()
+        return self._ensure_conn()
 
     async def _check_fts_available(self) -> bool:
         """Check whether the neurons_fts table is usable.
@@ -148,7 +165,7 @@ class SQLiteStorage(
     # ========== Statistics ==========
 
     async def get_stats(self, brain_id: str) -> dict[str, int]:
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
 
         async with conn.execute(
             """SELECT
@@ -168,7 +185,7 @@ class SQLiteStorage(
             }
 
     async def get_enhanced_stats(self, brain_id: str) -> dict[str, Any]:
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         basic_stats = await self.get_stats(brain_id)
 
         # DB file size

@@ -22,6 +22,9 @@ class SQLiteCoActivationMixin:
     def _ensure_conn(self) -> aiosqlite.Connection:
         raise NotImplementedError
 
+    def _ensure_read_conn(self) -> aiosqlite.Connection:
+        raise NotImplementedError
+
     def _get_brain_id(self) -> str:
         raise NotImplementedError
 
@@ -63,7 +66,7 @@ class SQLiteCoActivationMixin:
         min_count: int = 1,
     ) -> list[tuple[str, str, int, float]]:
         """Get aggregated co-activation counts for neuron pairs."""
-        conn = self._ensure_conn()
+        conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
         if since is not None:

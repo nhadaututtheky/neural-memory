@@ -339,13 +339,18 @@ async def learn_habits(
     # 4. Materialize qualifying candidates
     learned: list[LearnedHabit] = []
 
+    # Batch-fetch all unique step names across all candidates
+    all_steps = {step for candidate in candidates for step in candidate.steps}
+    existing_actions = await storage.find_neurons_exact_batch(
+        list(all_steps), type=NeuronType.ACTION
+    )
+
     for candidate in candidates:
         # Ensure ACTION neurons exist for each step
         neuron_ids: list[str] = []
         for step in candidate.steps:
-            existing = await storage.find_neurons(content_exact=step, type=NeuronType.ACTION)
-            if existing:
-                neuron_ids.append(existing[0].id)
+            if step in existing_actions:
+                neuron_ids.append(existing_actions[step].id)
             else:
                 neuron = Neuron.create(
                     type=NeuronType.ACTION,
@@ -353,6 +358,7 @@ async def learn_habits(
                     metadata={"_habit_action": True},
                 )
                 await storage.add_neuron(neuron)
+                existing_actions[step] = neuron  # Cache for next candidate
                 neuron_ids.append(neuron.id)
 
         # Create BEFORE synapses between consecutive steps

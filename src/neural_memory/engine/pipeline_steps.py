@@ -238,13 +238,16 @@ class ExtractConceptNeuronsStep:
         keywords = extract_keywords(ctx.content, language=ctx.language)
         concept_limit = min(20, max(5, len(ctx.content) // 100))
 
-        for keyword in keywords[:concept_limit]:
-            if len(keyword) < 3:
-                continue
-            existing = await storage.find_neurons(
-                type=NeuronType.CONCEPT, content_exact=keyword, limit=1
-            )
-            if existing:
+        # Filter valid keywords first
+        valid_keywords = [kw for kw in keywords[:concept_limit] if len(kw) >= 3]
+
+        # Batch check existing concepts in one query
+        existing_map = await storage.find_neurons_exact_batch(
+            valid_keywords, type=NeuronType.CONCEPT
+        )
+
+        for keyword in valid_keywords:
+            if keyword in existing_map:
                 continue
             neuron = Neuron.create(type=NeuronType.CONCEPT, content=keyword)
             await storage.add_neuron(neuron)
