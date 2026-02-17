@@ -38,9 +38,9 @@ class TestListPresets:
 
 class TestGetPreset:
     def test_returns_preset_by_name(self) -> None:
-        assert get_preset("safe-cost") is SAFE_COST
-        assert get_preset("balanced") is BALANCED
-        assert get_preset("max-recall") is MAX_RECALL
+        assert get_preset("safe-cost") == SAFE_COST
+        assert get_preset("balanced") == BALANCED
+        assert get_preset("max-recall") == MAX_RECALL
 
     def test_returns_none_for_unknown(self) -> None:
         assert get_preset("nonexistent") is None

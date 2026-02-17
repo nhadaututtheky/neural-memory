@@ -33,6 +33,10 @@ _BRAIN_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 _SYNC_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.@]*$")
 _SYNC_ID_MAX_LEN = 128
 
+# Valid TOML string value: alphanumeric, hyphens, underscores, dots, slashes, spaces
+_TOML_SAFE_STRING = re.compile(r"^[a-zA-Z0-9_\-\./ ]*$")
+_TOML_STR_MAX_LEN = 128
+
 
 def get_neuralmemory_dir() -> Path:
     """Get NeuralMemory data directory.
@@ -372,6 +376,20 @@ class Mem0SyncConfig:
         )
 
 
+def _sanitize_toml_str(value: str) -> str:
+    """Sanitize a string value for safe TOML serialization.
+
+    Prevents TOML injection by stripping control chars and quotes.
+    Returns empty string if value contains unsafe characters.
+    """
+    if not isinstance(value, str):
+        return ""
+    cleaned = value.strip()[:_TOML_STR_MAX_LEN]
+    if not _TOML_SAFE_STRING.match(cleaned):
+        return ""
+    return cleaned
+
+
 def _sanitize_sync_id(value: str) -> str:
     """Sanitize a sync identifier (user_id, agent_id).
 
@@ -563,10 +581,10 @@ class UnifiedConfig:
             f"embedding_threshold = {self.dedup.embedding_threshold}",
             f"embedding_ambiguous_low = {self.dedup.embedding_ambiguous_low}",
             f"llm_enabled = {'true' if self.dedup.llm_enabled else 'false'}",
-            f'llm_provider = "{self.dedup.llm_provider}"',
-            f'llm_model = "{self.dedup.llm_model}"',
+            f'llm_provider = "{_sanitize_toml_str(self.dedup.llm_provider)}"',
+            f'llm_model = "{_sanitize_toml_str(self.dedup.llm_model)}"',
             f"llm_max_pairs_per_encode = {self.dedup.llm_max_pairs_per_encode}",
-            f'merge_strategy = "{self.dedup.merge_strategy}"',
+            f'merge_strategy = "{_sanitize_toml_str(self.dedup.merge_strategy)}"',
             "",
             "# Mem0 auto-sync settings",
             "[mem0_sync]",
@@ -701,6 +719,7 @@ def _read_legacy_brain(data_dir: Path) -> str | None:
             if isinstance(name, str) and name != "default" and _BRAIN_NAME_PATTERN.match(name):
                 return name
         except Exception:
+            logger.warning("Found legacy config %s but could not read it", config_file, exc_info=True)
             continue
     return None
 
@@ -728,7 +747,7 @@ def _read_current_brain_from_toml() -> str | None:
         if isinstance(name, str) and _BRAIN_NAME_PATTERN.match(name):
             return name
     except Exception:
-        pass
+        logger.debug("Could not read current_brain from config.toml", exc_info=True)
     return None
 
 

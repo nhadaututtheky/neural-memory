@@ -14,7 +14,11 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Any
+import copy
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from neural_memory.unified_config import UnifiedConfig
 
 # ── Preset definitions ────────────────────────────────────────────
 
@@ -100,12 +104,13 @@ def list_presets() -> list[dict[str, str]]:
 
 
 def get_preset(name: str) -> dict[str, dict[str, Any]] | None:
-    """Get a preset by name. Returns None if not found."""
-    return _PRESETS.get(name)
+    """Get a preset by name. Returns a deep copy (safe to mutate)."""
+    preset = _PRESETS.get(name)
+    return copy.deepcopy(preset) if preset is not None else None
 
 
 def compute_diff(
-    config: Any,
+    config: UnifiedConfig,
     preset: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """Compute the diff between current config and a preset.
@@ -141,7 +146,7 @@ def compute_diff(
 
 
 def apply_preset(
-    config: Any,
+    config: UnifiedConfig,
     preset: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """Apply a preset to a UnifiedConfig instance.
@@ -151,8 +156,6 @@ def apply_preset(
 
     Returns the list of changes applied (same format as compute_diff).
     """
-    from dataclasses import replace
-
     from neural_memory.unified_config import BrainSettings, EternalConfig, MaintenanceConfig
 
     changes = compute_diff(config, preset)
@@ -163,15 +166,6 @@ def apply_preset(
 
     if "maintenance" in preset:
         merged = {**config.maintenance.to_dict(), **preset["maintenance"]}
-        config.maintenance = replace(
-            config.maintenance,
-            **{
-                k: v
-                for k, v in MaintenanceConfig.from_dict(merged).to_dict().items()
-                if k in preset["maintenance"]
-            },
-        )
-        # Full merge: rebuild from merged dict
         config.maintenance = MaintenanceConfig.from_dict(merged)
 
     if "eternal" in preset:

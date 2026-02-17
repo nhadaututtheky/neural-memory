@@ -629,26 +629,123 @@ phases:
         files: [shared_store.py, factory.py]
         status: VERIFIED
 
-  phase_3a:
-    modules: [unified_config - loading/migration]
-    loc: 11000
-    status: PENDING
-    findings: []
-    fixes: []
-
-  phase_3b:
-    modules: [unified_config - validation/defaults]
-    loc: 11000
-    status: PENDING
-    findings: []
-    fixes: []
-
-  phase_3c:
-    modules: [unified_config - brain management]
-    loc: 11000
-    status: PENDING
-    findings: []
-    fixes: []
+  phase_3:
+    modules: [unified_config.py, utils/config.py, config_presets.py, cli/config.py, cli/commands/config_cmd.py, engine/dedup/config.py, engine/embedding/config.py]
+    loc: 1604
+    files: 7
+    status: COMPLETE
+    findings:
+      # --- CONFIG SECURITY ---
+      - id: P3-001
+        severity: HIGH
+        category: CONFIG_SECURITY
+        desc: "TOML injection via unsanitized dedup string fields (llm_provider, llm_model, merge_strategy)"
+        files: [unified_config.py]
+        status: FIXED
+      # --- IMMUTABILITY ---
+      - id: P3-002
+        severity: HIGH
+        category: IMMUTABILITY
+        desc: "get_preset() returns direct reference to module-level mutable dicts"
+        files: [config_presets.py]
+        status: FIXED
+      # --- CORRECTNESS ---
+      - id: P3-003
+        severity: MEDIUM
+        category: DEAD_CODE
+        desc: "Dead code in apply_preset: maintenance replace() result immediately overwritten"
+        files: [config_presets.py]
+        status: FIXED
+      - id: P3-004
+        severity: MEDIUM
+        category: CORRECTNESS
+        desc: "Accessing private _conn attribute to check storage liveness"
+        files: [unified_config.py]
+        status: DEFERRED
+      - id: P3-005
+        severity: LOW
+        category: DEAD_CODE
+        desc: "updated_at field on UnifiedConfig declared but never set or serialized"
+        files: [unified_config.py]
+        status: DEFERRED
+      # --- ERROR HANDLING ---
+      - id: P3-006
+        severity: MEDIUM
+        category: ERROR_HANDLING
+        desc: "Bare except: pass in _read_current_brain_from_toml()"
+        files: [unified_config.py]
+        status: FIXED
+      - id: P3-007
+        severity: MEDIUM
+        category: ERROR_HANDLING
+        desc: "Bare except: continue in _read_legacy_brain() hides migration errors"
+        files: [unified_config.py]
+        status: FIXED
+      # --- PATH SECURITY ---
+      - id: P3-008
+        severity: MEDIUM
+        category: PATH_SECURITY
+        desc: "get_brain_path() and get_brain_db_path() missing brain name validation"
+        files: [cli/config.py]
+        status: FIXED
+      - id: P3-009
+        severity: MEDIUM
+        category: PATH_SECURITY
+        desc: "NEURALMEMORY_DIR env var used without validation"
+        files: [cli/config.py]
+        status: DEFERRED
+      - id: P3-010
+        severity: MEDIUM
+        category: PATH_SECURITY
+        desc: "sqlite_path from env var not validated in utils/config.py"
+        files: [utils/config.py]
+        status: DEFERRED
+      # --- TYPE SAFETY ---
+      - id: P3-011
+        severity: LOW
+        category: TYPE_SAFETY
+        desc: "config: Any → UnifiedConfig in compute_diff/apply_preset"
+        files: [config_presets.py]
+        status: FIXED
+      - id: P3-012
+        severity: LOW
+        category: IMMUTABILITY
+        desc: "AutoConfig, BrainSettings, EternalConfig not frozen (inconsistent with other sub-configs)"
+        files: [unified_config.py]
+        status: DEFERRED
+      - id: P3-013
+        severity: LOW
+        category: CONFIG_SECURITY
+        desc: "Neo4j password stored as plain str in Config dataclass (no masking)"
+        files: [utils/config.py]
+        status: DEFERRED
+      - id: P3-014
+        severity: LOW
+        category: DEAD_CODE
+        desc: "utils/config.py Config class appears superseded by UnifiedConfig"
+        files: [utils/config.py]
+        status: DEFERRED
+    fixes:
+      - date: "2026-02-17"
+        desc: "Add _sanitize_toml_str() and apply to dedup llm_provider/llm_model/merge_strategy in save()"
+        files: [unified_config.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "get_preset() returns deepcopy to prevent mutation of module-level dicts"
+        files: [config_presets.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Remove dead replace() block in apply_preset, unused import, fix type: Any → UnifiedConfig"
+        files: [config_presets.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Add logging to bare except blocks in _read_current_brain_from_toml and _read_legacy_brain"
+        files: [unified_config.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Add brain name validation + path traversal check in get_brain_path/get_brain_db_path"
+        files: [cli/config.py]
+        status: VERIFIED
 
   phase_4:
     modules: [mcp/, cli/]

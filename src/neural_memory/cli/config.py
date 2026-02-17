@@ -199,7 +199,12 @@ class CLIConfig:
     def get_brain_path(self, brain_name: str | None = None) -> Path:
         """Get path to brain data file."""
         name = brain_name or self.current_brain
-        return self.brains_dir / f"{name}.json"
+        if not _BRAIN_NAME_RE.match(name):
+            raise ValueError(f"Invalid brain name: {name!r}")
+        path = self.brains_dir / f"{name}.json"
+        if not path.resolve().is_relative_to(self.brains_dir.resolve()):
+            raise ValueError(f"Brain path escapes brains directory: {name!r}")
+        return path
 
     def list_brains(self) -> list[str]:
         """List available brains."""
@@ -218,4 +223,9 @@ class CLIConfig:
     def get_brain_db_path(self, brain_name: str | None = None) -> Path:
         """Get path to brain SQLite database (unified mode)."""
         name = brain_name or self.current_brain
-        return self.brains_dir / f"{name}.db"
+        if not _BRAIN_NAME_RE.match(name):
+            raise ValueError(f"Invalid brain name: {name!r}")
+        path = self.brains_dir / f"{name}.db"
+        if not path.resolve().is_relative_to(self.brains_dir.resolve()):
+            raise ValueError(f"Brain path escapes brains directory: {name!r}")
+        return path
