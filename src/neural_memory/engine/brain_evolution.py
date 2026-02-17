@@ -23,6 +23,7 @@ these metrics: maturity_level, plasticity, density.
 
 from __future__ import annotations
 
+import asyncio
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -179,19 +180,17 @@ class EvolutionEngine:
         """
         now = utcnow()
 
-        # Get brain metadata
-        brain = await self._storage.get_brain(brain_id)
+        # Parallel fetch: brain metadata, stats, synapses, fibers
+        brain, stats, all_synapses, all_fibers = await asyncio.gather(
+            self._storage.get_brain(brain_id),
+            self._storage.get_stats(brain_id),
+            self._storage.get_all_synapses(),
+            self._storage.get_fibers(limit=10000),
+        )
         brain_name = brain.name if brain else "unknown"
-
-        # Get counts
-        stats = await self._storage.get_stats(brain_id)
         neuron_count = stats.get("neuron_count", 0)
         synapse_count = stats.get("synapse_count", 0)
         fiber_count = stats.get("fiber_count", 0)
-
-        # Pre-fetch shared data once (avoids redundant storage calls)
-        all_synapses = await self._storage.get_all_synapses()
-        all_fibers = await self._storage.get_fibers(limit=10000)
 
         # Maturation metrics
         (
@@ -202,7 +201,9 @@ class EvolutionEngine:
         ) = await self._compute_maturation()
 
         # Topology metrics (pass pre-fetched synapses)
-        topo = await compute_topology(self._storage, brain_id, _preloaded_synapses=all_synapses)
+        topo = await compute_topology(
+            self._storage, brain_id, _preloaded_synapses=all_synapses  # type: ignore[arg-type]
+        )
         topology_coherence = topo.clustering_coefficient * 0.5 + topo.largest_component_ratio * 0.5
         knowledge_density = topo.knowledge_density
 

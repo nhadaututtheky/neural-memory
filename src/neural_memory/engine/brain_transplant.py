@@ -7,6 +7,7 @@ machinery.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -321,12 +322,12 @@ async def transplant(
     """
     from neural_memory.core.brain import Brain, BrainConfig
 
-    # Step 1: Export source and extract subgraph
-    source_snapshot = await source_storage.export_brain(source_brain_id)
+    # Step 1 + 2: Export source and target in parallel (independent storages)
+    source_snapshot, target_snapshot = await asyncio.gather(
+        source_storage.export_brain(source_brain_id),
+        target_storage.export_brain(target_brain_id),
+    )
     subgraph = extract_subgraph(source_snapshot, filt)
-
-    # Step 2: Export target
-    target_snapshot = await target_storage.export_brain(target_brain_id)
 
     # Step 3: Merge extracted subgraph into target
     merged, merge_report = merge_snapshots(target_snapshot, subgraph, strategy)

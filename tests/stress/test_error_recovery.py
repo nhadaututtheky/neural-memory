@@ -128,6 +128,8 @@ class TestRelatedMemoryFailureGraceful:
         fake_result.synapses_created = []
         fake_result.conflicts_detected = 0
 
+        mock_storage.get_stats = AsyncMock(return_value={"neuron_count": 1, "fiber_count": 1})
+
         server._storage = mock_storage
         server.get_storage = AsyncMock(return_value=mock_storage)
 

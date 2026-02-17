@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -105,11 +106,13 @@ class SQLiteBrainMixin:
         if brain is None:
             raise ValueError(f"Brain {brain_id} does not exist")
 
-        neurons = await _export_neurons(conn, brain_id)
-        synapses = await _export_synapses(conn, brain_id)
-        fibers = await _export_fibers(conn, brain_id)
-        typed_memories = await _export_typed_memories(conn, brain_id)
-        projects = await _export_projects(conn, brain_id)
+        neurons, synapses, fibers, typed_memories, projects = await asyncio.gather(
+            _export_neurons(conn, brain_id),
+            _export_synapses(conn, brain_id),
+            _export_fibers(conn, brain_id),
+            _export_typed_memories(conn, brain_id),
+            _export_projects(conn, brain_id),
+        )
 
         return BrainSnapshot(
             brain_id=brain_id,

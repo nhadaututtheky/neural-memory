@@ -27,8 +27,10 @@ Step dependency graph::
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from dataclasses import dataclass, replace as dc_replace
+from dataclasses import dataclass
+from dataclasses import replace as dc_replace
 from typing import TYPE_CHECKING, Any
 
 from neural_memory.core.fiber import Fiber
@@ -425,31 +427,32 @@ class CreateSynapsesStep:
     ) -> PipelineContext:
         assert ctx.anchor_neuron is not None
         anchor = ctx.anchor_neuron
+        synapses_to_add: list[Synapse] = []
 
         # Anchor → time neurons
         for time_neuron in ctx.time_neurons:
-            synapse = Synapse.create(
-                source_id=anchor.id,
-                target_id=time_neuron.id,
-                type=SynapseType.HAPPENED_AT,
-                weight=0.9,
+            synapses_to_add.append(
+                Synapse.create(
+                    source_id=anchor.id,
+                    target_id=time_neuron.id,
+                    type=SynapseType.HAPPENED_AT,
+                    weight=0.9,
+                )
             )
-            await storage.add_synapse(synapse)
-            ctx.synapses_created.append(synapse)
 
         # Anchor → entity neurons (weight by mention frequency)
         content_lower = ctx.content.lower()
         for entity_neuron in ctx.entity_neurons:
             mention_count = content_lower.count(entity_neuron.content.lower())
             entity_weight = min(0.95, 0.7 + 0.05 * mention_count)
-            synapse = Synapse.create(
-                source_id=anchor.id,
-                target_id=entity_neuron.id,
-                type=SynapseType.INVOLVES,
-                weight=entity_weight,
+            synapses_to_add.append(
+                Synapse.create(
+                    source_id=anchor.id,
+                    target_id=entity_neuron.id,
+                    type=SynapseType.INVOLVES,
+                    weight=entity_weight,
+                )
             )
-            await storage.add_synapse(synapse)
-            ctx.synapses_created.append(synapse)
 
         # Anchor → concept neurons (weight by keyword importance)
         kw_weight_map = {
@@ -459,14 +462,26 @@ class CreateSynapsesStep:
         for concept_neuron in ctx.concept_neurons:
             kw_weight = kw_weight_map.get(concept_neuron.content.lower(), 0.5)
             concept_weight = min(0.8, 0.4 + 0.3 * kw_weight)
-            synapse = Synapse.create(
-                source_id=anchor.id,
-                target_id=concept_neuron.id,
-                type=SynapseType.RELATED_TO,
-                weight=concept_weight,
+            synapses_to_add.append(
+                Synapse.create(
+                    source_id=anchor.id,
+                    target_id=concept_neuron.id,
+                    type=SynapseType.RELATED_TO,
+                    weight=concept_weight,
+                )
             )
-            await storage.add_synapse(synapse)
-            ctx.synapses_created.append(synapse)
+
+        # Batch add all synapses in parallel
+        if synapses_to_add:
+            results = await asyncio.gather(
+                *[storage.add_synapse(s) for s in synapses_to_add],
+                return_exceptions=True,
+            )
+            for synapse, result in zip(synapses_to_add, results, strict=True):
+                if isinstance(result, BaseException):
+                    logger.warning("Synapse add failed in CreateSynapsesStep: %s", result)
+                else:
+                    ctx.synapses_created.append(synapse)
 
         return ctx
 
@@ -487,16 +502,29 @@ class CoOccurrenceStep:
         storage: NeuralStorage,
         config: BrainConfig,
     ) -> PipelineContext:
+        synapses_to_add: list[Synapse] = []
         for i, neuron_a in enumerate(ctx.entity_neurons):
             for neuron_b in ctx.entity_neurons[i + 1 :]:
-                synapse = Synapse.create(
-                    source_id=neuron_a.id,
-                    target_id=neuron_b.id,
-                    type=SynapseType.CO_OCCURS,
-                    weight=0.5,
+                synapses_to_add.append(
+                    Synapse.create(
+                        source_id=neuron_a.id,
+                        target_id=neuron_b.id,
+                        type=SynapseType.CO_OCCURS,
+                        weight=0.5,
+                    )
                 )
-                await storage.add_synapse(synapse)
-                ctx.synapses_created.append(synapse)
+
+        if synapses_to_add:
+            results = await asyncio.gather(
+                *[storage.add_synapse(s) for s in synapses_to_add],
+                return_exceptions=True,
+            )
+            for synapse, result in zip(synapses_to_add, results, strict=True):
+                if isinstance(result, BaseException):
+                    logger.warning("Co-occurrence synapse add failed: %s", result)
+                else:
+                    ctx.synapses_created.append(synapse)
+
         return ctx
 
 

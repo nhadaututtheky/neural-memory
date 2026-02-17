@@ -131,6 +131,7 @@ class TestPassiveCaptureFailure:
         server._storage = mock_storage
         server.get_storage = AsyncMock(return_value=mock_storage)
 
+        mock_storage.get_stats = AsyncMock(return_value={"neuron_count": 1, "fiber_count": 1})
         mock_storage.get_neurons_batch = AsyncMock(return_value={})
         mock_storage.find_fibers_batch = AsyncMock(return_value=[])
 

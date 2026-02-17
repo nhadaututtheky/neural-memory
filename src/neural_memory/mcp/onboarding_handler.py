@@ -88,13 +88,20 @@ class OnboardingHandler:
         try:
             storage = await self.get_storage()
             brain_id = storage._current_brain_id  # type: ignore[attr-defined]
-            stats: dict[str, int] = await storage.get_stats(brain_id)
+            stats = await storage.get_stats(brain_id)
+            if not isinstance(stats, dict):
+                self._onboarding_shown = True
+                return None
         except Exception:
             logger.debug("Onboarding check: get_stats failed", exc_info=True)
             return None
 
         neuron_count = stats.get("neuron_count", 0)
         fiber_count = stats.get("fiber_count", 0)
+
+        if not isinstance(neuron_count, int) or not isinstance(fiber_count, int):
+            self._onboarding_shown = True
+            return None
 
         if neuron_count > 0 or fiber_count > 0:
             self._onboarding_shown = True

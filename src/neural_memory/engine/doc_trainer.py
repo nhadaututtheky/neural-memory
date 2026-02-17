@@ -9,6 +9,7 @@ Processes markdown files into a neural memory brain by:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -380,34 +381,46 @@ class DocTrainer:
                 await self._storage.add_neuron(neuron)
                 heading_neuron_ids[path] = neuron.id
 
-        # Create CONTAINS synapses: parent heading → child heading
+        # Collect all CONTAINS synapses, then add in parallel
+        synapses_to_add: list[Synapse] = []
+
+        # Parent heading → child heading
         for path in sorted(all_paths, key=len):
             if len(path) > 1:
                 parent_path = path[:-1]
                 parent_id = heading_neuron_ids.get(parent_path)
                 child_id = heading_neuron_ids.get(path)
                 if parent_id and child_id:
-                    synapse = Synapse.create(
-                        source_id=parent_id,
-                        target_id=child_id,
-                        type=SynapseType.CONTAINS,
-                        weight=0.9,
+                    synapses_to_add.append(
+                        Synapse.create(
+                            source_id=parent_id,
+                            target_id=child_id,
+                            type=SynapseType.CONTAINS,
+                            weight=0.9,
+                        )
                     )
-                    await self._storage.add_synapse(synapse)
-                    synapse_count += 1
 
-        # Create CONTAINS synapses: leaf heading → chunk anchor
+        # Leaf heading → chunk anchor
         for heading_path, anchor_id in chunk_anchors:
             heading_id = heading_neuron_ids.get(heading_path)
             if heading_id:
-                synapse = Synapse.create(
-                    source_id=heading_id,
-                    target_id=anchor_id,
-                    type=SynapseType.CONTAINS,
-                    weight=0.8,
+                synapses_to_add.append(
+                    Synapse.create(
+                        source_id=heading_id,
+                        target_id=anchor_id,
+                        type=SynapseType.CONTAINS,
+                        weight=0.8,
+                    )
                 )
-                await self._storage.add_synapse(synapse)
-                synapse_count += 1
+
+        if synapses_to_add:
+            results = await asyncio.gather(
+                *[self._storage.add_synapse(s) for s in synapses_to_add],
+                return_exceptions=True,
+            )
+            for r in results:
+                if not isinstance(r, BaseException):
+                    synapse_count += 1
 
         return synapse_count
 
@@ -430,18 +443,19 @@ class DocTrainer:
         # Weight just above activation_threshold (0.2) to be traversable
         doc_sequence_weight = 0.25
         synapse_count = 0
+        synapses_to_add: list[Synapse] = []
 
         # Connect top-level heading neurons to session TIME neuron
         for path, neuron_id in heading_neuron_ids.items():
             if len(path) == 1:
-                synapse = Synapse.create(
-                    source_id=neuron_id,
-                    target_id=session_time_neuron_id,
-                    type=SynapseType.HAPPENED_AT,
-                    weight=0.3,
+                synapses_to_add.append(
+                    Synapse.create(
+                        source_id=neuron_id,
+                        target_id=session_time_neuron_id,
+                        type=SynapseType.HAPPENED_AT,
+                        weight=0.3,
+                    )
                 )
-                await self._storage.add_synapse(synapse)
-                synapse_count += 1
 
         # Create BEFORE synapses between sibling chunks under same heading
         # (preserves local document order without runaway activation chains)
@@ -451,15 +465,24 @@ class DocTrainer:
 
         for anchor_ids in siblings.values():
             for i in range(len(anchor_ids) - 1):
-                synapse = Synapse.create(
-                    source_id=anchor_ids[i],
-                    target_id=anchor_ids[i + 1],
-                    type=SynapseType.BEFORE,
-                    weight=doc_sequence_weight,
-                    metadata={"doc_sequence": True},
+                synapses_to_add.append(
+                    Synapse.create(
+                        source_id=anchor_ids[i],
+                        target_id=anchor_ids[i + 1],
+                        type=SynapseType.BEFORE,
+                        weight=doc_sequence_weight,
+                        metadata={"doc_sequence": True},
+                    )
                 )
-                await self._storage.add_synapse(synapse)
-                synapse_count += 1
+
+        if synapses_to_add:
+            results = await asyncio.gather(
+                *[self._storage.add_synapse(s) for s in synapses_to_add],
+                return_exceptions=True,
+            )
+            for r in results:
+                if not isinstance(r, BaseException):
+                    synapse_count += 1
 
         return synapse_count
 

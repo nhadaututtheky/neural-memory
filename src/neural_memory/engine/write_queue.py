@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from neural_memory.core.fiber import Fiber
@@ -12,6 +13,21 @@ if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
 
 logger = logging.getLogger(__name__)
+
+
+async def _gather_count(
+    coros: list[Any],
+    error_label: str,
+) -> int:
+    """Run coroutines in parallel, return success count and log failures."""
+    results = await asyncio.gather(*coros, return_exceptions=True)
+    ok = 0
+    for r in results:
+        if isinstance(r, BaseException):
+            logger.warning("%s: %s", error_label, r)
+        else:
+            ok += 1
+    return ok
 
 
 class DeferredWriteQueue:
@@ -69,48 +85,55 @@ class DeferredWriteQueue:
     async def flush(self, storage: NeuralStorage) -> int:
         """Flush all pending writes to storage.
 
+        Uses asyncio.gather within each category for parallel writes.
+        Categories run sequentially (creates before updates) to preserve
+        ordering guarantees.
+
         Args:
             storage: Storage backend to write to
 
         Returns:
-            Count of items written
+            Count of items successfully written
         """
         count = 0
 
-        for fiber in self._fiber_updates:
-            try:
-                await storage.update_fiber(fiber)
-                count += 1
-            except Exception:
-                logger.warning("Deferred fiber update failed", exc_info=True)
+        # Fiber updates — parallel
+        if self._fiber_updates:
+            count += await _gather_count(
+                [storage.update_fiber(f) for f in self._fiber_updates],
+                "Deferred fiber update failed",
+            )
 
-        for synapse in self._synapse_creates:
-            try:
-                await storage.add_synapse(synapse)
-                count += 1
-            except Exception:
-                logger.warning("Deferred synapse create failed", exc_info=True)
+        # Synapse creates — parallel (before updates to avoid update-before-create)
+        if self._synapse_creates:
+            count += await _gather_count(
+                [storage.add_synapse(s) for s in self._synapse_creates],
+                "Deferred synapse create failed",
+            )
 
-        for synapse in self._synapse_updates:
-            try:
-                await storage.update_synapse(synapse)
-                count += 1
-            except Exception:
-                logger.warning("Deferred synapse update failed", exc_info=True)
+        # Synapse updates — parallel
+        if self._synapse_updates:
+            count += await _gather_count(
+                [storage.update_synapse(s) for s in self._synapse_updates],
+                "Deferred synapse update failed",
+            )
 
-        for state in self._state_updates:
-            try:
-                await storage.update_neuron_state(state)
-                count += 1
-            except Exception:
-                logger.warning("Deferred state update failed", exc_info=True)
+        # Neuron state updates — parallel
+        if self._state_updates:
+            count += await _gather_count(
+                [storage.update_neuron_state(s) for s in self._state_updates],
+                "Deferred state update failed",
+            )
 
-        for neuron_a, neuron_b, strength, anchor in self._co_activation_records:
-            try:
-                await storage.record_co_activation(neuron_a, neuron_b, strength, anchor)
-                count += 1
-            except Exception:
-                logger.warning("Deferred co-activation record failed", exc_info=True)
+        # Co-activation records — parallel
+        if self._co_activation_records:
+            count += await _gather_count(
+                [
+                    storage.record_co_activation(a, b, strength, anchor)
+                    for a, b, strength, anchor in self._co_activation_records
+                ],
+                "Deferred co-activation record failed",
+            )
 
         self.clear()
         return count

@@ -7,6 +7,7 @@ SQLite, reusing the existing export_brain()/import_brain() machinery.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from dataclasses import dataclass, field
@@ -414,11 +415,12 @@ class VersioningEngine:
         Raises:
             ValueError: If either version not found
         """
-        from_result = await self._storage.get_version(brain_id, from_version_id)
+        from_result, to_result = await asyncio.gather(
+            self._storage.get_version(brain_id, from_version_id),
+            self._storage.get_version(brain_id, to_version_id),
+        )
         if from_result is None:
             raise ValueError(f"Version {from_version_id} not found")
-
-        to_result = await self._storage.get_version(brain_id, to_version_id)
         if to_result is None:
             raise ValueError(f"Version {to_version_id} not found")
 
