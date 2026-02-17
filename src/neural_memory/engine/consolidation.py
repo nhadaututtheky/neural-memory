@@ -19,9 +19,9 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from neural_memory.core.fiber import Fiber
-from neural_memory.engine.clustering import UnionFind
 from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
+from neural_memory.engine.clustering import UnionFind
 from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
@@ -906,6 +906,15 @@ class ConsolidationEngine:
             report.action_events_pruned = habit_report.action_events_pruned
         except Exception:
             logger.debug("Habit learning failed (non-critical)", exc_info=True)
+
+        # Also learn query topic patterns (same substrate, different metadata)
+        try:
+            from neural_memory.engine.query_pattern_mining import learn_query_patterns
+
+            qp_report = await learn_query_patterns(self._storage, brain.config, reference_time)
+            report.habits_learned += qp_report.patterns_learned
+        except Exception:
+            logger.debug("Query pattern learning failed (non-critical)", exc_info=True)
 
     async def _dedup(
         self,

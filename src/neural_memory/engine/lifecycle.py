@@ -7,7 +7,8 @@ and reinforcement for frequently accessed memories.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field, replace as dc_replace
+from dataclasses import dataclass, field
+from dataclasses import replace as dc_replace
 from datetime import datetime
 from typing import TYPE_CHECKING
 

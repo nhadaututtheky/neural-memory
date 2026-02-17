@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any
 
 from neural_memory import __version__
 from neural_memory.engine.hooks import HookRegistry
+from neural_memory.mcp.alert_handler import AlertHandler
 from neural_memory.mcp.auto_handler import AutoHandler
 from neural_memory.mcp.conflict_handler import ConflictHandler
 from neural_memory.mcp.db_train_handler import DBTrainHandler
@@ -83,6 +84,7 @@ class MCPServer(
     TrainHandler,
     DBTrainHandler,
     MaintenanceHandler,
+    AlertHandler,
     Mem0SyncHandler,
     OnboardingHandler,
     ExpiryCleanupHandler,
@@ -103,6 +105,7 @@ class MCPServer(
         TrainHandler        — _train (train docs into brain, status)
         DBTrainHandler      — _train_db (train DB schema into brain, status)
         MaintenanceHandler  — _check_maintenance, health pulse
+        AlertHandler        — _alerts, persistent alert lifecycle
         Mem0SyncHandler     — maybe_start_mem0_sync, background auto-sync
         OnboardingHandler   — _check_onboarding, fresh-brain guidance
         ExpiryCleanupHandler — _maybe_run_expiry_cleanup, auto-delete expired
@@ -180,6 +183,7 @@ class MCPServer(
             "nmem_conflicts": self._conflicts,
             "nmem_train": self._train,
             "nmem_train_db": self._train_db,
+            "nmem_alerts": self._alerts,
         }
         handler = dispatch.get(name)
         if handler:

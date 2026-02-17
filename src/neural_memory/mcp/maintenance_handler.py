@@ -332,6 +332,13 @@ class MaintenanceHandler:
             # Trigger expiry cleanup if due
             await self._maybe_run_expiry_cleanup()  # type: ignore[attr-defined]
 
+            # Persist alerts from health pulse + auto-resolve cleared conditions
+            try:
+                await self._create_alerts_from_pulse(pulse)  # type: ignore[attr-defined]
+                await self._auto_resolve_cleared(pulse)  # type: ignore[attr-defined]
+            except Exception:
+                logger.debug("Alert persistence failed", exc_info=True)
+
         return pulse
 
 

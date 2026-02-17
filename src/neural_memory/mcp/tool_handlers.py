@@ -342,6 +342,11 @@ class ToolHandler:
         if onboarding:
             response["onboarding"] = onboarding
 
+        # Surface pending alerts count
+        alert_info = await self._surface_pending_alerts()  # type: ignore[attr-defined]
+        if alert_info:
+            response.update(alert_info)
+
         return response
 
     async def _recall(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -489,10 +494,30 @@ class ToolHandler:
             },
         )
 
+        # Suggest related queries from learned patterns
+        try:
+            from neural_memory.engine.query_pattern_mining import (
+                extract_topics,
+                suggest_follow_up_queries,
+            )
+
+            topics = extract_topics(query)
+            if topics:
+                related = await suggest_follow_up_queries(storage, topics, brain.config)
+                if related:
+                    response["related_queries"] = related
+        except Exception:
+            logger.debug("Query pattern suggestion failed", exc_info=True)
+
         # Onboarding hint for fresh brains
         onboarding = await self._check_onboarding()
         if onboarding:
             response["onboarding"] = onboarding
+
+        # Surface pending alerts count
+        alert_info = await self._surface_pending_alerts()  # type: ignore[attr-defined]
+        if alert_info:
+            response.update(alert_info)
 
         return response
 
@@ -523,25 +548,36 @@ class ToolHandler:
             ]
             fibers = fresh_fibers[:limit]
 
-        context_parts = []
-        for fiber in fibers:
-            content = fiber.summary
-            if not content and fiber.anchor_neuron_id:
-                anchor = await storage.get_neuron(fiber.anchor_neuron_id)
-                if anchor:
-                    content = anchor.content
-            if content:
-                context_parts.append(f"- {content}")
+        # Smart context optimization: score, dedup, budget
+        from neural_memory.engine.context_optimizer import optimize_context
 
-        context_text = "\n".join(context_parts) if context_parts else "No context available."
+        try:
+            max_tokens = int(self.config.brain.max_context_tokens)
+            if max_tokens < 100:
+                max_tokens = 4000
+        except (TypeError, ValueError, AttributeError):
+            max_tokens = 4000
+        plan = await optimize_context(storage, fibers, max_tokens)
+
+        if plan.items:
+            context_parts = [f"- {item.content}" for item in plan.items]
+            context_text = "\n".join(context_parts)
+        else:
+            context_text = "No context available."
 
         await self._record_tool_action("context")
 
         response: dict[str, Any] = {
             "context": context_text,
-            "count": len(context_parts),
-            "tokens_used": len(context_text.split()),
+            "count": len(plan.items),
+            "tokens_used": plan.total_tokens,
         }
+
+        if plan.dropped_count > 0:
+            response["optimization_stats"] = {
+                "items_dropped": plan.dropped_count,
+                "top_score": round(plan.items[0].score, 4) if plan.items else 0.0,
+            }
 
         # Expiry warnings (opt-in)
         warn_expiry_days = args.get("warn_expiry_days")
@@ -565,6 +601,11 @@ class ToolHandler:
                     ]
             except Exception:
                 logger.debug("Expiry warning check failed", exc_info=True)
+
+        # Surface pending alerts count
+        alert_info = await self._surface_pending_alerts()  # type: ignore[attr-defined]
+        if alert_info:
+            response.update(alert_info)
 
         return response
 

@@ -10,10 +10,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import timedelta
+from typing import TYPE_CHECKING, Any
 
 from neural_memory.utils.timeutils import utcnow
-from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from neural_memory.integration.adapters.mem0_adapter import _BaseMem0Adapter

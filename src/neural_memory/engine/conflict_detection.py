@@ -20,7 +20,8 @@ from __future__ import annotations
 
 import asyncio
 import re
-from dataclasses import dataclass, field, replace as dc_replace
+from dataclasses import dataclass, field
+from dataclasses import replace as dc_replace
 from enum import StrEnum
 from typing import TYPE_CHECKING
 

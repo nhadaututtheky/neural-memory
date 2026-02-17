@@ -13,6 +13,7 @@ from neural_memory.storage.base import NeuralStorage
 from neural_memory.storage.neuron_cache import NeuronLookupCache
 from neural_memory.storage.read_pool import ReadPool
 from neural_memory.storage.sqlite_action_log import SQLiteActionLogMixin
+from neural_memory.storage.sqlite_alerts import SQLiteAlertsMixin
 from neural_memory.storage.sqlite_brain_ops import SQLiteBrainMixin
 from neural_memory.storage.sqlite_coactivation import SQLiteCoActivationMixin
 from neural_memory.storage.sqlite_fibers import SQLiteFiberMixin
@@ -44,6 +45,7 @@ class SQLiteStorage(
     SQLiteCoActivationMixin,
     SQLiteVersioningMixin,
     SQLiteSyncStateMixin,
+    SQLiteAlertsMixin,
     SQLiteBrainMixin,
     NeuralStorage,
 ):
@@ -292,6 +294,7 @@ class SQLiteStorage(
         conn = self._ensure_conn()
 
         brain_tables = (
+            "alerts",
             "sync_states",
             "action_events",
             "brain_versions",

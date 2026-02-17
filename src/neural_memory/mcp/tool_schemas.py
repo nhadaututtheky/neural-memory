@@ -566,4 +566,29 @@ def get_tool_schemas() -> list[dict[str, Any]]:
                 "required": ["action"],
             },
         },
+        {
+            "name": "nmem_alerts",
+            "description": "View and manage brain health alerts. Alerts are created automatically from health checks and persist across sessions. Use 'list' to see active alerts, 'acknowledge' to mark as handled.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["list", "acknowledge"],
+                        "description": "list=view active/seen alerts, acknowledge=mark alert as handled",
+                    },
+                    "alert_id": {
+                        "type": "string",
+                        "description": "Alert ID to acknowledge (required for acknowledge action)",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 200,
+                        "description": "Max alerts to list (default: 50)",
+                    },
+                },
+                "required": ["action"],
+            },
+        },
     ]

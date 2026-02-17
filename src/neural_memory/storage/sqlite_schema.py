@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 # â”€â”€ Migrations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Each entry maps (from_version -> to_version) with a list of SQL statements.
@@ -191,6 +191,26 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
             metadata TEXT DEFAULT '{}',
             PRIMARY KEY (brain_id, source_system, source_collection)
         )""",
+    ],
+    (13, 14): [
+        # Proactive alerts queue for brain health monitoring
+        """CREATE TABLE IF NOT EXISTS alerts (
+            id TEXT NOT NULL,
+            brain_id TEXT NOT NULL,
+            alert_type TEXT NOT NULL,
+            severity TEXT NOT NULL DEFAULT 'low',
+            message TEXT NOT NULL,
+            recommended_action TEXT DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'active',
+            created_at TEXT NOT NULL,
+            seen_at TEXT,
+            acknowledged_at TEXT,
+            resolved_at TEXT,
+            metadata TEXT DEFAULT '{}',
+            PRIMARY KEY (brain_id, id)
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(brain_id, status)",
+        "CREATE INDEX IF NOT EXISTS idx_alerts_type ON alerts(brain_id, alert_type, status)",
     ],
 }
 
@@ -483,4 +503,23 @@ CREATE TABLE IF NOT EXISTS sync_states (
     metadata TEXT DEFAULT '{}',
     PRIMARY KEY (brain_id, source_system, source_collection)
 );
+
+-- Proactive alerts queue for brain health monitoring
+CREATE TABLE IF NOT EXISTS alerts (
+    id TEXT NOT NULL,
+    brain_id TEXT NOT NULL,
+    alert_type TEXT NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'low',
+    message TEXT NOT NULL,
+    recommended_action TEXT DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL,
+    seen_at TEXT,
+    acknowledged_at TEXT,
+    resolved_at TEXT,
+    metadata TEXT DEFAULT '{}',
+    PRIMARY KEY (brain_id, id)
+);
+CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(brain_id, status);
+CREATE INDEX IF NOT EXISTS idx_alerts_type ON alerts(brain_id, alert_type, status);
 """
