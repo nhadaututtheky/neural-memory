@@ -52,7 +52,7 @@ class DriftReport:
     """Report of tag drift for a canonical tag."""
 
     canonical: str
-    variants: list[str]
+    variants: tuple[str, ...]
     recommendation: str
 
 
@@ -156,7 +156,7 @@ class TagNormalizer:
                 reports.append(
                     DriftReport(
                         canonical=canonical,
-                        variants=unique_variants,
+                        variants=tuple(unique_variants),
                         recommendation=f"Normalize all to '{canonical}'",
                     )
                 )

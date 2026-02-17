@@ -268,6 +268,6 @@ class EternalContext:
                 neuron = await self._storage.get_neuron(fiber.anchor_neuron_id)
                 if neuron:
                     return neuron.content
-        except Exception as e:
-            logger.debug("Failed to get content for fiber %s: %s", fiber_id, e)
+        except (OSError, LookupError, ValueError) as e:
+            logger.warning("Failed to get content for fiber %s: %s", fiber_id, e)
         return None

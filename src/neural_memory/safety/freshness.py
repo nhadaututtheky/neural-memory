@@ -23,7 +23,7 @@ class FreshnessLevel(StrEnum):
     ANCIENT = "ancient"  # > 365 days
 
 
-@dataclass
+@dataclass(frozen=True)
 class FreshnessResult:
     """Result of freshness evaluation."""
 
@@ -168,7 +168,7 @@ def get_freshness_indicator(level: FreshnessLevel, use_ascii: bool = True) -> st
     return indicators.get(level, "[ ]")
 
 
-@dataclass
+@dataclass(frozen=True)
 class MemoryFreshnessReport:
     """Report on memory freshness for a set of memories."""
 

@@ -81,7 +81,7 @@ INVERSE_TYPES: dict[SynapseType, SynapseType] = {
 }
 
 
-@dataclass
+@dataclass(frozen=True)
 class Synapse:
     """
     A synapse represents a connection between two neurons.

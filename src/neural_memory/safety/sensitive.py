@@ -10,9 +10,15 @@ Detects potentially sensitive information like:
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from enum import StrEnum
+
+logger = logging.getLogger(__name__)
+
+# Maximum content length for sensitive detection (prevent ReDoS on huge input)
+_MAX_CONTENT_LENGTH = 100_000
 
 
 class SensitiveType(StrEnum):
@@ -168,6 +174,19 @@ def get_default_patterns() -> list[SensitivePattern]:
     ]
 
 
+# Pre-compiled regex cache: pattern string -> compiled regex
+_compiled_cache: dict[str, re.Pattern[str]] = {}
+
+
+def _get_compiled(pattern_str: str) -> re.Pattern[str]:
+    """Get or compile a regex pattern, with caching."""
+    compiled = _compiled_cache.get(pattern_str)
+    if compiled is None:
+        compiled = re.compile(pattern_str)
+        _compiled_cache[pattern_str] = compiled
+    return compiled
+
+
 def check_sensitive_content(
     content: str,
     patterns: list[SensitivePattern] | None = None,
@@ -187,6 +206,9 @@ def check_sensitive_content(
     if patterns is None:
         patterns = get_default_patterns()
 
+    # Cap content length to prevent ReDoS on huge input
+    content = content[:_MAX_CONTENT_LENGTH]
+
     matches: list[SensitiveMatch] = []
 
     for pattern in patterns:
@@ -194,7 +216,7 @@ def check_sensitive_content(
             continue
 
         try:
-            regex = re.compile(pattern.pattern)
+            regex = _get_compiled(pattern.pattern)
             for match in regex.finditer(content):
                 matches.append(
                     SensitiveMatch(
@@ -206,8 +228,8 @@ def check_sensitive_content(
                         end=match.end(),
                     )
                 )
-        except re.error:
-            # Skip invalid patterns
+        except re.error as e:
+            logger.warning("Invalid regex pattern '%s': %s", pattern.name, e)
             continue
 
     # Remove duplicates (same position)

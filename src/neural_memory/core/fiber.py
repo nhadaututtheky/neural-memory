@@ -10,7 +10,7 @@ from uuid import uuid4
 from neural_memory.utils.timeutils import utcnow
 
 
-@dataclass
+@dataclass(frozen=True)
 class Fiber:
     """
     A fiber represents a signal pathway through related neurons.
@@ -288,7 +288,8 @@ class Fiber:
     def _ensure_pathway_index(self) -> dict[str, int]:
         """Build pathway index lazily on first access."""
         if self._pathway_index is None:
-            self._pathway_index = {nid: i for i, nid in enumerate(self.pathway)}
+            index = {nid: i for i, nid in enumerate(self.pathway)}
+            object.__setattr__(self, "_pathway_index", index)
         return self._pathway_index
 
     def pathway_position(self, neuron_id: str) -> int | None:

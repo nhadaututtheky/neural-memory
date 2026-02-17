@@ -193,7 +193,7 @@ class TestBrainModeConfig:
 
         assert data["mode"] == "shared"
         assert data["shared"]["server_url"] == "http://localhost:8000"
-        assert data["shared"]["api_key"] == "key"
+        assert data["shared"]["api_key"] == "***"  # masked in serialization
 
     def test_to_dict_hybrid(self) -> None:
         """Test serialization of hybrid config."""
@@ -269,5 +269,5 @@ class TestBrainModeConfig:
         assert restored.hybrid is not None
         assert restored.hybrid.local_path == original.hybrid.local_path
         assert restored.hybrid.server_url == original.hybrid.server_url
-        assert restored.hybrid.api_key == original.hybrid.api_key
+        assert restored.hybrid.api_key == "***"  # api_key masked in serialization
         assert restored.hybrid.sync_interval_seconds == original.hybrid.sync_interval_seconds

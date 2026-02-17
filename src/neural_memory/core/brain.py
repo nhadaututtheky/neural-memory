@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace as dc_replace
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
@@ -65,84 +65,7 @@ class BrainConfig:
 
     def with_updates(self, **kwargs: Any) -> BrainConfig:
         """Create a new config with updated values."""
-        return BrainConfig(
-            decay_rate=kwargs.get("decay_rate", self.decay_rate),
-            reinforcement_delta=kwargs.get("reinforcement_delta", self.reinforcement_delta),
-            activation_threshold=kwargs.get("activation_threshold", self.activation_threshold),
-            max_spread_hops=kwargs.get("max_spread_hops", self.max_spread_hops),
-            max_context_tokens=kwargs.get("max_context_tokens", self.max_context_tokens),
-            default_synapse_weight=kwargs.get(
-                "default_synapse_weight", self.default_synapse_weight
-            ),
-            hebbian_delta=kwargs.get("hebbian_delta", self.hebbian_delta),
-            hebbian_threshold=kwargs.get("hebbian_threshold", self.hebbian_threshold),
-            hebbian_initial_weight=kwargs.get(
-                "hebbian_initial_weight", self.hebbian_initial_weight
-            ),
-            consolidation_prune_threshold=kwargs.get(
-                "consolidation_prune_threshold", self.consolidation_prune_threshold
-            ),
-            prune_min_inactive_days=kwargs.get(
-                "prune_min_inactive_days", self.prune_min_inactive_days
-            ),
-            merge_overlap_threshold=kwargs.get(
-                "merge_overlap_threshold", self.merge_overlap_threshold
-            ),
-            sigmoid_steepness=kwargs.get("sigmoid_steepness", self.sigmoid_steepness),
-            default_firing_threshold=kwargs.get(
-                "default_firing_threshold", self.default_firing_threshold
-            ),
-            default_refractory_ms=kwargs.get("default_refractory_ms", self.default_refractory_ms),
-            lateral_inhibition_k=kwargs.get("lateral_inhibition_k", self.lateral_inhibition_k),
-            lateral_inhibition_factor=kwargs.get(
-                "lateral_inhibition_factor", self.lateral_inhibition_factor
-            ),
-            learning_rate=kwargs.get("learning_rate", self.learning_rate),
-            weight_normalization_budget=kwargs.get(
-                "weight_normalization_budget", self.weight_normalization_budget
-            ),
-            novelty_boost_max=kwargs.get("novelty_boost_max", self.novelty_boost_max),
-            novelty_decay_rate=kwargs.get("novelty_decay_rate", self.novelty_decay_rate),
-            co_activation_threshold=kwargs.get(
-                "co_activation_threshold", self.co_activation_threshold
-            ),
-            co_activation_window_days=kwargs.get(
-                "co_activation_window_days", self.co_activation_window_days
-            ),
-            max_inferences_per_run=kwargs.get(
-                "max_inferences_per_run", self.max_inferences_per_run
-            ),
-            emotional_decay_factor=kwargs.get(
-                "emotional_decay_factor", self.emotional_decay_factor
-            ),
-            emotional_weight_scale=kwargs.get(
-                "emotional_weight_scale", self.emotional_weight_scale
-            ),
-            sequential_window_seconds=kwargs.get(
-                "sequential_window_seconds", self.sequential_window_seconds
-            ),
-            dream_neuron_count=kwargs.get("dream_neuron_count", self.dream_neuron_count),
-            dream_decay_multiplier=kwargs.get(
-                "dream_decay_multiplier", self.dream_decay_multiplier
-            ),
-            habit_min_frequency=kwargs.get("habit_min_frequency", self.habit_min_frequency),
-            habit_suggestion_min_weight=kwargs.get(
-                "habit_suggestion_min_weight", self.habit_suggestion_min_weight
-            ),
-            habit_suggestion_min_count=kwargs.get(
-                "habit_suggestion_min_count", self.habit_suggestion_min_count
-            ),
-            embedding_enabled=kwargs.get("embedding_enabled", self.embedding_enabled),
-            embedding_provider=kwargs.get("embedding_provider", self.embedding_provider),
-            embedding_model=kwargs.get("embedding_model", self.embedding_model),
-            embedding_similarity_threshold=kwargs.get(
-                "embedding_similarity_threshold", self.embedding_similarity_threshold
-            ),
-            embedding_activation_boost=kwargs.get(
-                "embedding_activation_boost", self.embedding_activation_boost
-            ),
-            freshness_weight=kwargs.get("freshness_weight", self.freshness_weight),
-        )
+        return dc_replace(self, **kwargs)
 
 
 @dataclass(frozen=True)
@@ -375,7 +298,7 @@ class Brain:
         return self.owner_id == user_id
 
 
-@dataclass
+@dataclass(frozen=True)
 class BrainSnapshot:
     """
     A serializable snapshot of a brain for export/import.

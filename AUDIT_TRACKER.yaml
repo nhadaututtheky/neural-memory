@@ -1058,6 +1058,186 @@ phases:
     modules: [core/, safety/, utils/, sync/]
     loc: 4238
     files: 21
-    status: PENDING
-    findings: []
-    fixes: []
+    status: COMPLETE
+    started: "2026-02-17"
+    completed: "2026-02-17"
+    findings:
+      # --- CRITICAL ---
+      - id: P6-001
+        severity: CRITICAL
+        category: IMMUTABILITY
+        desc: "synapse.py — Synapse is not frozen (violates core model immutability contract)"
+        files: [core/synapse.py]
+        status: FIXED
+      # --- HIGH ---
+      - id: P6-002
+        severity: HIGH
+        category: IMMUTABILITY
+        desc: "fiber.py — Fiber is not frozen (has _pathway_index lazy cache)"
+        files: [core/fiber.py]
+        status: FIXED
+      - id: P6-003
+        severity: HIGH
+        category: IMMUTABILITY
+        desc: "neuron.py — NeuronState is not frozen"
+        files: [core/neuron.py]
+        status: FIXED
+      - id: P6-004
+        severity: HIGH
+        category: IMMUTABILITY
+        desc: "Mutable dict/list defaults on frozen dataclasses (Neuron.metadata, Brain.metadata, etc.)"
+        files: [core/neuron.py, core/brain.py, core/fiber.py]
+        status: DEFERRED  # Python limitation — document as forbidden mutation
+      - id: P6-005
+        severity: HIGH
+        category: ERROR_HANDLING
+        desc: "SyncEvent.from_dict — datetime.fromisoformat uncaught ValueError on malformed timestamp"
+        files: [sync/client.py]
+        status: FIXED
+      # --- MEDIUM ---
+      - id: P6-006
+        severity: MEDIUM
+        category: ERROR_HANDLING
+        desc: "project.py:179-184 — from_dict datetime.fromisoformat uncaught ValueError"
+        files: [core/project.py]
+        status: FIXED
+      - id: P6-007
+        severity: MEDIUM
+        category: SECURITY
+        desc: "brain_mode.py:223 — to_dict serializes api_key in plaintext"
+        files: [core/brain_mode.py]
+        status: FIXED
+      - id: P6-008
+        severity: MEDIUM
+        category: PERFORMANCE
+        desc: "sensitive.py:196-197 — re.compile() inside loop on every check_sensitive_content call"
+        files: [safety/sensitive.py]
+        status: FIXED
+      - id: P6-009
+        severity: MEDIUM
+        category: PERFORMANCE
+        desc: "trigger_engine.py:216-218 — re.search() on raw strings inside hot loop"
+        files: [core/trigger_engine.py]
+        status: FIXED
+      - id: P6-010
+        severity: MEDIUM
+        category: CODE_QUALITY
+        desc: "brain.py:66-145 — BrainConfig.with_updates manually lists 40 fields (fragile)"
+        files: [core/brain.py]
+        status: FIXED
+      - id: P6-011
+        severity: MEDIUM
+        category: SECURITY
+        desc: "sensitive.py — no content length cap before regex matching (ReDoS risk)"
+        files: [safety/sensitive.py]
+        status: FIXED
+      - id: P6-012
+        severity: MEDIUM
+        category: IMMUTABILITY
+        desc: "Neuron.with_metadata shared mutable reference risk"
+        files: [core/neuron.py]
+        status: DEFERRED  # document metadata values should be immutable
+      - id: P6-013
+        severity: MEDIUM
+        category: PERFORMANCE
+        desc: "EternalContext.get_status N+1: 10 separate queries for type counts"
+        files: [core/eternal_context.py]
+        status: DEFERRED
+      - id: P6-014
+        severity: MEDIUM
+        category: CORRECTNESS
+        desc: "suggest_memory_type uses substring matching (false positives)"
+        files: [core/memory_types.py]
+        status: DEFERRED
+      - id: P6-015
+        severity: MEDIUM
+        category: CORRECTNESS
+        desc: "Config singleton not thread-safe"
+        files: [utils/config.py]
+        status: DEFERRED
+      # --- LOW ---
+      - id: P6-016
+        severity: LOW
+        category: IMMUTABILITY
+        desc: "DriftReport.variants is mutable list on frozen dataclass"
+        files: [utils/tag_normalizer.py]
+        status: FIXED
+      - id: P6-017
+        severity: LOW
+        category: IMMUTABILITY
+        desc: "FreshnessResult and MemoryFreshnessReport not frozen"
+        files: [safety/freshness.py]
+        status: FIXED
+      - id: P6-018
+        severity: LOW
+        category: IMMUTABILITY
+        desc: "SyncEvent not frozen"
+        files: [sync/client.py]
+        status: DEFERRED  # has mutable dict[str, Any] data field
+      - id: P6-019
+        severity: LOW
+        category: IMMUTABILITY
+        desc: "BrainSnapshot not frozen"
+        files: [core/brain.py]
+        status: FIXED
+      - id: P6-020
+        severity: LOW
+        category: ERROR_HANDLING
+        desc: "sensitive.py — silently swallows regex compilation errors"
+        files: [safety/sensitive.py]
+        status: FIXED
+      - id: P6-021
+        severity: LOW
+        category: CODE_QUALITY
+        desc: "sync/client.py — redundant import logging inside run_forever()"
+        files: [sync/client.py]
+        status: FIXED
+      - id: P6-022
+        severity: LOW
+        category: CORRECTNESS
+        desc: "SyncEvent.from_dict may produce timezone-aware datetime"
+        files: [sync/client.py]
+        status: FIXED
+      - id: P6-023
+        severity: LOW
+        category: ERROR_HANDLING
+        desc: "eternal_context.py:271 — broad except Exception in _get_memory_content"
+        files: [core/eternal_context.py]
+        status: FIXED
+    fixes:
+      - date: "2026-02-17"
+        desc: "Freeze Synapse, Fiber, NeuronState dataclasses (object.__setattr__ for Fiber cache)"
+        files: [core/synapse.py, core/fiber.py, core/neuron.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Guard SyncEvent.from_dict timestamp with try/except + strip tzinfo"
+        files: [sync/client.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Mask api_key in BrainModeConfig.to_dict serialization"
+        files: [core/brain_mode.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Pre-compile regex patterns in sensitive.py (cache) and trigger_engine.py (module-level)"
+        files: [safety/sensitive.py, core/trigger_engine.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Replace 80-line BrainConfig.with_updates with dc_replace(self, **kwargs)"
+        files: [core/brain.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Add _MAX_CONTENT_LENGTH cap + logger.warning for invalid regex in sensitive.py"
+        files: [safety/sensitive.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Guard Project.from_dict datetime parsing with try/except + utcnow() fallback"
+        files: [core/project.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "DriftReport.variants list -> tuple, freeze FreshnessResult + MemoryFreshnessReport + BrainSnapshot"
+        files: [utils/tag_normalizer.py, safety/freshness.py, core/brain.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Remove redundant import logging, narrow broad Exception in eternal_context"
+        files: [sync/client.py, core/eternal_context.py]
+        status: VERIFIED

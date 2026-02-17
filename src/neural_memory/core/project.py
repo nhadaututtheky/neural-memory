@@ -172,16 +172,30 @@ class Project:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Project:
         """Create from dictionary."""
+        try:
+            start_date = datetime.fromisoformat(data["start_date"])
+        except (ValueError, TypeError, KeyError):
+            start_date = utcnow()
+        try:
+            created_at = datetime.fromisoformat(data["created_at"])
+        except (ValueError, TypeError, KeyError):
+            created_at = utcnow()
+        end_date = None
+        if data.get("end_date"):
+            try:
+                end_date = datetime.fromisoformat(data["end_date"])
+            except (ValueError, TypeError):
+                pass
         return cls(
             id=data["id"],
             name=data["name"],
             description=data.get("description", ""),
-            start_date=datetime.fromisoformat(data["start_date"]),
-            end_date=datetime.fromisoformat(data["end_date"]) if data.get("end_date") else None,
+            start_date=start_date,
+            end_date=end_date,
             tags=frozenset(data.get("tags", [])),
             priority=data.get("priority", 1.0),
             metadata=data.get("metadata", {}),
-            created_at=datetime.fromisoformat(data["created_at"]),
+            created_at=created_at,
         )
 
 

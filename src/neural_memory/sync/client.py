@@ -45,12 +45,16 @@ class SyncEvent:
         brain_id = data.get("brain_id")
         if not event_type or not brain_id:
             return None
+        ts = utcnow()
+        if data.get("timestamp"):
+            try:
+                ts = datetime.fromisoformat(data["timestamp"]).replace(tzinfo=None)
+            except (ValueError, TypeError):
+                pass  # fall back to utcnow()
         return cls(
             type=event_type,
             brain_id=brain_id,
-            timestamp=datetime.fromisoformat(data["timestamp"])
-            if data.get("timestamp")
-            else utcnow(),
+            timestamp=ts,
             data=data.get("data", {}),
             source_client_id=data.get("source_client_id"),
         )
@@ -395,9 +399,7 @@ class SyncClient:
             except asyncio.CancelledError:
                 break
             except Exception:
-                import logging
-
-                logging.getLogger(__name__).warning(
+                logger.warning(
                     "WebSocket receive error, state → DISCONNECTED", exc_info=True
                 )
                 self._state = SyncClientState.DISCONNECTED

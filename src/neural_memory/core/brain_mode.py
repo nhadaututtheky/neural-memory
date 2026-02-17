@@ -220,7 +220,7 @@ class BrainModeConfig:
         if self.shared:
             result["shared"] = {
                 "server_url": self.shared.server_url,
-                "api_key": self.shared.api_key,
+                "api_key": "***" if self.shared.api_key else None,
                 "timeout": self.shared.timeout,
                 "retry_count": self.shared.retry_count,
                 "retry_delay": self.shared.retry_delay,
@@ -230,7 +230,7 @@ class BrainModeConfig:
             result["hybrid"] = {
                 "local_path": self.hybrid.local_path,
                 "server_url": self.hybrid.server_url,
-                "api_key": self.hybrid.api_key,
+                "api_key": "***" if self.hybrid.api_key else None,
                 "sync_strategy": self.hybrid.sync_strategy.value,
                 "sync_interval_seconds": self.hybrid.sync_interval_seconds,
                 "auto_sync_on_encode": self.hybrid.auto_sync_on_encode,

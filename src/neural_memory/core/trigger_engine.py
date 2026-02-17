@@ -49,46 +49,46 @@ class TriggerResult:
 
 # ──────────────────── Pattern lists ────────────────────
 
-USER_LEAVING_PATTERNS: list[str] = [
+USER_LEAVING_PATTERNS: list[re.Pattern[str]] = [
     # English
-    r"\b(?:bye|goodbye|good\s*bye|see you|gotta go|signing off|logging off)\b",
-    r"\b(?:i'm done|that's all|that's it|wrapping up|call it a day)\b",
-    r"\b(?:heading out|leaving now|going offline)\b",
+    re.compile(r"\b(?:bye|goodbye|good\s*bye|see you|gotta go|signing off|logging off)\b", re.IGNORECASE),
+    re.compile(r"\b(?:i'm done|that's all|that's it|wrapping up|call it a day)\b", re.IGNORECASE),
+    re.compile(r"\b(?:heading out|leaving now|going offline)\b", re.IGNORECASE),
     # Vietnamese
-    r"(?:tôi đi|tạm nghỉ|hết giờ|bye|tạm biệt|nghỉ thôi|đi ngủ)",
-    r"(?:kết thúc|xong rồi đi|thôi nhé|hẹn gặp lại)",
+    re.compile(r"(?:tôi đi|tạm nghỉ|hết giờ|bye|tạm biệt|nghỉ thôi|đi ngủ)", re.IGNORECASE),
+    re.compile(r"(?:kết thúc|xong rồi đi|thôi nhé|hẹn gặp lại)", re.IGNORECASE),
 ]
 
-MILESTONE_PATTERNS: list[str] = [
+MILESTONE_PATTERNS: list[re.Pattern[str]] = [
     # English
-    r"\b(?:done|finished|completed|shipped|deployed|merged|released)\b",
-    r"\b(?:all tests pass|tests passing|build succeeded|build passing)\b",
-    r"\b(?:pass test|tests? green|ci green|pipeline green)\b",
-    r"\b(?:feature complete|implementation complete|task complete)\b",
-    r"\b(?:lgtm|approved|ready to merge)\b",
+    re.compile(r"\b(?:done|finished|completed|shipped|deployed|merged|released)\b", re.IGNORECASE),
+    re.compile(r"\b(?:all tests pass|tests passing|build succeeded|build passing)\b", re.IGNORECASE),
+    re.compile(r"\b(?:pass test|tests? green|ci green|pipeline green)\b", re.IGNORECASE),
+    re.compile(r"\b(?:feature complete|implementation complete|task complete)\b", re.IGNORECASE),
+    re.compile(r"\b(?:lgtm|approved|ready to merge)\b", re.IGNORECASE),
     # Vietnamese
-    r"(?:xong|hoàn thành|đã xong|xong rồi|hoàn tất|đã hoàn thành)",
-    r"(?:pass test|chạy được|build xong|deploy xong)",
+    re.compile(r"(?:xong|hoàn thành|đã xong|xong rồi|hoàn tất|đã hoàn thành)", re.IGNORECASE),
+    re.compile(r"(?:pass test|chạy được|build xong|deploy xong)", re.IGNORECASE),
 ]
 
-ERROR_FIXED_PATTERNS: list[str] = [
+ERROR_FIXED_PATTERNS: list[re.Pattern[str]] = [
     # English
-    r"(?:fixed|resolved|solved|patched|corrected)\s+(?:it|the|this|that|by)\b",
-    r"\b(?:bug fix|hotfix|fix applied|issue resolved)\b",
-    r"\b(?:no longer|not anymore|works now|working now)\b",
+    re.compile(r"(?:fixed|resolved|solved|patched|corrected)\s+(?:it|the|this|that|by)\b", re.IGNORECASE),
+    re.compile(r"\b(?:bug fix|hotfix|fix applied|issue resolved)\b", re.IGNORECASE),
+    re.compile(r"\b(?:no longer|not anymore|works now|working now)\b", re.IGNORECASE),
     # Vietnamese
-    r"(?:sửa xong|fix xong|đã sửa|đã fix|hết lỗi|không lỗi nữa)",
-    r"(?:fix được rồi|chạy được rồi)",
+    re.compile(r"(?:sửa xong|fix xong|đã sửa|đã fix|hết lỗi|không lỗi nữa)", re.IGNORECASE),
+    re.compile(r"(?:fix được rồi|chạy được rồi)", re.IGNORECASE),
 ]
 
 # Reuse decision patterns from auto_capture (imported at check time)
-DECISION_PATTERNS: list[str] = [
-    r"(?:we |I )(?:decided|chose|selected|picked|opted)(?: to)?[:\s]+.{5,}",
-    r"(?:the )?decision(?: is)?[:\s]+.{5,}",
-    r"(?:we're |I'm )going (?:to|with)[:\s]+.{5,}",
-    r"let's (?:go with|use|choose)[:\s]+.{5,}",
+DECISION_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"(?:we |I )(?:decided|chose|selected|picked|opted)(?: to)?[:\s]+.{5,}", re.IGNORECASE),
+    re.compile(r"(?:the )?decision(?: is)?[:\s]+.{5,}", re.IGNORECASE),
+    re.compile(r"(?:we're |I'm )going (?:to|with)[:\s]+.{5,}", re.IGNORECASE),
+    re.compile(r"let's (?:go with|use|choose)[:\s]+.{5,}", re.IGNORECASE),
     # Vietnamese
-    r"(?:quyết định|chọn|dùng|chuyển sang)[:\s]+.{5,}",
+    re.compile(r"(?:quyết định|chọn|dùng|chuyển sang)[:\s]+.{5,}", re.IGNORECASE),
 ]
 
 # Minimum text length to avoid false positives
@@ -213,6 +213,6 @@ def estimate_session_tokens(
     return message_count * 150 + code_lines * 5 + error_count * 300
 
 
-def _matches_any(text: str, patterns: list[str]) -> bool:
-    """Check if text matches any regex pattern."""
-    return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
+def _matches_any(text: str, patterns: list[re.Pattern[str]]) -> bool:
+    """Check if text matches any pre-compiled regex pattern."""
+    return any(pattern.search(text) for pattern in patterns)

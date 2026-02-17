@@ -99,7 +99,7 @@ class Neuron:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class NeuronState:
     """
     Mutable activation state for a neuron.
