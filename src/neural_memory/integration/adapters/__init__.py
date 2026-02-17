@@ -34,9 +34,7 @@ def get_adapter(name: str, **kwargs: Any) -> SourceAdapter:
         adapter_cls = _lazy_load_adapter(name)
 
     if adapter_cls is None:
-        available = sorted(_ADAPTER_REGISTRY.keys())
-        msg = f"Unknown adapter '{name}'. Available: {available}"
-        raise ValueError(msg)
+        raise ValueError(f"Unknown adapter: {name!r}")
 
     return adapter_cls(**kwargs)  # type: ignore[no-any-return]
 

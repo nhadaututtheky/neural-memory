@@ -834,14 +834,11 @@ class TestAWFAdapter:
 
     @pytest.mark.asyncio()
     async def test_health_check_missing_dir(self, tmp_path: Any) -> None:
-        """Test health check when .brain/ directory doesn't exist."""
+        """Test that constructing AWFAdapter with nonexistent dir raises ValueError."""
         from neural_memory.integration.adapters.awf_adapter import AWFAdapter
 
-        adapter = AWFAdapter(brain_dir=tmp_path / "nonexistent")
-        result = await adapter.health_check()
-
-        assert result["healthy"] is False
-        assert "not found" in result["message"]
+        with pytest.raises(ValueError, match="does not exist"):
+            AWFAdapter(brain_dir=tmp_path / "nonexistent")
 
     @pytest.mark.asyncio()
     async def test_empty_brain_dir(self, tmp_path: Any) -> None:

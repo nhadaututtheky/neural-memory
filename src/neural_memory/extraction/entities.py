@@ -23,7 +23,7 @@ class EntityType(StrEnum):
     UNKNOWN = "unknown"
 
 
-@dataclass
+@dataclass(frozen=True)
 class Entity:
     """
     A named entity extracted from text.
@@ -53,7 +53,7 @@ class EntityExtractor:
     """
 
     # Common Vietnamese person name prefixes
-    VI_PERSON_PREFIXES = {
+    VI_PERSON_PREFIXES: frozenset[str] = frozenset({
         "anh",
         "chị",
         "em",
@@ -69,10 +69,10 @@ class EntityExtractor:
         "mrs",
         "ms",
         "miss",
-    }
+    })
 
     # Common location indicators
-    LOCATION_INDICATORS = {
+    LOCATION_INDICATORS: frozenset[str] = frozenset({
         # Vietnamese
         "ở",
         "tại",
@@ -95,6 +95,15 @@ class EntityExtractor:
         "hotel",
         "shop",
         "store",
+    })
+
+    # Pre-compiled location patterns (avoid recompilation in hot loop)
+    _LOCATION_PATTERNS: dict[str, re.Pattern[str]] = {
+        indicator: re.compile(
+            rf"\b{re.escape(indicator)}\s+([A-ZÀ-Ỹ][a-zà-ỹA-ZÀ-Ỹ\s]+?)(?:[,.]|\s+(?:với|và|to|with|for)|$)",
+            re.IGNORECASE,
+        )
+        for indicator in LOCATION_INDICATORS
     }
 
     # Pattern for capitalized words (potential entities)
@@ -395,13 +404,8 @@ class EntityExtractor:
         entities = []
         existing_texts = {e.text.lower() for e in existing}
 
-        # Find words after location indicators
-        for indicator in self.LOCATION_INDICATORS:
-            pattern = re.compile(
-                rf"\b{re.escape(indicator)}\s+([A-ZÀ-Ỹ][a-zà-ỹA-ZÀ-Ỹ\s]+?)(?:[,.]|\s+(?:với|và|to|with|for)|$)",
-                re.IGNORECASE,
-            )
-
+        # Find words after location indicators (pre-compiled patterns)
+        for indicator, pattern in self._LOCATION_PATTERNS.items():
             for match in pattern.finditer(text):
                 location = match.group(1).strip()
 

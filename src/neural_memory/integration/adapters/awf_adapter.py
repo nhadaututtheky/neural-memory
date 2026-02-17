@@ -38,9 +38,8 @@ class AWFAdapter:
 
     def __init__(self, brain_dir: str | Path) -> None:
         resolved = Path(brain_dir).resolve()
-        # Validate path is not traversing outside expected locations
-        if ".." in resolved.parts:
-            raise ValueError("Invalid brain directory: path traversal detected")
+        if not resolved.is_dir():
+            raise ValueError("Brain directory does not exist or is not a directory")
         self._brain_dir = resolved
 
     @property
@@ -104,7 +103,7 @@ class AWFAdapter:
         if not self._brain_dir.exists():
             return {
                 "healthy": False,
-                "message": f"Brain directory not found: {self._brain_dir}",
+                "message": "Brain directory not found",
                 "system": "awf",
             }
 
@@ -112,7 +111,7 @@ class AWFAdapter:
         if not brain_json.exists():
             return {
                 "healthy": False,
-                "message": f"brain.json not found in {self._brain_dir}",
+                "message": "brain.json not found",
                 "system": "awf",
             }
 
@@ -124,10 +123,10 @@ class AWFAdapter:
                 "message": f"AWF brain accessible (project: {project_name})",
                 "system": "awf",
             }
-        except (json.JSONDecodeError, OSError) as e:
+        except (json.JSONDecodeError, OSError):
             return {
                 "healthy": False,
-                "message": f"Failed to read brain.json: {e}",
+                "message": "Failed to read brain configuration",
                 "system": "awf",
             }
 

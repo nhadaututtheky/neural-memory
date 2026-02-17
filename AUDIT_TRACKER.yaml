@@ -900,9 +900,159 @@ phases:
     modules: [integration/, extraction/]
     loc: 6294
     files: 22
-    status: PENDING
-    findings: []
-    fixes: []
+    status: COMPLETE
+    started: "2026-02-17"
+    completed: "2026-02-17"
+    findings:
+      # --- integration/ HIGH ---
+      - id: P5-001
+        severity: HIGH
+        category: INFO_LEAK
+        desc: "adapters/__init__.py — error message lists all available adapter names"
+        files: [integration/adapters/__init__.py]
+        status: FIXED
+      - id: P5-002
+        severity: HIGH
+        category: PATH_SECURITY
+        desc: "awf_adapter.py:42 — dead '..' traversal check replaced with is_dir() validation"
+        files: [integration/adapters/awf_adapter.py]
+        status: FIXED
+      - id: P5-003
+        severity: HIGH
+        category: INFO_LEAK
+        desc: "awf_adapter.py:107-131 — health_check errors expose filesystem paths"
+        files: [integration/adapters/awf_adapter.py]
+        status: FIXED
+      - id: P5-004
+        severity: HIGH
+        category: BOUNDS
+        desc: "sync_engine.py — sync limit unbounded, allows arbitrarily large imports"
+        files: [integration/sync_engine.py]
+        status: FIXED
+      - id: P5-005
+        severity: HIGH
+        category: INFO_LEAK
+        desc: "sync_engine.py — str(e) leaked in error list returned to caller"
+        files: [integration/sync_engine.py]
+        status: FIXED
+      # --- extraction/ HIGH ---
+      - id: P5-006
+        severity: HIGH
+        category: ERROR_HANDLING
+        desc: "codebase.py:91-104 — PythonExtractor unhandled OSError/SyntaxError/UnicodeDecodeError on file read/parse"
+        files: [extraction/codebase.py]
+        status: FIXED
+      - id: P5-007
+        severity: HIGH
+        category: ERROR_HANDLING
+        desc: "codebase.py:445-449 — RegexExtractor unhandled OSError on file read"
+        files: [extraction/codebase.py]
+        status: FIXED
+      - id: P5-008
+        severity: HIGH
+        category: PERFORMANCE
+        desc: "entities.py:400 — re.compile() inside hot loop in _extract_locations()"
+        files: [extraction/entities.py]
+        status: FIXED
+      # --- integration/ MEDIUM ---
+      - id: P5-009
+        severity: MEDIUM
+        category: INFO_LEAK
+        desc: "mapper.py:170 — sensitive content rejection leaks detection types in error"
+        files: [integration/mapper.py]
+        status: FIXED
+      - id: P5-010
+        severity: MEDIUM
+        category: IMMUTABILITY
+        desc: "entities.py — Entity dataclass not frozen"
+        files: [extraction/entities.py]
+        status: FIXED
+      - id: P5-011
+        severity: MEDIUM
+        category: IMMUTABILITY
+        desc: "keywords.py — WeightedKeyword dataclass not frozen"
+        files: [extraction/keywords.py]
+        status: FIXED
+      - id: P5-012
+        severity: MEDIUM
+        category: IMMUTABILITY
+        desc: "temporal.py — TimeHint dataclass not frozen"
+        files: [extraction/temporal.py]
+        status: FIXED
+      - id: P5-013
+        severity: MEDIUM
+        category: IMMUTABILITY
+        desc: "entities.py — VI_PERSON_PREFIXES and LOCATION_INDICATORS are mutable sets"
+        files: [extraction/entities.py]
+        status: FIXED
+      - id: P5-014
+        severity: MEDIUM
+        category: NAMESPACE_LEAK
+        desc: "sentiment.py:441-443 — loop variables _emotion, _words, _word leak into module namespace"
+        files: [extraction/sentiment.py]
+        status: FIXED
+      # --- DEFERRED ---
+      - id: P5-015
+        severity: MEDIUM
+        category: IMMUTABILITY
+        desc: "parser.py — Stimulus dataclass has mutable list fields; freezing would not prevent list mutation"
+        files: [extraction/parser.py]
+        status: DEFERRED
+      - id: P5-016
+        severity: LOW
+        category: PERFORMANCE
+        desc: "sync_engine.py — import loop awaits each record sequentially"
+        files: [integration/sync_engine.py]
+        status: DEFERRED
+      - id: P5-017
+        severity: LOW
+        category: DEAD_CODE
+        desc: "adapters/graphiti_adapter.py — connection_kwargs unused placeholder"
+        files: [integration/adapters/graphiti_adapter.py]
+        status: DEFERRED
+      - id: P5-018
+        severity: LOW
+        category: DEAD_CODE
+        desc: "adapters/cognee_adapter.py — connection_kwargs unused placeholder"
+        files: [integration/adapters/cognee_adapter.py]
+        status: DEFERRED
+    fixes:
+      - date: "2026-02-17"
+        desc: "Remove available adapter names from error, generic message only"
+        files: [integration/adapters/__init__.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Replace dead '..' check with is_dir() + remove filesystem paths from health_check errors"
+        files: [integration/adapters/awf_adapter.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Add _MAX_SYNC_LIMIT=10000 cap + sanitize error messages in sync_engine"
+        files: [integration/sync_engine.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Change sensitive content rejection to generic error message"
+        files: [integration/mapper.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Wrap PythonExtractor + RegexExtractor file operations in try/except"
+        files: [extraction/codebase.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Pre-compile location regex patterns as class-level dict"
+        files: [extraction/entities.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Freeze Entity, WeightedKeyword, TimeHint dataclasses + frozenset for class constants"
+        files: [extraction/entities.py, extraction/keywords.py, extraction/temporal.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Clean up module-level loop variable leak with del statement"
+        files: [extraction/sentiment.py]
+        status: VERIFIED
+      - date: "2026-02-17"
+        desc: "Update AWFAdapter test to expect ValueError on nonexistent dir"
+        files: [tests/unit/test_integration.py]
+        status: VERIFIED
 
   phase_6:
     modules: [core/, safety/, utils/, sync/]

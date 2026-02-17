@@ -167,7 +167,7 @@ class RecordMapper:
                 record.id,
                 ", ".join(types_found),
             )
-            raise ValueError(f"Sensitive content detected: {', '.join(types_found)}")
+            raise ValueError("Record rejected by content policy")
 
         tags = set(record.tags) | {
             f"import:{record.source_system}",

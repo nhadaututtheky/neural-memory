@@ -231,7 +231,7 @@ def _tokenize_vietnamese(text: str) -> str | None:
         return None
 
 
-@dataclass
+@dataclass(frozen=True)
 class WeightedKeyword:
     """A keyword with an importance weight.
 

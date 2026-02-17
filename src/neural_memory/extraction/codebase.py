@@ -97,11 +97,14 @@ class PythonExtractor:
         Returns:
             Tuple of (symbols, relationships).
         """
-        # Limit file size to 1MB to prevent memory issues
-        if file_path.stat().st_size > 1_000_000:
+        try:
+            # Limit file size to 1MB to prevent memory issues
+            if file_path.stat().st_size > 1_000_000:
+                return [], []
+            source = file_path.read_text(encoding="utf-8")
+            tree = ast.parse(source, filename=str(file_path))
+        except (OSError, SyntaxError, UnicodeDecodeError):
             return [], []
-        source = file_path.read_text(encoding="utf-8")
-        tree = ast.parse(source, filename=str(file_path))
 
         file_str = str(file_path)
         symbols: list[CodeSymbol] = []
@@ -444,7 +447,10 @@ class RegexExtractor:
 
     def extract_file(self, file_path: Path) -> tuple[list[CodeSymbol], list[CodeRelationship]]:
         """Extract symbols and relationships from a source file using regex."""
-        source = file_path.read_text(encoding="utf-8", errors="replace")
+        try:
+            source = file_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return [], []
         if len(source) > 100_000:
             source = source[:100_000]
         file_str = str(file_path)

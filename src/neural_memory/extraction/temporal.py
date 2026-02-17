@@ -26,7 +26,7 @@ class TimeGranularity(StrEnum):
     YEAR = "year"
 
 
-@dataclass
+@dataclass(frozen=True)
 class TimeHint:
     """
     A parsed time reference from text.

@@ -17,6 +17,8 @@ from neural_memory.integration.models import (
 )
 from neural_memory.utils.timeutils import utcnow
 
+_MAX_SYNC_LIMIT = 10000
+
 if TYPE_CHECKING:
     from neural_memory.core.brain import BrainConfig
     from neural_memory.integration.adapter import SourceAdapter
@@ -74,6 +76,7 @@ class SyncEngine:
         start_time = time.monotonic()
         source_name = adapter.system_name
         collection_name = collection or "default"
+        limit = min(limit, _MAX_SYNC_LIMIT) if limit else _MAX_SYNC_LIMIT
 
         if sync_state is None:
             sync_state = SyncState(
@@ -135,11 +138,10 @@ class SyncEngine:
                     if (i + 1) % self._batch_size == 0:
                         await self._storage.batch_save()
 
-                except Exception as e:
+                except Exception:
                     failed_count += 1
-                    error_msg = f"Failed to import record {record.id}: {e}"
-                    errors.append(error_msg)
-                    logger.warning(error_msg)
+                    logger.warning("Failed to import record %s", record.id, exc_info=True)
+                    errors.append(f"Failed to import record {record.id}")
 
             # Second pass: create relationship synapses
             if all_relationships:
@@ -148,9 +150,9 @@ class SyncEngine:
                         record_to_fiber=record_to_fiber,
                         relationships=all_relationships,
                     )
-                except Exception as e:
-                    errors.append(f"Failed to create relationship synapses: {e}")
-                    logger.warning("Relationship synapse creation failed: %s", e)
+                except Exception:
+                    logger.warning("Relationship synapse creation failed", exc_info=True)
+                    errors.append("Failed to create relationship synapses")
 
             # Final commit
             await self._storage.batch_save()

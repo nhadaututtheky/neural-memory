@@ -441,6 +441,7 @@ _WORD_TO_EMOTIONS: dict[str, set[str]] = {}
 for _emotion, _words in _EMOTION_MAP.items():
     for _word in _words:
         _WORD_TO_EMOTIONS.setdefault(_word, set()).add(_emotion)
+del _emotion, _words, _word
 
 # Token pattern: split on whitespace and common punctuation
 _TOKEN_PATTERN = re.compile(r"[a-zA-ZÀ-ỹ']+")
