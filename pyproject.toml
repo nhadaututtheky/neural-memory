@@ -117,6 +117,7 @@ Issues = "https://github.com/nhadaututtheky/neural-memory/issues"
 neural-memory = "neural_memory.cli:main"
 nmem = "neural_memory.cli:main"
 nmem-mcp = "neural_memory.mcp:main"
+nmem-hook-pre-compact = "neural_memory.hooks.pre_compact:main"
 
 [tool.hatch.build.targets.sdist]
 include = [

@@ -608,6 +608,74 @@ def _extract_skill_description(skill_path: Path) -> str:
     return ""
 
 
+def flush(
+    transcript: Annotated[
+        str | None,
+        typer.Option("--transcript", "-t", help="Path to JSONL transcript file"),
+    ] = None,
+    text: Annotated[
+        str | None,
+        typer.Argument(help="Direct text to flush (reads stdin if omitted)"),
+    ] = None,
+    json_output: Annotated[bool, typer.Option("--json", "-j", help="Output as JSON")] = False,
+) -> None:
+    """Emergency flush: capture memories before context is lost.
+
+    Aggressively detects and saves all memorable content with
+    lowered confidence threshold. Designed for pre-compaction
+    or session-end scenarios.
+
+    Examples:
+        nmem flush "We decided to use Redis for caching"
+        nmem flush --transcript /path/to/transcript.jsonl
+        echo "important text" | nmem flush
+    """
+    import json as json_mod
+    import sys
+
+    from neural_memory.hooks.pre_compact import flush_text, read_transcript_tail
+
+    flush_content = ""
+
+    if text:
+        flush_content = text
+    elif transcript:
+        flush_content = read_transcript_tail(transcript)
+        if not flush_content:
+            typer.secho(f"No content found in transcript: {transcript}", fg=typer.colors.YELLOW)
+            raise typer.Exit(0)
+    else:
+        # Try reading from stdin (piped input)
+        if not sys.stdin.isatty():
+            flush_content = sys.stdin.read()
+
+    if not flush_content or len(flush_content.strip()) < 50:
+        typer.secho("Not enough content to flush (minimum 50 chars).", fg=typer.colors.YELLOW)
+        raise typer.Exit(0)
+
+    async def _flush() -> dict[str, Any]:
+        return await flush_text(flush_content)
+
+    result = run_async(_flush())
+
+    if json_output:
+        typer.echo(json_mod.dumps(result, indent=2, default=str))
+    else:
+        saved = result.get("saved", 0)
+        if saved > 0:
+            typer.secho(
+                f"Emergency flush: captured {saved} memories",
+                fg=typer.colors.GREEN,
+            )
+            for mem in result.get("memories", []):
+                typer.echo(f"  - {mem}")
+        else:
+            typer.secho(
+                result.get("message", "No memories captured"),
+                fg=typer.colors.YELLOW,
+            )
+
+
 def register(app: typer.Typer) -> None:
     """Register tool commands on the app."""
     app.command()(mcp)
@@ -619,4 +687,5 @@ def register(app: typer.Typer) -> None:
     app.command()(decay)
     app.command()(consolidate)
     app.command()(hooks)
+    app.command()(flush)
     app.command(name="install-skills")(install_skills)
