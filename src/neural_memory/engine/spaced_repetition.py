@@ -52,14 +52,18 @@ class SpacedRepetitionEngine:
                     if anchor:
                         summary = anchor.content[:200]
 
-            items.append({
-                "fiber_id": schedule.fiber_id,
-                "box": schedule.box,
-                "streak": schedule.streak,
-                "review_count": schedule.review_count,
-                "next_review": schedule.next_review.isoformat() if schedule.next_review else None,
-                "summary": summary,
-            })
+            items.append(
+                {
+                    "fiber_id": schedule.fiber_id,
+                    "box": schedule.box,
+                    "streak": schedule.streak,
+                    "review_count": schedule.review_count,
+                    "next_review": schedule.next_review.isoformat()
+                    if schedule.next_review
+                    else None,
+                    "summary": summary,
+                }
+            )
 
         return items
 
@@ -103,7 +107,9 @@ class SpacedRepetitionEngine:
             "previous_box": schedule.box,
             "new_box": new_schedule.box,
             "streak": new_schedule.streak,
-            "next_review": new_schedule.next_review.isoformat() if new_schedule.next_review else None,
+            "next_review": new_schedule.next_review.isoformat()
+            if new_schedule.next_review
+            else None,
             "neurons_reinforced": reinforced,
         }
 

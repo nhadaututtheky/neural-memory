@@ -53,49 +53,53 @@ class EntityExtractor:
     """
 
     # Common Vietnamese person name prefixes
-    VI_PERSON_PREFIXES: frozenset[str] = frozenset({
-        "anh",
-        "chị",
-        "em",
-        "bạn",
-        "cô",
-        "chú",
-        "bác",
-        "ông",
-        "bà",
-        "thầy",
-        "cô giáo",
-        "mr",
-        "mrs",
-        "ms",
-        "miss",
-    })
+    VI_PERSON_PREFIXES: frozenset[str] = frozenset(
+        {
+            "anh",
+            "chị",
+            "em",
+            "bạn",
+            "cô",
+            "chú",
+            "bác",
+            "ông",
+            "bà",
+            "thầy",
+            "cô giáo",
+            "mr",
+            "mrs",
+            "ms",
+            "miss",
+        }
+    )
 
     # Common location indicators
-    LOCATION_INDICATORS: frozenset[str] = frozenset({
-        # Vietnamese
-        "ở",
-        "tại",
-        "đến",
-        "từ",
-        "quán",
-        "cafe",
-        "cà phê",
-        "nhà hàng",
-        "công ty",
-        "văn phòng",
-        # English
-        "at",
-        "in",
-        "to",
-        "from",
-        "restaurant",
-        "office",
-        "building",
-        "hotel",
-        "shop",
-        "store",
-    })
+    LOCATION_INDICATORS: frozenset[str] = frozenset(
+        {
+            # Vietnamese
+            "ở",
+            "tại",
+            "đến",
+            "từ",
+            "quán",
+            "cafe",
+            "cà phê",
+            "nhà hàng",
+            "công ty",
+            "văn phòng",
+            # English
+            "at",
+            "in",
+            "to",
+            "from",
+            "restaurant",
+            "office",
+            "building",
+            "hotel",
+            "shop",
+            "store",
+        }
+    )
 
     # Pre-compiled location patterns (avoid recompilation in hot loop)
     _LOCATION_PATTERNS: dict[str, re.Pattern[str]] = {

@@ -136,10 +136,7 @@ def _cluster_by_tags(
                 uf.union(i, j)
 
     # Group by root, return Fiber objects
-    return [
-        [fibers[i] for i in indices]
-        for indices in uf.groups().values()
-    ]
+    return [[fibers[i] for i in indices] for indices in uf.groups().values()]
 
 
 def _extract_from_cluster(fibers: list[Fiber]) -> ExtractedPattern | None:

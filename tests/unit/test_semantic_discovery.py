@@ -186,9 +186,7 @@ class TestDiscoverSemanticSynapses:
         assert result.skipped_existing >= 1
         assert result.synapses_created == 0
 
-    async def test_respects_max_pairs(
-        self, storage: InMemoryStorage
-    ) -> None:
+    async def test_respects_max_pairs(self, storage: InMemoryStorage) -> None:
         """Should cap results at max_pairs."""
         config = BrainConfig(
             embedding_enabled=True,
@@ -276,9 +274,7 @@ class TestConsolidationIntegration:
                 found = True
         assert found
 
-    async def test_semantic_link_runs_in_consolidation(
-        self, storage: InMemoryStorage
-    ) -> None:
+    async def test_semantic_link_runs_in_consolidation(self, storage: InMemoryStorage) -> None:
         """Running SEMANTIC_LINK strategy should call discover_semantic_synapses."""
         brain_config = BrainConfig(embedding_enabled=False)
         brain = Brain.create(name="test", config=brain_config)
@@ -290,9 +286,7 @@ class TestConsolidationIntegration:
         # Should complete without error even if embedding is disabled
         assert report.semantic_synapses_created == 0
 
-    async def test_report_has_semantic_synapses_field(
-        self, storage: InMemoryStorage
-    ) -> None:
+    async def test_report_has_semantic_synapses_field(self, storage: InMemoryStorage) -> None:
         """ConsolidationReport should track semantic_synapses_created."""
         brain = Brain.create(name="test", config=BrainConfig())
         await storage.save_brain(brain)

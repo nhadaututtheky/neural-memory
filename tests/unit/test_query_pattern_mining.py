@@ -173,7 +173,7 @@ class TestExtractPatternCandidates:
 
     def test_capped_at_20(self) -> None:
         pairs = [
-            TopicPair(topic_a=f"topic{i}", topic_b=f"topic{i+1}", count=5, avg_gap_seconds=30)
+            TopicPair(topic_a=f"topic{i}", topic_b=f"topic{i + 1}", count=5, avg_gap_seconds=30)
             for i in range(30)
         ]
         candidates = extract_pattern_candidates(pairs, min_frequency=1)

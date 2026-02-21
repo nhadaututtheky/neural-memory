@@ -128,9 +128,7 @@ class TestSpacedRepetitionEngine:
 
         neuron = Neuron.create(type=NeuronType.CONCEPT, content="test", neuron_id="n1")
         await storage.add_neuron(neuron)
-        fiber = Fiber.create(
-            neuron_ids={"n1"}, synapse_ids=set(), anchor_neuron_id="n1"
-        )
+        fiber = Fiber.create(neuron_ids={"n1"}, synapse_ids=set(), anchor_neuron_id="n1")
         await storage.add_fiber(fiber)
 
         first = await engine.auto_schedule_fiber(fiber.id, brain.id)
@@ -146,9 +144,7 @@ class TestSpacedRepetitionEngine:
 
         neuron = Neuron.create(type=NeuronType.CONCEPT, content="test", neuron_id="n1")
         await storage.add_neuron(neuron)
-        fiber = Fiber.create(
-            neuron_ids={"n1"}, synapse_ids=set(), anchor_neuron_id="n1"
-        )
+        fiber = Fiber.create(neuron_ids={"n1"}, synapse_ids=set(), anchor_neuron_id="n1")
         await storage.add_fiber(fiber)
         await engine.auto_schedule_fiber(fiber.id, brain.id)
 
@@ -164,9 +160,7 @@ class TestSpacedRepetitionEngine:
 
         neuron = Neuron.create(type=NeuronType.CONCEPT, content="test", neuron_id="n1")
         await storage.add_neuron(neuron)
-        fiber = Fiber.create(
-            neuron_ids={"n1"}, synapse_ids=set(), anchor_neuron_id="n1"
-        )
+        fiber = Fiber.create(neuron_ids={"n1"}, synapse_ids=set(), anchor_neuron_id="n1")
         await storage.add_fiber(fiber)
         await engine.auto_schedule_fiber(fiber.id, brain.id)
 
@@ -191,9 +185,7 @@ class TestSpacedRepetitionEngine:
 
         neuron = Neuron.create(type=NeuronType.CONCEPT, content="test", neuron_id="n1")
         await storage.add_neuron(neuron)
-        fiber = Fiber.create(
-            neuron_ids={"n1"}, synapse_ids=set(), anchor_neuron_id="n1"
-        )
+        fiber = Fiber.create(neuron_ids={"n1"}, synapse_ids=set(), anchor_neuron_id="n1")
         await storage.add_fiber(fiber)
         await engine.auto_schedule_fiber(fiber.id, brain.id)
 
@@ -273,7 +265,12 @@ class TestStorageReviewMethods:
 
         # Also create one that's not due yet (advance to box 5)
         s2 = ReviewSchedule.create(fiber_id="f2", brain_id=brain.id)
-        advanced = s2.advance(success=True).advance(success=True).advance(success=True).advance(success=True)
+        advanced = (
+            s2.advance(success=True)
+            .advance(success=True)
+            .advance(success=True)
+            .advance(success=True)
+        )
         await storage.add_review_schedule(advanced)
 
         due = await storage.get_due_reviews(limit=10)

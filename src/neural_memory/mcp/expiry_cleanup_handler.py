@@ -60,16 +60,11 @@ class ExpiryCleanupHandler:
                 return 0
 
         # Skip if cleanup already running
-        if (
-            self._expiry_cleanup_task is not None
-            and not self._expiry_cleanup_task.done()
-        ):
+        if self._expiry_cleanup_task is not None and not self._expiry_cleanup_task.done():
             return 0
 
         self._last_expiry_cleanup_at = now
-        self._expiry_cleanup_task = asyncio.create_task(
-            self._run_expiry_cleanup(cfg)
-        )
+        self._expiry_cleanup_task = asyncio.create_task(self._run_expiry_cleanup(cfg))
         self._expiry_cleanup_task.add_done_callback(_log_cleanup_exception)
         return 0
 

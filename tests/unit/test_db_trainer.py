@@ -746,9 +746,7 @@ class TestHandlerHappyPath:
             mock_instance = AsyncMock()
             mock_instance.train = AsyncMock(return_value=mock_result)
             mock_trainer_cls.return_value = mock_instance
-            result = await handler._train_db_schema(
-                {"connection_string": f"sqlite:///{db_file}"}
-            )
+            result = await handler._train_db_schema({"connection_string": f"sqlite:///{db_file}"})
         assert result["tables_processed"] == 3
         assert result["relationships_mapped"] == 2
         assert "message" in result
@@ -801,9 +799,7 @@ class TestHandlerErrorPaths:
             mock_instance = AsyncMock()
             mock_instance.train = AsyncMock(side_effect=ValueError("secret path /etc/shadow"))
             mock_trainer_cls.return_value = mock_instance
-            result = await handler._train_db_schema(
-                {"connection_string": f"sqlite:///{db_file}"}
-            )
+            result = await handler._train_db_schema({"connection_string": f"sqlite:///{db_file}"})
         assert "error" in result
         assert "invalid configuration" in result["error"]
         assert "secret" not in result["error"]  # no info leakage
@@ -817,9 +813,7 @@ class TestHandlerErrorPaths:
             mock_instance = AsyncMock()
             mock_instance.train = AsyncMock(side_effect=RuntimeError("internal error details"))
             mock_trainer_cls.return_value = mock_instance
-            result = await handler._train_db_schema(
-                {"connection_string": f"sqlite:///{db_file}"}
-            )
+            result = await handler._train_db_schema({"connection_string": f"sqlite:///{db_file}"})
         assert "error" in result
         assert "unexpectedly" in result["error"]
         assert "internal" not in result["error"]

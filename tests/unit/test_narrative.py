@@ -74,9 +74,7 @@ class TestTimelineNarrative:
         """Test max_fibers limit is respected."""
         now = utcnow()
         for i in range(5):
-            n = Neuron.create(
-                type=NeuronType.CONCEPT, content=f"event {i}", neuron_id=f"n{i}"
-            )
+            n = Neuron.create(type=NeuronType.CONCEPT, content=f"event {i}", neuron_id=f"n{i}")
             await storage.add_neuron(n)
             f = Fiber.create(
                 neuron_ids={f"n{i}"},
@@ -102,9 +100,7 @@ class TestTopicNarrative:
 
     async def test_topic_no_results(self, storage, brain_config) -> None:
         """Test topic with no matching memories."""
-        narrative = await generate_topic_narrative(
-            storage, brain_config, "nonexistent topic"
-        )
+        narrative = await generate_topic_narrative(storage, brain_config, "nonexistent topic")
         assert narrative.mode == "topic"
         assert narrative.items == []
         assert "No memories found" in narrative.markdown
@@ -130,9 +126,7 @@ class TestTopicNarrative:
         )
         await storage.add_fiber(f)
 
-        narrative = await generate_topic_narrative(
-            storage, brain_config, "authentication"
-        )
+        narrative = await generate_topic_narrative(storage, brain_config, "authentication")
         assert narrative.mode == "topic"
         assert "Topic:" in narrative.markdown
 

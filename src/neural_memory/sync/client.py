@@ -399,9 +399,7 @@ class SyncClient:
             except asyncio.CancelledError:
                 break
             except Exception:
-                logger.warning(
-                    "WebSocket receive error, state → DISCONNECTED", exc_info=True
-                )
+                logger.warning("WebSocket receive error, state → DISCONNECTED", exc_info=True)
                 self._state = SyncClientState.DISCONNECTED
                 if self._auto_reconnect:
                     continue

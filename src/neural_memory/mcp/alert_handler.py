@@ -180,7 +180,10 @@ class AlertHandler:
         # Find types with active alerts but NOT in current pulse
         types_to_resolve: list[str] = []
         for alert in active_alerts:
-            if alert.alert_type not in active_types_in_pulse and alert.status != AlertStatus.ACKNOWLEDGED:
+            if (
+                alert.alert_type not in active_types_in_pulse
+                and alert.status != AlertStatus.ACKNOWLEDGED
+            ):
                 if alert.alert_type.value not in types_to_resolve:
                     types_to_resolve.append(alert.alert_type.value)
 

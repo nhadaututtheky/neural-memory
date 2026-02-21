@@ -155,7 +155,11 @@ def allocate_token_budgets(
 
     for item in items:
         # Proportional budget
-        budget = int((item.score / total_score) * max_tokens) if total_score > 0 else (max_tokens // len(items))
+        budget = (
+            int((item.score / total_score) * max_tokens)
+            if total_score > 0
+            else (max_tokens // len(items))
+        )
         budget = max(budget, min_budget)
 
         if tokens_used + min_budget > max_tokens:
@@ -244,14 +248,20 @@ async def optimize_context(
         priority_norm = 0.5
         try:
             typed_mem = await storage.get_typed_memory(fiber.id)
-            if typed_mem and hasattr(typed_mem, "priority") and isinstance(typed_mem.priority, (int, float)):
+            if (
+                typed_mem
+                and hasattr(typed_mem, "priority")
+                and isinstance(typed_mem.priority, (int, float))
+            ):
                 priority_norm = typed_mem.priority / 10.0
         except (TypeError, ValueError, AttributeError):
             pass
 
         # Frequency (cap at 20)
         freq = getattr(fiber, "frequency", 0) or 0
-        frequency_norm = min(freq / 20.0, 1.0) if isinstance(freq, (int, float)) and freq > 0 else 0.0
+        frequency_norm = (
+            min(freq / 20.0, 1.0) if isinstance(freq, (int, float)) and freq > 0 else 0.0
+        )
 
         # Freshness
         created_at = getattr(fiber, "created_at", None)

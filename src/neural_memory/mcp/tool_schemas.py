@@ -7,13 +7,26 @@ from typing import Any
 # Tool tier definitions — controls which tools are exposed via tools/list.
 # Hidden tools remain callable via dispatch (safety net).
 TOOL_TIERS: dict[str, frozenset[str]] = {
-    "minimal": frozenset({
-        "nmem_remember", "nmem_recall", "nmem_context", "nmem_recap",
-    }),
-    "standard": frozenset({
-        "nmem_remember", "nmem_recall", "nmem_context", "nmem_recap",
-        "nmem_todo", "nmem_session", "nmem_auto", "nmem_eternal",
-    }),
+    "minimal": frozenset(
+        {
+            "nmem_remember",
+            "nmem_recall",
+            "nmem_context",
+            "nmem_recap",
+        }
+    ),
+    "standard": frozenset(
+        {
+            "nmem_remember",
+            "nmem_recall",
+            "nmem_context",
+            "nmem_recap",
+            "nmem_todo",
+            "nmem_session",
+            "nmem_auto",
+            "nmem_eternal",
+        }
+    ),
     # "full" = all tools, no filtering
 }
 

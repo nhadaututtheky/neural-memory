@@ -230,7 +230,9 @@ class MaintenanceConfig:
         strategies = data.get("auto_consolidate_strategies", ("prune", "merge"))
         if isinstance(strategies, list):
             strategies = tuple(strategies)
-        sched_strategies = data.get("scheduled_consolidation_strategies", ("prune", "merge", "enrich"))
+        sched_strategies = data.get(
+            "scheduled_consolidation_strategies", ("prune", "merge", "enrich")
+        )
         if isinstance(sched_strategies, list):
             sched_strategies = tuple(sched_strategies)
         return cls(
@@ -251,7 +253,9 @@ class MaintenanceConfig:
             expiry_cleanup_interval_hours=data.get("expiry_cleanup_interval_hours", 12),
             expiry_cleanup_max_per_run=data.get("expiry_cleanup_max_per_run", 100),
             scheduled_consolidation_enabled=data.get("scheduled_consolidation_enabled", True),
-            scheduled_consolidation_interval_hours=data.get("scheduled_consolidation_interval_hours", 24),
+            scheduled_consolidation_interval_hours=data.get(
+                "scheduled_consolidation_interval_hours", 24
+            ),
             scheduled_consolidation_strategies=sched_strategies,
             version_check_enabled=data.get("version_check_enabled", True),
             version_check_interval_hours=data.get("version_check_interval_hours", 24),
@@ -784,7 +788,9 @@ def _read_legacy_brain(data_dir: Path) -> str | None:
             if isinstance(name, str) and name != "default" and _BRAIN_NAME_PATTERN.match(name):
                 return name
         except Exception:
-            logger.warning("Found legacy config %s but could not read it", config_file, exc_info=True)
+            logger.warning(
+                "Found legacy config %s but could not read it", config_file, exc_info=True
+            )
             continue
     return None
 

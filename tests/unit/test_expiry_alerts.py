@@ -161,7 +161,9 @@ class TestRecallExpiryWarnings:
     async def test_recall_without_warn_expiry_days(self, server: MCPServer) -> None:
         """No expiry_warnings key when param omitted."""
         mock_storage = AsyncMock()
-        mock_storage.get_brain = AsyncMock(return_value=MagicMock(id="test-brain", config=MagicMock()))
+        mock_storage.get_brain = AsyncMock(
+            return_value=MagicMock(id="test-brain", config=MagicMock())
+        )
 
         # Mock the recall pipeline
         mock_result = MagicMock()
@@ -194,7 +196,9 @@ class TestRecallExpiryWarnings:
     async def test_recall_with_warn_expiry_days(self, server: MCPServer) -> None:
         """expiry_warnings present when warn_expiry_days set and memories expiring."""
         mock_storage = AsyncMock()
-        mock_storage.get_brain = AsyncMock(return_value=MagicMock(id="test-brain", config=MagicMock()))
+        mock_storage.get_brain = AsyncMock(
+            return_value=MagicMock(id="test-brain", config=MagicMock())
+        )
 
         expiring_tm = _make_typed_memory("f-1", expires_in_days=3, memory_type=MemoryType.DECISION)
         mock_storage.get_expiring_memories_for_fibers = AsyncMock(return_value=[expiring_tm])

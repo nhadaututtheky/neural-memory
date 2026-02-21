@@ -56,11 +56,13 @@ class TestNarrativeHandler:
     async def test_timeline_action(self, server: MockNarrativeServer) -> None:
         """Test timeline action with date range."""
         now = utcnow()
-        result = await server._narrative({
-            "action": "timeline",
-            "start_date": (now - timedelta(days=7)).isoformat(),
-            "end_date": now.isoformat(),
-        })
+        result = await server._narrative(
+            {
+                "action": "timeline",
+                "start_date": (now - timedelta(days=7)).isoformat(),
+                "end_date": now.isoformat(),
+            }
+        )
         assert result["action"] == "timeline"
         assert "markdown" in result
 
@@ -71,11 +73,13 @@ class TestNarrativeHandler:
 
     async def test_timeline_invalid_dates(self, server: MockNarrativeServer) -> None:
         """Test timeline with bad date format."""
-        result = await server._narrative({
-            "action": "timeline",
-            "start_date": "not-a-date",
-            "end_date": "also-not-a-date",
-        })
+        result = await server._narrative(
+            {
+                "action": "timeline",
+                "start_date": "not-a-date",
+                "end_date": "also-not-a-date",
+            }
+        )
         assert "error" in result
 
     async def test_topic_action(

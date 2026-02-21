@@ -51,7 +51,9 @@ class TriggerResult:
 
 USER_LEAVING_PATTERNS: list[re.Pattern[str]] = [
     # English
-    re.compile(r"\b(?:bye|goodbye|good\s*bye|see you|gotta go|signing off|logging off)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:bye|goodbye|good\s*bye|see you|gotta go|signing off|logging off)\b", re.IGNORECASE
+    ),
     re.compile(r"\b(?:i'm done|that's all|that's it|wrapping up|call it a day)\b", re.IGNORECASE),
     re.compile(r"\b(?:heading out|leaving now|going offline)\b", re.IGNORECASE),
     # Vietnamese
@@ -62,7 +64,9 @@ USER_LEAVING_PATTERNS: list[re.Pattern[str]] = [
 MILESTONE_PATTERNS: list[re.Pattern[str]] = [
     # English
     re.compile(r"\b(?:done|finished|completed|shipped|deployed|merged|released)\b", re.IGNORECASE),
-    re.compile(r"\b(?:all tests pass|tests passing|build succeeded|build passing)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:all tests pass|tests passing|build succeeded|build passing)\b", re.IGNORECASE
+    ),
     re.compile(r"\b(?:pass test|tests? green|ci green|pipeline green)\b", re.IGNORECASE),
     re.compile(r"\b(?:feature complete|implementation complete|task complete)\b", re.IGNORECASE),
     re.compile(r"\b(?:lgtm|approved|ready to merge)\b", re.IGNORECASE),
@@ -73,7 +77,9 @@ MILESTONE_PATTERNS: list[re.Pattern[str]] = [
 
 ERROR_FIXED_PATTERNS: list[re.Pattern[str]] = [
     # English
-    re.compile(r"(?:fixed|resolved|solved|patched|corrected)\s+(?:it|the|this|that|by)\b", re.IGNORECASE),
+    re.compile(
+        r"(?:fixed|resolved|solved|patched|corrected)\s+(?:it|the|this|that|by)\b", re.IGNORECASE
+    ),
     re.compile(r"\b(?:bug fix|hotfix|fix applied|issue resolved)\b", re.IGNORECASE),
     re.compile(r"\b(?:no longer|not anymore|works now|working now)\b", re.IGNORECASE),
     # Vietnamese
@@ -83,7 +89,9 @@ ERROR_FIXED_PATTERNS: list[re.Pattern[str]] = [
 
 # Reuse decision patterns from auto_capture (imported at check time)
 DECISION_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"(?:we |I )(?:decided|chose|selected|picked|opted)(?: to)?[:\s]+.{5,}", re.IGNORECASE),
+    re.compile(
+        r"(?:we |I )(?:decided|chose|selected|picked|opted)(?: to)?[:\s]+.{5,}", re.IGNORECASE
+    ),
     re.compile(r"(?:the )?decision(?: is)?[:\s]+.{5,}", re.IGNORECASE),
     re.compile(r"(?:we're |I'm )going (?:to|with)[:\s]+.{5,}", re.IGNORECASE),
     re.compile(r"let's (?:go with|use|choose)[:\s]+.{5,}", re.IGNORECASE),

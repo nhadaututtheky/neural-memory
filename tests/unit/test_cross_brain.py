@@ -265,10 +265,12 @@ class TestCrossBrainRecallHandler:
             new_callable=AsyncMock,
             return_value={"answer": "cross-brain result", "cross_brain": True},
         ) as mock_cross:
-            result = await server._recall({
-                "query": "test query",
-                "brains": ["brain1", "brain2"],
-            })
+            result = await server._recall(
+                {
+                    "query": "test query",
+                    "brains": ["brain1", "brain2"],
+                }
+            )
             mock_cross.assert_called_once()
             assert result["cross_brain"] is True
 

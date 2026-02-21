@@ -161,6 +161,7 @@ async def list_neurons(
 ) -> dict[str, Any]:
     """List neurons with optional filters."""
     from neural_memory.core.neuron import NeuronType
+
     neuron_type = None
     if type:
         try:

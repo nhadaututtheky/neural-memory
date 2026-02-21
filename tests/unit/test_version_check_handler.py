@@ -148,11 +148,12 @@ class TestCheckLatestVersion:
     async def test_no_update_same_version(self) -> None:
         handler = _make_handler()
 
-        with patch(
-            "neural_memory.mcp.version_check_handler._fetch_latest_version",
-            new_callable=AsyncMock,
-        ) as mock_fetch, patch(
-            "neural_memory.mcp.version_check_handler.__version__", "2.4.0"
+        with (
+            patch(
+                "neural_memory.mcp.version_check_handler._fetch_latest_version",
+                new_callable=AsyncMock,
+            ) as mock_fetch,
+            patch("neural_memory.mcp.version_check_handler.__version__", "2.4.0"),
         ):
             mock_fetch.return_value = "2.4.0"
             await handler._check_latest_version()
@@ -236,10 +237,7 @@ class TestCancelVersionCheck:
         except asyncio.CancelledError:
             pass
 
-        assert (
-            handler._version_check_task.cancelled()
-            or handler._version_check_task.done()
-        )
+        assert handler._version_check_task.cancelled() or handler._version_check_task.done()
 
     def test_noop_when_no_task(self) -> None:
         handler = _make_handler()

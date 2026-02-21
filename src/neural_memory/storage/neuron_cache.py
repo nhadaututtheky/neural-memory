@@ -55,9 +55,7 @@ class NeuronLookupCache:
         self._hits += 1
         return neurons
 
-    def put(
-        self, content: str, neuron_type: str | None, neurons: list[Neuron]
-    ) -> None:
+    def put(self, content: str, neuron_type: str | None, neurons: list[Neuron]) -> None:
         """Cache neurons for an exact content match."""
         if len(self._cache) >= self._max_entries:
             self._evict_oldest()

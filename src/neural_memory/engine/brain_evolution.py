@@ -202,7 +202,9 @@ class EvolutionEngine:
 
         # Topology metrics (pass pre-fetched synapses)
         topo = await compute_topology(
-            self._storage, brain_id, _preloaded_synapses=all_synapses  # type: ignore[arg-type]
+            self._storage,
+            brain_id,
+            _preloaded_synapses=all_synapses,  # type: ignore[arg-type]
         )
         topology_coherence = topo.clustering_coefficient * 0.5 + topo.largest_component_ratio * 0.5
         knowledge_density = topo.knowledge_density

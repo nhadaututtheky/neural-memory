@@ -145,9 +145,7 @@ async def flush_text(text: str) -> dict[str, Any]:
             return {"saved": 0, "message": "No memorable content detected"}
 
         # Emergency threshold: more aggressive than normal
-        eligible = [
-            item for item in detected if item["confidence"] >= EMERGENCY_THRESHOLD
-        ]
+        eligible = [item for item in detected if item["confidence"] >= EMERGENCY_THRESHOLD]
         if not eligible:
             return {"saved": 0, "message": "No memories met emergency threshold"}
 
@@ -228,7 +226,8 @@ def main() -> None:
         description="NeuralMemory PreCompact hook — flush memories before compaction"
     )
     parser.add_argument(
-        "--transcript", "-t",
+        "--transcript",
+        "-t",
         help="Path to JSONL transcript file",
     )
     parser.add_argument(

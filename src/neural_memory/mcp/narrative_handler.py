@@ -116,9 +116,7 @@ class NarrativeHandler:
             return {"error": "topic is required for causal action"}
 
         max_depth = min(args.get("max_depth", 5), 10)
-        narrative = await generate_causal_narrative(
-            storage, topic, max_depth=max_depth
-        )
+        narrative = await generate_causal_narrative(storage, topic, max_depth=max_depth)
         return {
             "action": "causal",
             "title": narrative.title,

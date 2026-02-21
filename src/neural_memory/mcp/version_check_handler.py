@@ -80,10 +80,7 @@ class VersionCheckHandler:
         Called once at server startup. Guards against double-start.
         Returns the background task or None.
         """
-        if (
-            self._version_check_task is not None
-            and not self._version_check_task.done()
-        ):
+        if self._version_check_task is not None and not self._version_check_task.done():
             return self._version_check_task
 
         cfg: MaintenanceConfig = self.config.maintenance
@@ -155,10 +152,7 @@ class VersionCheckHandler:
 
     def cancel_version_check(self) -> None:
         """Cancel the background version check task if running."""
-        if (
-            self._version_check_task is not None
-            and not self._version_check_task.done()
-        ):
+        if self._version_check_task is not None and not self._version_check_task.done():
             self._version_check_task.cancel()
             logger.debug("Version check task cancelled")
 
@@ -197,6 +191,4 @@ def _log_version_check_exception(task: asyncio.Task[None]) -> None:
         return
     exc = task.exception()
     if exc is not None:
-        logger.error(
-            "Version check task raised unhandled exception: %s", exc
-        )
+        logger.error("Version check task raised unhandled exception: %s", exc)

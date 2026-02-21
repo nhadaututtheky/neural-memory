@@ -41,7 +41,16 @@ logger = logging.getLogger(__name__)
 
 # Morphological expansion constants for query term expansion.
 _EXPANSION_SUFFIXES: tuple[str, ...] = (
-    "tion", "ment", "ing", "ed", "er", "ity", "ness", "ize", "ise", "ate",
+    "tion",
+    "ment",
+    "ing",
+    "ed",
+    "er",
+    "ity",
+    "ness",
+    "ize",
+    "ise",
+    "ate",
 )
 _EXPANSION_PREFIXES: tuple[str, ...] = ("un", "re", "pre", "de", "dis")
 

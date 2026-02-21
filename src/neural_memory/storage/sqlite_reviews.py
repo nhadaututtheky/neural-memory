@@ -142,7 +142,15 @@ class SQLiteReviewsMixin:
         )
         row = await cursor.fetchone()
         if not row:
-            return {"total": 0, "due": 0, "box_1": 0, "box_2": 0, "box_3": 0, "box_4": 0, "box_5": 0}
+            return {
+                "total": 0,
+                "due": 0,
+                "box_1": 0,
+                "box_2": 0,
+                "box_3": 0,
+                "box_4": 0,
+                "box_5": 0,
+            }
         return {
             "total": row[0] or 0,
             "due": row[1] or 0,

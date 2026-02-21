@@ -224,23 +224,27 @@ async def generate_causal_narrative(
 
     items: list[NarrativeItem] = []
     # Add the seed itself
-    items.append(NarrativeItem(
-        fiber_id="",
-        timestamp="",
-        summary=seed.content,
-        relevance=1.0,
-    ))
+    items.append(
+        NarrativeItem(
+            fiber_id="",
+            timestamp="",
+            summary=seed.content,
+            relevance=1.0,
+        )
+    )
 
     # Add each causal step
     for step in chain.steps:
         neuron = await storage.get_neuron(step.neuron_id)
         if neuron:
-            items.append(NarrativeItem(
-                fiber_id="",
-                timestamp="",
-                summary=f"{neuron.content} (weight: {step.weight:.2f})",
-                relevance=step.weight,
-            ))
+            items.append(
+                NarrativeItem(
+                    fiber_id="",
+                    timestamp="",
+                    summary=f"{neuron.content} (weight: {step.weight:.2f})",
+                    relevance=step.weight,
+                )
+            )
 
     md = _render_causal_md(items, topic)
     return Narrative(

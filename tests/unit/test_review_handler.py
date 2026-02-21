@@ -73,14 +73,14 @@ class TestReviewHandler:
         assert result["count"] == 0
         assert result["items"] == []
 
-    async def test_schedule_fiber(
-        self, server: MockReviewServer, fiber_with_neuron: Fiber
-    ) -> None:
+    async def test_schedule_fiber(self, server: MockReviewServer, fiber_with_neuron: Fiber) -> None:
         """Test scheduling a fiber for review."""
-        result = await server._review({
-            "action": "schedule",
-            "fiber_id": fiber_with_neuron.id,
-        })
+        result = await server._review(
+            {
+                "action": "schedule",
+                "fiber_id": fiber_with_neuron.id,
+            }
+        )
         assert result["action"] == "schedule"
         assert result["fiber_id"] == fiber_with_neuron.id
         assert result["box"] == 1
@@ -98,30 +98,30 @@ class TestReviewHandler:
         result = await server._review({"action": "schedule", "fiber_id": "nope"})
         assert "error" in result
 
-    async def test_mark_success(
-        self, server: MockReviewServer, fiber_with_neuron: Fiber
-    ) -> None:
+    async def test_mark_success(self, server: MockReviewServer, fiber_with_neuron: Fiber) -> None:
         """Test marking a review as successful."""
         await server._review({"action": "schedule", "fiber_id": fiber_with_neuron.id})
-        result = await server._review({
-            "action": "mark",
-            "fiber_id": fiber_with_neuron.id,
-            "success": True,
-        })
+        result = await server._review(
+            {
+                "action": "mark",
+                "fiber_id": fiber_with_neuron.id,
+                "success": True,
+            }
+        )
         assert result["action"] == "mark"
         assert result["success"] is True
         assert result["new_box"] == 2
 
-    async def test_mark_failure(
-        self, server: MockReviewServer, fiber_with_neuron: Fiber
-    ) -> None:
+    async def test_mark_failure(self, server: MockReviewServer, fiber_with_neuron: Fiber) -> None:
         """Test marking a review as failed."""
         await server._review({"action": "schedule", "fiber_id": fiber_with_neuron.id})
-        result = await server._review({
-            "action": "mark",
-            "fiber_id": fiber_with_neuron.id,
-            "success": False,
-        })
+        result = await server._review(
+            {
+                "action": "mark",
+                "fiber_id": fiber_with_neuron.id,
+                "success": False,
+            }
+        )
         assert result["new_box"] == 1
         assert result["streak"] == 0
 
@@ -131,7 +131,11 @@ class TestReviewHandler:
         assert "error" in result
 
     async def test_stats(
-        self, server: MockReviewServer, storage: InMemoryStorage, brain: Brain, fiber_with_neuron: Fiber
+        self,
+        server: MockReviewServer,
+        storage: InMemoryStorage,
+        brain: Brain,
+        fiber_with_neuron: Fiber,
     ) -> None:
         """Test stats action."""
         await server._review({"action": "schedule", "fiber_id": fiber_with_neuron.id})

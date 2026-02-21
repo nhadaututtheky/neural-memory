@@ -192,9 +192,7 @@ class TestRunExpiryCleanup:
 
         storage = await handler.get_storage()
         # First delete_typed_memory fails, second succeeds
-        storage.delete_typed_memory = AsyncMock(
-            side_effect=[RuntimeError("fail"), True]
-        )
+        storage.delete_typed_memory = AsyncMock(side_effect=[RuntimeError("fail"), True])
 
         count = await handler._run_expiry_cleanup(cfg)
         assert count == 1  # Only second succeeded

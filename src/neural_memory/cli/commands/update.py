@@ -181,7 +181,9 @@ def _update_from_source(force: bool) -> None:
 
     # Step 1: git pull (detect current branch)
     typer.echo("\nPulling latest changes...")
-    _, current_branch = _run_command(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=str(source_dir))
+    _, current_branch = _run_command(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=str(source_dir)
+    )
     branch = current_branch.strip() or "main"
     returncode, output = _run_command(["git", "pull", "origin", branch], cwd=str(source_dir))
 

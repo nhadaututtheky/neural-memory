@@ -69,9 +69,7 @@ class ScheduledConsolidationHandler:
         )
         return self._scheduled_consolidation_task
 
-    async def _scheduled_consolidation_loop(
-        self, cfg: MaintenanceConfig
-    ) -> None:
+    async def _scheduled_consolidation_loop(self, cfg: MaintenanceConfig) -> None:
         """Background loop: sleep for interval, then consolidate.
 
         First run waits one full interval to avoid triggering on every
@@ -101,9 +99,7 @@ class ScheduledConsolidationHandler:
 
             await self._run_scheduled_consolidation(cfg)
 
-    async def _run_scheduled_consolidation(
-        self, cfg: MaintenanceConfig
-    ) -> None:
+    async def _run_scheduled_consolidation(self, cfg: MaintenanceConfig) -> None:
         """Execute one scheduled consolidation run."""
         from neural_memory.engine.consolidation import ConsolidationStrategy
         from neural_memory.engine.consolidation_delta import run_with_delta
@@ -111,19 +107,13 @@ class ScheduledConsolidationHandler:
         try:
             storage = await self.get_storage()
             brain_id = storage._current_brain_id or ""  # type: ignore[attr-defined]
-            strategies = [
-                ConsolidationStrategy(s)
-                for s in cfg.scheduled_consolidation_strategies
-            ]
+            strategies = [ConsolidationStrategy(s) for s in cfg.scheduled_consolidation_strategies]
 
             self._last_consolidation_at = utcnow()
 
-            delta = await run_with_delta(
-                storage, brain_id, strategies=strategies
-            )
+            delta = await run_with_delta(storage, brain_id, strategies=strategies)
             logger.info(
-                "Scheduled consolidation complete (strategies=%s): "
-                "%s | purity delta: %+.1f",
+                "Scheduled consolidation complete (strategies=%s): %s | purity delta: %+.1f",
                 cfg.scheduled_consolidation_strategies,
                 delta.report.summary(),
                 delta.purity_delta,
@@ -147,6 +137,4 @@ def _log_scheduled_exception(task: asyncio.Task[None]) -> None:
         return
     exc = task.exception()
     if exc is not None:
-        logger.error(
-            "Scheduled consolidation task raised unhandled exception: %s", exc
-        )
+        logger.error("Scheduled consolidation task raised unhandled exception: %s", exc)

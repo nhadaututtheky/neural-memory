@@ -85,9 +85,7 @@ class TestMaybeStartScheduledConsolidation:
     async def test_prevents_duplicate_tasks(self) -> None:
         """Does not start a second task if one is running."""
         handler = _make_handler()
-        handler._scheduled_consolidation_task = asyncio.create_task(
-            asyncio.sleep(10)
-        )
+        handler._scheduled_consolidation_task = asyncio.create_task(asyncio.sleep(10))
 
         result = await handler.maybe_start_scheduled_consolidation()
         assert result is handler._scheduled_consolidation_task
@@ -147,7 +145,9 @@ class TestScheduledConsolidationLoop:
                 raise asyncio.CancelledError
 
         with patch("neural_memory.mcp.scheduled_consolidation_handler.asyncio.sleep", fake_sleep):
-            with patch.object(handler, "_run_scheduled_consolidation", new_callable=AsyncMock) as mock_run:
+            with patch.object(
+                handler, "_run_scheduled_consolidation", new_callable=AsyncMock
+            ) as mock_run:
                 try:
                     await handler._scheduled_consolidation_loop(cfg)
                 except asyncio.CancelledError:
@@ -172,7 +172,9 @@ class TestScheduledConsolidationLoop:
                 raise asyncio.CancelledError
 
         with patch("neural_memory.mcp.scheduled_consolidation_handler.asyncio.sleep", fake_sleep):
-            with patch.object(handler, "_run_scheduled_consolidation", new_callable=AsyncMock) as mock_run:
+            with patch.object(
+                handler, "_run_scheduled_consolidation", new_callable=AsyncMock
+            ) as mock_run:
                 try:
                     await handler._scheduled_consolidation_loop(cfg)
                 except asyncio.CancelledError:
@@ -187,9 +189,7 @@ class TestRunScheduledConsolidation:
     @pytest.mark.asyncio
     async def test_calls_run_with_delta(self) -> None:
         """Runs consolidation with configured strategies."""
-        handler = _make_handler(
-            cfg=_make_cfg(strategies=("prune", "enrich"))
-        )
+        handler = _make_handler(cfg=_make_cfg(strategies=("prune", "enrich")))
 
         mock_delta = MagicMock()
         mock_delta.report.summary.return_value = "OK"
@@ -251,9 +251,7 @@ class TestCancelScheduledConsolidation:
     async def test_cancels_running_task(self) -> None:
         """Cancels the background task."""
         handler = _make_handler()
-        handler._scheduled_consolidation_task = asyncio.create_task(
-            asyncio.sleep(10)
-        )
+        handler._scheduled_consolidation_task = asyncio.create_task(asyncio.sleep(10))
 
         handler.cancel_scheduled_consolidation()
 

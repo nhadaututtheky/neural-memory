@@ -262,9 +262,7 @@ async def learn_query_patterns(
             continue
 
         # Create or strengthen BEFORE synapse
-        await _strengthen_topic_synapse(
-            storage, neuron_a.id, neuron_b.id, candidate.frequency
-        )
+        await _strengthen_topic_synapse(storage, neuron_a.id, neuron_b.id, candidate.frequency)
 
         report.patterns_learned += 1
 

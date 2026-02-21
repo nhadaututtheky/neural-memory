@@ -23,7 +23,9 @@ from neural_memory.storage.memory_reviews import InMemoryReviewsMixin
 from neural_memory.utils.timeutils import utcnow
 
 
-class InMemoryStorage(InMemoryReviewsMixin, InMemoryCollectionsMixin, InMemoryBrainMixin, NeuralStorage):
+class InMemoryStorage(
+    InMemoryReviewsMixin, InMemoryCollectionsMixin, InMemoryBrainMixin, NeuralStorage
+):
     """NetworkX-based in-memory storage for development and testing.
 
     Data is lost when the process exits unless explicitly exported.

@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
+
 async def _require_local_request(request: Request) -> None:
     """Reject non-localhost requests to protect OAuth endpoints."""
     client_host = request.client.host if request.client else ""
