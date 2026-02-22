@@ -600,7 +600,7 @@ NeuralMemory is lightweight — it won't slow down your editor.
 
 ## Available Tools
 
-Once configured, these 23 tools are available to your AI assistant:
+Once configured, these 26 tools are available to your AI assistant:
 
 ### Core Memory
 
@@ -650,11 +650,19 @@ Once configured, these 23 tools are available to your AI assistant:
 | `nmem_import` | Import from ChromaDB, Mem0, Cognee, Graphiti, LlamaIndex |
 | `nmem_narrative` | Generate timeline/topic/causal narratives |
 
+### Sync (Multi-Device)
+
+| Tool | Description |
+|------|-------------|
+| `nmem_sync` | Trigger manual sync (push/pull/full) |
+| `nmem_sync_status` | Show pending changes, devices, last sync |
+| `nmem_sync_config` | Configure hub URL, auto-sync, conflict strategy |
+
 ---
 
 ## Tool Tiers
 
-By default all 23 tools are exposed on every API turn. If you want to reduce token overhead, configure a **tool tier** in `~/.neuralmemory/config.toml`:
+By default all 26 tools are exposed on every API turn. If you want to reduce token overhead, configure a **tool tier** in `~/.neuralmemory/config.toml`:
 
 ```toml
 [tool_tier]
@@ -671,15 +679,15 @@ nmem config tier full         # reset to full
 
 | Tier | Tools | Est. Tokens | Savings |
 |------|-------|-------------|---------|
-| `full` (default) | 23 | ~3,500 | — |
-| `standard` | 8 | ~1,400 | ~69% |
-| `minimal` | 4 | ~700 | ~84% |
+| `full` (default) | 26 | ~3,800 | — |
+| `standard` | 8 | ~1,400 | ~63% |
+| `minimal` | 4 | ~700 | ~82% |
 
 **Tier contents:**
 
 - **minimal** — `remember`, `recall`, `context`, `recap`
 - **standard** — minimal + `todo`, `session`, `auto`, `eternal`
-- **full** — all 23 tools
+- **full** — all 26 tools
 
 > Hidden tools remain callable — only the schema listing changes. If the AI model already knows a tool name, it can still call it even when the tool is not exposed in `tools/list`.
 

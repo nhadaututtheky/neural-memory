@@ -15,11 +15,15 @@ from neural_memory.storage.read_pool import ReadPool
 from neural_memory.storage.sqlite_action_log import SQLiteActionLogMixin
 from neural_memory.storage.sqlite_alerts import SQLiteAlertsMixin
 from neural_memory.storage.sqlite_brain_ops import SQLiteBrainMixin
+from neural_memory.storage.sqlite_change_log import SQLiteChangeLogMixin
 from neural_memory.storage.sqlite_coactivation import SQLiteCoActivationMixin
+from neural_memory.storage.sqlite_compression import SQLiteCompressionMixin
+from neural_memory.storage.sqlite_devices import SQLiteDevicesMixin
 from neural_memory.storage.sqlite_fibers import SQLiteFiberMixin
 from neural_memory.storage.sqlite_maturation import SQLiteMaturationMixin
 from neural_memory.storage.sqlite_neurons import SQLiteNeuronMixin
 from neural_memory.storage.sqlite_projects import SQLiteProjectMixin
+from neural_memory.storage.sqlite_depth_priors import SQLiteDepthPriorMixin
 from neural_memory.storage.sqlite_reviews import SQLiteReviewsMixin
 from neural_memory.storage.sqlite_schema import (
     SCHEMA,
@@ -48,6 +52,10 @@ class SQLiteStorage(
     SQLiteSyncStateMixin,
     SQLiteAlertsMixin,
     SQLiteReviewsMixin,
+    SQLiteDepthPriorMixin,
+    SQLiteCompressionMixin,
+    SQLiteChangeLogMixin,
+    SQLiteDevicesMixin,
     SQLiteBrainMixin,
     NeuralStorage,
 ):
@@ -296,6 +304,8 @@ class SQLiteStorage(
         conn = self._ensure_conn()
 
         brain_tables = (
+            "change_log",
+            "devices",
             "review_schedules",
             "alerts",
             "sync_states",
@@ -303,6 +313,8 @@ class SQLiteStorage(
             "brain_versions",
             "memory_maturations",
             "co_activation_events",
+            "depth_priors",
+            "compression_backups",
             "typed_memories",
             "projects",
             "fiber_neurons",

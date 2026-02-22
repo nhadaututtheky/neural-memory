@@ -65,7 +65,7 @@ class TestToolTiers:
 
     def test_full_tier_returns_all(self) -> None:
         tools = get_tool_schemas_for_tier("full")
-        assert len(tools) == 23
+        assert len(tools) == 26
 
     def test_full_tier_matches_get_tool_schemas(self) -> None:
         full = get_tool_schemas_for_tier("full")
@@ -107,7 +107,7 @@ class TestToolTiers:
 
     def test_invalid_tier_defaults_to_full(self) -> None:
         tools = get_tool_schemas_for_tier("bogus")
-        assert len(tools) == 23
+        assert len(tools) == 26
 
     def test_tier_hierarchy_minimal_subset_of_standard(self) -> None:
         assert TOOL_TIERS["minimal"] < TOOL_TIERS["standard"]
@@ -128,7 +128,7 @@ class TestToolTiers:
         a = get_tool_schemas()
         b = get_tool_schemas()
         a.pop()
-        assert len(b) == 23
+        assert len(b) == 26
 
     def test_get_tool_schemas_for_tier_returns_copy(self) -> None:
         a = get_tool_schemas_for_tier("standard")
@@ -153,7 +153,7 @@ class TestServerTierIntegration:
 
     def test_server_full_tier(self) -> None:
         server = self._make_server("full")
-        assert len(server.get_tools()) == 23
+        assert len(server.get_tools()) == 26
 
     def test_server_standard_tier(self) -> None:
         server = self._make_server("standard")

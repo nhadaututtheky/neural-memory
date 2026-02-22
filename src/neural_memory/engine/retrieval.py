@@ -56,6 +56,7 @@ _EXPANSION_PREFIXES: tuple[str, ...] = ("un", "re", "pre", "de", "dis")
 
 if TYPE_CHECKING:
     from neural_memory.core.brain import BrainConfig
+    from neural_memory.engine.depth_prior import AdaptiveDepthSelector, DepthDecision
     from neural_memory.engine.embedding.provider import EmbeddingProvider
     from neural_memory.storage.base import NeuralStorage
 
@@ -119,6 +120,15 @@ class ReflexPipeline:
         )
         self._write_queue = DeferredWriteQueue()
 
+        # Adaptive depth selection (Bayesian priors)
+        self._adaptive_selector: AdaptiveDepthSelector | None = None
+        if config.adaptive_depth_enabled:
+            from neural_memory.engine.depth_prior import AdaptiveDepthSelector
+
+            self._adaptive_selector = AdaptiveDepthSelector(
+                storage, epsilon=config.adaptive_depth_epsilon,
+            )
+
     async def query(
         self,
         query: str,
@@ -155,8 +165,23 @@ class ReflexPipeline:
         stimulus = self._parser.parse(query, reference_time)
 
         # 2. Auto-detect depth if not specified
+        _depth_decision: DepthDecision | None = None
         if depth is None:
-            depth = self._detect_depth(stimulus)
+            rule_depth = self._detect_depth(stimulus)
+            if self._adaptive_selector is not None:
+                try:
+                    _depth_decision = await self._adaptive_selector.select_depth(
+                        stimulus, rule_depth,
+                    )
+                    depth = _depth_decision.depth
+                except NotImplementedError:
+                    # Storage doesn't support depth priors (e.g. InMemoryStorage)
+                    depth = rule_depth
+                except Exception:
+                    logger.debug("Adaptive depth selection failed, using rule-based", exc_info=True)
+                    depth = rule_depth
+            else:
+                depth = rule_depth
 
         # 2.5 Temporal reasoning fast-path (v0.19.0)
         temporal_result = await self._try_temporal_reasoning(
@@ -271,6 +296,24 @@ class ReflexPipeline:
                 "disputed_ids": disputed_ids,
             },
         )
+
+        # Record adaptive depth outcome (non-critical)
+        if _depth_decision is not None:
+            result.metadata["depth_selection"] = {
+                "method": _depth_decision.method,
+                "reason": _depth_decision.reason,
+                "exploration": _depth_decision.exploration,
+            }
+            if self._adaptive_selector is not None:
+                try:
+                    await self._adaptive_selector.record_outcome(
+                        stimulus=stimulus,
+                        depth_used=depth,
+                        confidence=reconstruction.confidence,
+                        fibers_matched=len(fibers_matched),
+                    )
+                except (NotImplementedError, Exception):
+                    logger.debug("Depth prior update failed (non-critical)", exc_info=True)
 
         # Optionally attach workflow suggestions (non-critical)
         try:

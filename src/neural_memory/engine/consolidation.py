@@ -41,6 +41,7 @@ class ConsolidationStrategy(StrEnum):
     LEARN_HABITS = "learn_habits"
     DEDUP = "dedup"
     SEMANTIC_LINK = "semantic_link"
+    COMPRESS = "compress"
     ALL = "all"
 
 
@@ -92,6 +93,8 @@ class ConsolidationReport:
     action_events_pruned: int = 0
     duplicates_found: int = 0
     semantic_synapses_created: int = 0
+    fibers_compressed: int = 0
+    tokens_saved: int = 0
     merge_details: list[MergeDetail] = field(default_factory=list)
     dry_run: bool = False
 
@@ -113,6 +116,8 @@ class ConsolidationReport:
             f"  Action events pruned: {self.action_events_pruned}",
             f"  Duplicates found: {self.duplicates_found}",
             f"  Semantic synapses: {self.semantic_synapses_created}",
+            f"  Fibers compressed: {self.fibers_compressed}",
+            f"  Tokens saved: {self.tokens_saved}",
             f"  Duration: {self.duration_ms:.1f}ms",
         ]
         if self.merge_details:
@@ -150,6 +155,7 @@ class ConsolidationEngine:
             {
                 ConsolidationStrategy.MERGE,
                 ConsolidationStrategy.MATURE,
+                ConsolidationStrategy.COMPRESS,
             }
         ),
         frozenset(
@@ -202,6 +208,9 @@ class ConsolidationEngine:
             ),
             ConsolidationStrategy.DEDUP: lambda: self._dedup(report, dry_run),
             ConsolidationStrategy.SEMANTIC_LINK: lambda: self._semantic_link(report, dry_run),
+            ConsolidationStrategy.COMPRESS: lambda: self._compress(
+                report, reference_time, dry_run
+            ),
         }
         handler = dispatch.get(strategy)
         if handler is not None:
@@ -1027,3 +1036,34 @@ class ConsolidationEngine:
                 report.semantic_synapses_created += 1
             except ValueError:
                 logger.debug("Semantic synapse already exists, skipping")
+
+    async def _compress(
+        self,
+        report: ConsolidationReport,
+        reference_time: datetime,
+        dry_run: bool,
+    ) -> None:
+        """Run tiered memory compression on all eligible fibers.
+
+        Creates a CompressionEngine with default config and runs it for the
+        current brain context.  Results are merged into *report*.
+        """
+        import logging as _logging
+
+        from neural_memory.engine.compression import CompressionEngine
+
+        _logger = _logging.getLogger(__name__)
+
+        brain_id = self._storage.current_brain_id
+        if not brain_id:
+            _logger.debug("COMPRESS skipped: no brain context")
+            return
+
+        engine = CompressionEngine(self._storage)
+        compression_report = await engine.run(
+            reference_time=reference_time,
+            dry_run=dry_run,
+        )
+
+        report.fibers_compressed += compression_report.fibers_compressed
+        report.tokens_saved += compression_report.tokens_saved

@@ -162,6 +162,9 @@ Once configured, these tools are available to your AI assistant:
 | `nmem_index` | Index codebase for code-aware recall |
 | `nmem_import` | Import from ChromaDB, Mem0, Cognee, Graphiti, LlamaIndex |
 | `nmem_eternal` | Save project context, decisions, instructions |
+| `nmem_sync` | Multi-device sync (push/pull/full) |
+| `nmem_sync_status` | Sync status and device info |
+| `nmem_sync_config` | Configure sync settings |
 | `nmem_recap` | Load saved context at session start |
 
 ### VS Code Extension
@@ -289,6 +292,8 @@ POST /memory/query      - Query memories
 POST /brain/create      - Create brain
 GET  /brain/{id}/export - Export brain
 WS   /sync/ws           - Real-time sync
+POST /hub/sync          - Multi-device incremental sync
+GET  /hub/devices/{id}  - List registered devices
 GET  /ui                - Web dashboard
 GET  /docs              - API documentation
 ```

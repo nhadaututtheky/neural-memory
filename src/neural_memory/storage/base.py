@@ -1024,6 +1024,237 @@ class NeuralStorage(ABC):
         """
         raise NotImplementedError
 
+    # ========== Depth Prior Operations ==========
+
+    async def get_depth_priors_batch(
+        self,
+        entity_texts: list[str],
+    ) -> dict[str, list[Any]]:
+        """Batch-fetch Bayesian depth priors for multiple entities.
+
+        Args:
+            entity_texts: Entity text strings to look up
+
+        Returns:
+            Dict mapping entity_text to list of DepthPrior objects
+        """
+        raise NotImplementedError
+
+    async def upsert_depth_prior(self, prior: Any) -> None:
+        """Insert or update a single depth prior.
+
+        Args:
+            prior: DepthPrior instance to persist
+        """
+        raise NotImplementedError
+
+    async def get_stale_priors(self, older_than: datetime) -> list[Any]:
+        """Find depth priors not updated since a given date.
+
+        Args:
+            older_than: Cutoff datetime; priors with last_updated before this are returned
+
+        Returns:
+            List of stale DepthPrior objects
+        """
+        raise NotImplementedError
+
+    async def delete_depth_priors(self, entity_text: str) -> int:
+        """Delete all depth priors for an entity.
+
+        Args:
+            entity_text: The entity text whose priors should be removed
+
+        Returns:
+            Number of rows deleted
+        """
+        raise NotImplementedError
+
+    # ========== Compression Backup Operations ==========
+
+    async def save_compression_backup(
+        self,
+        fiber_id: str,
+        original_content: str,
+        compression_tier: int,
+        original_token_count: int,
+        compressed_token_count: int,
+    ) -> None:
+        """Save (upsert) a pre-compression content backup for a fiber.
+
+        Only called for reversible tiers (1-2).  Backends that do not
+        support compression may leave this as a no-op.
+
+        Args:
+            fiber_id: The fiber whose content is being backed up.
+            original_content: Full original text before compression.
+            compression_tier: The tier to which the fiber is being compressed.
+            original_token_count: Approximate token count before compression.
+            compressed_token_count: Approximate token count after compression.
+        """
+        raise NotImplementedError
+
+    async def get_compression_backup(self, fiber_id: str) -> dict[str, Any] | None:
+        """Retrieve the compression backup for a fiber, if any.
+
+        Args:
+            fiber_id: The fiber ID to look up.
+
+        Returns:
+            Dict with backup fields, or None if no backup exists.
+        """
+        raise NotImplementedError
+
+    async def delete_compression_backup(self, fiber_id: str) -> bool:
+        """Delete the compression backup for a fiber.
+
+        Args:
+            fiber_id: The fiber ID whose backup should be removed.
+
+        Returns:
+            True if a row was deleted, False if no backup existed.
+        """
+        raise NotImplementedError
+
+    async def get_compression_stats(self) -> dict[str, Any]:
+        """Return aggregate compression statistics for the current brain.
+
+        Returns:
+            Dict with keys: ``total_backups``, ``by_tier``, ``total_tokens_saved``.
+        """
+        raise NotImplementedError
+
+    # ========== Change Log Operations ==========
+
+    async def record_change(
+        self,
+        entity_type: str,
+        entity_id: str,
+        operation: str,
+        device_id: str = "",
+        payload: dict[str, Any] | None = None,
+    ) -> int:
+        """Append a change to the log. Returns the sequence number (id).
+
+        Args:
+            entity_type: Type of entity changed ("neuron", "synapse", "fiber").
+            entity_id: ID of the changed entity.
+            operation: Operation performed ("insert", "update", "delete").
+            device_id: ID of the device that made the change.
+            payload: Optional dict of changed field values.
+
+        Returns:
+            Auto-incremented sequence number (id) of the new log entry.
+        """
+        raise NotImplementedError
+
+    async def get_changes_since(self, sequence: int = 0, limit: int = 1000) -> list[Any]:
+        """Get changes after a given sequence number, ordered by id ASC.
+
+        Args:
+            sequence: Return only entries with id > this value (0 = all).
+            limit: Maximum number of entries to return (capped server-side).
+
+        Returns:
+            List of ChangeEntry objects ordered by id ascending.
+        """
+        raise NotImplementedError
+
+    async def get_unsynced_changes(self, limit: int = 1000) -> list[Any]:
+        """Get all unsynced changes, ordered by id ASC.
+
+        Args:
+            limit: Maximum number of entries to return (capped server-side).
+
+        Returns:
+            List of unsynced ChangeEntry objects ordered by id ascending.
+        """
+        raise NotImplementedError
+
+    async def mark_synced(self, up_to_sequence: int) -> int:
+        """Mark all changes up to a sequence number as synced.
+
+        Args:
+            up_to_sequence: Mark all entries with id <= this value as synced.
+
+        Returns:
+            Count of rows updated.
+        """
+        raise NotImplementedError
+
+    async def prune_synced_changes(self, older_than_days: int = 30) -> int:
+        """Delete synced changes older than N days.
+
+        Args:
+            older_than_days: Delete synced entries whose changed_at is older
+                than this many days from now.
+
+        Returns:
+            Count of rows deleted.
+        """
+        raise NotImplementedError
+
+    async def get_change_log_stats(self) -> dict[str, Any]:
+        """Get change log statistics for the current brain.
+
+        Returns:
+            Dict with keys: ``total``, ``pending``, ``synced``, ``last_sequence``.
+        """
+        raise NotImplementedError
+
+    # ========== Device Registry Operations ==========
+
+    async def register_device(self, device_id: str, device_name: str = "") -> Any:
+        """Register a device for the current brain (upsert).
+
+        Args:
+            device_id: Unique device identifier.
+            device_name: Human-readable device name.
+
+        Returns:
+            DeviceRecord for the registered device.
+        """
+        raise NotImplementedError
+
+    async def get_device(self, device_id: str) -> Any | None:
+        """Get device info for a specific device.
+
+        Args:
+            device_id: The device ID to look up.
+
+        Returns:
+            DeviceRecord if found, None otherwise.
+        """
+        raise NotImplementedError
+
+    async def list_devices(self) -> list[Any]:
+        """List all registered devices for the current brain.
+
+        Returns:
+            List of DeviceRecord objects ordered by registration time ascending.
+        """
+        raise NotImplementedError
+
+    async def update_device_sync(self, device_id: str, last_sync_sequence: int) -> None:
+        """Update the last sync timestamp and sequence for a device.
+
+        Args:
+            device_id: The device to update.
+            last_sync_sequence: The highest change log sequence the device has synced.
+        """
+        raise NotImplementedError
+
+    async def remove_device(self, device_id: str) -> bool:
+        """Remove a device from the registry.
+
+        Args:
+            device_id: The device to remove.
+
+        Returns:
+            True if a row was deleted, False if device was not registered.
+        """
+        raise NotImplementedError
+
     # ========== Cleanup ==========
 
     @abstractmethod

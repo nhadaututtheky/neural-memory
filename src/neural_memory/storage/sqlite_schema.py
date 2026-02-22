@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 17
 
 # â”€â”€ Migrations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Each entry maps (from_version -> to_version) with a list of SQL statements.
@@ -229,6 +229,80 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
         "CREATE INDEX IF NOT EXISTS idx_review_next ON review_schedules(brain_id, next_review)",
         "CREATE INDEX IF NOT EXISTS idx_review_box ON review_schedules(brain_id, box)",
     ],
+    (15, 16): [
+        # Bayesian depth priors for adaptive recall
+        """CREATE TABLE IF NOT EXISTS depth_priors (
+            brain_id TEXT NOT NULL,
+            entity_text TEXT NOT NULL,
+            depth_level INTEGER NOT NULL,
+            alpha REAL NOT NULL DEFAULT 1.0,
+            beta REAL NOT NULL DEFAULT 1.0,
+            total_queries INTEGER DEFAULT 0,
+            last_updated TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (brain_id, entity_text, depth_level),
+            FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_depth_priors_entity ON depth_priors(brain_id, entity_text)",
+        # Compression backups for reversible compression (tiers 1-2)
+        """CREATE TABLE IF NOT EXISTS compression_backups (
+            fiber_id TEXT NOT NULL,
+            brain_id TEXT NOT NULL,
+            original_content TEXT NOT NULL,
+            compression_tier INTEGER NOT NULL,
+            compressed_at TEXT NOT NULL,
+            original_token_count INTEGER DEFAULT 0,
+            compressed_token_count INTEGER DEFAULT 0,
+            PRIMARY KEY (brain_id, fiber_id),
+            FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_compression_tier ON compression_backups(brain_id, compression_tier)",
+        # Fiber compression tier tracking
+        "ALTER TABLE fibers ADD COLUMN compression_tier INTEGER DEFAULT 0",
+    ],
+    (16, 17): [
+        # Multi-device sync: device tracking columns on core tables
+        "ALTER TABLE neurons ADD COLUMN device_id TEXT DEFAULT ''",
+        "ALTER TABLE neurons ADD COLUMN device_origin TEXT DEFAULT ''",
+        "ALTER TABLE neurons ADD COLUMN updated_at TEXT DEFAULT ''",
+        "ALTER TABLE synapses ADD COLUMN device_id TEXT DEFAULT ''",
+        "ALTER TABLE synapses ADD COLUMN device_origin TEXT DEFAULT ''",
+        "ALTER TABLE synapses ADD COLUMN updated_at TEXT DEFAULT ''",
+        "ALTER TABLE fibers ADD COLUMN device_id TEXT DEFAULT ''",
+        "ALTER TABLE fibers ADD COLUMN device_origin TEXT DEFAULT ''",
+        "ALTER TABLE fibers ADD COLUMN updated_at TEXT DEFAULT ''",
+        # Change log (append-only journal for incremental sync)
+        """CREATE TABLE IF NOT EXISTS change_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            brain_id TEXT NOT NULL,
+            entity_type TEXT NOT NULL,
+            entity_id TEXT NOT NULL,
+            operation TEXT NOT NULL,
+            device_id TEXT NOT NULL DEFAULT '',
+            changed_at TEXT NOT NULL,
+            payload TEXT DEFAULT '{}',
+            synced INTEGER DEFAULT 0
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_change_log_brain_synced ON change_log(brain_id, synced, changed_at)",
+        # Device registry for multi-device sync
+        """CREATE TABLE IF NOT EXISTS devices (
+            device_id TEXT NOT NULL,
+            brain_id TEXT NOT NULL,
+            device_name TEXT DEFAULT '',
+            last_sync_at TEXT,
+            last_sync_sequence INTEGER DEFAULT 0,
+            registered_at TEXT NOT NULL,
+            PRIMARY KEY (brain_id, device_id)
+        )""",
+        # Backfill updated_at from created_at for existing rows
+        "UPDATE neurons SET updated_at = created_at WHERE updated_at = '' OR updated_at IS NULL",
+        "UPDATE synapses SET updated_at = created_at WHERE updated_at = '' OR updated_at IS NULL",
+        "UPDATE fibers SET updated_at = created_at WHERE updated_at = '' OR updated_at IS NULL",
+        # Indexes for incremental sync queries
+        "CREATE INDEX IF NOT EXISTS idx_neurons_updated ON neurons(brain_id, updated_at)",
+        "CREATE INDEX IF NOT EXISTS idx_synapses_updated ON synapses(brain_id, updated_at)",
+        "CREATE INDEX IF NOT EXISTS idx_fibers_updated ON fibers(brain_id, updated_at)",
+    ],
 }
 
 
@@ -317,6 +391,9 @@ CREATE TABLE IF NOT EXISTS neurons (
     content TEXT NOT NULL,
     metadata TEXT DEFAULT '{}',  -- JSON
     content_hash INTEGER DEFAULT 0,  -- SimHash fingerprint for near-duplicate detection
+    device_id TEXT DEFAULT '',  -- Device that last modified this neuron
+    device_origin TEXT DEFAULT '',  -- Device that originally created this neuron
+    updated_at TEXT DEFAULT '',  -- Last modification timestamp
     created_at TEXT NOT NULL,
     PRIMARY KEY (brain_id, id),
     FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
@@ -324,6 +401,7 @@ CREATE TABLE IF NOT EXISTS neurons (
 CREATE INDEX IF NOT EXISTS idx_neurons_type ON neurons(brain_id, type);
 CREATE INDEX IF NOT EXISTS idx_neurons_created ON neurons(brain_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_neurons_hash ON neurons(brain_id, content_hash);
+CREATE INDEX IF NOT EXISTS idx_neurons_updated ON neurons(brain_id, updated_at);
 
 -- Neuron states table
 CREATE TABLE IF NOT EXISTS neuron_states (
@@ -355,6 +433,9 @@ CREATE TABLE IF NOT EXISTS synapses (
     metadata TEXT DEFAULT '{}',  -- JSON
     reinforced_count INTEGER DEFAULT 0,
     last_activated TEXT,
+    device_id TEXT DEFAULT '',  -- Device that last modified this synapse
+    device_origin TEXT DEFAULT '',  -- Device that originally created this synapse
+    updated_at TEXT DEFAULT '',  -- Last modification timestamp
     created_at TEXT NOT NULL,
     PRIMARY KEY (brain_id, id),
     FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE,
@@ -364,6 +445,7 @@ CREATE TABLE IF NOT EXISTS synapses (
 CREATE INDEX IF NOT EXISTS idx_synapses_source ON synapses(brain_id, source_id);
 CREATE INDEX IF NOT EXISTS idx_synapses_target ON synapses(brain_id, target_id);
 CREATE INDEX IF NOT EXISTS idx_synapses_pair ON synapses(brain_id, source_id, target_id);
+CREATE INDEX IF NOT EXISTS idx_synapses_updated ON synapses(brain_id, updated_at);
 
 -- Fibers table
 CREATE TABLE IF NOT EXISTS fibers (
@@ -385,6 +467,10 @@ CREATE TABLE IF NOT EXISTS fibers (
     auto_tags TEXT DEFAULT '[]',  -- JSON array: tags from auto-extraction
     agent_tags TEXT DEFAULT '[]',  -- JSON array: tags from calling agent
     metadata TEXT DEFAULT '{}',  -- JSON
+    compression_tier INTEGER DEFAULT 0,  -- 0=full, 1=extractive, 2=entity, 3=template, 4=graph-only
+    device_id TEXT DEFAULT '',  -- Device that last modified this fiber
+    device_origin TEXT DEFAULT '',  -- Device that originally created this fiber
+    updated_at TEXT DEFAULT '',  -- Last modification timestamp
     created_at TEXT NOT NULL,
     PRIMARY KEY (brain_id, id),
     FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
@@ -392,6 +478,7 @@ CREATE TABLE IF NOT EXISTS fibers (
 CREATE INDEX IF NOT EXISTS idx_fibers_created ON fibers(brain_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_fibers_salience ON fibers(brain_id, salience);
 CREATE INDEX IF NOT EXISTS idx_fibers_conductivity ON fibers(brain_id, conductivity);
+CREATE INDEX IF NOT EXISTS idx_fibers_updated ON fibers(brain_id, updated_at);
 
 -- Fiber-neuron junction table (fast lookups)
 CREATE TABLE IF NOT EXISTS fiber_neurons (
@@ -555,4 +642,58 @@ CREATE TABLE IF NOT EXISTS review_schedules (
 );
 CREATE INDEX IF NOT EXISTS idx_review_next ON review_schedules(brain_id, next_review);
 CREATE INDEX IF NOT EXISTS idx_review_box ON review_schedules(brain_id, box);
+
+-- Bayesian depth priors for adaptive recall
+CREATE TABLE IF NOT EXISTS depth_priors (
+    brain_id TEXT NOT NULL,
+    entity_text TEXT NOT NULL,
+    depth_level INTEGER NOT NULL,
+    alpha REAL NOT NULL DEFAULT 1.0,
+    beta REAL NOT NULL DEFAULT 1.0,
+    total_queries INTEGER DEFAULT 0,
+    last_updated TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (brain_id, entity_text, depth_level),
+    FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_depth_priors_entity ON depth_priors(brain_id, entity_text);
+
+-- Compression backups for reversible compression (tiers 1-2)
+CREATE TABLE IF NOT EXISTS compression_backups (
+    fiber_id TEXT NOT NULL,
+    brain_id TEXT NOT NULL,
+    original_content TEXT NOT NULL,
+    compression_tier INTEGER NOT NULL,
+    compressed_at TEXT NOT NULL,
+    original_token_count INTEGER DEFAULT 0,
+    compressed_token_count INTEGER DEFAULT 0,
+    PRIMARY KEY (brain_id, fiber_id),
+    FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_compression_tier ON compression_backups(brain_id, compression_tier);
+
+-- Change log (append-only journal for incremental sync)
+CREATE TABLE IF NOT EXISTS change_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    brain_id TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    operation TEXT NOT NULL,
+    device_id TEXT NOT NULL DEFAULT '',
+    changed_at TEXT NOT NULL,
+    payload TEXT DEFAULT '{}',
+    synced INTEGER DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_change_log_brain_synced ON change_log(brain_id, synced, changed_at);
+
+-- Device registry for multi-device sync
+CREATE TABLE IF NOT EXISTS devices (
+    device_id TEXT NOT NULL,
+    brain_id TEXT NOT NULL,
+    device_name TEXT DEFAULT '',
+    last_sync_at TEXT,
+    last_sync_sequence INTEGER DEFAULT 0,
+    registered_at TEXT NOT NULL,
+    PRIMARY KEY (brain_id, device_id)
+);
 """

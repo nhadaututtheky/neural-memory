@@ -334,6 +334,50 @@ class SafetyConfig:
 
 
 @dataclass(frozen=True)
+class SyncConfig:
+    """Multi-device sync configuration."""
+
+    enabled: bool = False
+    hub_url: str = ""
+    auto_sync: bool = False
+    sync_interval_seconds: int = 300
+    conflict_strategy: str = "prefer_recent"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "hub_url": self.hub_url,
+            "auto_sync": self.auto_sync,
+            "sync_interval_seconds": self.sync_interval_seconds,
+            "conflict_strategy": self.conflict_strategy,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SyncConfig:
+        strategy = str(data.get("conflict_strategy", "prefer_recent"))
+        valid_strategies = {"prefer_recent", "prefer_local", "prefer_remote", "prefer_stronger"}
+        if strategy not in valid_strategies:
+            strategy = "prefer_recent"
+        try:
+            interval = max(10, min(int(data.get("sync_interval_seconds", 300)), 86400))
+        except (ValueError, TypeError):
+            interval = 300
+        hub_url = str(data.get("hub_url", ""))
+        # Sanitize hub_url - only allow http/https URLs
+        if hub_url and not hub_url.startswith(("http://", "https://")):
+            hub_url = ""
+        # Truncate URL to reasonable length
+        hub_url = hub_url[:256]
+        return cls(
+            enabled=bool(data.get("enabled", False)),
+            hub_url=hub_url,
+            auto_sync=bool(data.get("auto_sync", False)),
+            sync_interval_seconds=interval,
+            conflict_strategy=strategy,
+        )
+
+
+@dataclass(frozen=True)
 class DedupSettings:
     """LLM-powered deduplication settings.
 
@@ -507,6 +551,12 @@ class UnifiedConfig:
     # Mem0 auto-sync settings
     mem0_sync: Mem0SyncConfig = field(default_factory=Mem0SyncConfig)
 
+    # Device identity (stable per-machine ID)
+    device_id: str = ""
+
+    # Multi-device sync settings
+    sync: SyncConfig = field(default_factory=SyncConfig)
+
     # CLI preferences
     json_output: bool = False
     default_depth: int | None = None
@@ -527,9 +577,12 @@ class UnifiedConfig:
         if not config_path.exists():
             # Migrate current_brain from legacy config.json if available
             legacy_brain = _read_legacy_brain(data_dir)
+            from neural_memory.sync.device import get_device_id as _get_device_id
+
             config = cls(
                 data_dir=data_dir,
                 current_brain=legacy_brain or get_default_brain(),
+                device_id=_get_device_id(data_dir),
             )
             config.save()
             if legacy_brain:
@@ -543,6 +596,14 @@ class UnifiedConfig:
         with open(config_path, "rb") as f:
             data = tomllib.load(f)
 
+        from neural_memory.sync.device import get_device_id
+
+        sync_data = data.get("sync", {})
+        # device_id: prefer explicit value in [sync] section, else generate/read from file
+        raw_device_id = str(data.get("device_id", "") or sync_data.get("device_id", "")).strip()
+        if not raw_device_id:
+            raw_device_id = get_device_id(data_dir)
+
         return cls(
             data_dir=data_dir,
             current_brain=data.get("current_brain", get_default_brain()),
@@ -555,6 +616,8 @@ class UnifiedConfig:
             dedup=DedupSettings.from_dict(data.get("dedup", {})),
             tool_tier=ToolTierConfig.from_dict(data.get("tool_tier", {})),
             mem0_sync=Mem0SyncConfig.from_dict(data.get("mem0_sync", {})),
+            device_id=raw_device_id,
+            sync=SyncConfig.from_dict(sync_data),
             json_output=data.get("cli", {}).get("json_output", False),
             default_depth=data.get("cli", {}).get("default_depth"),
             default_max_tokens=data.get("cli", {}).get("default_max_tokens", 500),
@@ -665,6 +728,14 @@ class UnifiedConfig:
             lines.append(f"limit = {self.mem0_sync.limit}")
 
         lines += [
+            "",
+            "# Multi-device sync settings",
+            "[sync]",
+            f"enabled = {'true' if self.sync.enabled else 'false'}",
+            f'hub_url = "{self.sync.hub_url}"',
+            f"auto_sync = {'true' if self.sync.auto_sync else 'false'}",
+            f"sync_interval_seconds = {self.sync.sync_interval_seconds}",
+            f'conflict_strategy = "{self.sync.conflict_strategy}"',
             "",
             "# MCP tool tier (minimal/standard/full)",
             "[tool_tier]",

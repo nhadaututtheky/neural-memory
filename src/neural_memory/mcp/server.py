@@ -48,6 +48,7 @@ from neural_memory.mcp.prompt import get_system_prompt
 from neural_memory.mcp.review_handler import ReviewHandler
 from neural_memory.mcp.scheduled_consolidation_handler import ScheduledConsolidationHandler
 from neural_memory.mcp.session_handler import SessionHandler
+from neural_memory.mcp.sync_handler import SyncToolHandler
 from neural_memory.mcp.tool_handlers import ToolHandler
 from neural_memory.mcp.tool_schemas import get_tool_schemas_for_tier
 from neural_memory.mcp.train_handler import TrainHandler
@@ -94,6 +95,7 @@ class MCPServer(
     ExpiryCleanupHandler,
     ScheduledConsolidationHandler,
     VersionCheckHandler,
+    SyncToolHandler,
 ):
     """MCP server that exposes NeuralMemory tools.
 
@@ -117,6 +119,7 @@ class MCPServer(
         ExpiryCleanupHandler — _maybe_run_expiry_cleanup, auto-delete expired
         ScheduledConsolidationHandler — periodic background consolidation
         VersionCheckHandler  — background PyPI version check + update hints
+        SyncToolHandler      — _sync, _sync_status, _sync_config (multi-device sync)
     """
 
     def __init__(self) -> None:
@@ -193,6 +196,9 @@ class MCPServer(
             "nmem_alerts": self._alerts,
             "nmem_review": self._review,
             "nmem_narrative": self._narrative,
+            "nmem_sync": self._sync,
+            "nmem_sync_status": self._sync_status,
+            "nmem_sync_config": self._sync_config,
         }
         handler = dispatch.get(name)
         if handler:

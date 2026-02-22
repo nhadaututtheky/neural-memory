@@ -5,6 +5,77 @@ All notable changes to NeuralMemory are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-02-22
+
+### Added
+
+- **Adaptive Recall (Bayesian Depth Prior)** — System learns optimal retrieval depth per entity
+  - Beta distribution priors per (entity, depth) pair with 5% epsilon exploration
+  - Outcome recording, 30-day decay, fallback to rule-based when insufficient data
+  - `AdaptiveDepthSelector` engine + `SQLiteDepthPriorMixin` storage
+- **Tiered Memory Compression** — Age-based compression preserving entity graph (zero-LLM)
+  - 5 tiers: Full (< 7d), Extractive (7-30d), Entity-only (30-90d), Template (90-180d), Graph-only (180d+)
+  - Entity density scoring, reversible for tiers 1-2, integrated as COMPRESS consolidation strategy
+- **Multi-Device Sync** — Hub-and-spoke incremental sync via change log + sequence numbers
+  - Device identity (UUID-based), append-only change log, incremental merge with neural-aware conflict resolution
+  - `SyncEngine` orchestrator, 4 hub endpoints (register, sync, status, devices), localhost-only
+  - 3 new MCP tools: `nmem_sync`, `nmem_sync_status`, `nmem_sync_config`
+  - `SyncConfig` frozen dataclass (disabled by default), device tracking columns on core tables
+  - Schema migrations v15 → v16 → v17
+
+### Changed
+
+- SQLite schema: v15 → v17
+- MCP tools: 23 → 26
+- Fiber model: `compression_tier` field
+- BrainConfig: 4 new fields (adaptive_depth_enabled/epsilon, compression_enabled/thresholds)
+- UnifiedConfig: `device_id` field + `SyncConfig` dataclass
+- Tests: 2687 passed (up from 2527)
+
+---
+
+## [2.7.1] - 2026-02-21
+
+### Added
+
+- **MCP Tool Tiers** — Config-based filtering to reduce token overhead per API turn
+  - 3 tiers: `minimal` (4 tools), `standard` (8 tools), `full` (all 23, default)
+  - `ToolTierConfig` frozen dataclass, `get_tool_schemas_for_tier()`, TOML config
+  - Hidden tools remain callable via dispatch
+- **Description Compression** — All tool descriptions compressed (~22% token reduction)
+
+### Changed
+
+- Tests: 2527 passed
+
+---
+
+## [2.7.0] - 2026-02-18
+
+### Added
+
+- **Spaced Repetition Engine** — Leitner box system (5 boxes: 1d, 3d, 7d, 14d, 30d)
+  - `ReviewSchedule` frozen dataclass, `SpacedRepetitionEngine`, `SQLiteReviewsMixin`
+  - Auto-scheduling for priority >= 7 fibers, `nmem_review` MCP tool
+  - Schema migration v14 → v15
+- **Memory Narratives** — Template-based markdown generation (no LLM)
+  - 3 modes: timeline (date range), topic (spreading activation), causal (CAUSED_BY chain)
+  - `nmem_narrative` MCP tool
+- **Semantic Synapse Discovery** — Offline consolidation via embeddings
+  - Batch cosine similarity → SIMILAR_TO synapses, integrated as Tier 5 consolidation
+  - 2x faster decay for unreinforced semantic synapses
+- **Cross-Brain Recall** — Parallel spreading activation across multiple brains
+  - `brains` array parameter on `nmem_recall` (max 5)
+  - SimHash dedup across brain results
+
+### Changed
+
+- MCP tools: 21 → 23 (`nmem_review`, `nmem_narrative`)
+- SQLite schema: v14 → v15
+- Tests: 2399 passed
+
+---
+
 ## [2.6.0] - 2026-02-18
 
 ### Added
@@ -901,6 +972,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[2.8.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v2.8.0
+[2.7.1]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v2.7.1
+[2.7.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v2.7.0
 [2.0.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v2.0.0
 [1.7.0]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v1.7.0
 [1.6.1]: https://github.com/nhadaututtheky/neural-memory/releases/tag/v1.6.1

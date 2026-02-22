@@ -18,6 +18,7 @@ from neural_memory.server.routes import (
     brain_router,
     consolidation_router,
     dashboard_router,
+    hub_router,
     integration_status_router,
     memory_router,
     oauth_router,
@@ -103,6 +104,7 @@ def create_app(
     api_v1.include_router(brain_router)
     api_v1.include_router(sync_router)
     api_v1.include_router(consolidation_router)
+    api_v1.include_router(hub_router)
     app.include_router(api_v1)
 
     # Legacy unversioned routes (backward compat)
@@ -110,6 +112,7 @@ def create_app(
     app.include_router(brain_router)
     app.include_router(sync_router)
     app.include_router(consolidation_router)
+    app.include_router(hub_router)
 
     # Dashboard API routes (unversioned — dashboard-specific)
     app.include_router(dashboard_router)

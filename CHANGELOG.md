@@ -5,6 +5,62 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-02-22
+
+### Added
+
+- **Adaptive Recall (Bayesian Depth Prior)** — System learns optimal retrieval depth per entity pattern
+  - Beta distribution priors per (entity, depth) pair — picks depth with highest E[Beta(a,b)]
+  - 5% epsilon exploration to discover better depths for known entities
+  - Fallback to rule-based detection when < 5 queries or no priors exist
+  - Outcome recording: updates alpha (success) or beta (failure) based on confidence + fibers_matched
+  - 30-day decay (a *= 0.9, b *= 0.9) to forget stale patterns
+  - `DepthPrior`, `DepthDecision` frozen dataclasses + `AdaptiveDepthSelector` engine
+  - `SQLiteDepthPriorMixin` with batch fetch, upsert, stale decay, delete operations
+  - Configurable: `adaptive_depth_enabled` (default True), `adaptive_depth_epsilon` (default 0.05)
+- **Tiered Memory Compression** — Age-based compression preserving entity graph structure (zero-LLM)
+  - 5 tiers: Full (< 7d), Extractive (7-30d), Entity-only (30-90d), Template (90-180d), Graph-only (180d+)
+  - Entity density scoring: `count(neurons_referenced) / word_count` per sentence
+  - Reversible for tiers 1-2 (backup stored), irreversible for tiers 3-4
+  - Integrated as `COMPRESS` strategy in `ConsolidationEngine` (Tier 2)
+  - `CompressionTier` IntEnum, `CompressionConfig`, `CompressionResult` frozen dataclasses
+  - `SQLiteCompressionMixin` for backup storage with stats
+  - Configurable: `compression_enabled` (default True), `compression_tier_thresholds` (7, 30, 90, 180 days)
+- **Multi-Device Sync** — Hub-and-spoke incremental sync via change log + sequence numbers
+  - **Device Identity**: UUID-based device_id generation, persisted in config, `DeviceInfo` frozen dataclass
+  - **Change Tracking**: Append-only `change_log` table recording all neuron/synapse/fiber mutations
+    - `ChangeEntry` frozen dataclass, `SQLiteChangeLogMixin` with 6 CRUD methods
+    - `record_change()`, `get_changes_since(sequence)`, `mark_synced()`, `prune_synced_changes()`
+  - **Incremental Sync Protocol**: Delta-based merge using neural-aware conflict resolution
+    - `SyncRequest`, `SyncResponse`, `SyncChange`, `SyncConflict` frozen dataclasses
+    - `ConflictStrategy` enum: prefer_recent, prefer_local, prefer_remote, prefer_stronger
+    - Neural merge rules: weight=max, access_frequency=sum, tags=union, conductivity=max, delete wins
+  - **Sync Engine**: `SyncEngine` orchestrator with `prepare_sync_request()`, `process_sync_response()`, `handle_hub_sync()`
+  - **Hub Server Endpoints** (localhost-only by default):
+    - `POST /hub/register` — register device for brain
+    - `POST /hub/sync` — push/pull incremental changes
+    - `GET /hub/status/{brain_id}` — sync status + device count
+    - `GET /hub/devices/{brain_id}` — list registered devices
+  - **3 new MCP tools** (full tier only):
+    - `nmem_sync` — trigger manual sync (push/pull/full)
+    - `nmem_sync_status` — show pending changes, devices, last sync
+    - `nmem_sync_config` — configure hub URL, auto-sync, conflict strategy
+  - `SyncConfig` frozen dataclass: enabled (default False), hub_url, auto_sync, sync_interval_seconds, conflict_strategy
+  - Device tracking columns on neurons/synapses/fibers: `device_id`, `device_origin`, `updated_at`
+  - Schema migrations v15 → v16 (depth_priors, compression_backups, fiber compression_tier) → v17 (change_log, devices, device columns)
+
+### Changed
+
+- **SQLite schema** — Version 15 → 17 (two migrations)
+- **MCP tools** — Expanded from 23 to 26 (`nmem_sync`, `nmem_sync_status`, `nmem_sync_config`)
+- **MCPServer mixin chain** — Added `SyncToolHandler` mixin
+- **`Fiber` model** — Added `compression_tier: int = 0` field
+- **`BrainConfig`** — Added 4 new fields: `adaptive_depth_enabled`, `adaptive_depth_epsilon`, `compression_enabled`, `compression_tier_thresholds`
+- **`UnifiedConfig`** — Added `device_id` field and `SyncConfig` dataclass
+- **`ConsolidationEngine`** — Added `COMPRESS` strategy enum + Tier 2 registration + `fibers_compressed`/`tokens_saved` report fields
+- **Hub endpoints** — Pydantic request validation with regex-based brain_id/device_id format checks
+- Tests: 2687 passed (up from 2527), +160 new tests across 8 test files
+
 ## [2.7.1] - 2026-02-21
 
 ### Added

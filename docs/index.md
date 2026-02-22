@@ -151,6 +151,7 @@ pip install neural-memory[all]      # All features
     - `nmem_auto` - Auto-capture memories
     - `nmem_train_db` - Train brain from database schema
     - `nmem_alerts` - View and manage brain health alerts
+    - `nmem_sync` - Multi-device sync
 
 ## VS Code Extension
 
@@ -196,6 +197,9 @@ nmem serve
 - **Smart Context Optimizer** - 5-factor composite scoring + SimHash dedup + token budgeting (v2.6.0+)
 - **Proactive Alerts** - Persistent brain health alerts with lifecycle management (v2.6.0+)
 - **Recall Pattern Learning** - Topic co-occurrence mining + follow-up suggestions (v2.6.0+)
+- **Adaptive Recall** - Bayesian depth priors that learn optimal retrieval depth per entity (v2.8.0+)
+- **Tiered Memory Compression** - Age-based compression preserving entity graph structure (v2.8.0+)
+- **Multi-Device Sync** - Hub-and-spoke incremental sync with neural-aware conflict resolution (v2.8.0+)
 
 ## Next Steps
 

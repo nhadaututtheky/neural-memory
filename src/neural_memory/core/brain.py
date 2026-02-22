@@ -65,6 +65,12 @@ class BrainConfig:
     freshness_weight: float = 0.0
     semantic_discovery_similarity_threshold: float = 0.7
     semantic_discovery_max_pairs: int = 100
+    # Adaptive recall (Bayesian depth priors)
+    adaptive_depth_enabled: bool = True
+    adaptive_depth_epsilon: float = 0.05
+    # Memory compression
+    compression_enabled: bool = True
+    compression_tier_thresholds: tuple[int, ...] = (7, 30, 90, 180)
 
     def with_updates(self, **kwargs: Any) -> BrainConfig:
         """Create a new config with updated values."""

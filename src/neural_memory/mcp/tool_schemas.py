@@ -710,4 +710,74 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "required": ["action"],
         },
     },
+    {
+        "name": "nmem_sync",
+        "description": "Trigger manual sync with hub server.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["push", "pull", "full"],
+                    "description": "push=send local changes, pull=get remote changes, full=bidirectional sync",
+                },
+                "hub_url": {
+                    "type": "string",
+                    "description": "Hub server URL (overrides config). Must be http:// or https://",
+                },
+                "strategy": {
+                    "type": "string",
+                    "enum": ["prefer_recent", "prefer_local", "prefer_remote", "prefer_stronger"],
+                    "description": "Conflict resolution strategy (default: from config)",
+                },
+            },
+            "required": ["action"],
+        },
+    },
+    {
+        "name": "nmem_sync_status",
+        "description": "Show sync status: pending changes, devices, last sync.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "nmem_sync_config",
+        "description": "View or update sync configuration.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["get", "set"],
+                    "description": "get=view current config, set=update config",
+                },
+                "enabled": {
+                    "type": "boolean",
+                    "description": "Enable/disable sync",
+                },
+                "hub_url": {
+                    "type": "string",
+                    "description": "Hub server URL",
+                },
+                "auto_sync": {
+                    "type": "boolean",
+                    "description": "Enable/disable auto-sync",
+                },
+                "sync_interval_seconds": {
+                    "type": "integer",
+                    "minimum": 10,
+                    "maximum": 86400,
+                    "description": "Sync interval in seconds",
+                },
+                "conflict_strategy": {
+                    "type": "string",
+                    "enum": ["prefer_recent", "prefer_local", "prefer_remote", "prefer_stronger"],
+                    "description": "Default conflict strategy",
+                },
+            },
+            "required": ["action"],
+        },
+    },
 ]
