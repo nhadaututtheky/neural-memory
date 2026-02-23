@@ -55,6 +55,9 @@ neo4j = [
 falkordb = [
     "falkordb>=1.0.0,<2.0",
 ]
+encryption = [
+    "cryptography>=41.0",
+]
 nlp-en = [
     "spacy>=3.6",
 ]
