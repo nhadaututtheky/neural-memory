@@ -248,11 +248,32 @@ class ReflexPipeline:
             fibers_matched,
         )
 
+        # Create encryptor for decryption if encryption is enabled
+        _encryptor = None
+        _brain_id = ""
+        try:
+            from neural_memory.unified_config import get_config as _get_cfg
+
+            _cfg = _get_cfg()
+            if _cfg.encryption.enabled:
+                from pathlib import Path
+
+                from neural_memory.safety.encryption import MemoryEncryptor
+
+                _keys_dir_str = _cfg.encryption.keys_dir
+                _keys_dir = Path(_keys_dir_str) if _keys_dir_str else (_cfg.data_dir / "keys")
+                _encryptor = MemoryEncryptor(keys_dir=_keys_dir)
+                _brain_id = self._storage._current_brain_id or ""
+        except Exception:
+            pass
+
         context, tokens_used = await format_context(
             self._storage,
             activations,
             fibers_matched,
             max_tokens,
+            encryptor=_encryptor,
+            brain_id=_brain_id,
         )
 
         latency_ms = (time.perf_counter() - start_time) * 1000

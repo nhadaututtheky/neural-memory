@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from neural_memory.core.neuron import NeuronType
 from neural_memory.engine.activation import ActivationResult
@@ -18,6 +18,7 @@ def _estimate_tokens(text: str) -> int:
 
 if TYPE_CHECKING:
     from neural_memory.core.fiber import Fiber
+    from neural_memory.safety.encryption import MemoryEncryptor
     from neural_memory.storage.base import NeuralStorage
 
 
@@ -26,12 +27,21 @@ async def format_context(
     activations: dict[str, ActivationResult],
     fibers: list[Fiber],
     max_tokens: int,
+    encryptor: MemoryEncryptor | None = None,
+    brain_id: str = "",
 ) -> tuple[str, int]:
     """Format activated memories into context for agent injection.
 
     Returns:
         Tuple of (formatted_context, token_estimate).
     """
+
+    def _maybe_decrypt(text: str, fiber_meta: dict[str, Any]) -> str:
+        """Decrypt content if fiber is encrypted and encryptor is available."""
+        if encryptor and brain_id and fiber_meta.get("encrypted"):
+            return encryptor.decrypt(text, brain_id)
+        return text
+
     lines: list[str] = []
     token_estimate = 0
 
@@ -48,7 +58,7 @@ async def format_context(
             else:
                 anchor = anchor_map.get(fiber.anchor_neuron_id)
                 if anchor:
-                    content = anchor.content
+                    content = _maybe_decrypt(anchor.content, fiber.metadata)
                 else:
                     continue
 
