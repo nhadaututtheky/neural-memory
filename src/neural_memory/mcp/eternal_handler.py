@@ -15,6 +15,7 @@ from neural_memory.utils.timeutils import utcnow
 if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
     from neural_memory.unified_config import UnifiedConfig
+from neural_memory.mcp.tool_handlers import _require_brain_id
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +66,7 @@ class EternalHandler:
     async def _eternal_save(self, args: dict[str, Any]) -> dict[str, Any]:
         """Save project context, decisions, instructions into neural graph."""
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id or "")
+        brain = await storage.get_brain(_require_brain_id(storage))
         if not brain:
             return {"error": "No brain configured"}
 
@@ -141,7 +142,7 @@ class EternalHandler:
     async def _recap_topic(self, ctx: EternalContext, topic: str) -> dict[str, Any]:
         """Recap with topic-based search via ReflexPipeline."""
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id or "")
+        brain = await storage.get_brain(_require_brain_id(storage))
         if not brain:
             return {"error": "No brain configured"}
 

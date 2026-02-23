@@ -37,6 +37,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _require_brain_id(storage: NeuralStorage) -> str:
+    """Return the current brain ID or raise ValueError if not set."""
+    brain_id = storage._current_brain_id
+    if not brain_id:
+        raise ValueError("No brain context set")
+    return brain_id
+
+
 class ToolHandler:
     """Mixin providing all MCP tool handler implementations.
 
@@ -76,7 +84,7 @@ class ToolHandler:
     async def _remember(self, args: dict[str, Any]) -> dict[str, Any]:
         """Store a memory in the neural graph."""
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id or "")
+        brain = await storage.get_brain(_require_brain_id(storage))
         if not brain:
             return {"error": "No brain configured"}
 
@@ -367,7 +375,7 @@ class ToolHandler:
             return await self._cross_brain_recall(args, brain_names)
 
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id or "")
+        brain = await storage.get_brain(_require_brain_id(storage))
         if not brain:
             return {"error": "No brain configured"}
 
@@ -683,7 +691,7 @@ class ToolHandler:
     async def _stats(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get brain statistics."""
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id or "")
+        brain = await storage.get_brain(_require_brain_id(storage))
         if not brain:
             return {"error": "No brain configured"}
 
@@ -727,7 +735,7 @@ class ToolHandler:
     async def _health(self, args: dict[str, Any]) -> dict[str, Any]:
         """Run brain health diagnostics."""
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id or "")
+        brain = await storage.get_brain(_require_brain_id(storage))
         if not brain:
             return {"error": "No brain configured"}
 
@@ -771,7 +779,7 @@ class ToolHandler:
     async def _evolution(self, args: dict[str, Any]) -> dict[str, Any]:
         """Measure brain evolution dynamics."""
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id or "")
+        brain = await storage.get_brain(_require_brain_id(storage))
         if not brain:
             return {"error": "No brain configured"}
 
@@ -868,7 +876,7 @@ class ToolHandler:
     async def _habits(self, args: dict[str, Any]) -> dict[str, Any]:
         """Manage learned workflow habits."""
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id or "")
+        brain = await storage.get_brain(_require_brain_id(storage))
         if not brain:
             return {"error": "No brain configured"}
 
@@ -926,7 +934,7 @@ class ToolHandler:
     async def _version(self, args: dict[str, Any]) -> dict[str, Any]:
         """Brain version control operations."""
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id or "")
+        brain = await storage.get_brain(_require_brain_id(storage))
         if not brain:
             return {"error": "No brain configured"}
 
@@ -1018,25 +1026,41 @@ class ToolHandler:
 
     async def _transplant(self, args: dict[str, Any]) -> dict[str, Any]:
         """Transplant memories from another brain."""
-        storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id or "")
-        if not brain:
+        from neural_memory.unified_config import get_shared_storage
+
+        target_storage = await self.get_storage()
+        target_brain_id = target_storage._current_brain_id
+        if not target_brain_id:
+            return {"error": "No brain configured"}
+
+        target_brain = await target_storage.get_brain(target_brain_id)
+        if not target_brain:
             return {"error": "No brain configured"}
 
         source_brain_name = args.get("source_brain")
         if not source_brain_name:
             return {"error": "source_brain is required"}
 
-        # Find source brain
-        source_brain = await storage.find_brain_by_name(source_brain_name)
-        if source_brain is None:
-            return {"error": "Source brain not found"}
-
-        if source_brain.id == brain.id:
+        if source_brain_name == target_brain.name:
             return {
                 "error": "Source brain and target brain are the same. "
                 "Transplanting a brain into itself is a destructive no-op."
             }
+
+        # Open a separate storage for the source brain (.db file)
+        try:
+            source_storage = await get_shared_storage(brain_name=source_brain_name)
+        except Exception:
+            logger.error("Failed to open source brain storage", exc_info=True)
+            return {"error": "Source brain not found"}
+
+        source_brain_id = source_storage._current_brain_id
+        if not source_brain_id:
+            return {"error": "Source brain not found"}
+
+        source_brain = await source_storage.get_brain(source_brain_id)
+        if source_brain is None:
+            return {"error": "Source brain not found"}
 
         from neural_memory.engine.brain_transplant import TransplantFilter, transplant
         from neural_memory.engine.merge import ConflictStrategy
@@ -1055,19 +1079,18 @@ class ToolHandler:
             memory_types=frozenset(memory_types) if memory_types else None,
         )
 
-        old_brain_id = storage._current_brain_id
         try:
-            storage.set_brain(source_brain.id or "")
             result = await transplant(
-                source_storage=storage,
-                target_storage=storage,
-                source_brain_id=source_brain.id,
-                target_brain_id=brain.id,
+                source_storage=source_storage,
+                target_storage=target_storage,
+                source_brain_id=source_brain_id,
+                target_brain_id=target_brain_id,
                 filt=filt,
                 strategy=strategy,
             )
-        finally:
-            storage.set_brain(old_brain_id or "")
+        except ValueError as exc:
+            logger.error("Transplant failed: %s", exc)
+            return {"error": "Transplant failed"}
 
         return {
             "success": True,

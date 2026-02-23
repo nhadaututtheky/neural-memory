@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, Any
+from neural_memory.mcp.tool_handlers import _require_brain_id
 
 if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
@@ -32,7 +33,7 @@ class ReviewHandler:
         """
         action = args.get("action", "queue")
         storage = await self.get_storage()
-        brain = await storage.get_brain(storage._current_brain_id or "")
+        brain = await storage.get_brain(_require_brain_id(storage))
         if not brain:
             return {"error": "No brain configured"}
 

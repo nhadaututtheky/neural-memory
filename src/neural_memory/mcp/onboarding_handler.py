@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
     from neural_memory.unified_config import UnifiedConfig
+from neural_memory.mcp.tool_handlers import _require_brain_id
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +88,7 @@ class OnboardingHandler:
 
         try:
             storage = await self.get_storage()
-            brain_id = storage._current_brain_id or ""
+            brain_id = _require_brain_id(storage)
             stats = await storage.get_stats(brain_id)
             if not isinstance(stats, dict):
                 self._onboarding_shown = True

@@ -136,7 +136,11 @@ def brain_export(
             raise typer.Exit(1)
 
         storage = await get_storage(config, brain_name=brain_name)
-        snapshot = await storage.export_brain(storage._current_brain_id or "")
+        brain_id = storage._current_brain_id
+        if not brain_id:
+            typer.secho("No brain context set.", fg=typer.colors.RED)
+            raise typer.Exit(1)
+        snapshot = await storage.export_brain(brain_id)
 
         # Filter sensitive content if requested
         neurons = snapshot.neurons
@@ -282,7 +286,7 @@ def brain_import(
         # Load/create storage and import
         storage = await get_storage(config, brain_name=brain_name)
         await storage.import_brain(snapshot, storage._current_brain_id)
-        await storage.save()
+        await storage.close()
 
         if use:
             config.current_brain = brain_name
@@ -444,8 +448,12 @@ def brain_transplant(
         source_storage = await get_storage(config, brain_name=source)
         target_storage = await get_storage(config, brain_name=target_name)
         try:
-            source_brain = await source_storage.get_brain(source_storage._current_brain_id or "")
-            target_brain = await target_storage.get_brain(target_storage._current_brain_id or "")
+            source_brain_id = source_storage._current_brain_id
+            target_brain_id = target_storage._current_brain_id
+            if not source_brain_id or not target_brain_id:
+                return {"error": "Brain context not set for source or target."}
+            source_brain = await source_storage.get_brain(source_brain_id)
+            target_brain = await target_storage.get_brain(target_brain_id)
 
             if not source_brain:
                 return {"error": f"Source brain '{source}' has no data."}
@@ -522,7 +530,10 @@ def brain_health(
             return {"error": f"Brain '{brain_name}' not found."}
 
         storage = await get_storage(config, brain_name=brain_name)
-        brain = await storage.get_brain(storage._current_brain_id or "")
+        brain_id = storage._current_brain_id
+        if not brain_id:
+            return {"error": "No brain context set"}
+        brain = await storage.get_brain(brain_id)
         if not brain:
             return {"error": "No brain configured"}
 

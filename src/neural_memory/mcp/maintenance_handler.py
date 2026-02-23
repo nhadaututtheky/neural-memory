@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 from neural_memory.core.trigger_engine import TriggerResult, TriggerType
 from neural_memory.utils.timeutils import utcnow
+from neural_memory.mcp.tool_handlers import _require_brain_id
 
 if TYPE_CHECKING:
     from neural_memory.unified_config import MaintenanceConfig
@@ -263,7 +264,7 @@ class MaintenanceHandler:
             from neural_memory.engine.consolidation_delta import run_with_delta
 
             storage = await self.get_storage()  # type: ignore[attr-defined]
-            brain_id = storage._current_brain_id or ""
+            brain_id = _require_brain_id(storage)
             strategies = [ConsolidationStrategy(s) for s in strategy_names]
             delta = await run_with_delta(storage, brain_id, strategies=strategies)
             logger.info(

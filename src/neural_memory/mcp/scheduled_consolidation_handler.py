@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from neural_memory.utils.timeutils import utcnow
+from neural_memory.mcp.tool_handlers import _require_brain_id
 
 if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
@@ -106,7 +107,7 @@ class ScheduledConsolidationHandler:
 
         try:
             storage = await self.get_storage()
-            brain_id = storage._current_brain_id or ""
+            brain_id = _require_brain_id(storage)
             strategies = [ConsolidationStrategy(s) for s in cfg.scheduled_consolidation_strategies]
 
             self._last_consolidation_at = utcnow()

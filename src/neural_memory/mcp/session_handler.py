@@ -14,6 +14,7 @@ from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
+from neural_memory.mcp.tool_handlers import _require_brain_id
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +112,7 @@ class SessionHandler:
         if git_ctx:
             session_tags.add(f"branch:{git_ctx.branch}")
 
-        brain = await storage.get_brain(storage._current_brain_id or "")
+        brain = await storage.get_brain(_require_brain_id(storage))
         if not brain:
             return {"error": "No brain configured"}
 
@@ -168,7 +169,7 @@ class SessionHandler:
             summary += f", task: {task}"
         summary += f", progress: {int(progress * 100)}%"
 
-        brain = await storage.get_brain(storage._current_brain_id or "")
+        brain = await storage.get_brain(_require_brain_id(storage))
         if not brain:
             return {"error": "No brain configured"}
 
