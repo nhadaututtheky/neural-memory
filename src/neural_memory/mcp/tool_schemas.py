@@ -92,6 +92,10 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "type": "integer",
                     "description": "Days until memory expires",
                 },
+                "encrypted": {
+                    "type": "boolean",
+                    "description": "Force encrypt this memory's neuron content (default: false). When true, content is encrypted with the brain's Fernet key regardless of sensitive content detection.",
+                },
             },
             "required": ["content"],
         },
