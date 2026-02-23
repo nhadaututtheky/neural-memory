@@ -18,9 +18,15 @@ from neural_memory.safety.sensitive import (
     filter_sensitive_content,
     get_default_patterns,
 )
+from neural_memory.safety.encryption import (
+    EncryptionResult,
+    MemoryEncryptor,
+)
 
 __all__ = [
+    "EncryptionResult",
     "FreshnessLevel",
+    "MemoryEncryptor",
     "SensitiveMatch",
     "SensitivePattern",
     "check_sensitive_content",
