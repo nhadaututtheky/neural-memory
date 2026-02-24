@@ -1,0 +1,41 @@
+{
+  "name": "neural-memory",
+  "owner": {
+    "name": "NeuralMemory Contributors",
+    "email": ""
+  },
+  "metadata": {
+    "description": "Reflex-based memory system for AI agents. Stores experiences as interconnected neurons, recalls through spreading activation — not search.",
+    "version": "2.8.1"
+  },
+  "plugins": [
+    {
+      "name": "neural-memory",
+      "source": {
+        "source": "github",
+        "repo": "nhadaututtheky/neural-memory"
+      },
+      "description": "Reflex-based memory system for AI agents — stores experiences as interconnected neurons and recalls them through spreading activation, mimicking how the human brain works.",
+      "version": "2.8.1",
+      "author": {
+        "name": "NeuralMemory Contributors"
+      },
+      "homepage": "https://github.com/nhadaututtheky/neural-memory",
+      "repository": "https://github.com/nhadaututtheky/neural-memory",
+      "license": "MIT",
+      "keywords": [
+        "memory",
+        "neural",
+        "mcp",
+        "agents",
+        "ai",
+        "graph",
+        "recall",
+        "llm",
+        "persistence",
+        "associative"
+      ],
+      "category": "productivity"
+    }
+  ]
+}
