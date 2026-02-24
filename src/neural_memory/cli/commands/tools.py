@@ -312,9 +312,27 @@ def decay(
 
 
 def consolidate(
+    strategy_positional: Annotated[
+        str | None,
+        typer.Argument(
+            hidden=True,
+            help="Deprecated positional syntax — use --strategy instead.",
+        ),
+    ] = None,
     brain: Annotated[str | None, typer.Option("--brain", "-b", help="Brain to consolidate")] = None,
     strategy: Annotated[
-        str, typer.Option("--strategy", "-s", help="Strategy: prune, merge, summarize, all")
+        str,
+        typer.Option(
+            "--strategy",
+            "-s",
+            help=(
+                "Consolidation strategy. Valid values: "
+                "prune, merge, summarize, mature, infer, enrich, "
+                "dream, learn_habits, dedup, semantic_link, compress, all. "
+                "Default: all (runs every strategy in dependency order). "
+                "'mature' advances episodic memories to semantic stage."
+            ),
+        ),
     ] = "all",
     dry_run: Annotated[
         bool, typer.Option("--dry-run", "-n", help="Preview changes without applying")
@@ -331,18 +349,40 @@ def consolidate(
 ) -> None:
     """Consolidate brain memories by pruning, merging, or summarizing.
 
+    Runs one or more consolidation passes on the current (or specified) brain.
+    Use --strategy to pick a specific pass, or omit it to run everything.
+
     Strategies:
-        prune      - Remove weak synapses and orphan neurons
-        merge      - Combine overlapping fibers
-        summarize  - Create concept neurons for topic clusters
-        all        - Run all strategies in order
+        prune        - Remove weak synapses and orphan neurons
+        merge        - Combine overlapping fibers
+        summarize    - Create concept neurons for topic clusters
+        mature       - Advance episodic memories to semantic stage
+        infer        - Add inferred synapses from co-activation patterns
+        enrich       - Enrich neurons with extracted metadata
+        dream        - Generate synthetic bridging memories
+        learn_habits - Extract recurring workflow patterns
+        dedup        - Merge near-duplicate memories
+        semantic_link- Add cross-domain semantic connections
+        compress     - Compress old low-activation fibers
+        all          - Run all strategies in dependency order (default)
 
     Examples:
-        nmem consolidate                    # Run all strategies
-        nmem consolidate -s prune           # Only prune
-        nmem consolidate --dry-run          # Preview without changes
+        nmem consolidate                         # Run all strategies
+        nmem consolidate --strategy prune        # Only prune
+        nmem consolidate -s mature               # Advance episodic memories
+        nmem consolidate --dry-run               # Preview without changes
         nmem consolidate -s merge --merge-overlap 0.3
     """
+    # Friendly error for old-style positional syntax (e.g. `nmem consolidate prune`)
+    if strategy_positional is not None:
+        typer.secho(
+            f"Error: positional strategy argument is not supported.\n"
+            f"  Did you mean: nmem consolidate --strategy {strategy_positional}",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(1)
+
     from neural_memory.engine.consolidation import (
         ConsolidationConfig,
         ConsolidationStrategy,
@@ -361,7 +401,18 @@ def consolidate(
         brain_obj = await storage.get_brain(brain_name)
         brain_id = brain_obj.id if brain_obj else brain_name
 
-        strategies = [ConsolidationStrategy(strategy)]
+        try:
+            strategies = [ConsolidationStrategy(strategy)]
+        except ValueError:
+            valid = ", ".join(s.value for s in ConsolidationStrategy)
+            typer.secho(
+                f"Error: unknown strategy '{strategy}'.\n"
+                f"  Valid strategies: {valid}\n"
+                f"  Example: nmem consolidate --strategy prune",
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(1)
         cons_config = ConsolidationConfig(
             prune_weight_threshold=prune_threshold,
             prune_min_inactive_days=min_inactive_days,
