@@ -193,18 +193,23 @@ class TestTransplantTool:
     async def test_transplant_nonexistent_source(self, server: MCPServer) -> None:
         """Should error when source brain doesn't exist."""
         mock_storage = AsyncMock()
-        mock_brain = MagicMock(id="test-brain")
+        mock_brain = MagicMock(id="test-brain", name="test-brain")
         mock_storage.get_brain = AsyncMock(return_value=mock_brain)
         mock_storage._current_brain_id = "test-brain"
-        mock_storage.find_brain_by_name = AsyncMock(return_value=None)
 
-        with patch.object(server, "get_storage", return_value=mock_storage):
+        with (
+            patch.object(server, "get_storage", return_value=mock_storage),
+            patch(
+                "neural_memory.unified_config.get_shared_storage",
+                side_effect=FileNotFoundError("Brain not found"),
+            ),
+        ):
             result = await server.call_tool(
                 "nmem_transplant", {"source_brain": "nonexistent-brain"}
             )
 
         assert "error" in result
-        assert "not found" in result["error"]
+        assert "not found" in result["error"].lower()
 
     @pytest.mark.asyncio
     async def test_transplant_missing_source(self, server: MCPServer) -> None:
@@ -460,7 +465,27 @@ class TestTransplantWithData:
         # Set context back to target brain for the MCP call
         storage.set_brain("target-brain")
 
-        with patch.object(server, "get_storage", return_value=storage):
+        # Create a separate source storage view backed by the same data
+        source_storage = InMemoryStorage()
+        source_storage._neurons = storage._neurons
+        source_storage._synapses = storage._synapses
+        source_storage._fibers = storage._fibers
+        source_storage._brains = storage._brains
+        source_storage._typed_memories = storage._typed_memories
+        source_storage._projects = storage._projects
+        source_storage._graph = storage._graph
+        source_storage.set_brain("source-brain")
+
+        async def mock_get_shared_storage(brain_name: str | None = None) -> InMemoryStorage:
+            return source_storage
+
+        with (
+            patch.object(server, "get_storage", return_value=storage),
+            patch(
+                "neural_memory.unified_config.get_shared_storage",
+                side_effect=mock_get_shared_storage,
+            ),
+        ):
             result = await server.call_tool(
                 "nmem_transplant",
                 {"source_brain": "source-brain", "tags": ["redis"]},

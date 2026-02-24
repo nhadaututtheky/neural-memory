@@ -433,7 +433,11 @@ class ToolHandler:
             return await self._cross_brain_recall(args, brain_names)
 
         storage = await self.get_storage()
-        brain = await storage.get_brain(_require_brain_id(storage))
+        try:
+            brain_id = _require_brain_id(storage)
+        except ValueError:
+            return {"error": "No brain configured"}
+        brain = await storage.get_brain(brain_id)
         if not brain:
             return {"error": "No brain configured"}
 
