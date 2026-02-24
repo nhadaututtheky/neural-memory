@@ -15,11 +15,13 @@ class TestEncryptionConfig:
     def test_from_dict(self) -> None:
         from neural_memory.unified_config import EncryptionConfig
 
-        cfg = EncryptionConfig.from_dict({
-            "enabled": False,
-            "auto_encrypt_sensitive": False,
-            "keys_dir": "custom/path",
-        })
+        cfg = EncryptionConfig.from_dict(
+            {
+                "enabled": False,
+                "auto_encrypt_sensitive": False,
+                "keys_dir": "custom/path",
+            }
+        )
         assert cfg.enabled is False
         assert cfg.auto_encrypt_sensitive is False
         assert cfg.keys_dir == "custom/path"
