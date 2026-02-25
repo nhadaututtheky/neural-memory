@@ -31,8 +31,10 @@ export type BeforeAgentStartEvent = {
 };
 
 export type BeforeAgentStartResult = {
-  systemPrompt?: string;
-  prependContext?: string;
+  systemPrompt?: string;     // Appended to system prompt — last handler wins
+  prependContext?: string;   // Prepended to conversation context — all handlers concatenated
+  modelOverride?: string;    // Override model for this run — first defined wins
+  providerOverride?: string; // Override provider for this run — first defined wins
 };
 
 export type AgentEndEvent = {

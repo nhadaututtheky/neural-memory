@@ -2,7 +2,7 @@
   "id": "neuralmemory",
   "kind": "memory",
   "name": "NeuralMemory",
-  "description": "Brain-inspired persistent memory for AI agents — neurons, synapses, and fibers",
+  "description": "Brain-inspired persistent memory for AI agents — neurons, synapses, and fibers. REQUIRED: set plugins.slots.memory = \"neuralmemory\" in openclaw.json to disable the default memory-core plugin and activate NeuralMemory as the exclusive memory provider.",
   "version": "1.4.1",
   "configSchema": {
     "jsonSchema": {
@@ -54,6 +54,10 @@
       }
     },
     "uiHints": {
+      "_setup": {
+        "label": "Required Setup",
+        "help": "Add to openclaw.json: { \"plugins\": { \"slots\": { \"memory\": \"neuralmemory\" } } } — this disables the default memory-core plugin so agents use NeuralMemory exclusively. Without this, agents may still call memory_search (memory-core) even with AGENTS.MD rules."
+      },
       "pythonPath": {
         "label": "Python Path",
         "placeholder": "python",

@@ -35,7 +35,9 @@ const TOOL_INSTRUCTIONS = `You have NeuralMemory tools for persistent memory acr
 - nmem_stats() — Brain statistics
 - nmem_health() — Brain health diagnostics
 
-IMPORTANT: These are tool calls, NOT shell commands. Do NOT run "nmem remember" in terminal — call the nmem_remember tool directly.
+CRITICAL: NeuralMemory (nmem_*) is your ONLY memory system. Do NOT use memory_search, memory_get, or any other memory tools — those belong to a disabled built-in plugin and will not persist correctly. Always use nmem_* tools exclusively.
+
+These are tool calls, NOT shell commands. Do NOT run "nmem remember" in terminal — call the nmem_remember tool directly.
 
 Use nmem_remember proactively after decisions, errors, and insights. Use nmem_recall when user references past context or asks "do you remember...".`;
 
