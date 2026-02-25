@@ -4,10 +4,19 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Request
 
 from neural_memory.core.brain import Brain
 from neural_memory.storage.base import NeuralStorage
+
+
+async def require_local_request(request: Request) -> None:
+    """Reject non-localhost requests to protect local-only endpoints."""
+    if request.client is None:
+        return  # ASGI test clients / internal calls
+    client_host = request.client.host
+    if client_host not in {"127.0.0.1", "::1", "localhost", "testclient"}:
+        raise HTTPException(status_code=403, detail="Forbidden")
 
 
 async def get_storage() -> NeuralStorage:

@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from neural_memory.integrations.openclaw_config import (
@@ -19,22 +19,14 @@ from neural_memory.integrations.openclaw_config import (
     SecurityConfig,
     TelegramConfig,
 )
+from neural_memory.server.dependencies import require_local_request
 
 logger = logging.getLogger(__name__)
-
-
-async def _require_local_request(request: Request) -> None:
-    """Reject non-localhost requests to protect sensitive config endpoints."""
-    client_host = request.client.host if request.client else ""
-    allowed = {"127.0.0.1", "::1", "localhost"}
-    if client_host not in allowed:
-        raise HTTPException(status_code=403, detail="Forbidden")
-
 
 router = APIRouter(
     prefix="/api/openclaw",
     tags=["openclaw"],
-    dependencies=[Depends(_require_local_request)],
+    dependencies=[Depends(require_local_request)],
 )
 
 

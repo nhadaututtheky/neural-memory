@@ -6,10 +6,10 @@ import logging
 import re
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from neural_memory.server.dependencies import get_storage
+from neural_memory.server.dependencies import get_storage, require_local_request
 from neural_memory.storage.base import NeuralStorage
 from neural_memory.sync.protocol import ConflictStrategy, SyncChange, SyncRequest, SyncResponse
 from neural_memory.sync.sync_engine import SyncEngine
@@ -21,18 +21,10 @@ _BRAIN_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 _DEVICE_ID_PATTERN = re.compile(r"^[a-fA-F0-9]+$")
 
 
-async def _require_local_request(request: Request) -> None:
-    """Reject non-localhost requests."""
-    client_host = request.client.host if request.client else ""
-    allowed = {"127.0.0.1", "::1", "localhost"}
-    if client_host not in allowed:
-        raise HTTPException(status_code=403, detail="Forbidden")
-
-
 router = APIRouter(
     prefix="/hub",
     tags=["hub"],
-    dependencies=[Depends(_require_local_request)],
+    dependencies=[Depends(require_local_request)],
 )
 
 

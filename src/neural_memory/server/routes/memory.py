@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from neural_memory.core.brain import Brain
 from neural_memory.engine.encoder import MemoryEncoder
 from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline
-from neural_memory.server.dependencies import get_brain, get_storage
+from neural_memory.server.dependencies import get_brain, get_storage, require_local_request
 from neural_memory.server.models import (
     EncodeRequest,
     EncodeResponse,
@@ -24,7 +24,11 @@ from neural_memory.server.models import (
 )
 from neural_memory.storage.base import NeuralStorage
 
-router = APIRouter(prefix="/memory", tags=["memory"])
+router = APIRouter(
+    prefix="/memory",
+    tags=["memory"],
+    dependencies=[Depends(require_local_request)],
+)
 
 
 @router.post(

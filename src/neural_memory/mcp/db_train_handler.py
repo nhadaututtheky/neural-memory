@@ -77,10 +77,14 @@ class DBTrainHandler:
         if not isinstance(consolidate, bool):
             return {"error": "consolidate must be a boolean"}
 
-        # Validate the SQLite file path exists (after all input validation)
+        # Validate the SQLite file path exists and is safe (after all input validation)
         from pathlib import Path
 
-        db_path = Path(connection_string[len("sqlite:///") :]).resolve()
+        raw_db_path = connection_string[len("sqlite:///") :]
+        # Reject path traversal attempts (.. components)
+        if ".." in raw_db_path.replace("\\", "/").split("/"):
+            return {"error": "Invalid database path: path traversal not allowed"}
+        db_path = Path(raw_db_path).resolve()
         if not db_path.is_file():
             return {"error": "Database file not found"}
 

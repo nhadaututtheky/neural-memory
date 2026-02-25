@@ -7,7 +7,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException
 
 from neural_memory.core.brain import Brain, BrainConfig
-from neural_memory.server.dependencies import get_storage
+from neural_memory.server.dependencies import get_storage, require_local_request
 from neural_memory.server.models import (
     BrainResponse,
     ConflictItemResponse,
@@ -20,7 +20,11 @@ from neural_memory.server.models import (
 )
 from neural_memory.storage.base import NeuralStorage
 
-router = APIRouter(prefix="/brain", tags=["brain"])
+router = APIRouter(
+    prefix="/brain",
+    tags=["brain"],
+    dependencies=[Depends(require_local_request)],
+)
 
 
 @router.post(

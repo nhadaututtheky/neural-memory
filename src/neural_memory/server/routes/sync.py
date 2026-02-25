@@ -12,8 +12,9 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
+from neural_memory.server.dependencies import require_local_request
 from neural_memory.utils.timeutils import utcnow
 
 logger = logging.getLogger(__name__)
@@ -22,15 +23,11 @@ logger = logging.getLogger(__name__)
 _BRAIN_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 
 
-async def _require_local_request(request: Request) -> None:
-    """Reject non-localhost requests to protect sync endpoints."""
-    client_host = request.client.host if request.client else ""
-    allowed = {"127.0.0.1", "::1", "localhost"}
-    if client_host not in allowed:
-        raise HTTPException(status_code=403, detail="Forbidden")
-
-
-router = APIRouter(prefix="/sync", tags=["sync"])
+router = APIRouter(
+    prefix="/sync",
+    tags=["sync"],
+    dependencies=[Depends(require_local_request)],
+)
 
 
 class SyncEventType(StrEnum):
@@ -411,7 +408,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             await sync_manager.disconnect(client_id)
 
 
-@router.get("/stats", dependencies=[Depends(_require_local_request)])
+@router.get("/stats")
 async def get_sync_stats() -> dict[str, Any]:
     """Get sync manager statistics."""
     sync_manager = get_sync_manager()

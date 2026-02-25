@@ -44,7 +44,13 @@ class QueryRequest(BaseModel):
 class CreateBrainRequest(BaseModel):
     """Request to create a new brain."""
 
-    name: str = Field(..., min_length=1, max_length=100, description="Brain name")
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        pattern=r"^[a-zA-Z0-9_\-\.]+$",
+        description="Brain name (alphanumeric, hyphens, underscores, dots only)",
+    )
     owner_id: str | None = Field(None, description="Owner identifier")
     is_public: bool = Field(False, description="Whether publicly accessible")
     config: BrainConfigModel | None = Field(None, description="Custom configuration")
