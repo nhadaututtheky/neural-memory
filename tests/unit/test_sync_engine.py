@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
+from neural_memory.core.fiber import Fiber
+from neural_memory.core.neuron import Neuron, NeuronType
+from neural_memory.core.synapse import Direction, Synapse, SynapseType
 from neural_memory.storage.sqlite_change_log import ChangeEntry
 from neural_memory.storage.sqlite_devices import DeviceRecord
 from neural_memory.sync.protocol import (
@@ -428,3 +432,388 @@ class TestHandleHubSync:
         await engine.handle_hub_sync(request)
 
         storage.record_change.assert_not_called()
+
+
+# ── _apply_remote_change ─────────────────────────────────────────────────────
+
+
+def _neuron_payload(
+    neuron_id: str = "n-1",
+    neuron_type: str = "concept",
+    content: str = "test neuron",
+) -> dict:
+    return {
+        "id": neuron_id,
+        "type": neuron_type,
+        "content": content,
+        "metadata": json.dumps({}),
+        "content_hash": 42,
+        "created_at": "2026-01-15T10:00:00",
+    }
+
+
+def _synapse_payload(
+    synapse_id: str = "s-1",
+    source_id: str = "n-1",
+    target_id: str = "n-2",
+) -> dict:
+    return {
+        "id": synapse_id,
+        "source_id": source_id,
+        "target_id": target_id,
+        "type": "related_to",
+        "weight": 0.7,
+        "direction": "bi",
+        "metadata": json.dumps({}),
+        "reinforced_count": 3,
+        "last_activated": "2026-01-15T10:00:00",
+        "created_at": "2026-01-15T10:00:00",
+    }
+
+
+def _fiber_payload(
+    fiber_id: str = "f-1",
+    anchor: str = "n-1",
+) -> dict:
+    return {
+        "id": fiber_id,
+        "neuron_ids": json.dumps(["n-1", "n-2"]),
+        "synapse_ids": json.dumps(["s-1"]),
+        "anchor_neuron_id": anchor,
+        "pathway": json.dumps(["n-1", "n-2"]),
+        "conductivity": 0.9,
+        "last_conducted": None,
+        "time_start": "2026-01-01T00:00:00",
+        "time_end": "2026-01-15T00:00:00",
+        "coherence": 0.8,
+        "salience": 0.6,
+        "frequency": 5,
+        "summary": "test fiber",
+        "auto_tags": json.dumps(["tag-a"]),
+        "agent_tags": json.dumps(["tag-b"]),
+        "metadata": json.dumps({"key": "val"}),
+        "compression_tier": 1,
+        "created_at": "2026-01-15T10:00:00",
+    }
+
+
+def _make_sync_change(
+    entity_type: str = "neuron",
+    entity_id: str = "n-1",
+    operation: str = "insert",
+    payload: dict | None = None,
+) -> SyncChange:
+    return SyncChange(
+        sequence=1,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        operation=operation,
+        device_id="dev-remote",
+        changed_at="2026-01-15T10:00:00",
+        payload=payload or {},
+    )
+
+
+class TestApplyRemoteChangeNeuron:
+    """Test _apply_remote_change for neuron operations."""
+
+    async def test_apply_insert_neuron(self) -> None:
+        storage = _make_mock_storage()
+        engine = SyncEngine(storage, device_id="dev-local")
+        change = _make_sync_change("neuron", "n-1", "insert", _neuron_payload())
+
+        await engine._apply_remote_change(change)
+
+        storage.add_neuron.assert_called_once()
+        neuron_arg = storage.add_neuron.call_args[0][0]
+        assert isinstance(neuron_arg, Neuron)
+        assert neuron_arg.id == "n-1"
+        assert neuron_arg.content == "test neuron"
+
+    async def test_apply_update_neuron(self) -> None:
+        storage = _make_mock_storage()
+        engine = SyncEngine(storage, device_id="dev-local")
+        change = _make_sync_change("neuron", "n-1", "update", _neuron_payload())
+
+        await engine._apply_remote_change(change)
+
+        storage.update_neuron.assert_called_once()
+
+    async def test_apply_delete_neuron(self) -> None:
+        storage = _make_mock_storage()
+        engine = SyncEngine(storage, device_id="dev-local")
+        change = _make_sync_change("neuron", "n-1", "delete")
+
+        await engine._apply_remote_change(change)
+
+        storage.delete_neuron.assert_called_once_with("n-1")
+
+
+class TestApplyRemoteChangeSynapse:
+    """Test _apply_remote_change for synapse operations."""
+
+    async def test_apply_insert_synapse(self) -> None:
+        storage = _make_mock_storage()
+        engine = SyncEngine(storage, device_id="dev-local")
+        change = _make_sync_change("synapse", "s-1", "insert", _synapse_payload())
+
+        await engine._apply_remote_change(change)
+
+        storage.add_synapse.assert_called_once()
+        synapse_arg = storage.add_synapse.call_args[0][0]
+        assert isinstance(synapse_arg, Synapse)
+        assert synapse_arg.id == "s-1"
+        assert synapse_arg.weight == 0.7
+
+    async def test_apply_update_synapse(self) -> None:
+        storage = _make_mock_storage()
+        engine = SyncEngine(storage, device_id="dev-local")
+        change = _make_sync_change("synapse", "s-1", "update", _synapse_payload())
+
+        await engine._apply_remote_change(change)
+
+        storage.update_synapse.assert_called_once()
+
+    async def test_apply_delete_synapse(self) -> None:
+        storage = _make_mock_storage()
+        engine = SyncEngine(storage, device_id="dev-local")
+        change = _make_sync_change("synapse", "s-1", "delete")
+
+        await engine._apply_remote_change(change)
+
+        storage.delete_synapse.assert_called_once_with("s-1")
+
+
+class TestApplyRemoteChangeFiber:
+    """Test _apply_remote_change for fiber operations."""
+
+    async def test_apply_insert_fiber(self) -> None:
+        storage = _make_mock_storage()
+        engine = SyncEngine(storage, device_id="dev-local")
+        change = _make_sync_change("fiber", "f-1", "insert", _fiber_payload())
+
+        await engine._apply_remote_change(change)
+
+        storage.add_fiber.assert_called_once()
+        fiber_arg = storage.add_fiber.call_args[0][0]
+        assert isinstance(fiber_arg, Fiber)
+        assert fiber_arg.id == "f-1"
+        assert fiber_arg.salience == 0.6
+
+    async def test_apply_update_fiber(self) -> None:
+        storage = _make_mock_storage()
+        engine = SyncEngine(storage, device_id="dev-local")
+        change = _make_sync_change("fiber", "f-1", "update", _fiber_payload())
+
+        await engine._apply_remote_change(change)
+
+        storage.update_fiber.assert_called_once()
+
+    async def test_apply_delete_fiber(self) -> None:
+        storage = _make_mock_storage()
+        engine = SyncEngine(storage, device_id="dev-local")
+        change = _make_sync_change("fiber", "f-1", "delete")
+
+        await engine._apply_remote_change(change)
+
+        storage.delete_fiber.assert_called_once_with("f-1")
+
+
+class TestApplyRemoteChangeFallbacks:
+    """Test insert/update fallback behavior."""
+
+    async def test_insert_fallback_to_update_on_duplicate(self) -> None:
+        """Insert raises ValueError (duplicate) → falls back to update."""
+        storage = _make_mock_storage()
+        storage.add_neuron = AsyncMock(side_effect=ValueError("already exists"))
+        engine = SyncEngine(storage, device_id="dev-local")
+        change = _make_sync_change("neuron", "n-1", "insert", _neuron_payload())
+
+        await engine._apply_remote_change(change)
+
+        storage.add_neuron.assert_called_once()
+        storage.update_neuron.assert_called_once()
+
+    async def test_update_fallback_to_insert_on_missing(self) -> None:
+        """Update raises ValueError (not found) → falls back to insert."""
+        storage = _make_mock_storage()
+        storage.update_neuron = AsyncMock(side_effect=ValueError("does not exist"))
+        engine = SyncEngine(storage, device_id="dev-local")
+        change = _make_sync_change("neuron", "n-1", "update", _neuron_payload())
+
+        await engine._apply_remote_change(change)
+
+        storage.update_neuron.assert_called_once()
+        storage.add_neuron.assert_called_once()
+
+    async def test_insert_synapse_fallback_to_update(self) -> None:
+        storage = _make_mock_storage()
+        storage.add_synapse = AsyncMock(side_effect=ValueError("already exists"))
+        engine = SyncEngine(storage, device_id="dev-local")
+        change = _make_sync_change("synapse", "s-1", "insert", _synapse_payload())
+
+        await engine._apply_remote_change(change)
+
+        storage.update_synapse.assert_called_once()
+
+    async def test_update_fiber_fallback_to_insert(self) -> None:
+        storage = _make_mock_storage()
+        storage.update_fiber = AsyncMock(side_effect=ValueError("does not exist"))
+        engine = SyncEngine(storage, device_id="dev-local")
+        change = _make_sync_change("fiber", "f-1", "update", _fiber_payload())
+
+        await engine._apply_remote_change(change)
+
+        storage.add_fiber.assert_called_once()
+
+
+class TestApplyRemoteChangeEdgeCases:
+    """Test edge cases: empty payload, unknown entity_type."""
+
+    async def test_empty_payload_skips(self) -> None:
+        """Empty payload on insert → skip without calling storage."""
+        storage = _make_mock_storage()
+        engine = SyncEngine(storage, device_id="dev-local")
+        change = _make_sync_change("neuron", "n-1", "insert", {})
+
+        await engine._apply_remote_change(change)
+
+        storage.add_neuron.assert_not_called()
+        storage.update_neuron.assert_not_called()
+
+    async def test_unknown_entity_type_skips(self) -> None:
+        """Unknown entity_type → skip with warning."""
+        storage = _make_mock_storage()
+        engine = SyncEngine(storage, device_id="dev-local")
+        change = _make_sync_change("unknown_type", "x-1", "insert", {"id": "x-1"})
+
+        await engine._apply_remote_change(change)
+
+        storage.add_neuron.assert_not_called()
+        storage.add_synapse.assert_not_called()
+        storage.add_fiber.assert_not_called()
+
+    async def test_unknown_entity_type_delete_skips(self) -> None:
+        """Unknown entity_type on delete → no crash."""
+        storage = _make_mock_storage()
+        engine = SyncEngine(storage, device_id="dev-local")
+        change = _make_sync_change("unknown_type", "x-1", "delete")
+
+        await engine._apply_remote_change(change)
+
+        storage.delete_neuron.assert_not_called()
+
+
+# ── Reconstruction helpers ───────────────────────────────────────────────────
+
+
+class TestNeuronFromPayload:
+    """Test _neuron_from_payload reconstruction."""
+
+    def test_round_trip(self) -> None:
+        """Neuron fields survive payload → reconstruction."""
+        payload = _neuron_payload("n-rt", "entity", "round trip test")
+        neuron = SyncEngine._neuron_from_payload(payload)
+
+        assert neuron.id == "n-rt"
+        assert neuron.type == NeuronType.ENTITY
+        assert neuron.content == "round trip test"
+        assert neuron.content_hash == 42
+        assert neuron.created_at == datetime(2026, 1, 15, 10, 0, 0)
+
+    def test_missing_optional_fields(self) -> None:
+        """Missing optional fields use safe defaults."""
+        payload = {"id": "n-min"}
+        neuron = SyncEngine._neuron_from_payload(payload)
+
+        assert neuron.id == "n-min"
+        assert neuron.type == NeuronType.CONCEPT
+        assert neuron.content == ""
+        assert neuron.content_hash == 0
+        assert neuron.metadata == {}
+
+    def test_metadata_as_json_string(self) -> None:
+        """Metadata passed as JSON string is parsed correctly."""
+        payload = {"id": "n-str", "metadata": '{"key": "val"}'}
+        neuron = SyncEngine._neuron_from_payload(payload)
+
+        assert neuron.metadata == {"key": "val"}
+
+
+class TestSynapseFromPayload:
+    """Test _synapse_from_payload reconstruction."""
+
+    def test_round_trip(self) -> None:
+        payload = _synapse_payload("s-rt", "n-a", "n-b")
+        synapse = SyncEngine._synapse_from_payload(payload)
+
+        assert synapse.id == "s-rt"
+        assert synapse.source_id == "n-a"
+        assert synapse.target_id == "n-b"
+        assert synapse.type == SynapseType.RELATED_TO
+        assert synapse.weight == 0.7
+        assert synapse.direction == Direction.BIDIRECTIONAL
+        assert synapse.reinforced_count == 3
+        assert synapse.last_activated == datetime(2026, 1, 15, 10, 0, 0)
+
+    def test_missing_optional_fields(self) -> None:
+        payload = {"id": "s-min"}
+        synapse = SyncEngine._synapse_from_payload(payload)
+
+        assert synapse.source_id == ""
+        assert synapse.target_id == ""
+        assert synapse.weight == 0.5
+        assert synapse.direction == Direction.UNIDIRECTIONAL
+        assert synapse.last_activated is None
+
+
+class TestFiberFromPayload:
+    """Test _fiber_from_payload reconstruction."""
+
+    def test_round_trip(self) -> None:
+        payload = _fiber_payload("f-rt", "n-1")
+        fiber = SyncEngine._fiber_from_payload(payload)
+
+        assert fiber.id == "f-rt"
+        assert fiber.neuron_ids == {"n-1", "n-2"}
+        assert fiber.synapse_ids == {"s-1"}
+        assert fiber.anchor_neuron_id == "n-1"
+        assert fiber.pathway == ["n-1", "n-2"]
+        assert fiber.conductivity == 0.9
+        assert fiber.coherence == 0.8
+        assert fiber.salience == 0.6
+        assert fiber.frequency == 5
+        assert fiber.summary == "test fiber"
+        assert fiber.auto_tags == {"tag-a"}
+        assert fiber.agent_tags == {"tag-b"}
+        assert fiber.metadata == {"key": "val"}
+        assert fiber.compression_tier == 1
+
+    def test_missing_new_fields(self) -> None:
+        """Old payload without auto_tags/agent_tags/compression_tier uses defaults."""
+        payload = {
+            "id": "f-old",
+            "neuron_ids": json.dumps(["n-1"]),
+            "synapse_ids": json.dumps([]),
+            "anchor_neuron_id": "n-1",
+        }
+        fiber = SyncEngine._fiber_from_payload(payload)
+
+        assert fiber.auto_tags == set()
+        assert fiber.agent_tags == set()
+        assert fiber.compression_tier == 0
+        assert fiber.pathway == []
+        assert fiber.conductivity == 1.0
+
+    def test_sets_from_list_payload(self) -> None:
+        """neuron_ids/synapse_ids passed as plain lists (not JSON) are handled."""
+        payload = {
+            "id": "f-list",
+            "neuron_ids": ["n-1", "n-2"],
+            "synapse_ids": ["s-1"],
+            "anchor_neuron_id": "n-1",
+        }
+        fiber = SyncEngine._fiber_from_payload(payload)
+
+        assert fiber.neuron_ids == {"n-1", "n-2"}
+        assert fiber.synapse_ids == {"s-1"}

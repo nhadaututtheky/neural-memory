@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import logging
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from neural_memory.core.fiber import Fiber
+from neural_memory.core.neuron import Neuron, NeuronType
+from neural_memory.core.synapse import Direction, Synapse, SynapseType
 from neural_memory.sync.incremental_merge import merge_change_lists
 from neural_memory.sync.protocol import (
     ConflictStrategy,
@@ -13,6 +18,7 @@ from neural_memory.sync.protocol import (
     SyncResponse,
     SyncStatus,
 )
+from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
@@ -138,18 +144,18 @@ class SyncEngine:
             list(request.changes), remote_changes, request.strategy
         )
 
-        # Apply incoming changes from the device
+        # Record and apply incoming changes from the device
         for change in request.changes:
+            # Always record in hub's change log first
+            await self._storage.record_change(
+                entity_type=change.entity_type,
+                entity_id=change.entity_id,
+                operation=change.operation,
+                device_id=change.device_id,
+                payload=change.payload,
+            )
             try:
                 await self._apply_remote_change(change)
-                # Record in hub's change log
-                await self._storage.record_change(
-                    entity_type=change.entity_type,
-                    entity_id=change.entity_id,
-                    operation=change.operation,
-                    device_id=change.device_id,
-                    payload=change.payload,
-                )
             except Exception:
                 logger.warning(
                     "Hub failed to apply change: %s %s",
@@ -178,14 +184,192 @@ class SyncEngine:
         This is a best-effort application — entities may not exist locally
         for update/delete, and that's OK (eventual consistency).
         """
-        # For now, we log the change and record it.
-        # Full entity materialization will require reading the payload
-        # and calling the appropriate storage methods.
-        # This is a stub for the first iteration — the hub just records changes.
+        entity_type = change.entity_type
+        operation = change.operation
+        payload = change.payload
+
+        # Delete operations don't need a payload — just remove by ID
+        if operation == "delete":
+            if entity_type == "neuron":
+                await self._storage.delete_neuron(change.entity_id)
+            elif entity_type == "synapse":
+                await self._storage.delete_synapse(change.entity_id)
+            elif entity_type == "fiber":
+                await self._storage.delete_fiber(change.entity_id)
+            else:
+                logger.warning("Unknown entity_type in delete: %s", entity_type)
+            return
+
+        # Insert/update require a payload to reconstruct the entity
+        if not payload:
+            logger.warning(
+                "Empty payload for %s %s %s — skipping",
+                operation,
+                entity_type,
+                change.entity_id,
+            )
+            return
+
+        if entity_type == "neuron":
+            neuron = self._neuron_from_payload(payload)
+            if operation == "insert":
+                try:
+                    await self._storage.add_neuron(neuron)
+                except ValueError:
+                    await self._storage.update_neuron(neuron)
+            else:  # update
+                try:
+                    await self._storage.update_neuron(neuron)
+                except ValueError:
+                    await self._storage.add_neuron(neuron)
+
+        elif entity_type == "synapse":
+            synapse = self._synapse_from_payload(payload)
+            if operation == "insert":
+                try:
+                    await self._storage.add_synapse(synapse)
+                except ValueError:
+                    await self._storage.update_synapse(synapse)
+            else:  # update
+                try:
+                    await self._storage.update_synapse(synapse)
+                except ValueError:
+                    await self._storage.add_synapse(synapse)
+
+        elif entity_type == "fiber":
+            fiber = self._fiber_from_payload(payload)
+            if operation == "insert":
+                try:
+                    await self._storage.add_fiber(fiber)
+                except ValueError:
+                    await self._storage.update_fiber(fiber)
+            else:  # update
+                try:
+                    await self._storage.update_fiber(fiber)
+                except ValueError:
+                    await self._storage.add_fiber(fiber)
+
+        else:
+            logger.warning("Unknown entity_type: %s", entity_type)
+            return
+
         logger.debug(
             "Applied remote change: %s %s %s from device %s",
-            change.operation,
-            change.entity_type,
+            operation,
+            entity_type,
             change.entity_id,
             change.device_id,
+        )
+
+    # ── Payload-to-entity reconstruction ─────────────────────────────────
+
+    @staticmethod
+    def _neuron_from_payload(payload: dict[str, Any]) -> Neuron:
+        """Reconstruct a Neuron from sync payload dict."""
+        created_at_raw = payload.get("created_at")
+        created_at = datetime.fromisoformat(created_at_raw) if created_at_raw else utcnow()
+
+        metadata = payload.get("metadata", {})
+        if isinstance(metadata, str):
+            metadata = json.loads(metadata)
+
+        return Neuron(
+            id=payload["id"],
+            type=NeuronType(payload.get("type", "concept")),
+            content=payload.get("content", ""),
+            metadata=metadata,
+            content_hash=payload.get("content_hash", 0),
+            created_at=created_at,
+        )
+
+    @staticmethod
+    def _synapse_from_payload(payload: dict[str, Any]) -> Synapse:
+        """Reconstruct a Synapse from sync payload dict."""
+        created_at_raw = payload.get("created_at")
+        created_at = datetime.fromisoformat(created_at_raw) if created_at_raw else utcnow()
+
+        last_activated_raw = payload.get("last_activated")
+        last_activated = datetime.fromisoformat(last_activated_raw) if last_activated_raw else None
+
+        metadata = payload.get("metadata", {})
+        if isinstance(metadata, str):
+            metadata = json.loads(metadata)
+
+        return Synapse(
+            id=payload["id"],
+            source_id=payload.get("source_id", ""),
+            target_id=payload.get("target_id", ""),
+            type=SynapseType(payload.get("type", "related_to")),
+            weight=payload.get("weight", 0.5),
+            direction=Direction(payload.get("direction", "uni")),
+            metadata=metadata,
+            reinforced_count=payload.get("reinforced_count", 0),
+            last_activated=last_activated,
+            created_at=created_at,
+        )
+
+    @staticmethod
+    def _fiber_from_payload(payload: dict[str, Any]) -> Fiber:
+        """Reconstruct a Fiber from sync payload dict."""
+        created_at_raw = payload.get("created_at")
+        created_at = datetime.fromisoformat(created_at_raw) if created_at_raw else utcnow()
+
+        time_start_raw = payload.get("time_start")
+        time_start = datetime.fromisoformat(time_start_raw) if time_start_raw else None
+
+        time_end_raw = payload.get("time_end")
+        time_end = datetime.fromisoformat(time_end_raw) if time_end_raw else None
+
+        last_conducted_raw = payload.get("last_conducted")
+        last_conducted = datetime.fromisoformat(last_conducted_raw) if last_conducted_raw else None
+
+        metadata = payload.get("metadata", {})
+        if isinstance(metadata, str):
+            metadata = json.loads(metadata)
+
+        # Parse set/list fields with safe defaults
+        neuron_ids_raw = payload.get("neuron_ids", [])
+        if isinstance(neuron_ids_raw, str):
+            neuron_ids_raw = json.loads(neuron_ids_raw)
+        neuron_ids = set(neuron_ids_raw)
+
+        synapse_ids_raw = payload.get("synapse_ids", [])
+        if isinstance(synapse_ids_raw, str):
+            synapse_ids_raw = json.loads(synapse_ids_raw)
+        synapse_ids = set(synapse_ids_raw)
+
+        pathway_raw = payload.get("pathway", [])
+        if isinstance(pathway_raw, str):
+            pathway_raw = json.loads(pathway_raw)
+        pathway: list[str] = list(pathway_raw)
+
+        auto_tags_raw = payload.get("auto_tags", [])
+        if isinstance(auto_tags_raw, str):
+            auto_tags_raw = json.loads(auto_tags_raw)
+        auto_tags = set(auto_tags_raw)
+
+        agent_tags_raw = payload.get("agent_tags", [])
+        if isinstance(agent_tags_raw, str):
+            agent_tags_raw = json.loads(agent_tags_raw)
+        agent_tags = set(agent_tags_raw)
+
+        return Fiber(
+            id=payload["id"],
+            neuron_ids=neuron_ids,
+            synapse_ids=synapse_ids,
+            anchor_neuron_id=payload.get("anchor_neuron_id", ""),
+            pathway=pathway,
+            conductivity=payload.get("conductivity", 1.0),
+            last_conducted=last_conducted,
+            time_start=time_start,
+            time_end=time_end,
+            coherence=payload.get("coherence", 0.0),
+            salience=payload.get("salience", 0.0),
+            frequency=payload.get("frequency", 0),
+            summary=payload.get("summary"),
+            auto_tags=auto_tags,
+            agent_tags=agent_tags,
+            metadata=metadata,
+            compression_tier=payload.get("compression_tier", 0),
+            created_at=created_at,
         )
