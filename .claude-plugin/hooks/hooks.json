@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "event": "PreCompact",
+      "command": "nmem-hook-pre-compact",
+      "description": "Flush conversation memories before context compaction",
+      "timeout": 30
+    },
+    {
+      "event": "Stop",
+      "command": "nmem-hook-stop",
+      "description": "Capture session memories when the session ends normally",
+      "timeout": 30
+    }
+  ]
+}

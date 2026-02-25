@@ -142,26 +142,55 @@ def setup_mcp_cursor() -> str:
         return "failed"
 
 
-def _find_pre_compact_command() -> str:
-    """Find the best shell command to invoke the pre_compact hook.
+def _find_hook_command(entry_point: str, cli_subcommand: str, module: str) -> str:
+    """Find the best shell command for a NeuralMemory hook.
 
     Priority:
-    1. nmem-hook-pre-compact  — dedicated pip entry point (cleanest, cross-platform)
-    2. nmem flush             — works if nmem CLI is on PATH
-    3. python -m ...          — always-available fallback
+    1. Dedicated pip entry point  — cleanest, cross-platform
+    2. nmem <subcommand>          — works if nmem CLI is on PATH
+    3. python -m <module>         — always-available fallback
     """
-    if shutil.which("nmem-hook-pre-compact"):
-        return "nmem-hook-pre-compact"
+    if shutil.which(entry_point):
+        return entry_point
     if shutil.which("nmem"):
-        return "nmem flush"
-    return f"{sys.executable} -m neural_memory.hooks.pre_compact"
+        return f"nmem {cli_subcommand}"
+    return f"{sys.executable} -m {module}"
+
+
+def _find_pre_compact_command() -> str:
+    return _find_hook_command("nmem-hook-pre-compact", "flush", "neural_memory.hooks.pre_compact")
+
+
+def _find_stop_command() -> str:
+    return _find_hook_command("nmem-hook-stop", "stop-hook", "neural_memory.hooks.stop")
+
+
+def _is_nmem_hook_present(entries: list[dict[str, Any]]) -> bool:
+    """Return True if any NeuralMemory hook is already registered in the entry list."""
+    for entry in entries:
+        for hook in entry.get("hooks", []):
+            cmd = hook.get("command", "")
+            if "neural_memory" in cmd or "nmem" in cmd:
+                return True
+    return False
+
+
+def _load_settings(settings_path: Path) -> dict[str, Any]:
+    if not settings_path.exists():
+        return {}
+    try:
+        raw = settings_path.read_text(encoding="utf-8").strip()
+        return json.loads(raw) if raw else {}
+    except (json.JSONDecodeError, OSError):
+        return {}
 
 
 def setup_hooks_claude() -> str:
-    """Auto-configure PreCompact hook in Claude Code (~/.claude/settings.json).
+    """Auto-configure PreCompact and Stop hooks in Claude Code (~/.claude/settings.json).
 
-    Injects a PreCompact hook entry that flushes conversation memories before
-    context compaction. Safe to call on existing configs — skips if already present.
+    Injects hook entries so NeuralMemory captures memories both before context
+    compaction (PreCompact) and at normal session end (Stop).
+    Safe to call repeatedly — skips hooks that are already present.
 
     Returns status string: "added", "exists", "failed", or "not_found".
     """
@@ -170,35 +199,27 @@ def setup_hooks_claude() -> str:
         return "not_found"
 
     settings_path = claude_dir / "settings.json"
-    cmd_str = _find_pre_compact_command()
-
-    existing: dict[str, Any] = {}
-    if settings_path.exists():
-        try:
-            raw = settings_path.read_text(encoding="utf-8").strip()
-            if raw:
-                existing = json.loads(raw)
-        except (json.JSONDecodeError, OSError):
-            existing = {}
-
-    # Check if our hook is already present
-    pre_compact_entries: list[dict[str, Any]] = existing.get("hooks", {}).get("PreCompact", [])
-    for entry in pre_compact_entries:
-        for hook in entry.get("hooks", []):
-            if "neural_memory" in hook.get("command", "") or "nmem" in hook.get("command", ""):
-                return "exists"
-
-    # Inject new PreCompact entry
-    new_entry: dict[str, Any] = {"hooks": [{"type": "command", "command": cmd_str, "timeout": 30}]}
+    existing = _load_settings(settings_path)
     hooks_section: dict[str, Any] = existing.setdefault("hooks", {})
-    pre_compact_list: list[dict[str, Any]] = hooks_section.setdefault("PreCompact", [])
-    pre_compact_list.append(new_entry)
+
+    added = 0
+    hook_specs = [
+        ("PreCompact", _find_pre_compact_command(), 30),
+        ("Stop", _find_stop_command(), 30),
+    ]
+
+    for event, cmd_str, timeout in hook_specs:
+        entries: list[dict[str, Any]] = hooks_section.setdefault(event, [])
+        if _is_nmem_hook_present(entries):
+            continue
+        entries.append({"hooks": [{"type": "command", "command": cmd_str, "timeout": timeout}]})
+        added += 1
+
+    if added == 0:
+        return "exists"
 
     try:
-        settings_path.write_text(
-            json.dumps(existing, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        settings_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
         return "added"
     except OSError:
         return "failed"
