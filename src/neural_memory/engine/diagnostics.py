@@ -85,8 +85,14 @@ _COMPONENT_WEIGHTS: dict[str, tuple[float, str]] = {
     "connectivity": (0.25, "Store more detailed memories to build richer connections."),
     "diversity": (0.20, "Store memories with causal, temporal, and emotional context."),
     "freshness": (0.15, "Store new memories or recall existing ones to keep brain active."),
-    "consolidation_ratio": (0.15, "Run consolidation with mature strategy to advance memories."),
-    "orphan_rate": (0.10, "Run consolidation with prune strategy to clean orphaned neurons."),
+    "consolidation_ratio": (
+        0.15,
+        "Run: nmem consolidate --strategy mature (advances episodic memories to semantic stage)",
+    ),
+    "orphan_rate": (
+        0.10,
+        "Run: nmem consolidate --strategy prune (removes orphaned neurons and weak synapses)",
+    ),
     "activation_efficiency": (0.10, "Use recall more often to activate stored neurons."),
     "recall_confidence": (0.05, "Reinforce memories by recalling them to strengthen synapses."),
 }
@@ -477,7 +483,7 @@ class DiagnosticsEngine:
                 )
             )
             recommendations.append(
-                "Run consolidation with prune strategy to clean up orphaned neurons."
+                "Run: nmem consolidate --strategy prune (removes orphaned neurons and weak synapses)"
             )
 
         # No consolidation
@@ -490,7 +496,7 @@ class DiagnosticsEngine:
                 )
             )
             recommendations.append(
-                "Run consolidation with mature strategy to advance episodic memories."
+                "Run: nmem consolidate --strategy mature (advances episodic memories to semantic stage)"
             )
 
         # Tag drift detection

@@ -152,6 +152,60 @@ nmem cleanup [OPTIONS]
 | `--dry-run` | `-n` | Preview without deleting |
 | `--force` | `-f` | Skip confirmation |
 
+### nmem consolidate
+
+Consolidate brain memories: prune weak links, merge overlapping fibers,
+advance episodic memories to semantic stage, and more.
+
+```bash
+nmem consolidate [OPTIONS]
+```
+
+**Options:**
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--brain` | `-b` | Brain to consolidate (default: current) |
+| `--strategy` | `-s` | Strategy to run (default: `all`) |
+| `--dry-run` | `-n` | Preview without applying changes |
+| `--prune-threshold` | | Synapse weight threshold for pruning (default: 0.05) |
+| `--merge-overlap` | | Jaccard overlap threshold for merging (default: 0.5) |
+| `--min-inactive-days` | | Minimum inactive days before pruning (default: 7.0) |
+
+**Valid strategies:**
+
+| Strategy | Description |
+|----------|-------------|
+| `prune` | Remove weak synapses and orphaned neurons |
+| `merge` | Combine overlapping fibers |
+| `summarize` | Create concept neurons for topic clusters |
+| `mature` | Advance episodic memories to semantic stage |
+| `infer` | Add inferred synapses from co-activation patterns |
+| `enrich` | Enrich neurons with extracted metadata |
+| `dream` | Generate synthetic bridging memories |
+| `learn_habits` | Extract recurring workflow patterns |
+| `dedup` | Merge near-duplicate memories |
+| `semantic_link` | Add cross-domain semantic connections |
+| `compress` | Compress old low-activation fibers |
+| `all` | Run all strategies in dependency order (default) |
+
+> **Note:** `mature` is a fully supported strategy. It advances episodic memories
+> to the semantic stage, which improves recall quality. `nmem health` may recommend
+> running it when the consolidation ratio is low.
+
+**Examples:**
+
+```bash
+nmem consolidate                          # Run all strategies
+nmem consolidate --strategy prune         # Only prune weak links
+nmem consolidate -s mature                # Advance episodic memories
+nmem consolidate --dry-run                # Preview without changes
+nmem consolidate -s merge --merge-overlap 0.3
+```
+
+> **Tip:** Always use `--strategy <name>` (named flag). Positional syntax
+> (`nmem consolidate prune`) is not supported and will produce a helpful error.
+
 ### nmem decay
 
 Apply memory decay (Ebbinghaus forgetting curve).
