@@ -19,6 +19,7 @@ Resolution actions:
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from dataclasses import dataclass, field
 from dataclasses import replace as dc_replace
@@ -29,6 +30,8 @@ from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.engine.learning_rule import LearningConfig, anti_hebbian_update
 from neural_memory.utils.timeutils import utcnow
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
@@ -347,6 +350,7 @@ async def resolve_conflicts(
     storage: NeuralStorage,
     confidence_delta: float = 0.3,
     supersede_threshold: float = 0.2,
+    existing_memory_type: str = "",
 ) -> list[ConflictResolution]:
     """Apply resolution actions for detected conflicts.
 
@@ -355,6 +359,8 @@ async def resolve_conflicts(
     2. Mark _disputed: true in metadata
     3. Create CONTRADICTS synapse
     4. If confidence drops below threshold: mark _superseded
+    5. If existing is ERROR type: create RESOLVED_BY synapse, mark resolved,
+       and apply stronger activation demotion (error resolution learning)
 
     Args:
         conflicts: List of detected conflicts
@@ -362,6 +368,7 @@ async def resolve_conflicts(
         storage: Storage backend
         confidence_delta: How much to reduce confidence
         supersede_threshold: Confidence below which to mark superseded
+        existing_memory_type: Type of the existing memory (e.g. "error")
 
     Returns:
         List of resolution actions taken
@@ -369,36 +376,60 @@ async def resolve_conflicts(
     resolutions: list[ConflictResolution] = []
 
     for conflict in conflicts:
+        # Determine if existing memory is an error (from param or neuron metadata)
+        existing_neuron = await storage.get_neuron(conflict.existing_neuron_id)
+        if existing_neuron is None:
+            continue
+
+        is_error_resolution = _is_error_memory(existing_neuron, existing_memory_type)
+
         # 1. Get existing neuron state for confidence reduction
         existing_state = await storage.get_neuron_state(conflict.existing_neuron_id)
         current_confidence = existing_state.activation_level if existing_state else 0.5
 
         # 2. Compute anti-Hebbian reduction
+        # Error resolution uses stronger demotion (2x learning rate)
+        effective_delta = confidence_delta * 2.0 if is_error_resolution else confidence_delta
         update = anti_hebbian_update(
             current_weight=current_confidence,
             strength=conflict.confidence,
-            config=LearningConfig(learning_rate=confidence_delta),
+            config=LearningConfig(learning_rate=effective_delta),
         )
         confidence_reduced = abs(update.delta)
 
+        # For error resolution, ensure at least 50% reduction
+        if is_error_resolution:
+            max_allowed = current_confidence * 0.5
+            effective_activation = min(update.new_weight, max_allowed)
+        else:
+            effective_activation = update.new_weight
+
         # 3. Update neuron state with reduced confidence
         if existing_state:
-            new_state = dc_replace(existing_state, activation_level=update.new_weight)
+            new_state = dc_replace(existing_state, activation_level=effective_activation)
             await storage.update_neuron_state(new_state)
 
-        # 4. Mark existing neuron as disputed
-        existing_neuron = await storage.get_neuron(conflict.existing_neuron_id)
-        if existing_neuron is None:
-            continue
+        # 4. Mark existing neuron as disputed (or resolved for errors)
+        is_superseded = effective_activation < supersede_threshold
 
-        is_superseded = update.new_weight < supersede_threshold
-        updated_neuron = existing_neuron.with_metadata(
-            _disputed=True,
-            _disputed_at=utcnow().isoformat(),
-            _disputed_by=new_neuron_id,
-            _superseded=is_superseded,
-            _pre_dispute_activation=current_confidence,
-        )
+        if is_error_resolution:
+            updated_neuron = existing_neuron.with_metadata(
+                _disputed=True,
+                _disputed_at=utcnow().isoformat(),
+                _disputed_by=new_neuron_id,
+                _superseded=is_superseded,
+                _pre_dispute_activation=current_confidence,
+                _conflict_resolved=True,
+                _resolved_by=new_neuron_id,
+            )
+        else:
+            updated_neuron = existing_neuron.with_metadata(
+                _disputed=True,
+                _disputed_at=utcnow().isoformat(),
+                _disputed_by=new_neuron_id,
+                _superseded=is_superseded,
+                _pre_dispute_activation=current_confidence,
+            )
         await storage.update_neuron(updated_neuron)
 
         # 5. Create CONTRADICTS synapse
@@ -420,6 +451,24 @@ async def resolve_conflicts(
             # Synapse may already exist if same pair conflicts multiple ways
             pass
 
+        # 6. Error Resolution Learning: create RESOLVED_BY synapse
+        if is_error_resolution:
+            resolved_by_synapse = Synapse.create(
+                source_id=new_neuron_id,
+                target_id=conflict.existing_neuron_id,
+                type=SynapseType.RESOLVED_BY,
+                weight=conflict.confidence,
+                metadata={
+                    "error_resolution": True,
+                    "resolved_at": utcnow().isoformat(),
+                    "original_error": conflict.existing_content[:200],
+                },
+            )
+            try:
+                await storage.add_synapse(resolved_by_synapse)
+            except ValueError:
+                logger.debug("RESOLVED_BY synapse already exists, skipping")
+
         resolutions.append(
             ConflictResolution(
                 conflict=conflict,
@@ -431,6 +480,24 @@ async def resolve_conflicts(
         )
 
     return resolutions
+
+
+def _is_error_memory(neuron: Neuron, memory_type_hint: str) -> bool:
+    """Check if a neuron represents an error memory.
+
+    Checks both the explicit memory_type_hint and the neuron's own metadata.
+
+    Args:
+        neuron: The existing neuron to check
+        memory_type_hint: Explicit type hint from caller (e.g. "error")
+
+    Returns:
+        True if the memory is an error type
+    """
+    if memory_type_hint == "error":
+        return True
+    neuron_type = str(neuron.metadata.get("type", ""))
+    return neuron_type == "error"
 
 
 def _extract_search_terms(content: str) -> list[str]:

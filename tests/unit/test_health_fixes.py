@@ -302,7 +302,7 @@ class TestDiversityMetric:
     def test_diversity_total_synapse_types_matches_enum(self) -> None:
         """_TOTAL_SYNAPSE_TYPES should match the actual enum member count."""
         assert len(SynapseType) == DiagnosticsEngine._TOTAL_SYNAPSE_TYPES
-        assert len(SynapseType) == 21
+        assert len(SynapseType) == 22
 
 
 class TestTokenEstimation:

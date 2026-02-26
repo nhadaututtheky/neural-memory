@@ -48,6 +48,7 @@ class SynapseType(StrEnum):
 
     # Conflict relationships
     CONTRADICTS = "contradicts"  # Memory A contradicts Memory B
+    RESOLVED_BY = "resolved_by"  # Fix/fact that resolved an error
 
     # Deduplication relationships
     ALIAS = "alias"  # New anchor -> Existing anchor (dedup reuse)
