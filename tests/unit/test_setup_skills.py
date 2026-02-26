@@ -250,3 +250,37 @@ class TestExtractSkillDescription:
 
         result = _extract_skill_description(tmp_path / "nope.md")
         assert result == ""
+
+
+# ── _normalize_path ──────────────────────────────────────────────
+
+
+class TestNormalizePath:
+    """Tests for cross-platform path normalization in hook commands."""
+
+    def test_converts_backslashes_to_forward_slashes(self) -> None:
+        from neural_memory.cli.setup import _normalize_path
+
+        assert _normalize_path(r"C:\Users\X\python.exe") == "C:/Users/X/python.exe"
+
+    def test_quotes_paths_with_spaces(self) -> None:
+        from neural_memory.cli.setup import _normalize_path
+
+        result = _normalize_path(r"C:\Program Files\Python\python.exe")
+        assert result == '"C:/Program Files/Python/python.exe"'
+
+    def test_no_quotes_for_paths_without_spaces(self) -> None:
+        from neural_memory.cli.setup import _normalize_path
+
+        result = _normalize_path(r"C:\Python314\python.exe")
+        assert '"' not in result
+
+    def test_unix_paths_unchanged(self) -> None:
+        from neural_memory.cli.setup import _normalize_path
+
+        assert _normalize_path("/usr/bin/python3") == "/usr/bin/python3"
+
+    def test_already_forward_slashes(self) -> None:
+        from neural_memory.cli.setup import _normalize_path
+
+        assert _normalize_path("C:/Users/X/python.exe") == "C:/Users/X/python.exe"

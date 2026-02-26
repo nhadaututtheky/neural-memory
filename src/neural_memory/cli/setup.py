@@ -21,7 +21,7 @@ def find_nmem_command() -> dict[str, Any]:
     Priority:
     1. nmem-mcp entry point (cleanest)
     2. nmem CLI with mcp subcommand
-    3. python -m fallback
+    3. python -m fallback (uses absolute path, normalized for Windows)
     """
     nmem_mcp = shutil.which("nmem-mcp")
     if nmem_mcp:
@@ -31,7 +31,7 @@ def find_nmem_command() -> dict[str, Any]:
     if nmem:
         return {"command": "nmem", "args": ["mcp"]}
 
-    return {"command": sys.executable, "args": ["-m", "neural_memory.mcp"]}
+    return {"command": _normalize_path(sys.executable), "args": ["-m", "neural_memory.mcp"]}
 
 
 def setup_config(data_dir: Path, *, force: bool = False) -> bool:
@@ -142,19 +142,33 @@ def setup_mcp_cursor() -> str:
         return "failed"
 
 
+def _normalize_path(path: str) -> str:
+    """Normalize a filesystem path for use in shell commands.
+
+    On Windows, convert backslashes to forward slashes and quote if
+    the path contains spaces. This ensures commands work in both
+    CMD/PowerShell and Git Bash/MSYS2 environments.
+    """
+    normalized = path.replace("\\", "/")
+    if " " in normalized:
+        normalized = f'"{normalized}"'
+    return normalized
+
+
 def _find_hook_command(entry_point: str, cli_subcommand: str, module: str) -> str:
     """Find the best shell command for a NeuralMemory hook.
 
     Priority:
     1. Dedicated pip entry point  — cleanest, cross-platform
     2. nmem <subcommand>          — works if nmem CLI is on PATH
-    3. python -m <module>         — always-available fallback
+    3. python -m <module>         — always-available fallback (uses absolute path)
     """
     if shutil.which(entry_point):
         return entry_point
     if shutil.which("nmem"):
         return f"nmem {cli_subcommand}"
-    return f"{sys.executable} -m {module}"
+    python = _normalize_path(sys.executable)
+    return f"{python} -m {module}"
 
 
 def _find_pre_compact_command() -> str:
