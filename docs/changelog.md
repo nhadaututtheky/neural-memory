@@ -5,6 +5,17 @@ All notable changes to NeuralMemory are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.0] - 2026-02-27
+
+### Added
+
+- **Error Resolution Learning** — `RESOLVED_BY` synapse links fixes to the errors they resolve
+  - Agents recall both error AND resolution instead of stubbornly refusing retries
+  - ≥50% activation demotion for resolved errors, `_conflict_resolved` metadata
+  - Zero-cost, backward compatible, auto-detects ERROR type from neuron metadata
+
+---
+
 ## [2.8.0] - 2026-02-22
 
 ### Added

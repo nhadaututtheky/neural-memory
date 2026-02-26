@@ -20,7 +20,7 @@ NeuralMemory stores experiences as interconnected neurons and recalls them throu
 | **LLM/Embedding** | Required (embedding API calls) | **None** — pure algorithmic graph traversal |
 | **Query** | "Find similar text" | "Recall through association" |
 | **Structure** | Flat chunks + embeddings | Neural graph + synapses |
-| **Relationships** | None (just similarity) | Explicit: `CAUSED_BY`, `LEADS_TO`, `DISCUSSED` |
+| **Relationships** | None (just similarity) | Explicit: `CAUSED_BY`, `LEADS_TO`, `RESOLVED_BY`, etc. |
 | **Temporal** | Timestamp filter | Time as first-class neurons |
 | **Multi-hop** | Multiple queries needed | Natural graph traversal |
 | **Lifecycle** | Static | Decay, reinforcement, consolidation |
@@ -232,7 +232,7 @@ Query: "What did Alice suggest?"
 | Concept | What it is |
 |---------|------------|
 | **Neuron** | A memory unit (concept, entity, action, time, state, spatial, sensory, intent) |
-| **Synapse** | A weighted, typed connection between neurons (`CAUSED_BY`, `LEADS_TO`, `CO_OCCURRED`, etc.) |
+| **Synapse** | A weighted, typed connection between neurons (`CAUSED_BY`, `LEADS_TO`, `RESOLVED_BY`, etc.) |
 | **Fiber** | A memory trace — an ordered sequence of neurons forming a coherent experience |
 | **Spreading activation** | Signal propagates from anchor neurons through synapses, decaying with distance |
 | **Reflex pipeline** | Query → decompose → anchor → activate → intersect → extract context |

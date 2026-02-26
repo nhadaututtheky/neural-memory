@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.0] - 2026-02-27
+
+### Added
+
+- **Error Resolution Learning** — When a new FACT/INSIGHT contradicts an existing ERROR memory, the system creates a `RESOLVED_BY` synapse linking fix → error instead of just flagging a conflict
+  - `RESOLVED_BY` synapse type added to `SynapseType` enum (22 types total)
+  - Resolved errors get ≥50% activation demotion (2x stronger than normal conflicts)
+  - Error neurons marked with `_conflict_resolved` and `_resolved_by` metadata
+  - Auto-detection via neuron metadata `{"type": "error"}` — no caller changes needed
+  - Zero-cost: pure graph manipulation, no LLM calls
+  - 7 new tests in `test_error_resolution.py`
+
+### Changed
+
+- `resolve_conflicts()` accepts optional `existing_memory_type` parameter
+- `conflict_detection.py` now imports `logging` module for RESOLVED_BY synapse debug logging
+
+---
+
 ## [2.8.1] - 2026-02-23
 
 ### Added
