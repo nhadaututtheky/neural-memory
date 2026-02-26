@@ -271,9 +271,7 @@ class TestErrorResolutionLearning:
         )
 
         resolved_by = [
-            s
-            for s in storage._synapses
-            if getattr(s, "type", None) == SynapseType.RESOLVED_BY
+            s for s in storage._synapses if getattr(s, "type", None) == SynapseType.RESOLVED_BY
         ]
         assert len(resolved_by) == 1
         metadata = resolved_by[0].metadata
