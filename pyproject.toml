@@ -185,7 +185,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S108", "DTZ001", "DTZ005", "T20", "ERA001", "PT001", "PT006", "PT011", "PT018"]
+"tests/**" = ["S101", "S108", "S314", "S405", "DTZ001", "DTZ005", "T20", "ERA001", "PT001", "PT006", "PT011", "PT018"]
 "src/neural_memory/mcp/server.py" = ["T201"]    # stdio transport uses print
 "src/neural_memory/utils/config.py" = ["S104"]   # configurable bind address
 "src/neural_memory/utils/simhash.py" = ["S324"]  # MD5 for fingerprint, not crypto

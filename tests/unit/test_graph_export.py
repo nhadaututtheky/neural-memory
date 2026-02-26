@@ -13,7 +13,6 @@ from neural_memory.cli.graph_export import (
     layout_tree,
 )
 
-
 # ── Fixtures ─────────────────────────────────────────────────────
 
 
@@ -156,8 +155,7 @@ class TestLayoutTree:
                 if i != j:
                     # No overlap: one ends before other starts
                     assert y1_end <= y2_start or y2_end <= y1_start, (
-                        f"Node {i} ({y1_start}-{y1_end}) overlaps "
-                        f"node {j} ({y2_start}-{y2_end})"
+                        f"Node {i} ({y1_start}-{y1_end}) overlaps node {j} ({y2_start}-{y2_end})"
                     )
 
     def test_edge_colors_by_weight(self) -> None:
