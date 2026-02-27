@@ -56,7 +56,13 @@ def get_tool_schemas_for_tier(tier: str) -> list[dict[str, Any]]:
 _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "name": "nmem_remember",
-        "description": "Store a memory. Auto-detects type if not specified.",
+        "description": "Store a memory. Auto-detects type if not specified. "
+        "Error resolution: when a new memory contradicts a stored error (type='error'), "
+        "the system automatically creates a RESOLVED_BY synapse and demotes the error's "
+        "activation by >=50%, so the agent stops repeating outdated errors. Detection is "
+        "automatic via tag overlap (>50%) and factual contradiction patterns — no manual "
+        "tagging needed. Sensitive content is auto-encrypted when encryption is enabled, "
+        "instead of being rejected.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -220,7 +226,9 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_suggest",
-        "description": "Autocomplete suggestions from brain neurons.",
+        "description": "Autocomplete suggestions from brain neurons. "
+        "When called with no prefix, returns idle neurons that have never been "
+        "accessed — useful for discovering neglected knowledge that needs reinforcement.",
         "inputSchema": {
             "type": "object",
             "properties": {

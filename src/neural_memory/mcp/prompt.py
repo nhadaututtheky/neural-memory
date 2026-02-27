@@ -120,6 +120,14 @@ User: "I always use 4-space indentation"
 # Found a bug fix
 "The issue was missing await - fixed by adding await before fetch()"
 -> nmem_remember(content="Bug fix: Missing await before fetch() caused race condition", type="error", priority=7)
+
+# Error Resolution: when you fix a previously stored error, store the fix normally.
+# The system auto-detects contradiction (>50% tag overlap + factual pattern mismatch),
+# creates a RESOLVED_BY synapse, and demotes the error activation by >=50%.
+# This prevents the agent from stubbornly recalling outdated errors.
+"Actually the race condition was in the websocket handler, not fetch()"
+-> nmem_remember(content="Fix: Race condition was in websocket handler, not fetch(). Use asyncio.Lock().", type="insight", priority=7)
+# Result: old error gets RESOLVED_BY synapse, activation drops >=50%, _conflict_resolved=true
 ```
 
 ## Codebase Indexing (nmem_index)
@@ -181,6 +189,25 @@ nmem_eternal(action="status")   # View memory counts and session state
 - `error`: Bugs and fixes
 - `workflow`: Processes/procedures
 - `reference`: Links/resources
+
+## Sync Engine vs Git Backup
+
+Use **nmem_sync** for real-time multi-device memory synchronization:
+- Works across devices (laptop, desktop, server) via hub server
+- Automatic conflict resolution (prefer_recent, prefer_local, prefer_remote, prefer_stronger)
+- Granular per-fiber sync — only changed memories are transferred
+- Bi-directional: push local changes, pull remote, or full sync
+
+Use **git backup** for version-controlled snapshots:
+- Better for single-device users who want history/rollback
+- Commit the `~/.neuralmemory/` data directory to a private repo
+- No conflict resolution — just point-in-time snapshots
+- Manual process (commit/push when you want)
+
+**When to use which:**
+- Single device, want history → git backup
+- Multiple devices, want auto-sync → nmem_sync
+- Both → use nmem_sync for real-time + git for disaster recovery
 """
 
 COMPACT_PROMPT = """You have NeuralMemory for persistent memory across sessions.

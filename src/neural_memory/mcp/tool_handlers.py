@@ -116,14 +116,7 @@ class ToolHandler:
         remaining_matches = check_sensitive_content(content, min_severity=2)
         # Filter out matches that were already redacted
         remaining_matches = [m for m in remaining_matches if m.severity < auto_redact_severity]
-        if remaining_matches:
-            types_found = sorted({m.type.value for m in remaining_matches})
-            return {
-                "error": "Sensitive content detected",
-                "sensitive_types": types_found,
-                "message": "Content contains potentially sensitive information. "
-                "Remove secrets before storing.",
-            }
+        sensitive_detected = bool(remaining_matches)
 
         # Determine if content should be encrypted
         should_encrypt = args.get("encrypted", False)
@@ -135,6 +128,24 @@ class ToolHandler:
             encryption_enabled = encryption_cfg.enabled
         except AttributeError:
             encryption_enabled = False
+
+        # Auto-encrypt sensitive content instead of blocking
+        if sensitive_detected and encryption_enabled:
+            should_encrypt = True
+            logger.info(
+                "Sensitive content detected (types: %s) — auto-encrypting instead of blocking",
+                ", ".join(sorted({m.type.value for m in remaining_matches})),
+            )
+        elif sensitive_detected and not encryption_enabled:
+            # Encryption not available — reject as before
+            types_found = sorted({m.type.value for m in remaining_matches})
+            return {
+                "error": "Sensitive content detected",
+                "sensitive_types": types_found,
+                "message": "Content contains potentially sensitive information. "
+                "Enable encryption (config.toml [encryption] enabled=true) to "
+                "auto-encrypt sensitive memories, or remove secrets before storing.",
+            }
 
         if encryption_enabled:
             # Auto-encrypt if sensitive content was detected in original input
@@ -322,6 +333,11 @@ class ToolHandler:
 
         if encryption_meta:
             response["encrypted"] = True
+            if sensitive_detected:
+                response["auto_encrypted_sensitive"] = True
+                response["sensitive_types_encrypted"] = sorted(
+                    {m.type.value for m in remaining_matches}
+                )
 
         if expiry_days is not None:
             response["expires_in_days"] = expiry_days
@@ -783,6 +799,11 @@ class ToolHandler:
             "conflicts_active": conflicts_active,
         }
 
+        # Actionable hints based on brain state
+        hints = await self._generate_stats_hints(storage, brain.id, stats)
+        if hints:
+            response["hints"] = hints
+
         # Onboarding hint for fresh brains
         onboarding = await self._check_onboarding()
         if onboarding:
@@ -793,6 +814,91 @@ class ToolHandler:
             response["update_hint"] = update_hint
 
         return response
+
+    async def _generate_stats_hints(
+        self,
+        storage: Any,
+        brain_id: str,
+        stats: dict[str, Any],
+    ) -> list[str]:
+        """Generate actionable hints based on brain state.
+
+        Hints appear in stats output to guide users on what to do next.
+        """
+        hints: list[str] = []
+        fiber_count = stats.get("fiber_count", 0)
+        neuron_count = stats.get("neuron_count", 0)
+        synapse_count = stats.get("synapse_count", 0)
+
+        if fiber_count == 0:
+            return hints
+
+        # Consolidation hint: many memories but 0% consolidated
+        try:
+            from neural_memory.engine.memory_stages import MemoryStage
+
+            semantic_records = await storage.find_maturations(stage=MemoryStage.SEMANTIC)
+            semantic_count = len(semantic_records)
+            consolidation_pct = (semantic_count / fiber_count * 100) if fiber_count else 0
+
+            if fiber_count >= 50 and consolidation_pct == 0:
+                hints.append(
+                    f"You have {fiber_count} memories but 0% consolidated. "
+                    "Run: nmem_auto action='process' or nmem consolidate --strategy mature "
+                    "to advance memories from episodic to semantic stage."
+                )
+            elif fiber_count >= 100 and consolidation_pct < 10:
+                hints.append(
+                    f"{fiber_count} memories, only {consolidation_pct:.0f}% consolidated. "
+                    "Recall topics you've stored to help memories mature, "
+                    "then run consolidation."
+                )
+        except Exception:
+            logger.debug("Maturation check failed (non-critical)", exc_info=True)
+
+        # Low activation hint: many neurons but few activated
+        try:
+            states = await storage.get_all_neuron_states()
+            activated = sum(1 for s in states if s.access_frequency > 0)
+            activation_pct = (activated / neuron_count * 100) if neuron_count else 0
+
+            if neuron_count >= 50 and activation_pct < 20:
+                idle_count = neuron_count - activated
+                hints.append(
+                    f"{idle_count} neurons ({100 - activation_pct:.0f}%) never accessed. "
+                    "Use nmem_recall with topics you've stored to activate them "
+                    "and strengthen recall pathways."
+                )
+        except Exception:
+            logger.debug("Activation check failed (non-critical)", exc_info=True)
+
+        # Low connectivity hint
+        if neuron_count > 0:
+            connectivity = synapse_count / neuron_count
+            if connectivity < 2.0 and neuron_count >= 20:
+                hints.append(
+                    f"Low connectivity ({connectivity:.1f} synapses/neuron, target: 3+). "
+                    "Store memories with context like 'X because Y' to build richer links."
+                )
+
+        # Spaced repetition hint: if review system has due items
+        try:
+            from neural_memory.engine.spaced_repetition import SpacedRepetitionEngine
+
+            brain = await storage.get_brain(brain_id)
+            if brain:
+                review_engine = SpacedRepetitionEngine(storage, brain.config)
+                review_stats = await review_engine.get_stats()
+                due_count = review_stats.get("due", 0)
+                if due_count > 0:
+                    hints.append(
+                        f"{due_count} memories due for review. "
+                        "Run nmem_review action='queue' to strengthen retention."
+                    )
+        except Exception:
+            logger.debug("Review check failed (non-critical)", exc_info=True)
+
+        return hints
 
     async def _health(self, args: dict[str, Any]) -> dict[str, Any]:
         """Run brain health diagnostics."""
@@ -836,7 +942,66 @@ class ToolHandler:
                 }
                 for p in report.top_penalties
             ],
+            "roadmap": self._build_health_roadmap(report),
         }
+
+    @staticmethod
+    def _build_health_roadmap(report: Any) -> dict[str, Any]:
+        """Build an actionable roadmap from current grade to next grade.
+
+        Shows prioritized steps sorted by estimated_gain (biggest impact first),
+        the points needed to reach the next grade, and specific commands to run.
+        """
+        grade_thresholds = {"F": 40, "D": 60, "C": 75, "B": 90, "A": 100}
+        next_grade_map = {"F": "D", "D": "C", "C": "B", "B": "A", "A": "A"}
+
+        current_grade = report.grade
+        next_grade = next_grade_map.get(current_grade, "A")
+        target_score = grade_thresholds.get(next_grade, 100)
+        points_needed = max(0, target_score - report.purity_score)
+
+        # Sort penalties by estimated gain (most impactful first)
+        steps: list[dict[str, Any]] = []
+        cumulative_gain = 0.0
+        for p in sorted(report.top_penalties, key=lambda x: x.estimated_gain, reverse=True):
+            if p.estimated_gain <= 0:
+                continue
+            cumulative_gain += p.estimated_gain
+            steps.append(
+                {
+                    "priority": len(steps) + 1,
+                    "component": p.component,
+                    "current": f"{p.current_score:.0%}",
+                    "action": p.action,
+                    "estimated_gain": f"+{p.estimated_gain:.1f} pts",
+                    "sufficient": cumulative_gain >= points_needed,
+                }
+            )
+
+        roadmap: dict[str, Any] = {
+            "current_grade": current_grade,
+            "current_score": report.purity_score,
+            "next_grade": next_grade,
+            "points_needed": round(points_needed, 1),
+            "steps": steps,
+        }
+
+        if current_grade == "A":
+            roadmap["message"] = (
+                "Excellent! Brain is at top grade. Maintain regular recall and storage."
+            )
+        elif points_needed <= sum(p.estimated_gain for p in report.top_penalties):
+            roadmap["message"] = (
+                f"Reaching grade {next_grade} is achievable by addressing "
+                f"the top {min(len(steps), 3)} penalties below."
+            )
+        else:
+            roadmap["message"] = (
+                f"Grade {next_grade} requires {points_needed:.1f} more points. "
+                "Focus on the highest-impact actions and give the brain time to mature."
+            )
+
+        return roadmap
 
     async def _evolution(self, args: dict[str, Any]) -> dict[str, Any]:
         """Measure brain evolution dynamics."""
@@ -901,13 +1066,15 @@ class ToolHandler:
         return result
 
     async def _suggest(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Get prefix-based autocomplete suggestions."""
+        """Get prefix-based autocomplete suggestions or idle neuron reinforcement hints."""
         storage = await self.get_storage()
         prefix = args.get("prefix", "")
-        if not prefix.strip():
-            return {"suggestions": [], "count": 0}
-
         limit = min(args.get("limit", 5), 20)
+
+        # When no prefix: return idle neurons that need reinforcement
+        if not prefix.strip():
+            return await self._suggest_idle_neurons(storage, limit)
+
         type_filter = None
         if "type_filter" in args:
             from neural_memory.core.neuron import NeuronType
@@ -934,6 +1101,56 @@ class ToolHandler:
             "count": len(formatted),
             "tokens_used": sum(len(s["content"].split()) for s in formatted),
         }
+
+    async def _suggest_idle_neurons(self, storage: Any, limit: int) -> dict[str, Any]:
+        """Return neurons that have never been accessed — candidates for reinforcement.
+
+        Sorted by creation age (oldest idle neurons first) to prioritize
+        long-neglected knowledge.
+        """
+        try:
+            states = await storage.get_all_neuron_states()
+            idle_states = [s for s in states if s.access_frequency == 0]
+
+            # Sort by creation time ascending (oldest first)
+            idle_states.sort(key=lambda s: s.created_at or "")
+
+            suggestions = []
+            for state in idle_states[:limit]:
+                neuron = await storage.get_neuron(state.neuron_id)
+                if neuron is None:
+                    continue
+                content_preview = neuron.content[:200] if neuron.content else ""
+                suggestions.append(
+                    {
+                        "content": content_preview,
+                        "type": neuron.type.value if neuron.type else "unknown",
+                        "neuron_id": neuron.id,
+                        "score": 0.0,
+                        "idle": True,
+                    }
+                )
+
+            total_idle = len(idle_states)
+            hint = ""
+            if total_idle > 0:
+                hint = (
+                    f"{total_idle} neurons never accessed. "
+                    "Recall these topics with nmem_recall to activate them "
+                    "and strengthen your memory graph."
+                )
+
+            return {
+                "suggestions": suggestions,
+                "count": len(suggestions),
+                "total_idle": total_idle,
+                "mode": "idle_reinforcement",
+                "hint": hint,
+                "tokens_used": sum(len(s["content"].split()) for s in suggestions),
+            }
+        except Exception:
+            logger.debug("Idle neuron suggestion failed", exc_info=True)
+            return {"suggestions": [], "count": 0}
 
     async def _habits(self, args: dict[str, Any]) -> dict[str, Any]:
         """Manage learned workflow habits."""
