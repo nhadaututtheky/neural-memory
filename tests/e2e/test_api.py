@@ -226,6 +226,223 @@ class TestMemoryEndpoints:
         assert "count" in data
 
 
+class TestNeuronCRUD:
+    """Tests for neuron CRUD endpoints (SharedStorage support)."""
+
+    @pytest.fixture
+    def brain_id(self, client: TestClient) -> str:
+        """Create a brain and return its ID."""
+        response = client.post(
+            "/brain/create",
+            json={"name": "neuron_crud_test"},
+        )
+        return response.json()["id"]
+
+    def test_create_neuron(self, client: TestClient, brain_id: str) -> None:
+        """Test creating a neuron directly."""
+        response = client.post(
+            "/memory/neurons",
+            json={"type": "concept", "content": "Test concept"},
+            headers={"X-Brain-ID": brain_id},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["type"] == "concept"
+        assert data["content"] == "Test concept"
+        assert "id" in data
+
+    def test_get_neuron(self, client: TestClient, brain_id: str) -> None:
+        """Test getting a neuron by ID."""
+        create_resp = client.post(
+            "/memory/neurons",
+            json={"type": "entity", "content": "Alice"},
+            headers={"X-Brain-ID": brain_id},
+        )
+        neuron_id = create_resp.json()["id"]
+
+        response = client.get(
+            f"/memory/neurons/{neuron_id}",
+            headers={"X-Brain-ID": brain_id},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["content"] == "Alice"
+
+    def test_get_nonexistent_neuron(self, client: TestClient, brain_id: str) -> None:
+        """Test getting a nonexistent neuron returns 404."""
+        response = client.get(
+            "/memory/neurons/nonexistent-id",
+            headers={"X-Brain-ID": brain_id},
+        )
+        assert response.status_code == 404
+
+    def test_update_neuron(self, client: TestClient, brain_id: str) -> None:
+        """Test updating a neuron."""
+        create_resp = client.post(
+            "/memory/neurons",
+            json={"type": "concept", "content": "Old content"},
+            headers={"X-Brain-ID": brain_id},
+        )
+        neuron_id = create_resp.json()["id"]
+
+        response = client.put(
+            f"/memory/neurons/{neuron_id}",
+            json={"content": "New content"},
+            headers={"X-Brain-ID": brain_id},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["content"] == "New content"
+
+    def test_delete_neuron(self, client: TestClient, brain_id: str) -> None:
+        """Test deleting a neuron."""
+        create_resp = client.post(
+            "/memory/neurons",
+            json={"type": "concept", "content": "To delete"},
+            headers={"X-Brain-ID": brain_id},
+        )
+        neuron_id = create_resp.json()["id"]
+
+        response = client.delete(
+            f"/memory/neurons/{neuron_id}",
+            headers={"X-Brain-ID": brain_id},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "deleted"
+
+        # Verify deleted
+        get_resp = client.get(
+            f"/memory/neurons/{neuron_id}",
+            headers={"X-Brain-ID": brain_id},
+        )
+        assert get_resp.status_code == 404
+
+    def test_create_neuron_invalid_type(self, client: TestClient, brain_id: str) -> None:
+        """Test creating a neuron with invalid type returns 400."""
+        response = client.post(
+            "/memory/neurons",
+            json={"type": "invalid_type", "content": "Test"},
+            headers={"X-Brain-ID": brain_id},
+        )
+        assert response.status_code == 400
+
+
+class TestSynapseCRUD:
+    """Tests for synapse CRUD endpoints (SharedStorage support)."""
+
+    @pytest.fixture
+    def brain_with_neurons(self, client: TestClient) -> dict[str, str]:
+        """Create a brain with two neurons."""
+        brain_resp = client.post(
+            "/brain/create",
+            json={"name": "synapse_crud_test"},
+        )
+        brain_id = brain_resp.json()["id"]
+        headers = {"X-Brain-ID": brain_id}
+
+        n1 = client.post(
+            "/memory/neurons",
+            json={"type": "entity", "content": "Alice"},
+            headers=headers,
+        ).json()["id"]
+
+        n2 = client.post(
+            "/memory/neurons",
+            json={"type": "concept", "content": "FastAPI"},
+            headers=headers,
+        ).json()["id"]
+
+        return {"brain_id": brain_id, "neuron1": n1, "neuron2": n2}
+
+    def test_create_synapse(self, client: TestClient, brain_with_neurons: dict[str, str]) -> None:
+        """Test creating a synapse between neurons."""
+        ids = brain_with_neurons
+        response = client.post(
+            "/memory/synapses",
+            json={
+                "source_id": ids["neuron1"],
+                "target_id": ids["neuron2"],
+                "type": "related_to",
+                "weight": 0.8,
+            },
+            headers={"X-Brain-ID": ids["brain_id"]},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "id" in data
+        assert data["weight"] == 0.8
+
+    def test_get_synapse(self, client: TestClient, brain_with_neurons: dict[str, str]) -> None:
+        """Test getting a synapse by ID."""
+        ids = brain_with_neurons
+        headers = {"X-Brain-ID": ids["brain_id"]}
+
+        create_resp = client.post(
+            "/memory/synapses",
+            json={
+                "source_id": ids["neuron1"],
+                "target_id": ids["neuron2"],
+                "type": "related_to",
+            },
+            headers=headers,
+        )
+        synapse_id = create_resp.json()["id"]
+
+        response = client.get(f"/memory/synapses/{synapse_id}", headers=headers)
+
+        assert response.status_code == 200
+        assert response.json()["source_id"] == ids["neuron1"]
+
+    def test_list_synapses(self, client: TestClient, brain_with_neurons: dict[str, str]) -> None:
+        """Test listing synapses."""
+        ids = brain_with_neurons
+        headers = {"X-Brain-ID": ids["brain_id"]}
+
+        client.post(
+            "/memory/synapses",
+            json={
+                "source_id": ids["neuron1"],
+                "target_id": ids["neuron2"],
+                "type": "related_to",
+            },
+            headers=headers,
+        )
+
+        response = client.get(
+            "/memory/synapses",
+            params={"source_id": ids["neuron1"]},
+            headers=headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] >= 1
+
+    def test_delete_synapse(self, client: TestClient, brain_with_neurons: dict[str, str]) -> None:
+        """Test deleting a synapse."""
+        ids = brain_with_neurons
+        headers = {"X-Brain-ID": ids["brain_id"]}
+
+        create_resp = client.post(
+            "/memory/synapses",
+            json={
+                "source_id": ids["neuron1"],
+                "target_id": ids["neuron2"],
+                "type": "related_to",
+            },
+            headers=headers,
+        )
+        synapse_id = create_resp.json()["id"]
+
+        response = client.delete(f"/memory/synapses/{synapse_id}", headers=headers)
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "deleted"
+
+
 class TestExportImport:
     """Tests for brain export/import functionality."""
 

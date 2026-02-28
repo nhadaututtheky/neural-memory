@@ -264,6 +264,68 @@ class IndexResponse(BaseModel):
     )
 
 
+class NeuronRequest(BaseModel):
+    """Request to create or update a neuron."""
+
+    id: str | None = Field(None, description="Neuron ID (generated if not provided)")
+    type: str = Field(..., description="Neuron type (e.g., concept, entity, action)")
+    content: str = Field(..., description="Neuron content", max_length=100_000)
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    created_at: datetime | None = Field(None, description="Creation timestamp")
+
+
+class NeuronUpdateRequest(BaseModel):
+    """Request to update a neuron."""
+
+    type: str | None = Field(None, description="Neuron type")
+    content: str | None = Field(None, description="Neuron content", max_length=100_000)
+    metadata: dict[str, Any] | None = Field(None, description="Additional metadata")
+
+
+class NeuronResponse(BaseModel):
+    """Response with neuron details."""
+
+    id: str
+    type: str
+    content: str
+    metadata: dict[str, Any]
+    created_at: str
+
+
+class NeuronStateRequest(BaseModel):
+    """Request to update neuron state."""
+
+    neuron_id: str
+    activation_level: float = Field(0.0, ge=0, le=1)
+    access_frequency: int = Field(0, ge=0)
+    last_activated: datetime | None = None
+    decay_rate: float = Field(0.1, ge=0, le=1)
+    firing_threshold: float = Field(0.3, ge=0, le=1)
+    refractory_until: datetime | None = None
+    refractory_period_ms: int = Field(100, ge=0)
+    homeostatic_target: float = Field(0.3, ge=0, le=1)
+
+
+class SynapseRequest(BaseModel):
+    """Request to create a synapse."""
+
+    id: str | None = Field(None, description="Synapse ID (generated if not provided)")
+    source_id: str = Field(..., description="Source neuron ID")
+    target_id: str = Field(..., description="Target neuron ID")
+    type: str = Field(..., description="Synapse type")
+    weight: float = Field(0.5, ge=0, le=1)
+    direction: str = Field("uni", description="Direction: uni (unidirectional), bi (bidirectional)")
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None
+
+
+class SynapseUpdateRequest(BaseModel):
+    """Request to update a synapse."""
+
+    weight: float | None = Field(None, ge=0, le=1)
+    metadata: dict[str, Any] | None = None
+
+
 class ErrorResponse(BaseModel):
     """Error response."""
 

@@ -221,7 +221,7 @@ class SQLiteBrainMixin:
             )
             # Insert neuron directly (skip per-statement commit)
             await conn.execute(
-                """INSERT INTO neurons (id, brain_id, type, content, metadata, content_hash, created_at)
+                """INSERT OR REPLACE INTO neurons (id, brain_id, type, content, metadata, content_hash, created_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
                 (
                     neuron.id,
@@ -259,7 +259,7 @@ class SQLiteBrainMixin:
             )
             # Insert directly (skip per-statement commit and neuron existence check)
             await conn.execute(
-                """INSERT INTO synapses
+                """INSERT OR REPLACE INTO synapses
                    (id, brain_id, source_id, target_id, type, weight, direction,
                     metadata, reinforced_count, last_activated, created_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -312,7 +312,7 @@ class SQLiteBrainMixin:
             # Insert directly without per-fiber commit
             all_tags = sorted(fiber.auto_tags | fiber.agent_tags)
             await conn.execute(
-                """INSERT INTO fibers
+                """INSERT OR REPLACE INTO fibers
                    (id, brain_id, neuron_ids, synapse_ids, anchor_neuron_id,
                     pathway, conductivity, last_conducted, time_start, time_end,
                     coherence, salience, frequency, summary, tags,
