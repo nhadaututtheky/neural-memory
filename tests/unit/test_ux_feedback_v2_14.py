@@ -93,9 +93,7 @@ class TestStatsHints:
         handler.get_storage = AsyncMock(return_value=storage_with_data)
         handler.config = MagicMock()
 
-        stats = await storage_with_data.get_enhanced_stats(
-            storage_with_data._current_brain_id
-        )
+        stats = await storage_with_data.get_enhanced_stats(storage_with_data._current_brain_id)
         brain_id = storage_with_data._current_brain_id
 
         hints = await handler._generate_stats_hints(storage_with_data, brain_id, stats)
@@ -104,9 +102,7 @@ class TestStatsHints:
         assert len(consolidation_hints) >= 1
         assert "0%" in consolidation_hints[0]
 
-    async def test_activation_hint_when_low(
-        self, storage_with_data: InMemoryStorage
-    ) -> None:
+    async def test_activation_hint_when_low(self, storage_with_data: InMemoryStorage) -> None:
         """Should hint about idle neurons when activation < 20%."""
         from neural_memory.mcp.tool_handlers import ToolHandler
 
@@ -114,9 +110,7 @@ class TestStatsHints:
         handler.get_storage = AsyncMock(return_value=storage_with_data)
         handler.config = MagicMock()
 
-        stats = await storage_with_data.get_enhanced_stats(
-            storage_with_data._current_brain_id
-        )
+        stats = await storage_with_data.get_enhanced_stats(storage_with_data._current_brain_id)
         brain_id = storage_with_data._current_brain_id
 
         hints = await handler._generate_stats_hints(storage_with_data, brain_id, stats)
@@ -124,9 +118,7 @@ class TestStatsHints:
         activation_hints = [h for h in hints if "never accessed" in h.lower()]
         assert len(activation_hints) >= 1
 
-    async def test_connectivity_hint_when_low(
-        self, storage_with_data: InMemoryStorage
-    ) -> None:
+    async def test_connectivity_hint_when_low(self, storage_with_data: InMemoryStorage) -> None:
         """Should hint about low connectivity."""
         from neural_memory.mcp.tool_handlers import ToolHandler
 
@@ -139,9 +131,7 @@ class TestStatsHints:
         connectivity_hints = [h for h in hints if "connectivity" in h.lower()]
         assert len(connectivity_hints) >= 1
 
-    async def test_no_hints_for_empty_brain(
-        self, storage_with_data: InMemoryStorage
-    ) -> None:
+    async def test_no_hints_for_empty_brain(self, storage_with_data: InMemoryStorage) -> None:
         """Should not generate hints for empty brain."""
         from neural_memory.mcp.tool_handlers import ToolHandler
 
@@ -179,15 +169,17 @@ class TestHealthRoadmap:
             fiber_count=195,
             warnings=(),
             recommendations=(),
-            top_penalties=_rank_penalty_factors({
-                "connectivity": 0.1,
-                "diversity": 0.72,
-                "freshness": 0.72,
-                "consolidation_ratio": 0.0,
-                "orphan_rate": 0.5,
-                "activation_efficiency": 0.1,
-                "recall_confidence": 0.3,
-            }),
+            top_penalties=_rank_penalty_factors(
+                {
+                    "connectivity": 0.1,
+                    "diversity": 0.72,
+                    "freshness": 0.72,
+                    "consolidation_ratio": 0.0,
+                    "orphan_rate": 0.5,
+                    "activation_efficiency": 0.1,
+                    "recall_confidence": 0.3,
+                }
+            ),
         )
 
         roadmap = ToolHandler._build_health_roadmap(report)
@@ -197,8 +189,10 @@ class TestHealthRoadmap:
         assert roadmap["points_needed"] > 0
         assert len(roadmap["steps"]) > 0
         # Steps should be sorted by estimated gain
-        gains = [float(s["estimated_gain"].replace("+", "").replace(" pts", ""))
-                 for s in roadmap["steps"]]
+        gains = [
+            float(s["estimated_gain"].replace("+", "").replace(" pts", ""))
+            for s in roadmap["steps"]
+        ]
         assert gains == sorted(gains, reverse=True)
 
     def test_roadmap_for_grade_a(self) -> None:
@@ -220,15 +214,17 @@ class TestHealthRoadmap:
             fiber_count=400,
             warnings=(),
             recommendations=(),
-            top_penalties=_rank_penalty_factors({
-                "connectivity": 0.9,
-                "diversity": 0.85,
-                "freshness": 0.95,
-                "consolidation_ratio": 0.8,
-                "orphan_rate": 0.05,
-                "activation_efficiency": 0.9,
-                "recall_confidence": 0.8,
-            }),
+            top_penalties=_rank_penalty_factors(
+                {
+                    "connectivity": 0.9,
+                    "diversity": 0.85,
+                    "freshness": 0.95,
+                    "consolidation_ratio": 0.8,
+                    "orphan_rate": 0.05,
+                    "activation_efficiency": 0.9,
+                    "recall_confidence": 0.8,
+                }
+            ),
         )
 
         roadmap = ToolHandler._build_health_roadmap(report)
@@ -256,15 +252,17 @@ class TestHealthRoadmap:
             fiber_count=150,
             warnings=(),
             recommendations=(),
-            top_penalties=_rank_penalty_factors({
-                "connectivity": 0.3,
-                "diversity": 0.5,
-                "freshness": 0.6,
-                "consolidation_ratio": 0.1,
-                "orphan_rate": 0.3,
-                "activation_efficiency": 0.3,
-                "recall_confidence": 0.4,
-            }),
+            top_penalties=_rank_penalty_factors(
+                {
+                    "connectivity": 0.3,
+                    "diversity": 0.5,
+                    "freshness": 0.6,
+                    "consolidation_ratio": 0.1,
+                    "orphan_rate": 0.3,
+                    "activation_efficiency": 0.3,
+                    "recall_confidence": 0.4,
+                }
+            ),
         )
 
         roadmap = ToolHandler._build_health_roadmap(report)
@@ -348,13 +346,13 @@ class TestPenaltyFactorRanking:
     def test_worst_component_ranked_first(self) -> None:
         """Component with worst score * highest weight should rank first."""
         scores = {
-            "connectivity": 0.0,       # weight 0.25 → penalty 25.0
-            "diversity": 0.5,           # weight 0.20 → penalty 10.0
-            "freshness": 0.8,           # weight 0.15 → penalty 3.0
-            "consolidation_ratio": 0.0, # weight 0.15 → penalty 15.0
-            "orphan_rate": 0.0,         # inverted: effective=1.0 → penalty 0.0
+            "connectivity": 0.0,  # weight 0.25 → penalty 25.0
+            "diversity": 0.5,  # weight 0.20 → penalty 10.0
+            "freshness": 0.8,  # weight 0.15 → penalty 3.0
+            "consolidation_ratio": 0.0,  # weight 0.15 → penalty 15.0
+            "orphan_rate": 0.0,  # inverted: effective=1.0 → penalty 0.0
             "activation_efficiency": 0.0,  # weight 0.10 → penalty 10.0
-            "recall_confidence": 0.0,   # weight 0.05 → penalty 5.0
+            "recall_confidence": 0.0,  # weight 0.05 → penalty 5.0
         }
 
         factors = _rank_penalty_factors(scores, top_n=3)

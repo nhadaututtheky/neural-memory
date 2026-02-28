@@ -71,9 +71,7 @@ class TestIsTrustedHost:
     def test_multiple_cidrs(self) -> None:
         with patch(
             "neural_memory.utils.config.get_config",
-            return_value=Config(
-                trusted_networks=["172.16.0.0/12", "192.168.0.0/16", "10.0.0.0/8"]
-            ),
+            return_value=Config(trusted_networks=["172.16.0.0/12", "192.168.0.0/16", "10.0.0.0/8"]),
         ):
             assert is_trusted_host("10.255.0.1") is True
             assert is_trusted_host("172.31.255.255") is True
@@ -91,9 +89,7 @@ class TestIsTrustedHost:
     def test_invalid_cidr_skipped(self) -> None:
         with patch(
             "neural_memory.utils.config.get_config",
-            return_value=Config(
-                trusted_networks=["not-a-cidr", "172.16.0.0/12"]
-            ),
+            return_value=Config(trusted_networks=["not-a-cidr", "172.16.0.0/12"]),
         ):
             # Invalid CIDR logged and skipped, valid one still works
             assert is_trusted_host("172.17.0.5") is True
@@ -108,9 +104,7 @@ class TestIsTrustedHost:
     def test_public_ip_rejected_even_with_private_ranges(self) -> None:
         with patch(
             "neural_memory.utils.config.get_config",
-            return_value=Config(
-                trusted_networks=["172.16.0.0/12", "192.168.0.0/16"]
-            ),
+            return_value=Config(trusted_networks=["172.16.0.0/12", "192.168.0.0/16"]),
         ):
             assert is_trusted_host("203.0.113.50") is False
 
