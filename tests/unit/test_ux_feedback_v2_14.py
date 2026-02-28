@@ -10,11 +10,8 @@ Covers:
 
 from __future__ import annotations
 
-from datetime import timedelta
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 import pytest_asyncio
 
 from neural_memory.core.brain import Brain, BrainConfig
@@ -23,13 +20,9 @@ from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.engine.diagnostics import (
     BrainHealthReport,
-    DiagnosticsEngine,
-    PenaltyFactor,
     _rank_penalty_factors,
 )
 from neural_memory.storage.memory_store import InMemoryStorage
-from neural_memory.utils.timeutils import utcnow
-
 
 # ── Helpers ──────────────────────────────────────────────────────
 

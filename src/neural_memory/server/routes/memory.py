@@ -366,6 +366,7 @@ async def update_neuron(
 ) -> NeuronResponse:
     """Update an existing neuron."""
     from dataclasses import replace
+
     from neural_memory.core.neuron import NeuronType
 
     neuron = await storage.get_neuron(neuron_id)
