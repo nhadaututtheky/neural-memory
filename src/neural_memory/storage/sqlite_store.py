@@ -15,6 +15,7 @@ from neural_memory.storage.read_pool import ReadPool
 from neural_memory.storage.sqlite_action_log import SQLiteActionLogMixin
 from neural_memory.storage.sqlite_alerts import SQLiteAlertsMixin
 from neural_memory.storage.sqlite_brain_ops import SQLiteBrainMixin
+from neural_memory.storage.sqlite_calibration import SQLiteCalibrationMixin
 from neural_memory.storage.sqlite_change_log import SQLiteChangeLogMixin
 from neural_memory.storage.sqlite_coactivation import SQLiteCoActivationMixin
 from neural_memory.storage.sqlite_compression import SQLiteCompressionMixin
@@ -54,6 +55,7 @@ class SQLiteStorage(
     SQLiteReviewsMixin,
     SQLiteDepthPriorMixin,
     SQLiteCompressionMixin,
+    SQLiteCalibrationMixin,
     SQLiteChangeLogMixin,
     SQLiteDevicesMixin,
     SQLiteBrainMixin,

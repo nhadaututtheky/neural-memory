@@ -219,6 +219,50 @@ class ReflexPipeline:
         # 4.7 Deprioritize disputed neurons (conflict resolution)
         activations, disputed_ids = await self._deprioritize_disputed(activations)
 
+        # 4.8 Sufficiency check: early exit if signal is too weak
+        from neural_memory.engine.sufficiency import check_sufficiency
+
+        _sufficiency = check_sufficiency(
+            activations=activations,
+            anchor_sets=anchor_sets,
+            intersections=intersections if not self._use_reflex else [],
+            stab_converged=_stab_report.converged,
+            stab_neurons_removed=_stab_report.neurons_removed,
+        )
+
+        if not _sufficiency.sufficient:
+            _early_latency = (time.perf_counter() - start_time) * 1000
+            _early_result = RetrievalResult(
+                answer=None,
+                confidence=_sufficiency.confidence,
+                depth_used=depth,
+                neurons_activated=len(activations),
+                fibers_matched=[],
+                subgraph=Subgraph(
+                    neuron_ids=list(activations.keys()),
+                    synapse_ids=[],
+                    anchor_ids=[a for anchors in anchor_sets for a in anchors],
+                ),
+                context="",
+                latency_ms=_early_latency,
+                co_activations=co_activations,
+                synthesis_method="insufficient_signal",
+                metadata={
+                    "query_intent": stimulus.intent.value,
+                    "anchors_found": sum(len(a) for a in anchor_sets),
+                    "sufficiency_gate": _sufficiency.gate,
+                    "sufficiency_reason": _sufficiency.reason,
+                    "sufficiency_confidence": _sufficiency.confidence,
+                },
+            )
+            # Flush any pending writes even on early exit
+            if self._write_queue.pending_count > 0:
+                try:
+                    await self._write_queue.flush(self._storage)
+                except Exception:
+                    logger.debug("Deferred write flush failed (non-critical)", exc_info=True)
+            return _early_result
+
         # 5. Find matching fibers
         fibers_matched = await self._find_matching_fibers(activations, valid_at=valid_at)
 
@@ -317,8 +361,23 @@ class ReflexPipeline:
                 "stabilization_iterations": _stab_report.iterations,
                 "stabilization_converged": _stab_report.converged,
                 "disputed_ids": disputed_ids,
+                "sufficiency_gate": _sufficiency.gate,
+                "sufficiency_confidence": _sufficiency.confidence,
             },
         )
+
+        # Record calibration feedback (non-critical)
+        try:
+            await self._storage.save_calibration_record(
+                gate=_sufficiency.gate,
+                predicted_sufficient=True,
+                actual_confidence=reconstruction.confidence,
+                actual_fibers=len(fibers_matched),
+                query_intent=stimulus.intent.value,
+            )
+        except (AttributeError, Exception):
+            # AttributeError: storage doesn't have calibration mixin (e.g. InMemoryStorage)
+            logger.debug("Calibration record save failed (non-critical)", exc_info=True)
 
         # Record adaptive depth outcome (non-critical)
         if _depth_decision is not None:

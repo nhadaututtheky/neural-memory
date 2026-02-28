@@ -40,6 +40,7 @@ class SynthesisMethod(StrEnum):
     MULTI_NEURON = "multi_neuron"  # Multiple neurons combined
     CAUSAL_CHAIN = "causal_chain"  # Causal traversal chain
     TEMPORAL_SEQUENCE = "temporal_sequence"  # Temporal range or event sequence
+    INSUFFICIENT_SIGNAL = "insufficient_signal"  # Early exit: signal too weak
     NONE = "none"  # No answer found
 
 
