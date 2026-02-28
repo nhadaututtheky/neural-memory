@@ -38,6 +38,10 @@ class Config:
         default_factory=lambda: ["http://localhost:*", "http://127.0.0.1:*"]
     )
 
+    # Trusted networks (CIDR notation, e.g. "172.16.0.0/12,192.168.0.0/16")
+    # Allows non-localhost requests from these networks (for Docker/container deployments)
+    trusted_networks: list[str] = field(default_factory=list)
+
     @classmethod
     def from_env(cls) -> Config:
         """Load configuration from environment variables."""
@@ -89,6 +93,10 @@ class Config:
             cors_origins=get_list(
                 "NEURAL_MEMORY_CORS_ORIGINS",
                 ["http://localhost:*", "http://127.0.0.1:*"],
+            ),
+            trusted_networks=get_list(
+                "NEURAL_MEMORY_TRUSTED_NETWORKS",
+                [],
             ),
         )
 

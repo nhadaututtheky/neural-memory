@@ -14,7 +14,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
-from neural_memory.server.dependencies import require_local_request
+from neural_memory.server.dependencies import is_trusted_host, require_local_request
 from neural_memory.utils.timeutils import utcnow
 
 logger = logging.getLogger(__name__)
@@ -297,9 +297,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
     Access is restricted to localhost connections only.
     """
-    # Reject non-localhost connections
+    # Reject untrusted connections
     client_host = websocket.client.host if websocket.client else ""
-    if client_host not in {"127.0.0.1", "::1", "localhost"}:
+    if not is_trusted_host(client_host):
         await websocket.close(code=4003, reason="Forbidden")
         return
 

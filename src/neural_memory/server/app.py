@@ -69,16 +69,19 @@ def create_app(
 
     # CORS middleware
     if cors_origins is None:
-        cors_origins = [
-            "http://localhost:3000",
-            "http://localhost:5173",
-            "http://localhost:8000",
-            "http://localhost:8080",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:5173",
-            "http://127.0.0.1:8000",
-            "http://127.0.0.1:8080",
-        ]
+        from neural_memory.utils.config import get_config
+
+        config = get_config()
+        cors_origins = list(config.cors_origins)
+
+        # If trusted networks are configured but CORS wasn't explicitly set,
+        # allow all origins (the IP check in require_local_request is the
+        # real security boundary, CORS just prevents browser preflight blocks)
+        if config.trusted_networks and cors_origins == [
+            "http://localhost:*",
+            "http://127.0.0.1:*",
+        ]:
+            cors_origins = ["*"]
 
     is_wildcard = cors_origins == ["*"]
     app.add_middleware(
