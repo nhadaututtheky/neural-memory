@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 
 # â”€â”€ Migrations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Each entry maps (from_version -> to_version) with a list of SQL statements.
@@ -318,6 +318,26 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
         )""",
         "CREATE INDEX IF NOT EXISTS idx_calibration_brain_gate ON retrieval_calibration(brain_id, gate)",
         "CREATE INDEX IF NOT EXISTS idx_calibration_created ON retrieval_calibration(brain_id, created_at)",
+    ],
+    (18, 19): [
+        """CREATE TABLE IF NOT EXISTS tool_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            brain_id TEXT NOT NULL,
+            tool_name TEXT NOT NULL,
+            server_name TEXT NOT NULL DEFAULT '',
+            args_summary TEXT NOT NULL DEFAULT '',
+            success INTEGER NOT NULL DEFAULT 1,
+            duration_ms INTEGER NOT NULL DEFAULT 0,
+            session_id TEXT NOT NULL DEFAULT '',
+            task_context TEXT NOT NULL DEFAULT '',
+            processed INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_tool_events_tool ON tool_events(brain_id, tool_name)",
+        "CREATE INDEX IF NOT EXISTS idx_tool_events_processed ON tool_events(brain_id, processed)",
+        "CREATE INDEX IF NOT EXISTS idx_tool_events_session ON tool_events(brain_id, session_id, created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_tool_events_created ON tool_events(brain_id, created_at)",
     ],
 }
 
@@ -728,4 +748,24 @@ CREATE TABLE IF NOT EXISTS retrieval_calibration (
 );
 CREATE INDEX IF NOT EXISTS idx_calibration_brain_gate ON retrieval_calibration(brain_id, gate);
 CREATE INDEX IF NOT EXISTS idx_calibration_created ON retrieval_calibration(brain_id, created_at);
+
+-- Tool events (v19)
+CREATE TABLE IF NOT EXISTS tool_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    brain_id TEXT NOT NULL,
+    tool_name TEXT NOT NULL,
+    server_name TEXT NOT NULL DEFAULT '',
+    args_summary TEXT NOT NULL DEFAULT '',
+    success INTEGER NOT NULL DEFAULT 1,
+    duration_ms INTEGER NOT NULL DEFAULT 0,
+    session_id TEXT NOT NULL DEFAULT '',
+    task_context TEXT NOT NULL DEFAULT '',
+    processed INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_tool_events_tool ON tool_events(brain_id, tool_name);
+CREATE INDEX IF NOT EXISTS idx_tool_events_processed ON tool_events(brain_id, processed);
+CREATE INDEX IF NOT EXISTS idx_tool_events_session ON tool_events(brain_id, session_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_tool_events_created ON tool_events(brain_id, created_at);
 """

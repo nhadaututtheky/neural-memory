@@ -82,15 +82,15 @@ class SQLiteReviewsMixin:
         conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
-        cursor = await conn.execute(
+        async with conn.execute(
             "SELECT * FROM review_schedules WHERE brain_id = ? AND fiber_id = ?",
             (brain_id, fiber_id),
-        )
-        row = await cursor.fetchone()
-        if not row:
-            return None
-        col_names = [d[0] for d in (cursor.description or [])]
-        return _row_to_schedule(dict(zip(col_names, row, strict=False)))
+        ) as cursor:
+            row = await cursor.fetchone()
+            if not row:
+                return None
+            col_names = [d[0] for d in (cursor.description or [])]
+            return _row_to_schedule(dict(zip(col_names, row, strict=False)))
 
     async def get_due_reviews(self, limit: int = 20) -> list[ReviewSchedule]:
         """Get review schedules that are due (next_review <= now)."""

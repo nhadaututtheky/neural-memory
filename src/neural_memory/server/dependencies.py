@@ -66,7 +66,7 @@ async def require_local_request(request: Request) -> None:
     Allows localhost and any IP within NEURAL_MEMORY_TRUSTED_NETWORKS CIDRs.
     """
     if request.client is None:
-        return  # ASGI test clients / internal calls
+        raise HTTPException(status_code=403, detail="Forbidden")
     if not is_trusted_host(request.client.host):
         raise HTTPException(status_code=403, detail="Forbidden")
 

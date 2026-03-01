@@ -90,13 +90,13 @@ class SQLiteDevicesMixin:
         conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
-        cursor = await conn.execute(
+        async with conn.execute(
             "SELECT * FROM devices WHERE brain_id = ? ORDER BY registered_at ASC",
             (brain_id,),
-        )
-        rows = await cursor.fetchall()
-        col_names = [d[0] for d in (cursor.description or [])]
-        return [_row_to_device(dict(zip(col_names, r, strict=False))) for r in rows]
+        ) as cursor:
+            rows = await cursor.fetchall()
+            col_names = [d[0] for d in (cursor.description or [])]
+            return [_row_to_device(dict(zip(col_names, r, strict=False))) for r in rows]
 
     async def update_device_sync(self, device_id: str, last_sync_sequence: int) -> None:
         """Update the last sync timestamp and sequence for a device."""

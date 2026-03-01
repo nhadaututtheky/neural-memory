@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "neural-memory"
-version = "2.16.0"
+version = "2.17.0"
 description = "Reflex-based memory system for AI agents - retrieval through activation, not search"
 readme = "README.md"
 license = "MIT"
@@ -125,6 +125,7 @@ nmem = "neural_memory.cli:main"
 nmem-mcp = "neural_memory.mcp:main"
 nmem-hook-pre-compact = "neural_memory.hooks.pre_compact:main"
 nmem-hook-stop = "neural_memory.hooks.stop:main"
+nmem-hook-post-tool-use = "neural_memory.hooks.post_tool_use:main"
 
 [tool.hatch.build.targets.sdist]
 include = [

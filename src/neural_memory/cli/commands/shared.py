@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Annotated, Any
 
 import typer
 
 from neural_memory.cli._helpers import get_config, get_storage, run_async
+
+logger = logging.getLogger(__name__)
 
 shared_app = typer.Typer(help="Real-time brain sharing configuration")
 
@@ -140,9 +143,11 @@ def shared_test() -> None:
                             "error": f"Server returned status {response.status}",
                         }
         except aiohttp.ClientError as e:
-            return {"success": False, "error": str(e)}
+            logger.error("Connection test failed: %s", e)
+            return {"success": False, "error": "Connection failed: server unreachable"}
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            logger.error("Connection test failed: %s", e)
+            return {"success": False, "error": "Connection test failed unexpectedly"}
 
     typer.echo(f"Testing connection to {config.shared.server_url}...")
     result = run_async(_test())

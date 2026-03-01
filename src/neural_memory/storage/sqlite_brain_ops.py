@@ -478,7 +478,7 @@ async def _export_fibers(conn: aiosqlite.Connection, brain_id: str) -> list[dict
 async def _export_typed_memories(conn: aiosqlite.Connection, brain_id: str) -> list[dict[str, Any]]:
     typed_memories: list[dict[str, Any]] = []
     async with conn.execute(
-        "SELECT * FROM typed_memories WHERE brain_id = ?", (brain_id,)
+        "SELECT * FROM typed_memories WHERE brain_id = ? LIMIT 50000", (brain_id,)
     ) as cursor:
         async for row in cursor:
             typed_memories.append(

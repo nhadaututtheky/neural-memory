@@ -12,6 +12,7 @@ Brain data is stored in ~/.neuralmemory/brains/<name>.db (SQLite)
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -575,14 +576,85 @@ class FalkorDBConfig:
         username = str(
             os.environ.get("NEURAL_MEMORY_FALKORDB_USERNAME") or data.get("username", "")
         )[:128]
-        password = str(
-            os.environ.get("NEURAL_MEMORY_FALKORDB_PASSWORD") or data.get("password", "")
-        )[:256]
+        password_env = os.environ.get("NEURAL_MEMORY_FALKORDB_PASSWORD")
+        password_file = data.get("password", "")
+        if not password_env and password_file:
+            logger.warning(
+                "FalkorDB password read from config.toml — prefer NEURAL_MEMORY_FALKORDB_PASSWORD env var"
+            )
+        password = str(password_env or password_file)[:256]
         return cls(
             host=host,
             port=port,
             username=username,
             password=password,
+        )
+
+
+@dataclass(frozen=True)
+class ToolMemoryConfig:
+    """Tool memory auto-capture configuration.
+
+    When enabled, a PostToolUse Claude Code hook captures lightweight
+    metadata about every MCP tool call into a JSONL buffer. A deferred
+    processing step (during consolidation) promotes patterns to neurons
+    and synapses (EFFECTIVE_FOR, USED_WITH).
+    """
+
+    enabled: bool = False
+    min_duration_ms: int = 0  # Ignore tool calls faster than this
+    blacklist: tuple[str, ...] = ()  # Tool name prefixes to skip
+    cooccurrence_window_s: int = 60  # Seconds for USED_WITH detection
+    min_frequency: int = 3  # Min calls before creating a tool neuron
+    max_buffer_lines: int = 10000  # Truncate JSONL buffer beyond this
+    process_batch_size: int = 200  # Max events per processing cycle
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "min_duration_ms": self.min_duration_ms,
+            "blacklist": list(self.blacklist),
+            "cooccurrence_window_s": self.cooccurrence_window_s,
+            "min_frequency": self.min_frequency,
+            "max_buffer_lines": self.max_buffer_lines,
+            "process_batch_size": self.process_batch_size,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ToolMemoryConfig:
+        blacklist_raw = data.get("blacklist", [])
+        if isinstance(blacklist_raw, (list, tuple)):
+            blacklist = tuple(str(b)[:128] for b in blacklist_raw[:50])
+        else:
+            blacklist = ()
+        try:
+            min_dur = max(0, min(int(data.get("min_duration_ms", 0)), 60_000))
+        except (ValueError, TypeError):
+            min_dur = 0
+        try:
+            window = max(1, min(int(data.get("cooccurrence_window_s", 60)), 3600))
+        except (ValueError, TypeError):
+            window = 60
+        try:
+            min_freq = max(1, min(int(data.get("min_frequency", 3)), 100))
+        except (ValueError, TypeError):
+            min_freq = 3
+        try:
+            max_buf = max(100, min(int(data.get("max_buffer_lines", 10000)), 1_000_000))
+        except (ValueError, TypeError):
+            max_buf = 10000
+        try:
+            batch = max(10, min(int(data.get("process_batch_size", 200)), 10000))
+        except (ValueError, TypeError):
+            batch = 200
+        return cls(
+            enabled=bool(data.get("enabled", False)),
+            min_duration_ms=min_dur,
+            blacklist=blacklist,
+            cooccurrence_window_s=window,
+            min_frequency=min_freq,
+            max_buffer_lines=max_buf,
+            process_batch_size=batch,
         )
 
 
@@ -643,6 +715,9 @@ class UnifiedConfig:
 
     # Storage backend: "sqlite" (default) or "falkordb"
     storage_backend: str = "sqlite"
+
+    # Tool memory auto-capture
+    tool_memory: ToolMemoryConfig = field(default_factory=ToolMemoryConfig)
 
     # FalkorDB config (used when storage_backend == "falkordb")
     falkordb: FalkorDBConfig = field(default_factory=FalkorDBConfig)
@@ -705,6 +780,7 @@ class UnifiedConfig:
             safety=SafetyConfig.from_dict(data.get("safety", {})),
             encryption=EncryptionConfig.from_dict(data.get("encryption", {})),
             dedup=DedupSettings.from_dict(data.get("dedup", {})),
+            tool_memory=ToolMemoryConfig.from_dict(data.get("tool_memory", {})),
             tool_tier=ToolTierConfig.from_dict(data.get("tool_tier", {})),
             mem0_sync=Mem0SyncConfig.from_dict(data.get("mem0_sync", {})),
             device_id=raw_device_id,
@@ -812,6 +888,16 @@ class UnifiedConfig:
             f'llm_model = "{_sanitize_toml_str(self.dedup.llm_model)}"',
             f"llm_max_pairs_per_encode = {self.dedup.llm_max_pairs_per_encode}",
             f'merge_strategy = "{_sanitize_toml_str(self.dedup.merge_strategy)}"',
+            "",
+            "# Tool memory auto-capture",
+            "[tool_memory]",
+            f"enabled = {'true' if self.tool_memory.enabled else 'false'}",
+            f"min_duration_ms = {self.tool_memory.min_duration_ms}",
+            f"blacklist = [{', '.join(repr(b) for b in self.tool_memory.blacklist)}]",
+            f"cooccurrence_window_s = {self.tool_memory.cooccurrence_window_s}",
+            f"min_frequency = {self.tool_memory.min_frequency}",
+            f"max_buffer_lines = {self.tool_memory.max_buffer_lines}",
+            f"process_batch_size = {self.tool_memory.process_batch_size}",
             "",
             "# Mem0 auto-sync settings",
             "[mem0_sync]",
@@ -926,6 +1012,15 @@ _config: UnifiedConfig | None = None
 
 # Cached storage instances keyed by db_path string
 _storage_cache: dict[str, NeuralStorage] = {}
+_storage_lock: asyncio.Lock | None = None
+
+
+def _get_storage_lock() -> asyncio.Lock:
+    """Lazy-init asyncio.Lock (must be created inside a running event loop)."""
+    global _storage_lock
+    if _storage_lock is None:
+        _storage_lock = asyncio.Lock()
+    return _storage_lock
 
 
 def get_config(reload: bool = False) -> UnifiedConfig:
@@ -1102,7 +1197,8 @@ async def _get_sqlite_storage(
     name: str,
     brain_name: str | None,
 ) -> NeuralStorage:
-    """Create or return cached SQLiteStorage."""
+    """Create or return cached SQLiteStorage (lock-protected against races)."""
+    lock = _get_storage_lock()
     from neural_memory.core.brain import Brain
     from neural_memory.storage.sqlite_store import SQLiteStorage
 
@@ -1112,44 +1208,45 @@ async def _get_sqlite_storage(
     db_path = config.get_brain_db_path(brain_name)
     cache_key = str(db_path)
 
-    # Return cached storage if available and still open
-    if cache_key in _storage_cache:
-        cached = _storage_cache[cache_key]
-        if getattr(cached, "_conn", None) is not None:
-            cached.set_brain(name)
-            return cached
+    async with lock:
+        # Return cached storage if available and still open
+        if cache_key in _storage_cache:
+            cached = _storage_cache[cache_key]
+            if getattr(cached, "_conn", None) is not None:
+                cached.set_brain(name)
+                return cached
 
-    # Ensure directory exists
-    db_path.parent.mkdir(parents=True, exist_ok=True)
+        # Ensure directory exists
+        db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Create and initialize storage
-    storage = SQLiteStorage(db_path)
-    try:
-        await storage.initialize()
-    except Exception:
-        await storage.close()
-        raise
+        # Create and initialize storage
+        storage = SQLiteStorage(db_path)
+        try:
+            await storage.initialize()
+        except Exception:
+            await storage.close()
+            raise
 
-    # Create brain if it doesn't exist
-    brain = await storage.get_brain(name)
+        # Create brain if it doesn't exist
+        brain = await storage.get_brain(name)
 
-    if brain is None:
-        from neural_memory.core.brain import BrainConfig
+        if brain is None:
+            from neural_memory.core.brain import BrainConfig
 
-        brain_config = BrainConfig(
-            decay_rate=config.brain.decay_rate,
-            reinforcement_delta=config.brain.reinforcement_delta,
-            activation_threshold=config.brain.activation_threshold,
-            max_spread_hops=config.brain.max_spread_hops,
-            max_context_tokens=config.brain.max_context_tokens,
-            freshness_weight=config.brain.freshness_weight,
-        )
-        brain = Brain.create(name=name, config=brain_config, brain_id=name)
-        await storage.save_brain(brain)
+            brain_config = BrainConfig(
+                decay_rate=config.brain.decay_rate,
+                reinforcement_delta=config.brain.reinforcement_delta,
+                activation_threshold=config.brain.activation_threshold,
+                max_spread_hops=config.brain.max_spread_hops,
+                max_context_tokens=config.brain.max_context_tokens,
+                freshness_weight=config.brain.freshness_weight,
+            )
+            brain = Brain.create(name=name, config=brain_config, brain_id=name)
+            await storage.save_brain(brain)
 
-    storage.set_brain(brain.id)
-    _storage_cache[cache_key] = storage
-    return storage
+        storage.set_brain(brain.id)
+        _storage_cache[cache_key] = storage
+        return storage
 
 
 # Cached FalkorDB storage (single connection, multi-graph)

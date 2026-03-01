@@ -7,11 +7,15 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from neural_memory.server.dependencies import get_storage
+from neural_memory.server.dependencies import get_storage, require_local_request
 from neural_memory.server.models import ErrorResponse
 from neural_memory.storage.base import NeuralStorage
 
-router = APIRouter(prefix="/brain", tags=["consolidation"])
+router = APIRouter(
+    prefix="/brain",
+    tags=["consolidation"],
+    dependencies=[Depends(require_local_request)],
+)
 
 
 class ConsolidateRequest(BaseModel):

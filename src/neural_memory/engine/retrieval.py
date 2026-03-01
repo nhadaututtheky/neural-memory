@@ -8,7 +8,7 @@ import logging
 import math
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from neural_memory.core.fiber import Fiber
 from neural_memory.core.neuron import NeuronType
@@ -38,6 +38,8 @@ from neural_memory.utils.timeutils import utcnow
 __all__ = ["DepthLevel", "ReflexPipeline", "RetrievalResult"]
 
 logger = logging.getLogger(__name__)
+
+_UNSET = object()  # Sentinel for lazy-init cache
 
 # Morphological expansion constants for query term expansion.
 _EXPANSION_SUFFIXES: tuple[str, ...] = (
@@ -119,6 +121,8 @@ class ReflexPipeline:
             reinforcement_delta=config.reinforcement_delta,
         )
         self._write_queue = DeferredWriteQueue()
+        self._query_router = QueryRouter()
+        self._cached_encryptor: Any = _UNSET
 
         # Adaptive depth selection (Bayesian priors)
         self._adaptive_selector: AdaptiveDepthSelector | None = None
@@ -129,6 +133,28 @@ class ReflexPipeline:
                 storage,
                 epsilon=config.adaptive_depth_epsilon,
             )
+
+    def _get_encryptor(self) -> Any:
+        """Get cached MemoryEncryptor instance, or None if encryption disabled."""
+        if self._cached_encryptor is not _UNSET:
+            return self._cached_encryptor
+        try:
+            from neural_memory.unified_config import get_config as _get_cfg
+
+            _cfg = _get_cfg()
+            if _cfg.encryption.enabled:
+                from pathlib import Path
+
+                from neural_memory.safety.encryption import MemoryEncryptor
+
+                _keys_dir_str = _cfg.encryption.keys_dir
+                _keys_dir = Path(_keys_dir_str) if _keys_dir_str else (_cfg.data_dir / "keys")
+                self._cached_encryptor = MemoryEncryptor(keys_dir=_keys_dir)
+            else:
+                self._cached_encryptor = None
+        except Exception:
+            self._cached_encryptor = None
+        return self._cached_encryptor
 
     async def query(
         self,
@@ -292,24 +318,9 @@ class ReflexPipeline:
             fibers_matched,
         )
 
-        # Create encryptor for decryption if encryption is enabled
-        _encryptor = None
-        _brain_id = ""
-        try:
-            from neural_memory.unified_config import get_config as _get_cfg
-
-            _cfg = _get_cfg()
-            if _cfg.encryption.enabled:
-                from pathlib import Path
-
-                from neural_memory.safety.encryption import MemoryEncryptor
-
-                _keys_dir_str = _cfg.encryption.keys_dir
-                _keys_dir = Path(_keys_dir_str) if _keys_dir_str else (_cfg.data_dir / "keys")
-                _encryptor = MemoryEncryptor(keys_dir=_keys_dir)
-                _brain_id = self._storage._current_brain_id or ""
-        except Exception:
-            pass
+        # Create encryptor for decryption if encryption is enabled (cached)
+        _encryptor = self._get_encryptor()
+        _brain_id = self._storage._current_brain_id or "" if _encryptor else ""
 
         context, tokens_used = await format_context(
             self._storage,
@@ -471,7 +482,7 @@ class ReflexPipeline:
         specialized traversal finds results. Returns None to fall through
         to the standard pipeline otherwise.
         """
-        route = QueryRouter().route(stimulus)
+        route = self._query_router.route(stimulus)
         metadata = route.metadata or {}
         traversal = metadata.get("traversal", "")
 
@@ -942,17 +953,25 @@ class ReflexPipeline:
         # Get all anchor neurons (with embeddings) - limit search scope
         candidates = await self._storage.find_neurons(limit=500)
 
-        scored: list[tuple[str, float]] = []
+        # Collect candidates with embeddings, compute similarity in parallel
+        embed_pairs: list[tuple[str, list[float]]] = []
         for neuron in candidates:
             stored_embedding = neuron.metadata.get("_embedding")
-            if not stored_embedding or not isinstance(stored_embedding, list):
-                continue
+            if stored_embedding and isinstance(stored_embedding, list):
+                embed_pairs.append((neuron.id, stored_embedding))
+
+        if not embed_pairs:
+            return []
+
+        async def _compute_sim(nid: str, stored: list[float]) -> tuple[str, float]:
             try:
-                sim = await self._embedding_provider.similarity(query_vec, stored_embedding)
-                if sim >= 0.7:  # threshold
-                    scored.append((neuron.id, sim))
+                sim = await self._embedding_provider.similarity(query_vec, stored)  # type: ignore[union-attr]
+                return (nid, sim)
             except Exception:
-                continue
+                return (nid, 0.0)
+
+        results = await asyncio.gather(*[_compute_sim(nid, emb) for nid, emb in embed_pairs])
+        scored = [(nid, sim) for nid, sim in results if sim >= 0.7]
 
         # Sort by similarity descending, return top-K IDs
         scored.sort(key=lambda x: x[1], reverse=True)

@@ -46,6 +46,21 @@ class MemoryEncryptor:
     def _key_path(self, brain_id: str) -> Path:
         return self._keys_dir / f"{brain_id}.key"
 
+    @staticmethod
+    def _restrict_windows_acl(path: Path) -> None:
+        """Restrict file access on Windows using icacls (owner-only read/write)."""
+        import subprocess
+
+        username = os.environ.get("USERNAME", "")
+        if not username:
+            return
+        # Remove inherited permissions, grant only current user full control
+        subprocess.run(  # noqa: S603
+            ["icacls", str(path), "/inheritance:r", "/grant:r", f"{username}:(R,W)"],  # noqa: S607
+            capture_output=True,
+            check=False,
+        )
+
     def _get_or_create_cipher(self, brain_id: str) -> Fernet:
         from cryptography.fernet import Fernet
 
@@ -62,7 +77,9 @@ class MemoryEncryptor:
             key = Fernet.generate_key()
             key_path.write_bytes(key)
             try:
-                if os.name != "nt":
+                if os.name == "nt":
+                    self._restrict_windows_acl(key_path)
+                else:
                     key_path.chmod(0o600)
             except OSError:
                 logger.warning("Could not restrict key file permissions: %s", key_path)

@@ -139,7 +139,7 @@ class SQLiteChangeLogMixin:
         conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
-        cursor = await conn.execute(
+        async with conn.execute(
             """SELECT
                 COUNT(*) as total,
                 SUM(CASE WHEN synced = 0 THEN 1 ELSE 0 END) as pending,
@@ -147,12 +147,12 @@ class SQLiteChangeLogMixin:
                 MAX(id) as last_sequence
                FROM change_log WHERE brain_id = ?""",
             (brain_id,),
-        )
-        row = await cursor.fetchone()
-        if row is None:
-            return {"total": 0, "pending": 0, "synced": 0, "last_sequence": 0}
-        col_names = [d[0] for d in (cursor.description or [])]
-        data = dict(zip(col_names, row, strict=False))
+        ) as cursor:
+            row = await cursor.fetchone()
+            if row is None:
+                return {"total": 0, "pending": 0, "synced": 0, "last_sequence": 0}
+            col_names = [d[0] for d in (cursor.description or [])]
+            data = dict(zip(col_names, row, strict=False))
         return {
             "total": data["total"] or 0,
             "pending": data["pending"] or 0,

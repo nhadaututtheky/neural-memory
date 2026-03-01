@@ -14,6 +14,7 @@ import logging
 import re
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
@@ -68,9 +69,10 @@ class SensitiveMatch:
         return self.matched_text[:4] + "*" * (len(self.matched_text) - 8) + self.matched_text[-4:]
 
 
-def get_default_patterns() -> list[SensitivePattern]:
-    """Get default sensitive content patterns."""
-    return [
+@lru_cache(maxsize=1)
+def get_default_patterns() -> tuple[SensitivePattern, ...]:
+    """Get default sensitive content patterns (cached after first call)."""
+    return (
         # API Keys and Secrets
         SensitivePattern(
             name="Generic API Key",
@@ -171,7 +173,7 @@ def get_default_patterns() -> list[SensitivePattern]:
             description="Long hexadecimal string (potential key)",
             severity=1,
         ),
-    ]
+    )
 
 
 # Pre-compiled regex cache: pattern string -> compiled regex
@@ -189,7 +191,7 @@ def _get_compiled(pattern_str: str) -> re.Pattern[str]:
 
 def check_sensitive_content(
     content: str,
-    patterns: list[SensitivePattern] | None = None,
+    patterns: tuple[SensitivePattern, ...] | list[SensitivePattern] | None = None,
     min_severity: int = 1,
 ) -> list[SensitiveMatch]:
     """

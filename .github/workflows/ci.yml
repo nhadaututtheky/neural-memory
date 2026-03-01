@@ -65,7 +65,7 @@ jobs:
         run: pip install -e ".[dev,server]"
 
       - name: Run tests
-        run: pytest tests/ -v --timeout=60 -n auto -m "not stress" --cov=neural_memory --cov-report=xml --cov-report=term-missing --cov-fail-under=67 --dist worksteal
+        run: pytest tests/ -v --timeout=60 -n auto -m "not stress" --cov=neural_memory --cov-report=xml --cov-report=term-missing --cov-fail-under=70 --dist worksteal
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.11'

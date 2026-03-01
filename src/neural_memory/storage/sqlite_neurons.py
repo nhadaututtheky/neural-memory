@@ -280,6 +280,33 @@ class SQLiteNeuronMixin:
 
         return cursor.rowcount > 0
 
+    async def delete_neurons_batch(self, neuron_ids: list[str]) -> int:
+        """Delete multiple neurons in batched SQL statements.
+
+        Uses chunked DELETE ... WHERE id IN (...) for efficiency.
+        Returns total number of deleted rows.
+        """
+        if not neuron_ids:
+            return 0
+
+        conn = self._ensure_conn()
+        brain_id = self._get_brain_id()
+        deleted = 0
+        chunk_size = 500
+
+        for start in range(0, len(neuron_ids), chunk_size):
+            chunk = neuron_ids[start : start + chunk_size]
+            placeholders = ",".join("?" for _ in chunk)
+            cursor = await conn.execute(
+                f"DELETE FROM neurons WHERE brain_id = ? AND id IN ({placeholders})",
+                [brain_id, *chunk],
+            )
+            deleted += cursor.rowcount
+
+        await conn.commit()
+        self._neuron_cache.invalidate()
+        return deleted
+
     # ========== Neuron State Operations ==========
 
     async def get_neuron_state(self, neuron_id: str) -> NeuronState | None:

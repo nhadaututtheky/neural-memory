@@ -476,9 +476,10 @@ class TestIdentifierValidation:
         dialect = SQLiteDialect()
         assert dialect._validate_identifier("users") == "users"
 
-    def test_safe_identifier_with_space(self) -> None:
+    def test_safe_identifier_with_space_rejected(self) -> None:
         dialect = SQLiteDialect()
-        assert dialect._validate_identifier("user roles") == "user roles"
+        with pytest.raises(ValueError, match="Unsafe SQL identifier"):
+            dialect._validate_identifier("user roles")
 
     def test_unsafe_identifier_single_quote(self) -> None:
         dialect = SQLiteDialect()

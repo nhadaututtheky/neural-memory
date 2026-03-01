@@ -159,6 +159,11 @@ logs/
 .neural_memory/
 .claude/
 
+# Secrets / runtime config (defence-in-depth)
+config.toml
+*.key
+.env
+
 # spaCy models
 en_core_web_sm/
 en_core_web_md/

@@ -6,9 +6,11 @@ This enables smarter query routing and memory lifecycle management.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import IntEnum, StrEnum
+from functools import lru_cache
 from typing import Any
 
 from neural_memory.utils.timeutils import utcnow
@@ -30,6 +32,7 @@ class MemoryType(StrEnum):
     ERROR = "error"  # Error patterns: "This API returns 429 on rate limit"
     WORKFLOW = "workflow"  # Process patterns: "Deploy flow: test -> stage -> prod"
     REFERENCE = "reference"  # External refs: "Docs at https://..."
+    TOOL = "tool"  # Tool usage patterns: "Grep is effective for finding code patterns"
 
 
 class Priority(IntEnum):
@@ -258,6 +261,7 @@ DEFAULT_EXPIRY_DAYS: dict[MemoryType, int | None] = {
     MemoryType.ERROR: 30,  # Error patterns may get fixed
     MemoryType.WORKFLOW: 365,  # Workflows change slowly
     MemoryType.REFERENCE: None,  # References persist
+    MemoryType.TOOL: 90,  # Tool patterns become stale as workflows change
 }
 
 
@@ -274,6 +278,7 @@ DEFAULT_DECAY_RATES: dict[MemoryType, float] = {
     MemoryType.WORKFLOW: 0.08,  # Workflows change over time
     MemoryType.ERROR: 0.12,  # Errors become less relevant
     MemoryType.TODO: 0.15,  # TODOs should be acted on quickly
+    MemoryType.TOOL: 0.06,  # Tool patterns reinforced by repeated use
 }
 
 
@@ -293,6 +298,12 @@ def get_decay_rate(memory_type: str) -> float:
         return 0.1
 
 
+@lru_cache(maxsize=256)
+def _word_boundary_pattern(keyword: str) -> re.Pattern[str]:
+    """Compile and cache a word-boundary regex for the given keyword."""
+    return re.compile(rf"\b{re.escape(keyword)}\b")
+
+
 def _has_keyword(content_lower: str, keyword: str) -> bool:
     """Check if keyword appears as a whole word (not substring) in content."""
     # Multi-word keywords: simple containment is fine (e.g. "need to", "found that")
@@ -300,9 +311,7 @@ def _has_keyword(content_lower: str, keyword: str) -> bool:
         return keyword in content_lower
     # Single-word: require word boundary to avoid false positives
     # (e.g. "add" should not match "address")
-    import re
-
-    return bool(re.search(rf"\b{re.escape(keyword)}\b", content_lower))
+    return bool(_word_boundary_pattern(keyword).search(content_lower))
 
 
 def suggest_memory_type(content: str) -> MemoryType:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated, Any
 
 import typer
@@ -13,6 +14,8 @@ from neural_memory.cli._helpers import (
     output_result,
     run_async,
 )
+
+logger = logging.getLogger(__name__)
 
 version_app = typer.Typer(help="Brain version control commands")
 
@@ -50,7 +53,8 @@ def version_create(
             try:
                 version = await engine.create_version(brain.id, name, description)
             except ValueError as e:
-                return {"error": str(e)}
+                logger.error("Version create failed: %s", e)
+                return {"error": "Failed to create version: invalid parameters"}
 
             return {
                 "success": True,
@@ -179,7 +183,8 @@ def version_rollback(
             try:
                 rollback_v = await engine.rollback(brain.id, version_id)
             except ValueError as e:
-                return {"error": str(e)}
+                logger.error("Version rollback failed: %s", e)
+                return {"error": "Rollback failed: version not found or invalid"}
 
             return {
                 "success": True,
@@ -232,7 +237,8 @@ def version_diff(
             try:
                 diff = await engine.diff(brain.id, from_version, to_version)
             except ValueError as e:
-                return {"error": str(e)}
+                logger.error("Version diff failed: %s", e)
+                return {"error": "Diff failed: one or both versions not found"}
 
             return {
                 "summary": diff.summary,

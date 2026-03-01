@@ -21,7 +21,7 @@ from neural_memory.utils.timeutils import utcnow
 
 logger = logging.getLogger(__name__)
 
-_SAFE_IDENTIFIER = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_ ]*$")
+_SAFE_IDENTIFIER = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
 # ── Frozen dataclasses ──────────────────────────────────────────

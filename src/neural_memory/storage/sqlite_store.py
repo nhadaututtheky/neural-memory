@@ -34,6 +34,7 @@ from neural_memory.storage.sqlite_schema import (
 )
 from neural_memory.storage.sqlite_synapses import SQLiteSynapseMixin
 from neural_memory.storage.sqlite_sync_state import SQLiteSyncStateMixin
+from neural_memory.storage.sqlite_tool_events import SQLiteToolEventsMixin
 from neural_memory.storage.sqlite_typed import SQLiteTypedMemoryMixin
 from neural_memory.storage.sqlite_versioning import SQLiteVersioningMixin
 
@@ -58,6 +59,7 @@ class SQLiteStorage(
     SQLiteCalibrationMixin,
     SQLiteChangeLogMixin,
     SQLiteDevicesMixin,
+    SQLiteToolEventsMixin,
     SQLiteBrainMixin,
     NeuralStorage,
 ):
@@ -229,16 +231,22 @@ class SQLiteStorage(
                     }
                 )
 
-        # Today's fibers
+        # Combined query: today_fibers + time range (same table) in one round-trip
         from neural_memory.utils.timeutils import utcnow
 
         today_midnight = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         async with conn.execute(
-            "SELECT COUNT(*) as cnt FROM fibers WHERE brain_id = ? AND created_at >= ?",
-            (brain_id, today_midnight.isoformat()),
+            """SELECT
+                   COUNT(*) FILTER (WHERE created_at >= ?) as today_cnt,
+                   MIN(created_at) as oldest,
+                   MAX(created_at) as newest
+               FROM fibers WHERE brain_id = ?""",
+            (today_midnight.isoformat(), brain_id),
         ) as cursor:
-            today_row = await cursor.fetchone()
-            today_fibers_count = today_row["cnt"] if today_row else 0
+            fiber_row = await cursor.fetchone()
+            today_fibers_count = fiber_row["today_cnt"] if fiber_row else 0
+            oldest_memory: str | None = fiber_row["oldest"] if fiber_row else None
+            newest_memory: str | None = fiber_row["newest"] if fiber_row else None
 
         # Synapse stats by type
         synapse_stats: dict[str, Any] = {
@@ -277,18 +285,6 @@ class SQLiteStorage(
         ) as cursor:
             async for row in cursor:
                 neuron_type_breakdown[row["type"]] = row["cnt"]
-
-        # Memory time range
-        oldest_memory: str | None = None
-        newest_memory: str | None = None
-        async with conn.execute(
-            "SELECT MIN(created_at) as oldest, MAX(created_at) as newest FROM fibers WHERE brain_id = ?",
-            (brain_id,),
-        ) as cursor:
-            time_row = await cursor.fetchone()
-            if time_row:
-                oldest_memory = time_row["oldest"]
-                newest_memory = time_row["newest"]
 
         return {
             **basic_stats,

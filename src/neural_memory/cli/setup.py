@@ -179,6 +179,12 @@ def _find_stop_command() -> str:
     return _find_hook_command("nmem-hook-stop", "stop-hook", "neural_memory.hooks.stop")
 
 
+def _find_post_tool_use_command() -> str:
+    return _find_hook_command(
+        "nmem-hook-post-tool-use", "post-tool-use-hook", "neural_memory.hooks.post_tool_use"
+    )
+
+
 def _is_nmem_hook_present(entries: list[dict[str, Any]]) -> bool:
     """Return True if any NeuralMemory hook is already registered in the entry list."""
     for entry in entries:
@@ -220,13 +226,22 @@ def setup_hooks_claude() -> str:
     hook_specs = [
         ("PreCompact", _find_pre_compact_command(), 30),
         ("Stop", _find_stop_command(), 30),
+        ("PostToolUse", _find_post_tool_use_command(), 5),
     ]
+
+    # Matcher for PostToolUse: skip internal/noisy tools
+    post_tool_matcher = 'tool != "TodoRead" && tool != "TodoWrite" && tool != "TaskList"'
 
     for event, cmd_str, timeout in hook_specs:
         entries: list[dict[str, Any]] = hooks_section.setdefault(event, [])
         if _is_nmem_hook_present(entries):
             continue
-        entries.append({"hooks": [{"type": "command", "command": cmd_str, "timeout": timeout}]})
+        entry: dict[str, Any] = {
+            "hooks": [{"type": "command", "command": cmd_str, "timeout": timeout}],
+        }
+        if event == "PostToolUse":
+            entry["matcher"] = post_tool_matcher
+        entries.append(entry)
         added += 1
 
     if added == 0:

@@ -50,6 +50,10 @@ class SynapseType(StrEnum):
     CONTRADICTS = "contradicts"  # Memory A contradicts Memory B
     RESOLVED_BY = "resolved_by"  # Fix/fact that resolved an error
 
+    # Tool relationships
+    EFFECTIVE_FOR = "effective_for"  # Tool -> Task/Concept (tool is effective for task)
+    USED_WITH = "used_with"  # Tool -> Tool (tools used together in same context)
+
     # Deduplication relationships
     ALIAS = "alias"  # New anchor -> Existing anchor (dedup reuse)
 
@@ -68,6 +72,7 @@ BIDIRECTIONAL_TYPES: frozenset[SynapseType] = frozenset(
         SynapseType.RELATED_TO,
         SynapseType.SIMILAR_TO,
         SynapseType.NEAR,
+        SynapseType.USED_WITH,
     }
 )
 

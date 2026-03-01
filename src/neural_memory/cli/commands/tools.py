@@ -285,6 +285,13 @@ def serve(
         typer.echo("Error: uvicorn not installed. Run: pip install neural-memory[server]", err=True)
         raise typer.Exit(1)
 
+    if host in ("0.0.0.0", "::"):  # noqa: S104
+        typer.echo(
+            f"WARNING: Binding to {host} exposes the server to the network. "
+            "Consider using TLS (a reverse proxy) for production deployments.",
+            err=True,
+        )
+
     typer.echo(f"Starting NeuralMemory API server on http://{host}:{port}")
     typer.echo(f"  UI:   http://{host}:{port}/ui")
     typer.echo(f"  Docs: http://{host}:{port}/docs")

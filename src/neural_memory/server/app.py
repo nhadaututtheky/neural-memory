@@ -74,14 +74,19 @@ def create_app(
         config = get_config()
         cors_origins = list(config.cors_origins)
 
-        # If trusted networks are configured but CORS wasn't explicitly set,
-        # allow all origins (the IP check in require_local_request is the
-        # real security boundary, CORS just prevents browser preflight blocks)
-        if config.trusted_networks and cors_origins == [
-            "http://localhost:*",
-            "http://127.0.0.1:*",
-        ]:
-            cors_origins = ["*"]
+        # If trusted networks are configured, add their origins to CORS
+        # (never auto-upgrade to wildcard — CORS is a separate security layer)
+        if config.trusted_networks:
+            for net_str in config.trusted_networks:
+                try:
+                    import ipaddress
+
+                    net = ipaddress.ip_network(net_str, strict=False)
+                    origin = f"http://{net.network_address}:*"
+                    if origin not in cors_origins:
+                        cors_origins.append(origin)
+                except ValueError:
+                    pass
 
     is_wildcard = cors_origins == ["*"]
     app.add_middleware(

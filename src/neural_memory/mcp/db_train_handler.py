@@ -81,10 +81,12 @@ class DBTrainHandler:
         from pathlib import Path
 
         raw_db_path = connection_string[len("sqlite:///") :]
-        # Reject path traversal attempts (.. components)
-        if ".." in raw_db_path.replace("\\", "/").split("/"):
-            return {"error": "Invalid database path: path traversal not allowed"}
         db_path = Path(raw_db_path).resolve()
+
+        # Reject path traversal: resolved path must not contain ".." components
+        # and must match what the user intended (no symlink trickery)
+        if ".." in Path(raw_db_path).parts:
+            return {"error": "Invalid database path: path traversal not allowed"}
         if not db_path.is_file():
             return {"error": "Database file not found"}
 

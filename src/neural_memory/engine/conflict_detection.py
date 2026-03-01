@@ -500,9 +500,12 @@ def _is_error_memory(neuron: Neuron, memory_type_hint: str) -> bool:
     return neuron_type == "error"
 
 
+_SEARCH_TERM_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9_.-]+\b")
+
+
 def _extract_search_terms(content: str) -> list[str]:
     """Extract key terms from content for searching existing memories."""
-    words = re.findall(r"\b[a-zA-Z][a-zA-Z0-9_.-]+\b", content)
+    words = _SEARCH_TERM_RE.findall(content)
     terms = [w for w in words if w.lower() not in _STOP_WORDS and len(w) >= 3]
 
     # Deduplicate (case-insensitive) while preserving original case and order

@@ -1,0 +1,48 @@
+# Git
+.git
+.gitignore
+
+# Tests
+tests/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+__pycache__/
+
+# Data / Secrets
+*.db
+*.sqlite
+*.key
+data/
+logs/
+.env
+config.toml
+
+# CI / Project meta
+.github/
+.claude/
+.rune/
+MagicMock/
+.tmp*/

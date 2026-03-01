@@ -42,6 +42,7 @@ class ConsolidationStrategy(StrEnum):
     DEDUP = "dedup"
     SEMANTIC_LINK = "semantic_link"
     COMPRESS = "compress"
+    PROCESS_TOOL_EVENTS = "process_tool_events"
     ALL = "all"
 
 
@@ -189,6 +190,7 @@ class ConsolidationEngine:
                 ConsolidationStrategy.PRUNE,
                 ConsolidationStrategy.LEARN_HABITS,
                 ConsolidationStrategy.DEDUP,
+                ConsolidationStrategy.PROCESS_TOOL_EVENTS,
             }
         ),
         frozenset(
@@ -249,6 +251,9 @@ class ConsolidationEngine:
             ConsolidationStrategy.DEDUP: lambda: self._dedup(report, dry_run),
             ConsolidationStrategy.SEMANTIC_LINK: lambda: self._semantic_link(report, dry_run),
             ConsolidationStrategy.COMPRESS: lambda: self._compress(report, reference_time, dry_run),
+            ConsolidationStrategy.PROCESS_TOOL_EVENTS: lambda: self._process_tool_events(
+                report, dry_run
+            ),
         }
         handler = dispatch.get(strategy)
         if handler is not None:
@@ -436,11 +441,19 @@ class ConsolidationEngine:
             anchor_neuron_ids.add(fiber.anchor_neuron_id)
 
         all_neurons = await self._storage.find_neurons(limit=100000)
+        orphan_ids: list[str] = []
         for neuron in all_neurons:
             if neuron.id not in connected_neuron_ids and neuron.id not in anchor_neuron_ids:
                 report.neurons_pruned += 1
-                if not dry_run:
-                    await self._storage.delete_neuron(neuron.id)
+                orphan_ids.append(neuron.id)
+
+        if not dry_run and orphan_ids:
+            # Use batch delete if available, else fall back to individual deletes
+            if hasattr(self._storage, "delete_neurons_batch"):
+                await self._storage.delete_neurons_batch(orphan_ids)
+            else:
+                for nid in orphan_ids:
+                    await self._storage.delete_neuron(nid)
 
     async def _merge(
         self,
@@ -1105,3 +1118,63 @@ class ConsolidationEngine:
 
         report.fibers_compressed += compression_report.fibers_compressed
         report.tokens_saved += compression_report.tokens_saved
+
+    async def _process_tool_events(
+        self,
+        report: ConsolidationReport,
+        dry_run: bool,
+    ) -> None:
+        """Process buffered tool events into neurons and synapses.
+
+        Reads the JSONL buffer, ingests into tool_events table, then runs
+        pattern detection. Only executes if tool_memory.enabled in config.
+        """
+        import logging as _logging
+
+        from neural_memory.unified_config import UnifiedConfig
+
+        _logger = _logging.getLogger(__name__)
+
+        brain_id = self._storage.current_brain_id
+        if not brain_id:
+            _logger.debug("PROCESS_TOOL_EVENTS skipped: no brain context")
+            return
+
+        try:
+            config = UnifiedConfig.load()
+        except Exception:
+            _logger.debug("PROCESS_TOOL_EVENTS skipped: config load failed", exc_info=True)
+            return
+
+        if not config.tool_memory.enabled:
+            return
+
+        if dry_run:
+            _logger.debug("PROCESS_TOOL_EVENTS skipped: dry_run mode")
+            return
+
+        from neural_memory.engine.tool_memory import ingest_buffer, process_events
+
+        # Ingest JSONL buffer
+        buffer_path = config.data_dir / "tool_events.jsonl"
+        ingest_result = await ingest_buffer(
+            self._storage,  # type: ignore[arg-type]
+            brain_id,
+            buffer_path,
+            config.tool_memory.max_buffer_lines,
+        )
+        if ingest_result.events_ingested > 0:
+            _logger.debug(
+                "PROCESS_TOOL_EVENTS: ingested %d events from buffer",
+                ingest_result.events_ingested,
+            )
+
+        # Process events into neurons/synapses
+        result = await process_events(self._storage, brain_id, config.tool_memory)  # type: ignore[arg-type]
+        if result.events_processed > 0:
+            _logger.debug(
+                "PROCESS_TOOL_EVENTS: processed %d events, created %d neurons, %d synapses",
+                result.events_processed,
+                result.neurons_created,
+                result.synapses_created,
+            )
