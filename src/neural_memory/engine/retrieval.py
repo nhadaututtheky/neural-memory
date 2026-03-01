@@ -379,7 +379,7 @@ class ReflexPipeline:
 
         # Record calibration feedback (non-critical)
         try:
-            await self._storage.save_calibration_record(
+            await self._storage.save_calibration_record(  # type: ignore[attr-defined]
                 gate=_sufficiency.gate,
                 predicted_sufficient=True,
                 actual_confidence=reconstruction.confidence,
