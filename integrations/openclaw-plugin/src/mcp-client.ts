@@ -2,7 +2,7 @@
  * NeuralMemory MCP Client — JSON-RPC 2.0 over stdio.
  *
  * Spawns `python -m neural_memory.mcp` and communicates using the
- * MCP protocol (Content-Length framing, same as LSP).
+ * MCP protocol (newline-delimited JSON Lines).
  *
  * Zero external dependencies — implements the protocol directly.
  */
@@ -240,42 +240,24 @@ export class NeuralMemoryMcpClient {
   private writeMessage(message: object): void {
     if (!this.proc?.stdin?.writable) return;
     const json = JSON.stringify(message);
-    const byteLength = Buffer.byteLength(json, "utf-8");
-    const frame = `Content-Length: ${byteLength}\r\n\r\n${json}`;
+    const frame = `${json}\n`;
     this.proc.stdin.write(frame);
   }
 
-  // ── Response parsing (byte-accurate) ──────────────────────
+  // ── Response parsing (newline-delimited JSON Lines) ────────
 
   private drainBuffer(): void {
-    const HEADER_SEP = Buffer.from("\r\n\r\n");
-
     while (true) {
-      const headerEnd = this.rawBuffer.indexOf(HEADER_SEP);
-      if (headerEnd === -1) break;
+      const newlineIndex = this.rawBuffer.indexOf("\n");
+      if (newlineIndex === -1) break;
 
-      const header = this.rawBuffer.subarray(0, headerEnd).toString("utf-8");
-      const match = header.match(/Content-Length:\s*(\d+)/i);
-      if (!match) {
-        // Malformed header — skip past it
-        this.rawBuffer = this.rawBuffer.subarray(headerEnd + 4);
-        continue;
-      }
+      const line = this.rawBuffer.subarray(0, newlineIndex).toString("utf-8");
+      this.rawBuffer = this.rawBuffer.subarray(newlineIndex + 1);
 
-      const contentLength = parseInt(match[1], 10);
-      const bodyStart = headerEnd + 4;
-
-      if (this.rawBuffer.length < bodyStart + contentLength) {
-        break; // Incomplete body — wait for more data
-      }
-
-      const body = this.rawBuffer
-        .subarray(bodyStart, bodyStart + contentLength)
-        .toString("utf-8");
-      this.rawBuffer = this.rawBuffer.subarray(bodyStart + contentLength);
+      if (!line.trim()) continue;
 
       try {
-        const message = JSON.parse(body) as JsonRpcMessage;
+        const message = JSON.parse(line) as JsonRpcMessage;
         this.handleMessage(message);
       } catch (err) {
         this.logger.error(

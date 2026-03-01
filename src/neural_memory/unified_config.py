@@ -771,7 +771,11 @@ class UnifiedConfig:
 
         return cls(
             data_dir=data_dir,
-            current_brain=data.get("current_brain", get_default_brain()),
+            current_brain=(
+                os.environ.get("NEURALMEMORY_BRAIN")
+                or os.environ.get("NMEM_BRAIN")
+                or data.get("current_brain", get_default_brain())
+            ),
             brain=BrainSettings.from_dict(data.get("brain", {})),
             auto=AutoConfig.from_dict(data.get("auto", {})),
             eternal=EternalConfig.from_dict(data.get("eternal", {})),
@@ -1176,11 +1180,18 @@ async def get_shared_storage(brain_name: str | None = None) -> NeuralStorage:
     # (which writes to both config.json and config.toml) without
     # requiring a full MCP server restart.
     if brain_name is None:
-        disk_brain = _read_current_brain_from_toml()
-        if disk_brain is not None and disk_brain != config.current_brain:
-            logger = logging.getLogger(__name__)
-            logger.info("Brain changed on disk: %s → %s", config.current_brain, disk_brain)
-            config.current_brain = disk_brain
+        env_brain = os.environ.get("NEURALMEMORY_BRAIN") or os.environ.get("NMEM_BRAIN")
+        if env_brain:
+            if env_brain != config.current_brain:
+                logger = logging.getLogger(__name__)
+                logger.info("Brain set by env var: %s", env_brain)
+                config.current_brain = env_brain
+        else:
+            disk_brain = _read_current_brain_from_toml()
+            if disk_brain is not None and disk_brain != config.current_brain:
+                logger = logging.getLogger(__name__)
+                logger.info("Brain changed on disk: %s → %s", config.current_brain, disk_brain)
+                config.current_brain = disk_brain
 
     name = brain_name or config.current_brain
 
