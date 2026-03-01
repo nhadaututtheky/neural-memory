@@ -18,8 +18,15 @@ from typing import TYPE_CHECKING
 from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.engine.doc_chunker import DocChunk, chunk_markdown, discover_files
+from neural_memory.engine.doc_extractor import (
+    ExtractionError,
+    extract_to_markdown,
+)
 from neural_memory.engine.encoder import MemoryEncoder
 from neural_memory.utils.timeutils import utcnow
+
+# Extensions that are already markdown and don't need extraction
+_TEXT_PASSTHROUGH: frozenset[str] = frozenset({".md", ".mdx", ".txt", ".rst"})
 
 if TYPE_CHECKING:
     from neural_memory.core.brain import BrainConfig
@@ -55,6 +62,7 @@ class TrainingConfig:
     extensions: tuple[str, ...] = (".md",)
     initial_stage: str = "episodic"
     salience_ceiling: float = 0.5
+    pinned: bool = True
 
 
 @dataclass(frozen=True)
@@ -147,13 +155,17 @@ class DocTrainer:
                 brain_name=tc.brain_name or "current",
             )
 
-        # Collect all chunks from all files
+        # Collect all chunks from all files, with hash-based dedup
         all_chunks: list[DocChunk] = []
+        files_skipped = 0
         for file_path in files:
-            try:
-                text = file_path.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError) as exc:
-                logger.warning("Failed to read %s: %s", file_path, exc)
+            # Check if file already trained (hash dedup)
+            if await self._is_file_already_trained(file_path, tc):
+                files_skipped += 1
+                continue
+
+            text = self._read_or_extract(file_path)
+            if text is None:
                 continue
 
             rel_path = str(file_path.relative_to(directory))
@@ -165,11 +177,17 @@ class DocTrainer:
             )
             all_chunks.extend(chunks)
 
-        return await self._encode_chunks(
+            # Record file as trained
+            await self._record_trained_file(file_path, len(chunks), tc)
+
+        result = await self._encode_chunks(
             chunks=all_chunks,
-            files_processed=len(files),
+            files_processed=len(files) - files_skipped,
             training_config=tc,
         )
+        if files_skipped > 0:
+            logger.info("Skipped %d already-trained files", files_skipped)
+        return result
 
     async def train_file(
         self,
@@ -187,10 +205,8 @@ class DocTrainer:
         """
         tc = training_config or TrainingConfig()
 
-        try:
-            text = file_path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as exc:
-            logger.error("Failed to read %s: %s", file_path, exc)
+        text = self._read_or_extract(file_path)
+        if text is None:
             return TrainingResult(
                 files_processed=0,
                 chunks_encoded=0,
@@ -210,6 +226,74 @@ class DocTrainer:
             files_processed=1,
             training_config=tc,
         )
+
+    async def _is_file_already_trained(self, file_path: Path, tc: TrainingConfig) -> bool:
+        """Check if a file has already been trained via content hash."""
+        if not hasattr(self._storage, "get_training_file_by_hash"):
+            return False
+
+        try:
+            from neural_memory.storage.sqlite_training_files import compute_file_hash
+
+            file_hash = compute_file_hash(file_path)
+            record = await self._storage.get_training_file_by_hash(file_hash)
+            if record and record["status"] == "completed":
+                logger.info("Skipping already-trained file: %s", file_path.name)
+                return True
+        except (OSError, ValueError) as exc:
+            logger.debug("Cannot hash file %s: %s", file_path, exc)
+        return False
+
+    async def _record_trained_file(
+        self, file_path: Path, chunks_total: int, tc: TrainingConfig
+    ) -> None:
+        """Record a file as trained for future dedup."""
+        if not hasattr(self._storage, "upsert_training_file"):
+            return
+
+        try:
+            from neural_memory.storage.sqlite_training_files import compute_file_hash
+
+            file_hash = compute_file_hash(file_path)
+            await self._storage.upsert_training_file(
+                file_hash=file_hash,
+                file_path=str(file_path),
+                file_size=file_path.stat().st_size,
+                chunks_total=chunks_total,
+                chunks_completed=chunks_total,
+                status="completed",
+                domain_tag=tc.domain_tag,
+            )
+        except (OSError, ValueError) as exc:
+            logger.warning("Cannot record trained file %s: %s", file_path, exc)
+
+    @staticmethod
+    def _read_or_extract(file_path: Path) -> str | None:
+        """Read a file, extracting to markdown if needed.
+
+        For .md/.mdx/.txt/.rst files, reads directly as text.
+        For other formats (PDF, DOCX, etc.), uses doc_extractor.
+
+        Returns:
+            Markdown text, or None if the file could not be read.
+        """
+        suffix = file_path.suffix.lower()
+        if suffix in _TEXT_PASSTHROUGH:
+            try:
+                return file_path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as exc:
+                logger.warning("Failed to read %s: %s", file_path, exc)
+                return None
+
+        # Rich format — extract to markdown
+        try:
+            return extract_to_markdown(file_path)
+        except ExtractionError as exc:
+            logger.warning("Extraction failed for %s: %s", file_path, exc)
+            return None
+        except Exception as exc:
+            logger.warning("Unexpected extraction error for %s: %s", file_path, exc)
+            return None
 
     async def _encode_chunks(
         self,
@@ -290,6 +374,13 @@ class DocTrainer:
             total_neurons += len(result.neurons_created)
             total_synapses += len(result.synapses_created)
             chunks_encoded += 1
+
+            # Pin KB fibers so they skip decay/prune/compress
+            if tc.pinned:
+                from dataclasses import replace as dc_replace
+
+                pinned_fiber = dc_replace(result.fiber, pinned=True)
+                await self._storage.update_fiber(pinned_fiber)
 
             # Record anchor for hierarchy linking
             if chunk.heading_path:

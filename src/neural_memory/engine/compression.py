@@ -687,6 +687,11 @@ class CompressionEngine:
         fibers = await self._storage.get_fibers(limit=10000)
 
         for fiber in fibers:
+            # Pinned (KB) fibers stay at tier 0 forever
+            if fiber.pinned:
+                report.fibers_skipped += 1
+                continue
+
             target_tier = self.determine_target_tier(fiber, reference_time)
 
             if int(target_tier) <= fiber.compression_tier:

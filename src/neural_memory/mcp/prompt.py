@@ -190,6 +190,68 @@ nmem_eternal(action="status")   # View memory counts and session state
 - `workflow`: Processes/procedures
 - `reference`: Links/resources
 
+## Knowledge Base Training (nmem_train + nmem_pin)
+
+Train permanent knowledge from documentation files into the brain:
+
+```
+# Train from a directory (supports .md, .txt, .rst, .pdf, .docx, .pptx, .html, .json, .xlsx, .csv)
+nmem_train(action="train", path="docs/", domain_tag="react")
+
+# Train a single file
+nmem_train(action="train", path="guide.pdf", domain_tag="onboarding")
+
+# Check training status
+nmem_train(action="status")
+```
+
+Trained knowledge is **pinned** by default — it never decays, never gets pruned, never gets compressed.
+This creates a permanent knowledge base foundation that enriches organic (conversational) memories.
+
+**Pin/Unpin memories manually:**
+```
+nmem_pin(fiber_ids=["fiber-id-1", "fiber-id-2"], pinned=true)   # Pin
+nmem_pin(fiber_ids=["fiber-id-1"], pinned=false)                  # Unpin (lifecycle resumes)
+```
+
+**Re-training same file is idempotent** — files are tracked by SHA-256 hash. Already-trained files are skipped.
+
+Install optional extraction dependencies for non-text formats:
+```
+pip install neural-memory[extract]   # PDF, DOCX, PPTX, HTML, XLSX support
+```
+
+## Health & Diagnostics
+
+- `nmem_health()` — Brain health: purity score, grade, warnings
+- `nmem_evolution()` — Brain evolution: maturation, plasticity, coherence
+- `nmem_alerts(action="list")` — View active health alerts
+- `nmem_stats()` — Memory counts, type distribution, freshness
+- `nmem_conflicts(action="list")` — View conflicting memories
+
+## Spaced Repetition (nmem_review)
+
+- `nmem_review(action="queue")` — Get memories due for review (Leitner box system)
+- `nmem_review(action="mark", fiber_id="...", success=true)` — Record review result
+- `nmem_review(action="stats")` — Review statistics
+
+## Brain Management
+
+- `nmem_version(action="create", name="v1")` — Snapshot current brain state
+- `nmem_version(action="list")` — List all snapshots
+- `nmem_version(action="rollback", version_id="...")` — Restore a snapshot
+- `nmem_transplant(source_brain="other-brain", tags=["react"])` — Import memories from another brain
+- `nmem_narrative(action="topic", topic="auth")` — Generate narrative about a topic
+
+## Import External Data (nmem_import)
+
+Import memories from other systems:
+```
+nmem_import(source="chromadb", connection="/path/to/chroma")
+nmem_import(source="mem0", user_id="user123")
+nmem_import(source="llamaindex", connection="/path/to/index")
+```
+
 ## Sync Engine vs Git Backup
 
 Use **nmem_sync** for real-time multi-device memory synchronization:
@@ -212,16 +274,31 @@ Use **git backup** for version-controlled snapshots:
 
 COMPACT_PROMPT = """You have NeuralMemory for persistent memory across sessions.
 
-**Remember** (nmem_remember): Save decisions, preferences, facts, errors, todos.
-**Recall** (nmem_recall): Query past context. Depth: 0=direct, 1=context, 2=patterns, 3=deep (auto if unset).
-**Context** (nmem_context): Load recent memories at session start.
-**Auto-capture** (nmem_auto): `nmem_auto(action="process", text="...")` after important conversations.
-**Session** (nmem_session): Track task/feature/progress. `get` at start, `set` during, `end` when done.
-**Index** (nmem_index): Scan codebase into memory (Python, JS/TS, Go, Rust, Java, C/C++). `scan` once, then recall finds code.
-**Recap** (nmem_recap): Resume session context. `nmem_recap()` quick, `nmem_recap(level=2)` detailed, `nmem_recap(topic="X")` search.
-**Eternal** (nmem_eternal): Save project context, decisions, instructions into neural graph. `status` to view, `save` to persist.
+**Core:**
+- **Remember** (nmem_remember): Save decisions, preferences, facts, errors, todos, workflows.
+- **Recall** (nmem_recall): Query past context. Depth: 0=direct, 1=context, 2=patterns, 3=deep (auto if unset).
+- **Context** (nmem_context): Load recent memories at session start.
+- **Recap** (nmem_recap): Resume session. `nmem_recap()` quick, `level=2` detailed, `topic="X"` search.
 
-**Auto**: Short recall queries get session context injected. Recall >=50 chars auto-captures patterns. Retrieved memories get reinforced. Context auto-saves on key events.
+**Workflow:**
+- **Auto-capture** (nmem_auto): `process` after conversations, `flush` before compaction.
+- **Session** (nmem_session): `get` at start, `set` during work, `end` when done.
+- **Eternal** (nmem_eternal): Persist project context, decisions, instructions.
+- **Index** (nmem_index): Scan codebase into memory graph. `scan` once, then recall finds code.
+
+**Knowledge Base:**
+- **Train** (nmem_train): Train docs into permanent memory. Supports PDF/DOCX/PPTX/HTML/JSON/XLSX/CSV.
+- **Pin** (nmem_pin): Pin/unpin memories to prevent decay. Trained KB is auto-pinned.
+
+**Advanced:**
+- **Health** (nmem_health): Brain health score and warnings.
+- **Review** (nmem_review): Spaced repetition queue (Leitner boxes).
+- **Sync** (nmem_sync): Multi-device memory synchronization.
+- **Version** (nmem_version): Brain snapshots, rollback.
+- **Transplant** (nmem_transplant): Import memories from other brains.
+- **Import** (nmem_import): Import from ChromaDB, Mem0, LlamaIndex.
+- **Conflicts** (nmem_conflicts): View and resolve conflicting memories.
+- **Narrative** (nmem_narrative): Generate topic/timeline/causal narratives.
 
 Be proactive: remember important info without being asked. Call nmem_recap() at session start."""
 

@@ -37,8 +37,8 @@ class SQLiteFiberMixin:
                     pathway, conductivity, last_conducted,
                     time_start, time_end, coherence, salience, frequency,
                     summary, tags, auto_tags, agent_tags, metadata,
-                    compression_tier, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    compression_tier, pinned, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     fiber.id,
                     brain_id,
@@ -59,6 +59,7 @@ class SQLiteFiberMixin:
                     json.dumps(list(fiber.agent_tags)),
                     json.dumps(fiber.metadata),
                     fiber.compression_tier,
+                    1 if fiber.pinned else 0,
                     fiber.created_at.isoformat(),
                 ),
             )
@@ -169,7 +170,7 @@ class SQLiteFiberMixin:
                last_conducted = ?, time_start = ?, time_end = ?,
                coherence = ?, salience = ?, frequency = ?,
                summary = ?, tags = ?, auto_tags = ?, agent_tags = ?,
-               metadata = ?, compression_tier = ?
+               metadata = ?, compression_tier = ?, pinned = ?
                WHERE id = ? AND brain_id = ?""",
             (
                 json.dumps(list(fiber.neuron_ids)),
@@ -189,6 +190,7 @@ class SQLiteFiberMixin:
                 json.dumps(list(fiber.agent_tags)),
                 json.dumps(fiber.metadata),
                 fiber.compression_tier,
+                1 if fiber.pinned else 0,
                 fiber.id,
                 brain_id,
             ),
@@ -227,6 +229,48 @@ class SQLiteFiberMixin:
         await conn.commit()
 
         return cursor.rowcount > 0
+
+    async def get_pinned_neuron_ids(self) -> set[str]:
+        """Get all neuron IDs that belong to pinned fibers.
+
+        Used by lifecycle systems (decay, prune) to skip pinned neurons.
+        """
+        conn = self._ensure_read_conn()
+        brain_id = self._get_brain_id()
+
+        async with conn.execute(
+            "SELECT neuron_ids FROM fibers WHERE brain_id = ? AND pinned = 1",
+            (brain_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+
+        result: set[str] = set()
+        for row in rows:
+            neuron_ids_raw = row[0]
+            if neuron_ids_raw:
+                result.update(json.loads(neuron_ids_raw))
+        return result
+
+    async def pin_fibers(self, fiber_ids: list[str], pinned: bool = True) -> int:
+        """Pin or unpin fibers by ID.
+
+        Returns:
+            Number of fibers updated.
+        """
+        if not fiber_ids:
+            return 0
+
+        conn = self._ensure_conn()
+        brain_id = self._get_brain_id()
+
+        pin_val = 1 if pinned else 0
+        placeholders = ",".join("?" for _ in fiber_ids)
+        cursor = await conn.execute(
+            f"UPDATE fibers SET pinned = ? WHERE brain_id = ? AND id IN ({placeholders})",  # noqa: S608
+            [pin_val, brain_id, *fiber_ids],
+        )
+        await conn.commit()
+        return cursor.rowcount
 
     async def get_stale_fiber_count(self, brain_id: str, stale_days: int = 90) -> int:
         conn = self._ensure_read_conn()

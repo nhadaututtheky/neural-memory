@@ -60,6 +60,7 @@ class Fiber:
     agent_tags: set[str] = field(default_factory=set)
     metadata: dict[str, Any] = field(default_factory=dict)
     compression_tier: int = 0
+    pinned: bool = False
     created_at: datetime = field(default_factory=utcnow)
     # Lazy pathway index cache (not part of constructor/repr/compare)
     _pathway_index: dict[str, int] | None = field(

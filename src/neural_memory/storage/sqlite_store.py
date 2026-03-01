@@ -35,6 +35,7 @@ from neural_memory.storage.sqlite_schema import (
 from neural_memory.storage.sqlite_synapses import SQLiteSynapseMixin
 from neural_memory.storage.sqlite_sync_state import SQLiteSyncStateMixin
 from neural_memory.storage.sqlite_tool_events import SQLiteToolEventsMixin
+from neural_memory.storage.sqlite_training_files import SQLiteTrainingFilesMixin
 from neural_memory.storage.sqlite_typed import SQLiteTypedMemoryMixin
 from neural_memory.storage.sqlite_versioning import SQLiteVersioningMixin
 
@@ -60,6 +61,7 @@ class SQLiteStorage(
     SQLiteChangeLogMixin,
     SQLiteDevicesMixin,
     SQLiteToolEventsMixin,
+    SQLiteTrainingFilesMixin,
     SQLiteBrainMixin,
     NeuralStorage,
 ):

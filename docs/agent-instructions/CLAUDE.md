@@ -66,6 +66,71 @@ nmem_index(action="scan", path="./src")
 
 Then `nmem_recall(query="authentication")` finds related code through the neural graph.
 
+### Knowledge Base Training
+
+Train permanent knowledge from documentation files:
+```
+# Train from docs directory (PDF, DOCX, PPTX, HTML, JSON, XLSX, CSV, MD, TXT, RST)
+nmem_train(action="train", path="docs/", domain_tag="react")
+
+# Train a single file
+nmem_train(action="train", path="api-spec.pdf")
+
+# Check training status
+nmem_train(action="status")
+```
+
+Trained knowledge is **pinned** — permanent, no decay, no pruning. Re-training same file is skipped (SHA-256 dedup).
+
+For non-text formats: `pip install neural-memory[extract]`
+
+### Pin/Unpin Memories
+
+```
+nmem_pin(fiber_ids=["id1", "id2"], pinned=true)   # Make permanent
+nmem_pin(fiber_ids=["id1"], pinned=false)           # Resume lifecycle
+```
+
+### Health & Diagnostics
+
+```
+nmem_health()                              # Brain health score + warnings
+nmem_stats()                               # Memory counts and freshness
+nmem_alerts(action="list")                 # Active health alerts
+nmem_conflicts(action="list")              # Conflicting memories
+nmem_evolution()                           # Brain maturation + plasticity
+```
+
+### Spaced Repetition
+
+```
+nmem_review(action="queue")                # Get memories due for review
+nmem_review(action="mark", fiber_id="...", success=true)  # Record result
+```
+
+### Brain Versioning & Transplant
+
+```
+nmem_version(action="create", name="pre-refactor")  # Snapshot
+nmem_version(action="rollback", version_id="...")    # Restore
+nmem_transplant(source_brain="other", tags=["react"])  # Import from another brain
+```
+
+### Multi-Device Sync
+
+```
+nmem_sync(action="full")                   # Bi-directional sync with hub
+nmem_sync_status()                         # Check sync status
+nmem_sync_config(action="set", hub_url="https://hub:8080", enabled=true)
+```
+
+### Import External Data
+
+```
+nmem_import(source="chromadb", connection="/path/to/chroma")
+nmem_import(source="mem0", user_id="user123")
+```
+
 ### Rules
 
 1. **Be proactive** — remember important info without being asked
@@ -74,3 +139,4 @@ Then `nmem_recall(query="authentication")` finds related code through the neural
 4. **Set priority** — critical=7-10, normal=5, trivial=1-3
 5. **Add tags** — organize by project/topic for better retrieval
 6. **Recap on start** — always call `nmem_recap()` at session beginning
+7. **Train KB first** — if project has docs/, train them into memory for permanent context

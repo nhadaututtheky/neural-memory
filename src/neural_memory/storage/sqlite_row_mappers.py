@@ -118,6 +118,9 @@ def row_to_fiber(row: aiosqlite.Row) -> Fiber:
     # Compression tier (v16+) with backward compat
     compression_tier = row["compression_tier"] if "compression_tier" in row_keys else 0
 
+    # Pinned flag (v20+) with backward compat
+    pinned = bool(row["pinned"]) if "pinned" in row_keys else False
+
     return Fiber(
         id=row["id"],
         neuron_ids=set(json.loads(row["neuron_ids"])),
@@ -136,6 +139,7 @@ def row_to_fiber(row: aiosqlite.Row) -> Fiber:
         agent_tags=agent_tags,
         metadata=json.loads(row["metadata"]),
         compression_tier=compression_tier,
+        pinned=pinned,
         created_at=datetime.fromisoformat(row["created_at"]),
     )
 

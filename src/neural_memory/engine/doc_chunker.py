@@ -33,6 +33,14 @@ _INLINE_ITALIC_RE = re.compile(r"\*(.+?)\*|_(.+?)_")
 _INLINE_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 
 _DEFAULT_EXTENSIONS: frozenset[str] = frozenset({".md", ".mdx"})
+
+# All extensions supported when doc_extractor is used (extract → markdown → chunk)
+EXTENDED_EXTENSIONS: frozenset[str] = frozenset({
+    ".md", ".mdx", ".txt", ".rst",
+    ".pdf", ".docx", ".pptx",
+    ".html", ".htm",
+    ".json", ".xlsx", ".csv",
+})
 _DEFAULT_EXCLUDE: frozenset[str] = frozenset(
     {
         "__pycache__",

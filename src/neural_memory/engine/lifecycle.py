@@ -92,11 +92,19 @@ class DecayManager:
         reference_time = reference_time or utcnow()
         report = DecayReport(reference_time=reference_time)
 
+        # Preload pinned neuron IDs to skip during decay
+        pinned_neuron_ids: set[str] = set()
+        if hasattr(storage, "get_pinned_neuron_ids"):
+            pinned_neuron_ids = await storage.get_pinned_neuron_ids()
+
         # Get all neuron states
         states = await storage.get_all_neuron_states()
         report.neurons_processed = len(states)
 
         for state in states:
+            # Skip neurons belonging to pinned (KB) fibers
+            if state.neuron_id in pinned_neuron_ids:
+                continue
             # Use last_activated if available, otherwise fall back to created_at
             if state.last_activated is None:
                 reference_activated = (
@@ -136,6 +144,10 @@ class DecayManager:
         report.synapses_processed = len(synapses)
 
         for synapse in synapses:
+            # Skip synapses connected to pinned neurons
+            if synapse.source_id in pinned_neuron_ids or synapse.target_id in pinned_neuron_ids:
+                continue
+
             # Use last_activated if available, otherwise fall back to created_at
             if synapse.last_activated is None:
                 synapse_reference = (

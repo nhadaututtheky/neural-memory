@@ -15,7 +15,12 @@ logger = logging.getLogger(__name__)
 # Validation limits
 _MAX_DOMAIN_TAG_LEN = 100
 _MAX_BRAIN_NAME_LEN = 64
-_ALLOWED_EXTENSIONS = frozenset({".md", ".mdx", ".txt", ".rst"})
+_ALLOWED_EXTENSIONS = frozenset({
+    ".md", ".mdx", ".txt", ".rst",
+    ".pdf", ".docx", ".pptx",
+    ".html", ".htm",
+    ".json", ".xlsx", ".csv",
+})
 
 
 class TrainHandler:
@@ -79,6 +84,7 @@ class TrainHandler:
             brain_name=brain_name,
             extensions=tuple(extensions_raw),
             consolidate=args.get("consolidate", True),
+            pinned=args.get("pinned", True),
         )
 
         trainer = DocTrainer(storage, brain.config)
@@ -129,7 +135,12 @@ class TrainHandler:
         )
         trained_count = sum(1 for n in doc_neurons if n.metadata.get("doc_train"))
 
-        return {
+        # Include training file stats if available
+        file_stats: dict[str, Any] = {}
+        if hasattr(storage, "get_training_stats"):
+            file_stats = await storage.get_training_stats()
+
+        result: dict[str, Any] = {
             "trained_chunks": trained_count,
             "has_training_data": trained_count > 0,
             "message": (
@@ -137,4 +148,30 @@ class TrainHandler:
                 if trained_count > 0
                 else "No training data. Use nmem_train(action='train', path='docs/') to train."
             ),
+        }
+        if file_stats:
+            result["files"] = file_stats
+        return result
+
+    async def _pin(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Pin or unpin memory fibers."""
+        storage = await self.get_storage()
+
+        fiber_ids = args.get("fiber_ids", [])
+        if not fiber_ids:
+            return {"error": "fiber_ids is required"}
+
+        if not isinstance(fiber_ids, list) or len(fiber_ids) > 100:
+            return {"error": "fiber_ids must be a list of up to 100 IDs"}
+
+        pinned = args.get("pinned", True)
+
+        if not hasattr(storage, "pin_fibers"):
+            return {"error": "Storage does not support pinning"}
+
+        count = await storage.pin_fibers(fiber_ids, pinned=pinned)
+        action = "pinned" if pinned else "unpinned"
+        return {
+            "updated": count,
+            "message": f"{action} {count} fiber(s)",
         }

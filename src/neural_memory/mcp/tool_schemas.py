@@ -550,7 +550,9 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_train",
-        "description": "Train brain from documentation files.",
+        "description": "Train brain from documentation files. "
+        "Supports PDF, DOCX, PPTX, HTML, JSON, XLSX, CSV (requires: pip install neural-memory[extract]). "
+        "Trained memories are pinned by default (no decay, no compression, permanent KB).",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -577,16 +579,46 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "type": "array",
                     "items": {
                         "type": "string",
-                        "enum": [".md", ".mdx", ".txt", ".rst"],
+                        "enum": [
+                            ".md", ".mdx", ".txt", ".rst",
+                            ".pdf", ".docx", ".pptx",
+                            ".html", ".htm",
+                            ".json", ".xlsx", ".csv",
+                        ],
                     },
-                    "description": "File extensions to include (default: ['.md'])",
+                    "description": "File extensions to include (default: ['.md']). "
+                    "Rich formats (PDF, DOCX, PPTX, HTML, XLSX) require: pip install neural-memory[extract]",
                 },
                 "consolidate": {
                     "type": "boolean",
                     "description": "Run ENRICH consolidation after encoding (default: true)",
                 },
+                "pinned": {
+                    "type": "boolean",
+                    "description": "Pin trained memories as permanent KB — skip decay/prune/compress (default: true)",
+                },
             },
             "required": ["action"],
+        },
+    },
+    {
+        "name": "nmem_pin",
+        "description": "Pin or unpin memories. Pinned memories skip decay, pruning, and compression — "
+        "use for permanent knowledge base content.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "fiber_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Fiber IDs to pin or unpin",
+                },
+                "pinned": {
+                    "type": "boolean",
+                    "description": "true to pin, false to unpin (default: true)",
+                },
+            },
+            "required": ["fiber_ids"],
         },
     },
     {

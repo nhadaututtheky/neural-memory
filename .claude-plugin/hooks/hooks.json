@@ -11,6 +11,12 @@
       "command": "nmem-hook-stop",
       "description": "Capture session memories when the session ends normally",
       "timeout": 30
+    },
+    {
+      "event": "PostToolUse",
+      "command": "nmem-hook-post-tool-use",
+      "description": "Track tool usage patterns for tool memory learning",
+      "timeout": 10
     }
   ]
 }

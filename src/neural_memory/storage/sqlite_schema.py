@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
 
 # â”€â”€ Migrations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Each entry maps (from_version -> to_version) with a list of SQL statements.
@@ -339,6 +339,27 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
         "CREATE INDEX IF NOT EXISTS idx_tool_events_session ON tool_events(brain_id, session_id, created_at)",
         "CREATE INDEX IF NOT EXISTS idx_tool_events_created ON tool_events(brain_id, created_at)",
     ],
+    (19, 20): [
+        # Pinned flag for KB (knowledge base) memories — skip decay/prune/compress
+        "ALTER TABLE fibers ADD COLUMN pinned INTEGER DEFAULT 0",
+        "CREATE INDEX IF NOT EXISTS idx_fibers_pinned ON fibers(brain_id, pinned)",
+        # Training file tracking for dedup and resume
+        """CREATE TABLE IF NOT EXISTS training_files (
+            id TEXT PRIMARY KEY,
+            brain_id TEXT NOT NULL,
+            file_hash TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            file_size INTEGER NOT NULL,
+            chunks_total INTEGER NOT NULL DEFAULT 0,
+            chunks_completed INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'pending',
+            domain_tag TEXT DEFAULT '',
+            trained_at TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_training_files_hash ON training_files(brain_id, file_hash)",
+    ],
 }
 
 
@@ -504,6 +525,7 @@ CREATE TABLE IF NOT EXISTS fibers (
     agent_tags TEXT DEFAULT '[]',  -- JSON array: tags from calling agent
     metadata TEXT DEFAULT '{}',  -- JSON
     compression_tier INTEGER DEFAULT 0,  -- 0=full, 1=extractive, 2=entity, 3=template, 4=graph-only
+    pinned INTEGER DEFAULT 0,  -- 1=KB memory, skip decay/prune/compress
     device_id TEXT DEFAULT '',  -- Device that last modified this fiber
     device_origin TEXT DEFAULT '',  -- Device that originally created this fiber
     updated_at TEXT DEFAULT '',  -- Last modification timestamp
@@ -515,6 +537,7 @@ CREATE INDEX IF NOT EXISTS idx_fibers_created ON fibers(brain_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_fibers_salience ON fibers(brain_id, salience);
 CREATE INDEX IF NOT EXISTS idx_fibers_conductivity ON fibers(brain_id, conductivity);
 CREATE INDEX IF NOT EXISTS idx_fibers_updated ON fibers(brain_id, updated_at);
+CREATE INDEX IF NOT EXISTS idx_fibers_pinned ON fibers(brain_id, pinned);
 
 -- Fiber-neuron junction table (fast lookups)
 CREATE TABLE IF NOT EXISTS fiber_neurons (
@@ -768,4 +791,21 @@ CREATE INDEX IF NOT EXISTS idx_tool_events_tool ON tool_events(brain_id, tool_na
 CREATE INDEX IF NOT EXISTS idx_tool_events_processed ON tool_events(brain_id, processed);
 CREATE INDEX IF NOT EXISTS idx_tool_events_session ON tool_events(brain_id, session_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_tool_events_created ON tool_events(brain_id, created_at);
+
+-- Training file tracking (doc-to-brain dedup & resume)
+CREATE TABLE IF NOT EXISTS training_files (
+    id TEXT PRIMARY KEY,
+    brain_id TEXT NOT NULL,
+    file_hash TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    file_size INTEGER NOT NULL,
+    chunks_total INTEGER NOT NULL DEFAULT 0,
+    chunks_completed INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    domain_tag TEXT DEFAULT '',
+    trained_at TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_training_files_hash ON training_files(brain_id, file_hash);
 """

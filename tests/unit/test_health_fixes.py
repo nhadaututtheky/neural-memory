@@ -1,10 +1,10 @@
-"""Tests for v1.0.2 health and correctness fixes.
+"""Tests for health and correctness fixes.
 
 Covers:
 1. Context truncation (retrieval_context.py) — long fibers truncated instead of skipped
 2. Diversity metric (diagnostics.py) — normalized against 8 expected types, threshold 3
 3. Temporal neighbor synapses (encoder.py) — BEFORE/AFTER instead of RELATED_TO
-4. Version bump — __version__ == "1.0.2"
+4. Version bump — __version__ matches pyproject.toml
 """
 
 from __future__ import annotations

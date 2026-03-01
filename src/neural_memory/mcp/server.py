@@ -188,6 +188,7 @@ class MCPServer(
             "nmem_conflicts": self._conflicts,
             "nmem_train": self._train,
             "nmem_train_db": self._train_db,
+            "nmem_pin": self._pin,
             "nmem_alerts": self._alerts,
             "nmem_review": self._review,
             "nmem_narrative": self._narrative,

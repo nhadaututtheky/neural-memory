@@ -327,6 +327,11 @@ class ConsolidationEngine:
         all_synapses = await self._storage.get_synapses()
         pruned_synapse_ids: set[str] = set()
 
+        # Preload pinned neuron IDs to protect from pruning
+        pinned_neuron_ids: set[str] = set()
+        if hasattr(self._storage, "get_pinned_neuron_ids"):
+            pinned_neuron_ids = await self._storage.get_pinned_neuron_ids()
+
         # Build fiber salience cache for high-salience protection
         fibers_for_salience = await self._storage.get_fibers(limit=10000)
         fiber_salience_cache: dict[str, list[Fiber]] = {}
@@ -345,6 +350,10 @@ class ConsolidationEngine:
             )
 
         for synapse in all_synapses:
+            # Skip synapses connected to pinned (KB) neurons
+            if synapse.source_id in pinned_neuron_ids or synapse.target_id in pinned_neuron_ids:
+                continue
+
             # Apply time-based decay before checking weight threshold
             decayed = synapse.time_decay(reference_time=reference_time)
 

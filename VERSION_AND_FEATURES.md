@@ -345,14 +345,16 @@ nmem-mcp = neural_memory.mcp:main
 
 ---
 
-## Current Versions (as of 2026-02-06)
+## Current Versions (as of 2026-03-02)
 
 | Component | Version |
 |-----------|---------|
-| Python Package | 0.9.1 |
-| VS Code Extension | 0.1.5 |
-| Database Schema | 4 |
-| Brain Snapshot Format | 0.1.0 |
+| Python Package | 2.17.0 |
+| Database Schema | 20 |
+| MCP Tools | 28 |
+| Memory Types | 11 |
+| Synapse Types | 24 |
+| Brain Snapshot Format | 1.0.0 |
 | API Prefix | /api/v1 |
 | Python Requirement | >=3.11 |
 | Docker Base | python:3.11-slim |
