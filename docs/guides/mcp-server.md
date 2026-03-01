@@ -66,9 +66,22 @@ This auto-configures the MCP server, skills, commands, agent, and hooks.
 
 ---
 
-## Claude Code (Manual MCP)
+## Claude Code (CLI — Recommended for Manual Setup)
 
-If you prefer manual config, add to your project's `.mcp.json`:
+The official way to add MCP servers to Claude Code:
+
+```bash
+# Global (all projects):
+claude mcp add --scope user neural-memory -- nmem-mcp
+
+# Or with uvx (no pip install needed):
+claude mcp add --scope user neural-memory -- uvx --from neural-memory nmem-mcp
+
+# Project-only:
+claude mcp add neural-memory -- nmem-mcp
+```
+
+**Alternatively**, add to your project's `.mcp.json` manually:
 
 ```json
 {
@@ -92,6 +105,8 @@ Or if you installed via pip (no `uvx`):
   }
 }
 ```
+
+> **Note:** Do NOT add MCP servers to `~/.claude/settings.json` or `~/.claude/mcp_servers.json` — Claude Code does not read MCP config from those files. Use `claude mcp add` or `.mcp.json`.
 
 ---
 
@@ -845,7 +860,7 @@ rmdir /s /q %USERPROFILE%\.neuralmemory
 
 | Editor | Config File | Config Format |
 |--------|-------------|---------------|
-| **Claude Code** | `.mcp.json` (project root) | `{ "mcpServers": { ... } }` |
+| **Claude Code** | `claude mcp add` or `.mcp.json` | `{ "mcpServers": { ... } }` |
 | **Cursor** | `~/.cursor/mcp.json` | `{ "mcpServers": { ... } }` |
 | **Windsurf** | `~/.codeium/windsurf/mcp_config.json` | `{ "mcpServers": { ... } }` |
 | **Claude Desktop** | See [path above](#claude-desktop) | `{ "mcpServers": { ... } }` |

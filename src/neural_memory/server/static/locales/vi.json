@@ -73,7 +73,7 @@
   "ago": "tr\u01b0\u1edbc",
   "int_setup_wizards": "H\u01b0\u1edbng d\u1eabn C\u00e0i \u0111\u1eb7t",
   "int_setup_desc": "Sao ch\u00e9p c\u1ea5u h\u00ecnh \u0111\u1ec3 k\u1ebft n\u1ed1i NeuralMemory v\u1edbi c\u00f4ng c\u1ee5 AI c\u1ee7a b\u1ea1n.",
-  "int_setup_claude_desc": "Th\u00eam v\u00e0o ~/.claude/mcp_servers.json ho\u1eb7c .mcp.json c\u1ee7a d\u1ef1 \u00e1n:",
+  "int_setup_claude_desc": "Ch\u1ea1y: claude mcp add --scope user neural-memory -- nmem-mcp (ho\u1eb7c th\u00eam v\u00e0o .mcp.json):",
   "int_setup_cursor_desc": "Th\u00eam v\u00e0o .cursor/mcp.json trong th\u01b0 m\u1ee5c g\u1ed1c d\u1ef1 \u00e1n:",
   "int_setup_openclaw_desc": "C\u00e0i \u0111\u1eb7t plugin NeuralMemory cho OpenClaw:",
   "int_setup_generic_desc": "C\u1ea5u h\u00ecnh MCP server chu\u1ea9n (t\u01b0\u01a1ng th\u00edch m\u1ecdi MCP client):",

@@ -70,8 +70,88 @@ def setup_brain(data_dir: Path) -> str:
     return "default"
 
 
+def _claude_json_has_server(claude_json_path: Path, server_name: str) -> bool:
+    """Check if a server is already registered in ~/.claude.json."""
+    if not claude_json_path.exists():
+        return False
+    try:
+        raw = claude_json_path.read_text(encoding="utf-8").strip()
+        if not raw:
+            return False
+        data = json.loads(raw)
+        servers = data.get("mcpServers", {})
+        return server_name in servers
+    except (json.JSONDecodeError, OSError):
+        return False
+
+
+def _add_via_claude_cli(scope: str, command_args: list[str]) -> bool:
+    """Try to add MCP server via `claude mcp add` CLI.
+
+    Returns True on success, False if claude CLI is not available or fails.
+    """
+    import subprocess
+
+    claude_bin = shutil.which("claude")
+    if not claude_bin:
+        return False
+
+    cmd = [claude_bin, "mcp", "add", "-s", scope, "neural-memory", "--"]
+    cmd.extend(command_args)
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            timeout=15,
+            check=False,
+        )
+        return result.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def _add_via_claude_json(claude_json_path: Path, mcp_entry: dict[str, Any]) -> bool:
+    """Fallback: write MCP config directly to ~/.claude.json."""
+    try:
+        existing: dict[str, Any] = {}
+        if claude_json_path.exists():
+            raw = claude_json_path.read_text(encoding="utf-8").strip()
+            if raw:
+                existing = json.loads(raw)
+
+        servers: dict[str, Any] = existing.setdefault("mcpServers", {})
+        servers["neural-memory"] = mcp_entry
+        claude_json_path.write_text(
+            json.dumps(existing, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return True
+    except (json.JSONDecodeError, OSError):
+        return False
+
+
+def _cleanup_stale_mcp_servers_json() -> None:
+    """Remove the deprecated ~/.claude/mcp_servers.json if it exists.
+
+    Claude Code does NOT read this file — it was a pre-release path.
+    Entries here cause user confusion since they appear configured but don't work.
+    """
+    stale = Path.home() / ".claude" / "mcp_servers.json"
+    if stale.exists():
+        try:
+            stale.unlink()
+        except OSError:
+            pass
+
+
 def setup_mcp_claude() -> str:
-    """Auto-configure MCP in Claude Code (~/.claude/mcp_servers.json).
+    """Auto-configure MCP in Claude Code.
+
+    Strategy:
+    1. Use ``claude mcp add --scope user`` CLI if available (official method).
+    2. Fallback: write directly to ``~/.claude.json`` > ``mcpServers``.
+    3. Clean up deprecated ``~/.claude/mcp_servers.json`` (Claude Code ignores it).
 
     Returns status string: "added", "exists", "failed", or "not_found".
     """
@@ -79,30 +159,29 @@ def setup_mcp_claude() -> str:
     if not claude_dir.exists():
         return "not_found"
 
-    config_path = claude_dir / "mcp_servers.json"
-    mcp_entry = find_nmem_command()
+    claude_json = claude_dir.parent / ".claude.json"
 
-    existing: dict[str, Any] = {}
-    if config_path.exists():
-        try:
-            raw = config_path.read_text(encoding="utf-8").strip()
-            if raw:
-                existing = json.loads(raw)
-        except (json.JSONDecodeError, OSError):
-            existing = {}
-
-    if "neural-memory" in existing:
+    # Already registered?
+    if _claude_json_has_server(claude_json, "neural-memory"):
+        _cleanup_stale_mcp_servers_json()
         return "exists"
 
-    try:
-        existing["neural-memory"] = mcp_entry
-        config_path.write_text(
-            json.dumps(existing, indent=2) + "\n",
-            encoding="utf-8",
-        )
+    # Build the command to register
+    mcp_entry = find_nmem_command()
+    command_args: list[str] = [mcp_entry["command"]]
+    command_args.extend(mcp_entry.get("args", []))
+
+    # Try official CLI first
+    if _add_via_claude_cli("user", command_args):
+        _cleanup_stale_mcp_servers_json()
         return "added"
-    except OSError:
-        return "failed"
+
+    # Fallback: direct JSON write
+    if _add_via_claude_json(claude_json, mcp_entry):
+        _cleanup_stale_mcp_servers_json()
+        return "added"
+
+    return "failed"
 
 
 def setup_mcp_cursor() -> str:

@@ -73,7 +73,7 @@
   "ago": "ago",
   "int_setup_wizards": "Setup Wizards",
   "int_setup_desc": "Copy config snippets to connect NeuralMemory with your AI tools.",
-  "int_setup_claude_desc": "Add to ~/.claude/mcp_servers.json or project .mcp.json:",
+  "int_setup_claude_desc": "Run: claude mcp add --scope user neural-memory -- nmem-mcp (or add to .mcp.json):",
   "int_setup_cursor_desc": "Add to .cursor/mcp.json in your project root:",
   "int_setup_openclaw_desc": "Install the NeuralMemory plugin for OpenClaw:",
   "int_setup_generic_desc": "Standard MCP server configuration (works with any MCP client):",

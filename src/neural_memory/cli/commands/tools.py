@@ -27,13 +27,8 @@ def mcp() -> None:
         nmem mcp                    # Run MCP server
         python -m neural_memory.mcp # Alternative way
 
-    Configuration for Claude Code (~/.claude/mcp_servers.json):
-        {
-            "neural-memory": {
-                "command": "nmem",
-                "args": ["mcp"]
-            }
-        }
+    Configuration for Claude Code:
+        claude mcp add --scope user neural-memory -- nmem-mcp
     """
     from neural_memory.mcp.server import main as mcp_main
 
@@ -216,8 +211,8 @@ def init(
     else:
         claude_status = setup_mcp_claude()
         status_labels = {
-            "added": "~/.claude/mcp_servers.json (added)",
-            "exists": "~/.claude/mcp_servers.json (already configured)",
+            "added": "~/.claude.json (added MCP server)",
+            "exists": "~/.claude.json (already configured)",
             "not_found": "not detected (~/.claude/ not found)",
             "failed": "failed to write config",
         }

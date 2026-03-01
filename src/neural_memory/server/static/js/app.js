@@ -701,14 +701,7 @@ function dashboardApp() {
         {
           id: 'claude-code', name: 'Claude Code', icon: 'terminal', color: '#D97757', open: false,
           description: this.t('int_setup_claude_desc'),
-          snippet: JSON.stringify({
-            mcpServers: {
-              'neural-memory': {
-                command: 'python',
-                args: ['-m', 'neural_memory.mcp'],
-              },
-            },
-          }, null, 2),
+          snippet: 'claude mcp add --scope user neural-memory -- nmem-mcp',
         },
         {
           id: 'cursor', name: 'Cursor', icon: 'mouse-pointer', color: '#3B82F6', open: false,

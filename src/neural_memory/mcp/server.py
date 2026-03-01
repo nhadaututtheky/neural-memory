@@ -11,13 +11,8 @@ Usage:
     # Run directly
     python -m neural_memory.mcp
 
-    # Or in Claude Code's mcp_servers.json:
-    {
-        "neural-memory": {
-            "command": "python",
-            "args": ["-m", "neural_memory.mcp"]
-        }
-    }
+    # Or add to Claude Code via CLI:
+    claude mcp add --scope user neural-memory -- nmem-mcp
 
     # Or set NEURALMEMORY_BRAIN to use a specific brain:
     NEURALMEMORY_BRAIN=myproject python -m neural_memory.mcp
