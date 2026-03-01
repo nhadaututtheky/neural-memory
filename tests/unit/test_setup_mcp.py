@@ -78,7 +78,9 @@ class TestSetupMcpClaude:
     def test_already_exists(self, tmp_path: Path) -> None:
         (tmp_path / ".claude").mkdir()
         claude_json = tmp_path / ".claude.json"
-        claude_json.write_text(json.dumps({"mcpServers": {"neural-memory": {"command": "nmem-mcp"}}}))
+        claude_json.write_text(
+            json.dumps({"mcpServers": {"neural-memory": {"command": "nmem-mcp"}}})
+        )
         with patch("neural_memory.cli.setup.Path.home", return_value=tmp_path):
             assert setup_mcp_claude() == "exists"
 
