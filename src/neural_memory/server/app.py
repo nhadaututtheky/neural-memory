@@ -212,19 +212,59 @@ def create_app(
             },
         }
 
-    # UI endpoint (legacy vis.js graph)
-    @app.get("/ui", tags=["visualization"])
-    async def ui() -> FileResponse:
-        """Serve the visualization UI."""
-        return FileResponse(STATIC_DIR / "index.html")
+    # React SPA dist directory
+    spa_dist = STATIC_DIR / "dist"
 
-    # Dashboard endpoint (full SPA)
+    def _serve_spa() -> FileResponse:
+        """Serve React SPA index.html, falling back to legacy if not built."""
+        spa_index = spa_dist / "index.html"
+        if spa_index.exists():
+            return FileResponse(spa_index)
+        # Fallback to legacy dashboard if React build not found
+        legacy = STATIC_DIR / "dashboard.html"
+        if legacy.exists():
+            return FileResponse(legacy)
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(  # type: ignore[return-value]
+            {"error": "Dashboard not built. Run: cd dashboard && npm run build"},
+            status_code=404,
+        )
+
+    # Primary UI endpoint — React SPA
+    @app.get("/ui", tags=["dashboard"])
+    async def ui() -> FileResponse:
+        """Serve the NeuralMemory dashboard."""
+        return _serve_spa()
+
+    # /dashboard alias (same SPA)
     @app.get("/dashboard", tags=["dashboard"])
     async def dashboard() -> FileResponse:
-        """Serve the NeuralMemory dashboard."""
+        """Serve the NeuralMemory React dashboard."""
+        return _serve_spa()
+
+    # Legacy endpoints (backward compat)
+    @app.get("/dashboard-legacy", tags=["dashboard"])
+    async def dashboard_legacy() -> FileResponse:
+        """Serve the legacy Alpine.js dashboard."""
         return FileResponse(STATIC_DIR / "dashboard.html")
 
-    # Mount static files (for potential future assets)
+    @app.get("/ui-legacy", tags=["dashboard"])
+    async def ui_legacy() -> FileResponse:
+        """Serve the legacy vis.js graph UI."""
+        return FileResponse(STATIC_DIR / "index.html")
+
+    # SPA catch-all for client-side routing (must be after API routes)
+    @app.get("/dashboard/{path:path}", tags=["dashboard"])
+    async def dashboard_spa_catchall(path: str) -> FileResponse:
+        """Catch-all for React SPA client-side routing."""
+        return _serve_spa()
+
+    # Mount SPA static assets (JS/CSS bundles)
+    if spa_dist.exists():
+        app.mount("/assets", StaticFiles(directory=str(spa_dist / "assets")), name="spa-assets")
+
+    # Mount legacy static files
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 

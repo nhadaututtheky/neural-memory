@@ -838,4 +838,17 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "required": ["action"],
         },
     },
+    {
+        "name": "nmem_telegram_backup",
+        "description": "Send brain database file as backup to Telegram.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "brain_name": {
+                    "type": "string",
+                    "description": "Brain name to backup (default: active brain)",
+                },
+            },
+        },
+    },
 ]

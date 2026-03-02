@@ -1,0 +1,150 @@
+@import "tailwindcss";
+
+/*
+ * Neural Memory Dashboard — Warm Cream Light Theme
+ * Adapted from Future Bot light mode with indigo accent
+ */
+
+@theme {
+  /* Colors — Warm Cream Light */
+  --color-background: #faf8f3;
+  --color-foreground: #1a1714;
+  --color-card: #f5f0ea;
+  --color-card-foreground: #1a1714;
+  --color-popover: #f5f0ea;
+  --color-popover-foreground: #1a1714;
+  --color-primary: #6366f1;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #ede5d8;
+  --color-secondary-foreground: #1a1714;
+  --color-muted: #ede5d8;
+  --color-muted-foreground: #78716c;
+  --color-accent: #e8e0d4;
+  --color-accent-foreground: #1a1714;
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #ffffff;
+  --color-border: #d4ccc2;
+  --color-input: #d4ccc2;
+  --color-ring: #6366f1;
+
+  /* Health colors */
+  --color-health-good: #059669;
+  --color-health-warn: #f59e0b;
+  --color-health-bad: #dc2626;
+
+  /* Chart colors */
+  --color-chart-1: #6366f1;
+  --color-chart-2: #8b5cf6;
+  --color-chart-3: #06b6d4;
+  --color-chart-4: #f59e0b;
+  --color-chart-5: #059669;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+
+  /* Fonts */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Sidebar */
+  --color-sidebar: #f0ebe4;
+  --color-sidebar-foreground: #1a1714;
+  --color-sidebar-border: #d4ccc2;
+  --color-sidebar-accent: #e8e0d4;
+  --color-sidebar-accent-foreground: #1a1714;
+  --color-sidebar-primary: #6366f1;
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-ring: #6366f1;
+}
+
+/* Dark mode override */
+@media (prefers-color-scheme: dark) {
+  @theme {
+    --color-background: #0f0e0c;
+    --color-foreground: #f5f0ea;
+    --color-card: #1a1814;
+    --color-card-foreground: #f5f0ea;
+    --color-popover: #1a1814;
+    --color-popover-foreground: #f5f0ea;
+    --color-primary: #818cf8;
+    --color-primary-foreground: #0f0e0c;
+    --color-secondary: #2a2520;
+    --color-secondary-foreground: #f5f0ea;
+    --color-muted: #2a2520;
+    --color-muted-foreground: #a8a29e;
+    --color-accent: #332e28;
+    --color-accent-foreground: #f5f0ea;
+    --color-destructive: #ef4444;
+    --color-destructive-foreground: #ffffff;
+    --color-border: #3d3630;
+    --color-input: #3d3630;
+    --color-ring: #818cf8;
+
+    --color-health-good: #34d399;
+    --color-health-warn: #fbbf24;
+    --color-health-bad: #f87171;
+
+    --color-sidebar: #161412;
+    --color-sidebar-foreground: #f5f0ea;
+    --color-sidebar-border: #3d3630;
+    --color-sidebar-accent: #2a2520;
+    --color-sidebar-accent-foreground: #f5f0ea;
+    --color-sidebar-primary: #818cf8;
+    --color-sidebar-primary-foreground: #0f0e0c;
+    --color-sidebar-ring: #818cf8;
+  }
+}
+
+/* Base styles */
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Font display class */
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted-foreground);
+}
+
+/* Focus ring */
+*:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}

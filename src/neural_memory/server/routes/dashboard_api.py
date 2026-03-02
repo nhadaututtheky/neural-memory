@@ -1,9 +1,10 @@
-"""Dashboard API routes — brain stats, health, brain management, timeline, diagrams."""
+"""Dashboard API routes — brain stats, health, brain management, timeline, diagrams, brain files."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -533,3 +534,174 @@ async def get_evolution(
         stage_distribution=stage_dist,
         closest_to_semantic=closest,
     )
+
+
+# ── Brain Files API ────────────────────────────────────
+
+
+class BrainFileInfo(BaseModel):
+    """Info about a single brain database file."""
+
+    name: str
+    path: str
+    size_bytes: int = 0
+    is_active: bool = False
+
+
+class BrainFilesResponse(BaseModel):
+    """Response with brain file information."""
+
+    brains_dir: str
+    brains: list[BrainFileInfo] = Field(default_factory=list)
+    total_size_bytes: int = 0
+
+
+@router.get(
+    "/brain-files",
+    response_model=BrainFilesResponse,
+    summary="Get brain file paths and sizes",
+)
+async def get_brain_files() -> BrainFilesResponse:
+    """Get file path and size information for all brain databases."""
+    from neural_memory.unified_config import get_config
+
+    cfg = get_config()
+    brain_names = cfg.list_brains()
+    active_name = cfg.current_brain
+    brains_dir = Path(cfg.get_brain_db_path("_probe_")).parent
+
+    brain_files: list[BrainFileInfo] = []
+    total_size = 0
+
+    for name in brain_names:
+        db_path = Path(cfg.get_brain_db_path(name))
+        size = 0
+        if db_path.exists():
+            size = db_path.stat().st_size
+            total_size += size
+
+        brain_files.append(
+            BrainFileInfo(
+                name=name,
+                path=str(db_path),
+                size_bytes=size,
+                is_active=name == active_name,
+            )
+        )
+
+    return BrainFilesResponse(
+        brains_dir=str(brains_dir),
+        brains=brain_files,
+        total_size_bytes=total_size,
+    )
+
+
+# ── Telegram API ────────────────────────────────────
+
+
+class TelegramStatusResponse(BaseModel):
+    """Telegram integration status."""
+
+    configured: bool = False
+    bot_name: str | None = None
+    bot_username: str | None = None
+    chat_ids: list[str] = Field(default_factory=list)
+    backup_on_consolidation: bool = False
+    error: str | None = None
+
+
+class TelegramTestRequest(BaseModel):
+    """Request to send a test message."""
+
+    pass
+
+
+class TelegramBackupRequest(BaseModel):
+    """Request to trigger a brain backup."""
+
+    brain_name: str | None = None
+
+
+@router.get(
+    "/telegram/status",
+    response_model=TelegramStatusResponse,
+    summary="Get Telegram integration status",
+)
+async def get_telegram_status_api() -> TelegramStatusResponse:
+    """Get current Telegram integration status."""
+    from neural_memory.integration.telegram import get_telegram_status
+
+    status = await get_telegram_status()
+    return TelegramStatusResponse(
+        configured=status.configured,
+        bot_name=status.bot_name,
+        bot_username=status.bot_username,
+        chat_ids=status.chat_ids,
+        backup_on_consolidation=status.backup_on_consolidation,
+        error=status.error,
+    )
+
+
+@router.post(
+    "/telegram/test",
+    summary="Send test message to Telegram",
+)
+async def telegram_test_api() -> dict[str, Any]:
+    """Send a test message to verify Telegram configuration."""
+    from neural_memory.integration.telegram import (
+        TelegramClient,
+        TelegramError,
+        get_bot_token,
+        get_telegram_config,
+    )
+
+    token = get_bot_token()
+    if not token:
+        raise HTTPException(status_code=400, detail="Bot token not configured")
+
+    config = get_telegram_config()
+    if not config.chat_ids:
+        raise HTTPException(status_code=400, detail="No chat IDs configured")
+
+    client = TelegramClient(token)
+    results: list[str] = []
+    errors: list[str] = []
+
+    for chat_id in config.chat_ids:
+        try:
+            await client.send_message(
+                chat_id,
+                "🧠 <b>Neural Memory</b> — Test message\n\nTelegram integration is working!",
+            )
+            results.append(chat_id)
+        except TelegramError as exc:
+            errors.append(f"{chat_id}: {exc}")
+
+    return {"sent": results, "errors": errors}
+
+
+@router.post(
+    "/telegram/backup",
+    summary="Send brain backup to Telegram",
+)
+async def telegram_backup_api(
+    request: TelegramBackupRequest,
+) -> dict[str, Any]:
+    """Send brain database file as backup to Telegram."""
+    from neural_memory.integration.telegram import (
+        TelegramClient,
+        TelegramError,
+        get_bot_token,
+    )
+
+    token = get_bot_token()
+    if not token:
+        raise HTTPException(status_code=400, detail="Bot token not configured")
+
+    client = TelegramClient(token)
+
+    try:
+        result = await client.backup_brain(request.brain_name)
+        return result
+    except TelegramError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))

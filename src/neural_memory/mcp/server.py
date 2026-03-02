@@ -44,6 +44,7 @@ from neural_memory.mcp.review_handler import ReviewHandler
 from neural_memory.mcp.scheduled_consolidation_handler import ScheduledConsolidationHandler
 from neural_memory.mcp.session_handler import SessionHandler
 from neural_memory.mcp.sync_handler import SyncToolHandler
+from neural_memory.mcp.telegram_handler import TelegramHandler
 from neural_memory.mcp.tool_handlers import ToolHandler
 from neural_memory.mcp.tool_schemas import get_tool_schemas_for_tier
 from neural_memory.mcp.train_handler import TrainHandler
@@ -91,6 +92,7 @@ class MCPServer(
     ScheduledConsolidationHandler,
     VersionCheckHandler,
     SyncToolHandler,
+    TelegramHandler,
 ):
     """MCP server that exposes NeuralMemory tools.
 
@@ -115,6 +117,7 @@ class MCPServer(
         ScheduledConsolidationHandler — periodic background consolidation
         VersionCheckHandler  — background PyPI version check + update hints
         SyncToolHandler      — _sync, _sync_status, _sync_config (multi-device sync)
+        TelegramHandler      — _telegram_backup (send brain to Telegram)
     """
 
     def __init__(self) -> None:
@@ -195,6 +198,7 @@ class MCPServer(
             "nmem_sync": self._sync,
             "nmem_sync_status": self._sync_status,
             "nmem_sync_config": self._sync_config,
+            "nmem_telegram_backup": self._telegram_backup,
         }
         handler = dispatch.get(name)
         if handler:

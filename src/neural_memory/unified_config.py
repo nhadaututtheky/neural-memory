@@ -658,6 +658,46 @@ class ToolMemoryConfig:
         )
 
 
+@dataclass(frozen=True)
+class TelegramConfig:
+    """Telegram backup integration configuration.
+
+    Bot token is read from NMEM_TELEGRAM_BOT_TOKEN env var (never in config file).
+    Chat IDs are stored in config.toml [telegram] section.
+    """
+
+    enabled: bool = False
+    chat_ids: tuple[str, ...] = ()
+    max_file_size_mb: int = 50
+    backup_on_consolidation: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "chat_ids": list(self.chat_ids),
+            "max_file_size_mb": self.max_file_size_mb,
+            "backup_on_consolidation": self.backup_on_consolidation,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> TelegramConfig:
+        raw_ids = data.get("chat_ids", [])
+        if isinstance(raw_ids, (list, tuple)):
+            chat_ids = tuple(str(cid).strip() for cid in raw_ids if str(cid).strip())
+        else:
+            chat_ids = ()
+        try:
+            max_size = max(1, min(int(data.get("max_file_size_mb", 50)), 2000))
+        except (ValueError, TypeError):
+            max_size = 50
+        return cls(
+            enabled=bool(data.get("enabled", False)),
+            chat_ids=chat_ids,
+            max_file_size_mb=max_size,
+            backup_on_consolidation=bool(data.get("backup_on_consolidation", False)),
+        )
+
+
 @dataclass
 class UnifiedConfig:
     """Unified configuration for NeuralMemory.
@@ -718,6 +758,9 @@ class UnifiedConfig:
 
     # Tool memory auto-capture
     tool_memory: ToolMemoryConfig = field(default_factory=ToolMemoryConfig)
+
+    # Telegram backup integration
+    telegram: TelegramConfig = field(default_factory=TelegramConfig)
 
     # FalkorDB config (used when storage_backend == "falkordb")
     falkordb: FalkorDBConfig = field(default_factory=FalkorDBConfig)
@@ -785,6 +828,7 @@ class UnifiedConfig:
             encryption=EncryptionConfig.from_dict(data.get("encryption", {})),
             dedup=DedupSettings.from_dict(data.get("dedup", {})),
             tool_memory=ToolMemoryConfig.from_dict(data.get("tool_memory", {})),
+            telegram=TelegramConfig.from_dict(data.get("telegram", {})),
             tool_tier=ToolTierConfig.from_dict(data.get("tool_tier", {})),
             mem0_sync=Mem0SyncConfig.from_dict(data.get("mem0_sync", {})),
             device_id=raw_device_id,
@@ -936,6 +980,14 @@ class UnifiedConfig:
             f'username = "{_sanitize_toml_str(self.falkordb.username)}"',
             "# Password omitted for security — use env NEURAL_MEMORY_FALKORDB_PASSWORD",
             'password = ""',
+            "",
+            "# Telegram backup integration",
+            "# Bot token: set NMEM_TELEGRAM_BOT_TOKEN env var (never stored here)",
+            "[telegram]",
+            f"enabled = {'true' if self.telegram.enabled else 'false'}",
+            f"chat_ids = [{', '.join(repr(cid) for cid in self.telegram.chat_ids)}]",
+            f"max_file_size_mb = {self.telegram.max_file_size_mb}",
+            f"backup_on_consolidation = {'true' if self.telegram.backup_on_consolidation else 'false'}",
             "",
             "# MCP tool tier (minimal/standard/full)",
             "[tool_tier]",

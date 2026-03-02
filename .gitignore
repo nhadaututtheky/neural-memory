@@ -164,6 +164,11 @@ config.toml
 *.key
 .env
 
+# Dashboard (React SPA)
+dashboard/node_modules/
+dashboard/dist/
+src/neural_memory/server/static/dist/
+
 # spaCy models
 en_core_web_sm/
 en_core_web_md/
