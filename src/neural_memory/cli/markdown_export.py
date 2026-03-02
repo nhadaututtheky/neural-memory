@@ -11,6 +11,11 @@ from datetime import datetime
 from typing import Any
 
 
+def _escape_md_table(text: str) -> str:
+    """Escape pipe characters for markdown table cells."""
+    return text.replace("|", "\\|")
+
+
 def snapshot_to_markdown(
     snapshot: Any,
     *,
@@ -152,7 +157,7 @@ def snapshot_to_markdown(
         neuron_types[n.get("type", "unknown")] += 1
     if neuron_types:
         for ntype, count in neuron_types.most_common():
-            lines.append(f"| Neurons ({ntype}) | {count} |")
+            lines.append(f"| Neurons ({_escape_md_table(ntype)}) | {count} |")
 
     # Synapse type breakdown
     synapse_types: Counter[str] = Counter()
@@ -160,7 +165,7 @@ def snapshot_to_markdown(
         synapse_types[s.get("type", "unknown")] += 1
     if synapse_types:
         for stype, count in synapse_types.most_common(10):
-            lines.append(f"| Synapses ({stype}) | {count} |")
+            lines.append(f"| Synapses ({_escape_md_table(stype)}) | {count} |")
 
     # Typed memory breakdown
     mem_type_counts: Counter[str] = Counter()

@@ -121,11 +121,15 @@ class SQLiteFiberMixin:
             params.append(min_salience)
 
         if metadata_key is not None:
+            # Use double-quoted member syntax to treat dots as literal characters
             query += " AND json_extract(metadata, ?) IS NOT NULL"
-            params.append(f"$.{metadata_key}")
+            params.append(f'$."{metadata_key}"')
 
+        # When tags filter is needed, fetch more rows to compensate for
+        # post-SQL filtering (tags are stored as JSON arrays)
+        fetch_limit = min(limit * 3, 3000) if tags else limit
         query += " ORDER BY salience DESC LIMIT ?"
-        params.append(limit)
+        params.append(fetch_limit)
 
         async with conn.execute(query, params) as cursor:
             rows = await cursor.fetchall()
@@ -135,7 +139,7 @@ class SQLiteFiberMixin:
         if tags is not None:
             fibers = [f for f in fibers if tags.issubset(f.tags)]
 
-        return fibers
+        return fibers[:limit]
 
     async def find_fibers_batch(
         self,

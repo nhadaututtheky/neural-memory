@@ -263,7 +263,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "description": "Filter by neuron type",
                 },
             },
-            "required": ["prefix"],
+            "required": [],
         },
     },
     {

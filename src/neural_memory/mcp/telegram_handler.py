@@ -11,6 +11,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Import TelegramError at module level with fallback
+try:
+    from neural_memory.integration.telegram import TelegramError as _TelegramError
+except ImportError:
+    _TelegramError = None  # type: ignore[assignment, misc]
+
 
 class TelegramHandler:
     """Mixin providing Telegram backup MCP tool handler."""
@@ -26,7 +32,6 @@ class TelegramHandler:
         try:
             from neural_memory.integration.telegram import (
                 TelegramClient,
-                TelegramError,
                 get_bot_token,
             )
 
@@ -58,9 +63,13 @@ class TelegramHandler:
 
             return response
 
-        except TelegramError as exc:
-            logger.error("Telegram backup failed: %s", exc)
-            return {"error": str(exc)}
-        except Exception:
+        except ImportError:
+            logger.error("Telegram integration not available")
+            return {"error": "Telegram integration not available. Install aiohttp."}
+        except Exception as exc:
+            # Use module-level _TelegramError for safe isinstance check
+            if _TelegramError is not None and isinstance(exc, _TelegramError):
+                logger.error("Telegram backup failed: %s", exc)
+                return {"error": "Telegram backup failed."}
             logger.error("Telegram backup failed unexpectedly", exc_info=True)
             return {"error": "Telegram backup failed unexpectedly."}

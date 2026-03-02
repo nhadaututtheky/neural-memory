@@ -64,11 +64,9 @@ class InMemoryCollectionsMixin:
                 continue
 
             results.append(fiber)
-            if len(results) >= limit:
-                break
 
         results.sort(key=lambda f: f.salience, reverse=True)
-        return results
+        return results[:limit]
 
     async def find_fibers_batch(
         self,

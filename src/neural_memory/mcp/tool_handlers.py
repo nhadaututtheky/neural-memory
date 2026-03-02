@@ -10,7 +10,6 @@ from the MCPServer base class.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -88,7 +87,9 @@ class ToolHandler:
         if not brain:
             return {"error": "No brain configured"}
 
-        content = args["content"]
+        content = args.get("content")
+        if not content or not isinstance(content, str):
+            return {"error": "content is required and must be a string"}
         if len(content) > MAX_CONTENT_LENGTH:
             return {"error": f"Content too long ({len(content)} chars). Max: {MAX_CONTENT_LENGTH}."}
 
@@ -248,9 +249,11 @@ class ToolHandler:
             if raw_event_at:
                 try:
                     event_timestamp = datetime.fromisoformat(raw_event_at)
-                    # Strip timezone for naive UTC storage
+                    # Convert to UTC before stripping timezone
                     if event_timestamp.tzinfo is not None:
-                        event_timestamp = event_timestamp.replace(tzinfo=None)
+                        from datetime import UTC
+
+                        event_timestamp = event_timestamp.astimezone(UTC).replace(tzinfo=None)
                 except (ValueError, TypeError):
                     return {
                         "error": f"Invalid event_at format: {raw_event_at}. Use ISO format (e.g. '2026-03-02T08:00:00')."
@@ -471,7 +474,9 @@ class ToolHandler:
         if not brain:
             return {"error": "No brain configured"}
 
-        query = args["query"]
+        query = args.get("query")
+        if not query or not isinstance(query, str):
+            return {"error": "query is required and must be a string"}
         try:
             depth = DepthLevel(args.get("depth", 1))
         except ValueError:
@@ -501,6 +506,11 @@ class ToolHandler:
         if "valid_at" in args:
             try:
                 valid_at = datetime.fromisoformat(args["valid_at"])
+                # Convert to UTC before stripping timezone
+                if valid_at.tzinfo is not None:
+                    from datetime import UTC
+
+                    valid_at = valid_at.astimezone(UTC).replace(tzinfo=None)
             except (ValueError, TypeError):
                 return {"error": f"Invalid valid_at datetime: {args['valid_at']}"}
 
@@ -646,8 +656,15 @@ class ToolHandler:
         if not query:
             return {"error": "query is required"}
 
-        # Cap at 5 brains
-        brain_names = brain_names[:5]
+        # Validate and cap at 5 brains
+        import re
+
+        _brain_pattern = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
+        brain_names = [
+            n for n in brain_names[:5] if isinstance(n, str) and _brain_pattern.match(n)
+        ]
+        if not brain_names:
+            return {"error": "No valid brain names provided"}
         depth = args.get("depth", 1)
         max_tokens = min(args.get("max_tokens", 500), 10_000)
 
@@ -771,9 +788,12 @@ class ToolHandler:
 
     async def _todo(self, args: dict[str, Any]) -> dict[str, Any]:
         """Add a TODO."""
+        task = args.get("task")
+        if not task or not isinstance(task, str):
+            return {"error": "task is required and must be a string"}
         return await self._remember(
             {
-                "content": args["task"],
+                "content": task,
                 "type": "todo",
                 "priority": args.get("priority", 5),
                 "expires_days": 30,
@@ -1227,9 +1247,11 @@ class ToolHandler:
 
         elif action == "clear":
             habits = await storage.find_fibers(metadata_key="_habit_pattern", limit=1000)
-            if habits:
-                await asyncio.gather(*[storage.delete_fiber(h.id) for h in habits])
-            cleared = len(habits)
+            cleared = 0
+            # Delete sequentially to avoid overwhelming SQLite with concurrent writes
+            for h in habits:
+                await storage.delete_fiber(h.id)
+                cleared += 1
             return {"cleared": cleared, "message": f"Cleared {cleared} learned habits"}
 
         return {"error": f"Unknown action: {action}"}

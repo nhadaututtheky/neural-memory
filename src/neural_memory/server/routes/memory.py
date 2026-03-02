@@ -51,6 +51,9 @@ async def encode_memory(
     storage: Annotated[NeuralStorage, Depends(get_storage)],
 ) -> EncodeResponse:
     """Encode new content as a memory."""
+    if len(request.content) > 100_000:
+        raise HTTPException(status_code=400, detail="Content exceeds 100,000 character limit")
+
     from neural_memory.safety.sensitive import check_sensitive_content
 
     sensitive_matches = check_sensitive_content(request.content, min_severity=2)

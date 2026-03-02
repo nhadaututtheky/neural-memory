@@ -152,18 +152,18 @@ async def _find_or_create_tool_neuron(
     storage: _ToolEventStorage,
     tool_name: str,
     server_name: str,
-) -> str:
+) -> tuple[str, bool]:
     """Find existing tool neuron or create a new one.
 
     Storage must have brain context set via set_brain() before calling.
-    Returns the neuron ID.
+    Returns (neuron_id, was_created).
     """
     content = _tool_neuron_content(tool_name)
 
     # Search for existing neuron with this content
     existing = await storage.find_neurons(content_exact=content, limit=1)
     if existing:
-        return existing[0].id
+        return existing[0].id, False
 
     # Create new tool neuron
     neuron = Neuron.create(
@@ -172,24 +172,27 @@ async def _find_or_create_tool_neuron(
         metadata={"tool_server": server_name, "tool_type": "mcp"},
     )
     await storage.add_neuron(neuron)
-    return neuron.id
+    return neuron.id, True
 
 
 async def _find_or_create_concept_neuron(
     storage: _ToolEventStorage,
     concept: str,
-) -> str:
-    """Find existing concept neuron or create a new one for task context."""
+) -> tuple[str, bool]:
+    """Find existing concept neuron or create a new one for task context.
+
+    Returns (neuron_id, was_created).
+    """
     existing = await storage.find_neurons(content_exact=concept, limit=1)
     if existing:
-        return existing[0].id
+        return existing[0].id, False
 
     neuron = Neuron.create(
         content=concept,
         type=NeuronType.CONCEPT,
     )
     await storage.add_neuron(neuron)
-    return neuron.id
+    return neuron.id, True
 
 
 async def _find_synapse_between(
@@ -290,12 +293,13 @@ async def process_events(
                 seen_pairs.add(pair)
 
                 # Find or create neurons for both tools
-                nid_a = await _find_or_create_tool_neuron(
+                nid_a, created_a = await _find_or_create_tool_neuron(
                     storage, pair[0], tool_server.get(pair[0], "")
                 )
-                nid_b = await _find_or_create_tool_neuron(
+                nid_b, created_b = await _find_or_create_tool_neuron(
                     storage, pair[1], tool_server.get(pair[1], "")
                 )
+                neurons_created += int(created_a) + int(created_b)
 
                 # Find or create USED_WITH synapse (check both directions)
                 existing_syn = await _find_synapse_between(
@@ -337,10 +341,11 @@ async def process_events(
             continue
         task_tool_pairs.add(pair_key)
 
-        tool_nid = await _find_or_create_tool_neuron(
+        tool_nid, tool_created = await _find_or_create_tool_neuron(
             storage, ev["tool_name"], ev.get("server_name", "")
         )
-        task_nid = await _find_or_create_concept_neuron(storage, task)
+        task_nid, task_created = await _find_or_create_concept_neuron(storage, task)
+        neurons_created += int(tool_created) + int(task_created)
 
         existing_syn = await _find_synapse_between(
             storage, tool_nid, task_nid, SynapseType.EFFECTIVE_FOR

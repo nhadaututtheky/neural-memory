@@ -148,7 +148,11 @@ def create_app(
         }
 
     # Graph visualization API (supports limit/offset for progressive loading)
-    @app.get("/api/graph", tags=["visualization"])
+    from neural_memory.server.dependencies import require_local_request
+
+    @app.get(
+        "/api/graph", tags=["visualization"], dependencies=[Depends(require_local_request)]
+    )
     async def get_graph_data(
         storage: NeuralStorage = Depends(shared_get_storage),
         limit: int = Query(default=500, ge=1, le=2000),

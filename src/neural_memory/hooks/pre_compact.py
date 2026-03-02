@@ -283,8 +283,8 @@ def main() -> None:
                 f"[NeuralMemory] Pre-compact flush: {result.get('message', 'no memories')}",
                 file=sys.stderr,
             )
-    except Exception as exc:
-        print(f"[NeuralMemory] Flush error: {exc}", file=sys.stderr)  # noqa: T201
+    except Exception:
+        print("[NeuralMemory] Pre-compact flush failed", file=sys.stderr)  # noqa: T201
         sys.exit(0)  # Don't block compaction on errors
 
 

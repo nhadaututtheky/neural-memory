@@ -212,7 +212,6 @@ class QueryRouter:
             "better",
             "worse",
             "same",
-            "like",
             # Vietnamese
             "so sánh",
             "khác",

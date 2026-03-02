@@ -77,7 +77,7 @@ class SharedFiberBrainMixin:
         limit: int = 100,
     ) -> list[Fiber]:
         """Find fibers matching criteria."""
-        params: dict[str, Any] = {"limit": limit}
+        params: dict[str, Any] = {"limit": min(limit, 1000)}
         if contains_neuron:
             params["contains_neuron"] = contains_neuron
         if time_overlaps:

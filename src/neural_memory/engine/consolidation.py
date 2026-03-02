@@ -8,7 +8,6 @@ Provides automated memory maintenance:
 
 from __future__ import annotations
 
-import asyncio
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -178,7 +177,7 @@ class ConsolidationEngine:
     dream, learn_habits, dedup.
 
     Strategies are grouped into dependency tiers and run in parallel
-    within each tier using asyncio.gather().
+    within each tier sequentially (to avoid stale data).
     """
 
     # Dependency tiers — strategies within a tier are independent and
@@ -297,17 +296,10 @@ class ConsolidationEngine:
             tier_strategies = tier & requested
             if not tier_strategies:
                 continue
-            if len(tier_strategies) == 1:
-                await self._run_strategy(
-                    next(iter(tier_strategies)), report, reference_time, dry_run
-                )
-            else:
-                await asyncio.gather(
-                    *(
-                        self._run_strategy(s, report, reference_time, dry_run)
-                        for s in tier_strategies
-                    )
-                )
+            # Run strategies sequentially within each tier to avoid
+            # stale data snapshots and shared mutable report races
+            for strategy in tier_strategies:
+                await self._run_strategy(strategy, report, reference_time, dry_run)
 
         report.duration_ms = (time.perf_counter() - start) * 1000
         return report
@@ -510,9 +502,12 @@ class ConsolidationEngine:
             if union_size > 0:
                 jaccard = intersection / union_size
                 # Lower threshold for temporally-close fibers
-                time_diff = abs(
-                    (fiber_list[i].created_at - fiber_list[j].created_at).total_seconds()
-                )
+                if fiber_list[i].created_at and fiber_list[j].created_at:
+                    time_diff = abs(
+                        (fiber_list[i].created_at - fiber_list[j].created_at).total_seconds()
+                    )
+                else:
+                    time_diff = float("inf")
                 effective_threshold = (
                     self._config.merge_overlap_threshold * 0.6
                     if time_diff < 3600

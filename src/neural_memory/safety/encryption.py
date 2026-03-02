@@ -75,19 +75,19 @@ class MemoryEncryptor:
             logger.debug("Loaded encryption key for brain %s", brain_id)
         else:
             key = Fernet.generate_key()
-            key_path.write_bytes(key)
+            if os.name == "nt":
+                key_path.write_bytes(key)
+            else:
+                # Atomic creation with restricted permissions on POSIX
+                fd = os.open(str(key_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                os.write(fd, key)
+                os.close(fd)
             try:
                 if os.name == "nt":
                     self._restrict_windows_acl(key_path)
-                else:
-                    key_path.chmod(0o600)
             except OSError:
                 logger.warning("Could not restrict key file permissions: %s", key_path)
-            logger.info(
-                "Generated new encryption key for brain %s at %s",
-                brain_id,
-                key_path,
-            )
+            logger.info("Generated new encryption key for brain %s", brain_id)
 
         cipher = Fernet(key)
         self._ciphers[brain_id] = cipher

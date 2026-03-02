@@ -672,8 +672,8 @@ async def telegram_test_api() -> dict[str, Any]:
                 "🧠 <b>Neural Memory</b> — Test message\n\nTelegram integration is working!",
             )
             results.append(chat_id)
-        except TelegramError as exc:
-            errors.append(f"{chat_id}: {exc}")
+        except TelegramError:
+            errors.append(f"{chat_id}: send failed")
 
     return {"sent": results, "errors": errors}
 
@@ -701,5 +701,5 @@ async def telegram_backup_api(
     try:
         result = await client.backup_brain(request.brain_name)
         return result
-    except TelegramError as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except TelegramError:
+        raise HTTPException(status_code=500, detail="Telegram backup failed")
