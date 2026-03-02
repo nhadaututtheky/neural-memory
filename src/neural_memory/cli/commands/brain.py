@@ -54,10 +54,16 @@ def brain_use(
 ) -> None:
     """Switch to a different brain.
 
+    This updates config.toml so CLI and MCP servers (without NMEM_BRAIN
+    env var) will use the new brain. MCP servers started with NMEM_BRAIN
+    are pinned to that brain and will NOT be affected by this command.
+
     Examples:
         nmem brain use work
         nmem brain use personal
     """
+    import os
+
     config = get_config()
 
     if name not in config.list_brains():
@@ -66,6 +72,15 @@ def brain_use(
             fg=typer.colors.RED,
         )
         raise typer.Exit(1)
+
+    # Warn if env var is set — this CLI switch won't affect env-pinned processes
+    env_brain = os.environ.get("NEURALMEMORY_BRAIN") or os.environ.get("NMEM_BRAIN")
+    if env_brain:
+        typer.secho(
+            f"Note: NMEM_BRAIN env var is set to '{env_brain}'. "
+            "MCP servers using this env var will remain pinned to that brain.",
+            fg=typer.colors.YELLOW,
+        )
 
     config.current_brain = name
     config.save()

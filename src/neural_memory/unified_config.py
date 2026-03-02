@@ -1175,25 +1175,29 @@ async def get_shared_storage(brain_name: str | None = None) -> NeuralStorage:
     """
     config = get_config()
 
-    # When no explicit brain is requested, re-read current_brain from
-    # config.toml on disk.  This picks up brain switches made by the CLI
-    # (which writes to both config.json and config.toml) without
-    # requiring a full MCP server restart.
+    # When no explicit brain is requested, resolve from env var or disk.
+    #
+    # Priority: env var > config.toml > in-memory config
+    #
+    # IMPORTANT: When NMEM_BRAIN / NEURALMEMORY_BRAIN is set, we use it
+    # directly WITHOUT mutating config.current_brain. This ensures
+    # process-level isolation for multi-agent setups where each Claude
+    # Code session spawns its own MCP server process with a different
+    # env var. Mutating the shared config object would cause cross-brain
+    # contamination if the config singleton is ever shared.
     if brain_name is None:
         env_brain = os.environ.get("NEURALMEMORY_BRAIN") or os.environ.get("NMEM_BRAIN")
         if env_brain:
-            if env_brain != config.current_brain:
-                logger = logging.getLogger(__name__)
-                logger.info("Brain set by env var: %s", env_brain)
-                config.current_brain = env_brain
+            name = env_brain
         else:
             disk_brain = _read_current_brain_from_toml()
             if disk_brain is not None and disk_brain != config.current_brain:
                 logger = logging.getLogger(__name__)
                 logger.info("Brain changed on disk: %s → %s", config.current_brain, disk_brain)
                 config.current_brain = disk_brain
-
-    name = brain_name or config.current_brain
+            name = config.current_brain
+    else:
+        name = brain_name
 
     # FalkorDB backend
     if config.storage_backend == "falkordb":
