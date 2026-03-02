@@ -243,6 +243,17 @@ pip install neural-memory[extract]   # PDF, DOCX, PPTX, HTML, XLSX support
 - `nmem_transplant(source_brain="other-brain", tags=["react"])` — Import memories from another brain
 - `nmem_narrative(action="topic", topic="auth")` — Generate narrative about a topic
 
+## Telegram Backup (nmem_telegram_backup)
+
+Send brain .db file as backup to Telegram chats:
+
+```
+nmem_telegram_backup()                        # Backup current brain
+nmem_telegram_backup(brain_name="work")       # Backup specific brain
+```
+
+Requires: `NMEM_TELEGRAM_BOT_TOKEN` env var + `[telegram] chat_ids` in config.toml.
+
 ## Import External Data (nmem_import)
 
 Import memories from other systems:
@@ -299,6 +310,7 @@ COMPACT_PROMPT = """You have NeuralMemory for persistent memory across sessions.
 - **Import** (nmem_import): Import from ChromaDB, Mem0, LlamaIndex.
 - **Conflicts** (nmem_conflicts): View and resolve conflicting memories.
 - **Narrative** (nmem_narrative): Generate topic/timeline/causal narratives.
+- **Telegram** (nmem_telegram_backup): Send brain .db backup to Telegram chats.
 
 Be proactive: remember important info without being asked. Call nmem_recap() at session start."""
 

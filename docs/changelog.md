@@ -5,6 +5,36 @@ All notable changes to NeuralMemory are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.19.0] - 2026-03-02
+
+### Added
+
+- **React Dashboard** — Complete rewrite from Alpine.js/vis.js to modern React 19 stack
+  - 7 pages: Overview, Health, Graph, Timeline, Evolution, Diagrams, Settings
+  - Vite 7 + TailwindCSS 4 + shadcn/ui + Recharts + Sigma.js (WebGL)
+  - Warm cream light theme with dark mode support
+  - KPI cards with Framer Motion count-up, Sigma.js graph explorer (10K+ nodes)
+  - Build output served by FastAPI at `/ui` and `/dashboard`
+  - Legacy dashboards at `/ui-legacy` and `/dashboard-legacy`
+
+- **Telegram Backup Integration** — Send brain .db files to Telegram
+  - `TelegramClient` async wrapper (aiohttp), `TelegramConfig` frozen dataclass
+  - Bot token via `NMEM_TELEGRAM_BOT_TOKEN` env var, chat IDs in `config.toml`
+  - CLI: `nmem telegram status/test/backup`
+  - MCP tool: `nmem_telegram_backup` (28th tool)
+  - Dashboard Settings: status indicator, test button, backup button
+
+- **Dashboard API** — New REST endpoints for React dashboard
+  - Brain files, stats, health, evolution, graph, timeline, telegram status/test/backup
+
+### Changed
+
+- MCP tools: 27 → 28
+- `/ui` and `/dashboard` now serve React SPA
+- Tests: 2860+ passed
+
+---
+
 ## [2.13.0] - 2026-02-27
 
 ### Added

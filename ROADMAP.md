@@ -4,7 +4,7 @@
 > Every item passes the VISION.md 4-question test + brain test.
 > ZERO LLM dependency — pure algorithmic, regex, graph-based.
 
-**Current state**: v2.17.0 — 28 MCP tools, 2830+ tests, schema v20, SQLite + FalkorDB backends.
+**Current state**: v2.19.0 — 28 MCP tools, 2860+ tests, schema v20, SQLite + FalkorDB backends.
 **Architecture**: Spreading activation reflex engine, biological memory model, MCP standard.
 
 ---
@@ -26,6 +26,8 @@
 | FalkorDB graph backend (opt-in) | Shipped |
 | VS Code extension (preview) | Shipped |
 | REST API + WebSocket dashboard | Shipped |
+| React dashboard (7 pages, warm cream theme) | Shipped |
+| Telegram backup integration | Shipped |
 | Brain versioning + transplant + merge | Shipped |
 | Algorithmic sufficiency gate (8-gate retrieval validator) | Shipped |
 | Codebase indexing + code-aware recall | Shipped |

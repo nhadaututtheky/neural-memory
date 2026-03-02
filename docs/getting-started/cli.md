@@ -405,6 +405,65 @@ nmem shared sync [--direction push|pull|both] [--json]
 
 ---
 
+## Telegram Commands
+
+### nmem telegram status
+
+Show Telegram integration configuration status.
+
+```bash
+nmem telegram status [--json]
+```
+
+Shows: bot token configured (yes/no), bot name/username, chat IDs, backup-on-consolidation flag.
+
+### nmem telegram test
+
+Send a test message to all configured Telegram chats.
+
+```bash
+nmem telegram test [--json]
+```
+
+Verifies bot token and chat IDs are working. Sends a "NeuralMemory test" message.
+
+### nmem telegram backup
+
+Send brain .db file as backup to all configured Telegram chats.
+
+```bash
+nmem telegram backup [OPTIONS]
+```
+
+**Options:**
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--brain` | `-b` | Brain name (default: current) |
+| `--json` | `-j` | Output as JSON |
+
+**Setup:**
+
+1. Set bot token: `export NMEM_TELEGRAM_BOT_TOKEN="your-bot-token"`
+2. Add chat IDs to `~/.neuralmemory/config.toml`:
+
+```toml
+[telegram]
+enabled = true
+chat_ids = ["123456789"]
+```
+
+**Examples:**
+
+```bash
+nmem telegram status               # Check config
+nmem telegram test                  # Verify bot works
+nmem telegram backup                # Backup current brain
+nmem telegram backup --brain work   # Backup specific brain
+```
+
+---
+
 ## Server Commands
 
 ### nmem serve

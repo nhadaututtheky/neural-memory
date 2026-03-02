@@ -409,13 +409,109 @@ Get graph data for visualization.
 }
 ```
 
-### Web UI
+### Web Dashboard
 
 #### GET /ui
 
-Serve the interactive visualization UI.
+Serve the React dashboard (SPA). Pages: Overview, Health, Graph, Timeline, Evolution, Diagrams, Settings.
 
-Opens a browser-based graph visualization using vis.js.
+Built with React 19 + TailwindCSS 4 + shadcn/ui + Recharts + Sigma.js. Warm cream light theme.
+
+#### GET /ui-legacy
+
+Serve the legacy vis.js graph visualization (backward compat).
+
+#### GET /dashboard-legacy
+
+Serve the legacy Alpine.js dashboard (backward compat).
+
+---
+
+## Dashboard API
+
+### Brain Files
+
+#### GET /api/dashboard/brain-files
+
+Get brain file paths and disk usage.
+
+**Response:**
+
+```json
+{
+  "brains_dir": "/home/user/.neuralmemory/brains",
+  "brains": [
+    {
+      "name": "default",
+      "path": "/home/user/.neuralmemory/brains/default.db",
+      "size_bytes": 1048576,
+      "is_active": true
+    }
+  ],
+  "total_size_bytes": 1048576
+}
+```
+
+### Telegram Status
+
+#### GET /api/dashboard/telegram/status
+
+Get Telegram integration status and bot info.
+
+**Response:**
+
+```json
+{
+  "configured": true,
+  "bot_name": "MyBrainBot",
+  "bot_username": "mybrainbot",
+  "chat_ids": ["123456789"],
+  "backup_on_consolidation": false,
+  "error": null
+}
+```
+
+### Telegram Test
+
+#### POST /api/dashboard/telegram/test
+
+Send a test message to all configured Telegram chats.
+
+**Response:**
+
+```json
+{
+  "status": "ok",
+  "sent_to": 1,
+  "failed": 0
+}
+```
+
+### Telegram Backup
+
+#### POST /api/dashboard/telegram/backup
+
+Send brain .db file as backup to all configured Telegram chats.
+
+**Request Body (optional):**
+
+```json
+{
+  "brain_name": "my-brain"
+}
+```
+
+**Response:**
+
+```json
+{
+  "status": "ok",
+  "brain": "my-brain",
+  "size_mb": 1.5,
+  "sent_to": 1,
+  "failed": 0
+}
+```
 
 ---
 

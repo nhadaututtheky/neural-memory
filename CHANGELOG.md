@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.19.0] - 2026-03-02
+
+### Added
+
+- **React Dashboard** — Modern dashboard replacing legacy Alpine.js/vis.js
+  - Vite 7 + React 19 + TypeScript + TailwindCSS 4 + shadcn/ui
+  - Warm cream light theme (`#faf8f3`) with dark mode support
+  - 7 pages: Overview, Health (Recharts radar), Graph, Timeline, Evolution, Diagrams, Settings
+  - TanStack Query 5 for data fetching, Zustand 5 for state
+  - Lazy-loaded routes with skeleton loaders
+  - `/ui` and `/dashboard` serve React SPA, legacy at `/ui-legacy` and `/dashboard-legacy`
+  - Brain file info: paths, sizes, disk usage in Settings page
+
+- **Telegram Backup Integration** — Send brain `.db` files to Telegram
+  - `TelegramClient` (aiohttp): `send_message` (auto-split >4096 chars), `send_document`, `backup_brain`
+  - `TelegramConfig` frozen dataclass in `unified_config.py` (`[telegram]` TOML section)
+  - CLI: `nmem telegram status`, `nmem telegram test`, `nmem telegram backup [--brain NAME]`
+  - MCP tool: `nmem_telegram_backup` (28 total tools)
+  - Dashboard API: `GET /api/dashboard/telegram/status`, `POST .../test`, `POST .../backup`
+  - Dashboard Settings page: status indicator, test button, backup button
+  - Bot token via `NMEM_TELEGRAM_BOT_TOKEN` env var only (never in config file)
+  - Chat IDs in `config.toml` under `[telegram]` section
+
+- **Brain Files API** — `GET /api/dashboard/brain-files`
+  - Returns brains directory path, per-brain file path + size, total disk usage
+
+### Tests
+
+- 15 new Telegram tests: config, token, client, status, MCP handler
+- MCP tool count updated (27→28)
+
 ## [2.18.0] - 2026-03-02
 
 ### Added

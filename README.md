@@ -12,7 +12,7 @@
 
 NeuralMemory stores experiences as interconnected neurons and recalls them through spreading activation, mimicking how the human brain works. Instead of searching a database, memories surface through associative recall — activating related concepts until the relevant memory emerges.
 
-**27 MCP tools** · **11 memory types** · **24 synapse types** · **Schema v20** · **2830+ tests**
+**28 MCP tools** · **11 memory types** · **24 synapse types** · **Schema v20** · **2860+ tests**
 
 ## Why Not RAG / Vector Search?
 
@@ -135,9 +135,13 @@ nmem consolidate              # Prune, merge, summarize
 nmem cleanup                  # Remove expired memories
 
 # Visual tools
-nmem dashboard                # Rich terminal dashboard
-nmem ui                       # Interactive memory browser
-nmem graph "auth"             # Visualize neural connections
+nmem serve                    # Start FastAPI server
+# Then open http://localhost:8000/ui for React dashboard
+
+# Telegram backup
+nmem telegram status          # Show Telegram config status
+nmem telegram test            # Send test message
+nmem telegram backup          # Send brain .db to Telegram
 ```
 
 ### Python API
@@ -170,7 +174,7 @@ asyncio.run(main())
 
 ### MCP Tools (Claude Code / Cursor)
 
-Once configured, these 27 tools are available to your AI assistant:
+Once configured, these 28 tools are available to your AI assistant:
 
 **Core Memory:**
 
@@ -217,6 +221,7 @@ Once configured, these 27 tools are available to your AI assistant:
 | `nmem_sync` | Multi-device sync (push/pull/full) |
 | `nmem_sync_status` | Sync status and pending changes |
 | `nmem_sync_config` | Configure sync settings |
+| `nmem_telegram_backup` | Send brain database backup to Telegram |
 
 ### VS Code Extension
 
@@ -322,6 +327,38 @@ nmem_version(action="create", name="v1-stable")  # Snapshot
 nmem_version(action="list")                       # List versions
 nmem_version(action="rollback", version_id="...")  # Restore
 nmem_version(action="diff", from_version="...", to_version="...")
+```
+
+### Web Dashboard
+
+```bash
+nmem serve                         # Start server on localhost:8000
+# Open http://localhost:8000/ui    # React dashboard (7 pages)
+# Open http://localhost:8000/docs  # API docs (Swagger)
+```
+
+Pages: Overview (KPIs + brain list), Health (radar chart + warnings), Graph (placeholder for Sigma.js), Timeline, Evolution, Diagrams, Settings (brain files + Telegram backup).
+
+### Telegram Backup
+
+Send brain `.db` files to Telegram for offsite backup:
+
+```bash
+# Setup: set env var + config
+export NMEM_TELEGRAM_BOT_TOKEN="your-bot-token"
+# Add to config.toml:
+# [telegram]
+# enabled = true
+# chat_ids = ["123456789"]
+
+# CLI
+nmem telegram status              # Check config
+nmem telegram test                # Send test message
+nmem telegram backup              # Send brain backup
+nmem telegram backup --brain work # Specific brain
+
+# MCP tool
+nmem_telegram_backup(brain_name="work")
 ```
 
 ### Multi-Device Sync

@@ -1,73 +1,76 @@
-# React + TypeScript + Vite
+# NeuralMemory Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 + TypeScript + Vite 7 dashboard for NeuralMemory.
 
-Currently, two official plugins are available:
+## Tech Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Framework**: React 19 + TypeScript
+- **Build**: Vite 7
+- **Styling**: TailwindCSS 4 + shadcn/ui
+- **State**: TanStack Query 5 + Zustand 5
+- **Charts**: Recharts 3
+- **Graph**: Sigma.js 3 + graphology (WebGL)
+- **Animation**: Framer Motion 11
+- **Icons**: Lucide React
+- **Theme**: Warm cream light (dark mode secondary)
 
-## React Compiler
+## Pages
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Page | Route | Description |
+|------|-------|-------------|
+| Overview | `/dashboard` | KPI cards, brain list, file info |
+| Health | `/dashboard/health` | Radar chart, warnings, recommendations |
+| Graph | `/dashboard/graph` | Sigma.js neural graph explorer |
+| Timeline | `/dashboard/timeline` | Date-filtered memory timeline |
+| Evolution | `/dashboard/evolution` | Brain maturation & stage distribution |
+| Diagrams | `/dashboard/diagrams` | Fiber subgraph viewer |
+| Settings | `/dashboard/settings` | Brain config, Telegram backup, about |
 
-## Expanding the ESLint configuration
+## Development
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+```bash
+# Install dependencies
+npm install
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+# Start dev server (proxies API to localhost:8000)
+npm run dev
+# Opens at http://localhost:5174
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# In another terminal, start the NeuralMemory server
+nmem serve
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Production Build
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+```bash
+npm run build
+# Output: ../src/neural_memory/server/static/dist/
+```
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+The built SPA is served by FastAPI at `/ui` and `/dashboard`.
+
+## Project Structure
+
+```
+src/
+├── main.tsx                  # Entry point
+├── App.tsx                   # Router + QueryClient + Toaster
+├── index.css                 # Warm cream palette + dark mode
+├── lib/utils.ts              # cn() utility
+├── components/
+│   ├── ui/                   # shadcn/ui primitives
+│   └── layout/               # AppShell, Sidebar, TopBar
+├── api/
+│   ├── client.ts             # Fetch wrapper
+│   ├── types.ts              # TypeScript interfaces
+│   └── hooks/                # TanStack Query hooks
+├── features/
+│   ├── overview/             # Overview page + KPI cards
+│   ├── health/               # Health radar + warnings
+│   ├── graph/                # Sigma.js graph explorer
+│   ├── timeline/             # Timeline page
+│   ├── evolution/            # Evolution metrics
+│   ├── diagrams/             # Fiber diagrams
+│   └── settings/             # Settings + Telegram backup
+└── stores/                   # Zustand stores
 ```

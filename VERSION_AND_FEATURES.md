@@ -97,6 +97,9 @@
 | `nmem shared test` | Test shared connection | — |
 | `nmem shared sync` | Sync local with remote | — |
 | `nmem index` | Index codebase into neural memory | --ext, --status, --json |
+| `nmem telegram status` | Show Telegram config status | --json |
+| `nmem telegram test` | Send test message to configured chats | --json |
+| `nmem telegram backup` | Send brain .db backup to Telegram | --brain, --json |
 
 ---
 
@@ -122,6 +125,15 @@
 | DELETE | `/brain/{id}` | Delete brain |
 | WS | `/sync/ws` | WebSocket real-time sync |
 | GET | `/sync/stats` | Sync statistics |
+| GET | `/api/dashboard/stats` | Dashboard overview stats |
+| GET | `/api/dashboard/health` | Dashboard health metrics |
+| GET | `/api/dashboard/evolution` | Brain evolution data |
+| GET | `/api/dashboard/graph` | Graph data for visualization |
+| GET | `/api/dashboard/timeline` | Timeline events |
+| GET | `/api/dashboard/brain-files` | Brain file paths and sizes |
+| GET | `/api/dashboard/telegram/status` | Telegram config status + bot info |
+| POST | `/api/dashboard/telegram/test` | Send test message to Telegram |
+| POST | `/api/dashboard/telegram/backup` | Send brain backup to Telegram |
 
 > All REST endpoints also available at `/api/v1/` prefix.
 
@@ -140,6 +152,7 @@
 | `nmem_suggest` | prefix, limit?, type_filter? | Prefix-based autocomplete suggestions ranked by relevance + frequency |
 | `nmem_session` | action (get/set/end), feature?, task?, progress?, notes? | Track current working session state for cross-session resume (auto-detects git branch) |
 | `nmem_index` | action (scan/status), path?, extensions? | Index codebase into neural memory for code-aware recall |
+| `nmem_telegram_backup` | brain_name? | Send brain .db backup to configured Telegram chats |
 
 **MCP Resources:**
 - `neuralmemory://prompt/system` — Full system prompt
@@ -234,7 +247,7 @@ min_confidence = 0.7        # Threshold for explicit process
 
 ---
 
-## Memory Types (10)
+## Memory Types (11)
 
 | Type | Description |
 |------|-------------|
@@ -248,6 +261,7 @@ min_confidence = 0.7        # Threshold for explicit process
 | `error` | Error patterns |
 | `workflow` | Workflow patterns |
 | `reference` | Reference material |
+| `tool` | Tool usage patterns |
 
 ---
 
@@ -279,6 +293,9 @@ min_confidence = 0.7        # Threshold for explicit process
 neural-memory = neural_memory.cli:main
 nmem = neural_memory.cli:main
 nmem-mcp = neural_memory.mcp:main
+nmem-hook-stop = neural_memory.hooks.stop:main
+nmem-hook-pre-compact = neural_memory.hooks.pre_compact:main
+nmem-hook-post-tool-use = neural_memory.hooks.post_tool_use:main
 ```
 
 ---
@@ -349,7 +366,7 @@ nmem-mcp = neural_memory.mcp:main
 
 | Component | Version |
 |-----------|---------|
-| Python Package | 2.17.0 |
+| Python Package | 2.19.0 |
 | Database Schema | 20 |
 | MCP Tools | 28 |
 | Memory Types | 11 |
