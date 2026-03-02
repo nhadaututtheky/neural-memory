@@ -280,6 +280,48 @@ After restarting Claude Code, just ask naturally:
 
 The agent will automatically call the `recall` tool to search your brain.
 
+## NeuralMemory vs RAG
+
+### Q: I have 100 document files (law, specs, etc.) — should I use NeuralMemory or RAG?
+
+**RAG/Vector Search is better for document lookup.** Here's why:
+
+| Aspect | RAG | NeuralMemory |
+|--------|-----|-------------|
+| **Best for** | "Find the paragraph about X" | "Why did we decide X?" |
+| **Query style** | Semantic similarity search | Associative recall through graph traversal |
+| **100 law docs** | Chunks + embeddings → sub-10ms exact match | SimHash + keyword anchors → weaker semantic matching |
+| **Embedding quality** | LLM understands synonyms, paraphrasing | No embeddings — pure algorithmic, may miss paraphrases |
+| **Returns** | Exact text chunks from source docs | Fiber summaries, not original verbatim text |
+| **Cost** | ~$0.02/1K queries (embedding API) | $0.00 — fully offline |
+
+**When to use which:**
+
+| Scenario | Winner |
+|----------|--------|
+| "What does Article 42 say?" (document lookup) | **RAG** |
+| "Which law covers remote work?" (search) | **RAG** |
+| "Why did the team choose Article 42 over 43?" (decision chain) | **NeuralMemory** |
+| "What pattern do we see in deploy failures?" (habit detection) | **NeuralMemory** |
+| "What did Alice suggest in yesterday's meeting?" (episodic recall) | **NeuralMemory** |
+
+**Can I use both?** Yes — and that's often the best approach:
+- **RAG** for document corpus search (laws, specs, API docs)
+- **NeuralMemory** for agent memory (decisions, errors, workflows, context across sessions)
+
+They complement each other. RAG answers "what does the document say?", NeuralMemory answers "what did we learn and decide?"
+
+### Q: What about `nmem_train` for documents — doesn't that compete with RAG?
+
+`nmem_train` ingests documents into the neural graph as permanent (pinned) knowledge. It works well for:
+- Project docs you reference occasionally
+- Onboarding guides where relationships matter
+- Small doc sets (<20 files) where graph traversal adds value
+
+For **large document corpus search** (100+ files, legal compliance, exact text retrieval), RAG with a proper vector database (Chroma, Pinecone, Weaviate) will outperform NeuralMemory significantly. NeuralMemory's strength is *associative recall* and *relationship tracing*, not *semantic text search*.
+
+---
+
 ## Technical & Architecture
 
 ### Q: Does NeuralMemory use LLMs or embeddings?

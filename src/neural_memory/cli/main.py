@@ -72,8 +72,8 @@ from neural_memory.cli.commands.config_cmd import config_app  # noqa: E402
 from neural_memory.cli.commands.habits import habits_app  # noqa: E402
 from neural_memory.cli.commands.project import project_app  # noqa: E402
 from neural_memory.cli.commands.shared import shared_app  # noqa: E402
-from neural_memory.cli.commands.version import version_app  # noqa: E402
 from neural_memory.cli.commands.telegram import app as telegram_app  # noqa: E402
+from neural_memory.cli.commands.version import version_app  # noqa: E402
 
 app.add_typer(brain_app, name="brain")
 app.add_typer(config_app, name="config")

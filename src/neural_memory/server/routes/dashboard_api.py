@@ -613,8 +613,6 @@ class TelegramStatusResponse(BaseModel):
 class TelegramTestRequest(BaseModel):
     """Request to send a test message."""
 
-    pass
-
 
 class TelegramBackupRequest(BaseModel):
     """Request to trigger a brain backup."""
