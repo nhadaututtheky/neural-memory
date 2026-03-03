@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import sys
 import time
 from pathlib import Path
@@ -17,7 +18,7 @@ logger = logging.getLogger("e2e_ollama")
 for name in ["neural_memory.engine", "neural_memory.storage", "neural_memory.safety"]:
     logging.getLogger(name).setLevel(logging.WARNING)
 
-MD_PATH = "/private/tmp/husqvarna-train/husqvarna-manual.md"
+MD_PATH = os.environ.get("OLLAMA_E2E_MANUAL", "/private/tmp/husqvarna-train/husqvarna-manual.md")
 
 # Same 6 base queries as Gemini E2E
 BASE_QUERIES = [

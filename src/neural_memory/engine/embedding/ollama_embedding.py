@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from neural_memory.engine.embedding.provider import EmbeddingProvider
@@ -16,7 +17,7 @@ _MODEL_DIMENSIONS: dict[str, int] = {
 }
 
 _DEFAULT_MODEL = "bge-m3"
-_DEFAULT_BASE_URL = "http://localhost:11434"
+_DEFAULT_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 
 # Ollama runs locally — use small batches to avoid timeouts on large models
 _BATCH_SIZE = 10
