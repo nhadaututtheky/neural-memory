@@ -285,7 +285,7 @@ async def main() -> None:
     avg_conf = sum(r["confidence"] for r in results_data if r["status"] == "OK") / max(ok_count, 1)
     avg_fibers = sum(r["fibers"] for r in results_data if r["status"] == "OK") / max(ok_count, 1)
 
-    categories = sorted(set(r["category"] for r in results_data))
+    categories = sorted({r["category"] for r in results_data})
     cat_stats = {}
     for cat in categories:
         cat_results = [r for r in results_data if r["category"] == cat]
