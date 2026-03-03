@@ -106,8 +106,7 @@ class TestCrossLanguageHint:
     async def test_hint_shown_on_language_mismatch(self) -> None:
         """Vietnamese query, English brain, 0 results → hint shown."""
         neurons = [
-            FakeNeuron(id=f"n{i}", content=f"Fixed bug number {i} in auth module")
-            for i in range(5)
+            FakeNeuron(id=f"n{i}", content=f"Fixed bug number {i} in auth module") for i in range(5)
         ]
         handler = FakeToolHandler(neurons)
         result = FakeRetrievalResult(fibers_matched=[], confidence=0.0)
@@ -123,10 +122,7 @@ class TestCrossLanguageHint:
     @pytest.mark.asyncio
     async def test_no_hint_when_embedding_enabled(self) -> None:
         """No hint if embedding is already enabled."""
-        neurons = [
-            FakeNeuron(id=f"n{i}", content=f"Fixed bug {i}")
-            for i in range(5)
-        ]
+        neurons = [FakeNeuron(id=f"n{i}", content=f"Fixed bug {i}") for i in range(5)]
         handler = FakeToolHandler(neurons)
         result = FakeRetrievalResult(fibers_matched=[], confidence=0.0)
         config = FakeConfig(embedding_enabled=True)
@@ -138,10 +134,7 @@ class TestCrossLanguageHint:
     @pytest.mark.asyncio
     async def test_no_hint_when_results_found(self) -> None:
         """No hint when recall found fibers with good confidence."""
-        neurons = [
-            FakeNeuron(id=f"n{i}", content=f"Fixed bug {i}")
-            for i in range(5)
-        ]
+        neurons = [FakeNeuron(id=f"n{i}", content=f"Fixed bug {i}") for i in range(5)]
         handler = FakeToolHandler(neurons)
         result = FakeRetrievalResult(fibers_matched=["f1", "f2"], confidence=0.5)
         config = FakeConfig(embedding_enabled=False)
@@ -153,10 +146,7 @@ class TestCrossLanguageHint:
     @pytest.mark.asyncio
     async def test_no_hint_same_language(self) -> None:
         """No hint when query and brain are same language."""
-        neurons = [
-            FakeNeuron(id=f"n{i}", content=f"Fixed auth bug {i}")
-            for i in range(5)
-        ]
+        neurons = [FakeNeuron(id=f"n{i}", content=f"Fixed auth bug {i}") for i in range(5)]
         handler = FakeToolHandler(neurons)
         result = FakeRetrievalResult(fibers_matched=[], confidence=0.0)
         config = FakeConfig(embedding_enabled=False)
@@ -181,8 +171,7 @@ class TestCrossLanguageHint:
     async def test_hint_english_query_vietnamese_brain(self) -> None:
         """English query, Vietnamese brain → hint shown."""
         neurons = [
-            FakeNeuron(id=f"n{i}", content=f"Lỗi xác thực trong module số {i}")
-            for i in range(5)
+            FakeNeuron(id=f"n{i}", content=f"Lỗi xác thực trong module số {i}") for i in range(5)
         ]
         handler = FakeToolHandler(neurons)
         result = FakeRetrievalResult(fibers_matched=[], confidence=0.1)
@@ -197,10 +186,7 @@ class TestCrossLanguageHint:
     @pytest.mark.asyncio
     async def test_hint_includes_pip_install_when_not_installed(self) -> None:
         """Hint mentions pip install when sentence-transformers not installed."""
-        neurons = [
-            FakeNeuron(id=f"n{i}", content=f"Fixed bug {i} in module")
-            for i in range(5)
-        ]
+        neurons = [FakeNeuron(id=f"n{i}", content=f"Fixed bug {i} in module") for i in range(5)]
         handler = FakeToolHandler(neurons)
         result = FakeRetrievalResult(fibers_matched=[], confidence=0.0)
         config = FakeConfig(embedding_enabled=False)
@@ -214,10 +200,7 @@ class TestCrossLanguageHint:
     @pytest.mark.asyncio
     async def test_hint_omits_pip_install_when_installed(self) -> None:
         """Hint omits pip install when sentence-transformers is available."""
-        neurons = [
-            FakeNeuron(id=f"n{i}", content=f"Fixed bug {i} in module")
-            for i in range(5)
-        ]
+        neurons = [FakeNeuron(id=f"n{i}", content=f"Fixed bug {i} in module") for i in range(5)]
         handler = FakeToolHandler(neurons)
         result = FakeRetrievalResult(fibers_matched=[], confidence=0.0)
         config = FakeConfig(embedding_enabled=False)
@@ -235,10 +218,7 @@ class TestCrossLanguageHint:
     @pytest.mark.asyncio
     async def test_hint_low_confidence_triggers(self) -> None:
         """Hint shown when confidence is low (< 0.3) even with some fibers."""
-        neurons = [
-            FakeNeuron(id=f"n{i}", content=f"Fixed English bug {i}")
-            for i in range(5)
-        ]
+        neurons = [FakeNeuron(id=f"n{i}", content=f"Fixed English bug {i}") for i in range(5)]
         handler = FakeToolHandler(neurons)
         # Has fibers but very low confidence
         result = FakeRetrievalResult(fibers_matched=[], confidence=0.1)

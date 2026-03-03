@@ -95,9 +95,7 @@ class TestExtractActionNeuronsStep:
         storage = AsyncMock()
         config = AsyncMock()
 
-        actions = ". ".join(
-            f"implemented feature{i}" for i in range(10)
-        )
+        actions = ". ".join(f"implemented feature{i}" for i in range(10))
         ctx = _make_ctx(actions)
         result = await step.execute(ctx, storage, config)
 
@@ -135,9 +133,7 @@ class TestExtractIntentNeuronsStep:
         storage = AsyncMock()
         config = AsyncMock()
 
-        intents = ". ".join(
-            f"I want to do thing{i}" for i in range(10)
-        )
+        intents = ". ".join(f"I want to do thing{i}" for i in range(10))
         ctx = _make_ctx(intents)
         result = await step.execute(ctx, storage, config)
 

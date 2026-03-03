@@ -51,9 +51,7 @@ def _make_activations(
 
 def _strong_activations(n: int = 5) -> dict[str, _FakeActivation]:
     """Return n activations with high activation levels."""
-    return _make_activations(
-        [(f"n{i}", 0.8, 1, "anchor-0") for i in range(n)]
-    )
+    return _make_activations([(f"n{i}", 0.8, 1, "anchor-0") for i in range(n)])
 
 
 def _make_sufficient_result(gate: str = "default_pass", conf: float = 0.6) -> SufficiencyResult:
@@ -231,9 +229,7 @@ class TestQueryIntentInCheckSufficiency:
     def _borderline_ambiguous_activations(self) -> dict[str, _FakeActivation]:
         """Create activations that borderline-trigger ambiguous_spread with default profile."""
         # 20 activations, entropy ~4+ bits (all equal = max entropy), focus low
-        return _make_activations(
-            [(f"n{i}", 0.15, 2, f"anchor-{i}") for i in range(20)]
-        )
+        return _make_activations([(f"n{i}", 0.15, 2, f"anchor-{i}") for i in range(20)])
 
     def test_strict_intent_lowers_ambiguous_spread_entropy_threshold(self) -> None:
         """With strict profile, entropy_tolerance=0.8, so 3.0*0.8=2.4 threshold.
@@ -292,9 +288,7 @@ class TestQueryIntentInCheckSufficiency:
         """With lenient profile, entropy_tolerance=1.5, threshold=4.5.
         Same high-entropy activations that trigger ambiguous_spread with default should NOT with lenient.
         """
-        activations = _make_activations(
-            [(f"n{i}", 0.10, 2, f"anchor-{i}") for i in range(20)]
-        )
+        activations = _make_activations([(f"n{i}", 0.10, 2, f"anchor-{i}") for i in range(20)])
         anchor_sets = [[f"anchor-{i}"] for i in range(20)]
 
         default_result = check_sufficiency(
@@ -321,9 +315,7 @@ class TestQueryIntentInCheckSufficiency:
         """With strict profile min_top_activation_factor=1.2, so threshold=0.48.
         An activation of 0.42 should NOT trigger intersection_convergence with strict.
         """
-        activations = _make_activations(
-            [("n0", 0.42, 1, "anchor-0"), ("n1", 0.40, 1, "anchor-1")]
-        )
+        activations = _make_activations([("n0", 0.42, 1, "anchor-0"), ("n1", 0.40, 1, "anchor-1")])
         anchor_sets = [["anchor-0"], ["anchor-1"]]
         intersections = ["n0", "n1"]
 
@@ -342,9 +334,7 @@ class TestQueryIntentInCheckSufficiency:
         """With lenient profile min_top_activation_factor=0.7, threshold=0.28.
         An activation of 0.30 should trigger intersection_convergence with lenient but not strict.
         """
-        activations = _make_activations(
-            [("n0", 0.30, 1, "anchor-0"), ("n1", 0.28, 1, "anchor-1")]
-        )
+        activations = _make_activations([("n0", 0.30, 1, "anchor-0"), ("n1", 0.28, 1, "anchor-1")])
         anchor_sets = [["anchor-0"], ["anchor-1"]]
         intersections = ["n0", "n1"]
 
@@ -361,9 +351,7 @@ class TestQueryIntentInCheckSufficiency:
 
     def test_lenient_intersection_count_min_is_1(self) -> None:
         """Lenient profile has min_intersection_count=1, so a single intersection suffices."""
-        activations = _make_activations(
-            [("n0", 0.40, 1, "anchor-0"), ("n1", 0.38, 1, "anchor-1")]
-        )
+        activations = _make_activations([("n0", 0.40, 1, "anchor-0"), ("n1", 0.38, 1, "anchor-1")])
         anchor_sets = [["anchor-0"], ["anchor-1"]]
         intersections = ["n0"]  # only 1 intersection
 
@@ -379,9 +367,7 @@ class TestQueryIntentInCheckSufficiency:
 
     def test_strict_intersection_count_min_is_2(self) -> None:
         """Strict profile has min_intersection_count=2, so a single intersection is insufficient."""
-        activations = _make_activations(
-            [("n0", 0.50, 1, "anchor-0"), ("n1", 0.48, 1, "anchor-1")]
-        )
+        activations = _make_activations([("n0", 0.50, 1, "anchor-0"), ("n1", 0.48, 1, "anchor-1")])
         anchor_sets = [["anchor-0"], ["anchor-1"]]
         intersections = ["n0"]  # only 1 intersection
 
@@ -457,8 +443,7 @@ class TestDiminishingReturnsGate:
         """Direct test: build activations where computed metrics closely match prev."""
         # One anchor, 10 neurons, top=0.80
         activations = _make_activations(
-            [("n0", 0.80, 1, "anchor-0")]
-            + [(f"n{i}", 0.40, 1, "anchor-0") for i in range(1, 10)]
+            [("n0", 0.80, 1, "anchor-0")] + [(f"n{i}", 0.40, 1, "anchor-0") for i in range(1, 10)]
         )
         anchor_sets = [["anchor-0"]]
 
@@ -501,8 +486,7 @@ class TestDiminishingReturnsGate:
     def test_diminishing_returns_does_not_fire_when_activation_improved(self) -> None:
         """When top_activation improved by > 0.05, gate should NOT fire."""
         activations = _make_activations(
-            [("n0", 0.80, 1, "anchor-0")]
-            + [(f"n{i}", 0.40, 1, "anchor-0") for i in range(1, 10)]
+            [("n0", 0.80, 1, "anchor-0")] + [(f"n{i}", 0.40, 1, "anchor-0") for i in range(1, 10)]
         )
         anchor_sets = [["anchor-0"]]
 
@@ -536,8 +520,7 @@ class TestDiminishingReturnsGate:
     def test_diminishing_returns_does_not_fire_when_neuron_count_changed(self) -> None:
         """When neuron count delta > 1, gate should NOT fire."""
         activations = _make_activations(
-            [("n0", 0.80, 1, "anchor-0")]
-            + [(f"n{i}", 0.40, 1, "anchor-0") for i in range(1, 10)]
+            [("n0", 0.80, 1, "anchor-0")] + [(f"n{i}", 0.40, 1, "anchor-0") for i in range(1, 10)]
         )
         anchor_sets = [["anchor-0"]]
 
@@ -571,8 +554,7 @@ class TestDiminishingReturnsGate:
     def test_no_prev_metrics_skips_gate(self) -> None:
         """Without prev_metrics, diminishing_returns gate is skipped entirely."""
         activations = _make_activations(
-            [("n0", 0.80, 1, "anchor-0")]
-            + [(f"n{i}", 0.40, 1, "anchor-0") for i in range(1, 10)]
+            [("n0", 0.80, 1, "anchor-0")] + [(f"n{i}", 0.40, 1, "anchor-0") for i in range(1, 10)]
         )
         anchor_sets = [["anchor-0"]]
 
@@ -596,9 +578,7 @@ class TestCombinedFeaturesInteraction:
     def test_calibration_downgrade_on_default_pass_gate(self) -> None:
         """A default_pass result should be downgraded when calibration shows low avg_confidence."""
         # Build activations that will trigger default_pass (weak signal, not caught by other gates)
-        activations = _make_activations(
-            [("n0", 0.20, 2, "anchor-0"), ("n1", 0.15, 2, "anchor-0")]
-        )
+        activations = _make_activations([("n0", 0.20, 2, "anchor-0"), ("n1", 0.15, 2, "anchor-0")])
         anchor_sets = [["anchor-0"]]
 
         cal = {
@@ -649,8 +629,7 @@ class TestCombinedFeaturesInteraction:
     def test_all_params_can_be_passed_simultaneously(self) -> None:
         """Ensure check_sufficiency accepts all new params without error."""
         activations = _make_activations(
-            [("n0", 0.80, 1, "anchor-0")]
-            + [(f"n{i}", 0.40, 1, "anchor-0") for i in range(1, 10)]
+            [("n0", 0.80, 1, "anchor-0")] + [(f"n{i}", 0.40, 1, "anchor-0") for i in range(1, 10)]
         )
         anchor_sets = [["anchor-0"]]
         prev = SufficiencyMetrics(
@@ -841,8 +820,7 @@ class TestGetGateEmaStats:
             )
             now = utcnow().isoformat()
             rows = [
-                ("brain-1", "default_pass", 1, 0.5 + i * 0.01, 0, "", "{}", now)
-                for i in range(20)
+                ("brain-1", "default_pass", 1, 0.5 + i * 0.01, 0, "", "{}", now) for i in range(20)
             ]
             await conn.executemany(
                 """INSERT INTO retrieval_calibration
@@ -896,10 +874,7 @@ class TestGetGateEmaStats:
             )
             now = utcnow().isoformat()
             # All: predicted_sufficient=1, actual_confidence >= 0.3 → all correct
-            rows = [
-                ("brain-1", "default_pass", 1, 0.8, 0, "", "{}", now)
-                for _ in range(10)
-            ]
+            rows = [("brain-1", "default_pass", 1, 0.8, 0, "", "{}", now) for _ in range(10)]
             await conn.executemany(
                 """INSERT INTO retrieval_calibration
                    (brain_id, gate, predicted_sufficient, actual_confidence,
@@ -949,10 +924,7 @@ class TestGetGateEmaStats:
             )
             now = utcnow().isoformat()
             # All: predicted_sufficient=1, actual_confidence < 0.3 → all wrong
-            rows = [
-                ("brain-1", "default_pass", 1, 0.05, 0, "", "{}", now)
-                for _ in range(10)
-            ]
+            rows = [("brain-1", "default_pass", 1, 0.05, 0, "", "{}", now) for _ in range(10)]
             await conn.executemany(
                 """INSERT INTO retrieval_calibration
                    (brain_id, gate, predicted_sufficient, actual_confidence,

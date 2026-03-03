@@ -221,9 +221,7 @@ class TestNeuronsCreatedCounter:
         )
 
     @pytest.mark.asyncio
-    async def test_neurons_created_for_effective_for(
-        self, sqlite_storage: SQLiteStorage
-    ) -> None:
+    async def test_neurons_created_for_effective_for(self, sqlite_storage: SQLiteStorage) -> None:
         """Tool + task_context appearing enough times should create 2 neurons."""
         from neural_memory.engine.tool_memory import process_events
         from neural_memory.unified_config import ToolMemoryConfig
@@ -352,9 +350,7 @@ class TestMetadataKeyFilter:
         assert fiber_without.id not in result_ids
 
     @pytest.mark.asyncio
-    async def test_sqlite_dot_notation_finds_key(
-        self, sqlite_storage: SQLiteStorage
-    ) -> None:
+    async def test_sqlite_dot_notation_finds_key(self, sqlite_storage: SQLiteStorage) -> None:
         """SQLite json_extract with dot notation ($.key) works for simple keys.
 
         This verifies the DB-level metadata_key query produces results.
@@ -540,14 +536,10 @@ class TestTagsFilterOrdering:
         assert result_saliences[1] == pytest.approx(0.2, abs=1e-6)
 
     @pytest.mark.asyncio
-    async def test_tags_filter_empty_when_no_match(
-        self, sqlite_storage: SQLiteStorage
-    ) -> None:
+    async def test_tags_filter_empty_when_no_match(self, sqlite_storage: SQLiteStorage) -> None:
         """Tags filter with no matching fibers returns empty list."""
         for i in range(3):
-            await _add_fiber_with_neuron(
-                sqlite_storage, f"n-notag-{i}", tags={"other"}
-            )
+            await _add_fiber_with_neuron(sqlite_storage, f"n-notag-{i}", tags={"other"})
 
         results = await sqlite_storage.find_fibers(tags={"absent_tag"}, limit=5)
         assert results == []
@@ -562,9 +554,7 @@ class TestInMemoryOrdering:
     """M7 — InMemoryStorage.find_fibers must return highest-salience fibers first."""
 
     @pytest.mark.asyncio
-    async def test_results_ordered_by_salience_desc(
-        self, memory_storage: InMemoryStorage
-    ) -> None:
+    async def test_results_ordered_by_salience_desc(self, memory_storage: InMemoryStorage) -> None:
         """Fibers inserted in low-to-high order should be returned high-to-low."""
         saliences = [0.1, 0.9, 0.3, 0.7, 0.5]
         for idx, sal in enumerate(saliences):
@@ -577,13 +567,11 @@ class TestInMemoryOrdering:
         for i in range(len(results) - 1):
             assert results[i].salience >= results[i + 1].salience, (
                 f"Salience not descending at position {i}: "
-                f"{results[i].salience} < {results[i+1].salience}"
+                f"{results[i].salience} < {results[i + 1].salience}"
             )
 
     @pytest.mark.asyncio
-    async def test_limit_returns_top_k_by_salience(
-        self, memory_storage: InMemoryStorage
-    ) -> None:
+    async def test_limit_returns_top_k_by_salience(self, memory_storage: InMemoryStorage) -> None:
         """limit=2 should return the 2 highest-salience fibers."""
         saliences = [0.2, 0.8, 0.5, 0.1, 0.9]
         for idx, sal in enumerate(saliences):

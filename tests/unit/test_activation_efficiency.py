@@ -27,16 +27,8 @@ class TestHebbianActivationFloor:
         activations: dict[str, MagicMock] = {}
         a, b = "neuron-a", "neuron-b"
 
-        pre_act = (
-            activations[a].activation_level
-            if activations and a in activations
-            else 0.1
-        )
-        post_act = (
-            activations[b].activation_level
-            if activations and b in activations
-            else 0.1
-        )
+        pre_act = activations[a].activation_level if activations and a in activations else 0.1
+        post_act = activations[b].activation_level if activations and b in activations else 0.1
 
         assert pre_act == 0.1
         assert post_act == 0.1
@@ -48,11 +40,7 @@ class TestHebbianActivationFloor:
         activations = {"neuron-a": mock_result}
         a = "neuron-a"
 
-        pre_act = (
-            activations[a].activation_level
-            if activations and a in activations
-            else 0.1
-        )
+        pre_act = activations[a].activation_level if activations and a in activations else 0.1
 
         assert pre_act == 0.7
 

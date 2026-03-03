@@ -61,7 +61,9 @@ class TestGetUpdateHint:
 
     def test_normal_hint_for_pip_install(self) -> None:
         handler = _make_handler(update_available=True)
-        with patch("neural_memory.mcp.version_check_handler._is_editable_install", return_value=False):
+        with patch(
+            "neural_memory.mcp.version_check_handler._is_editable_install", return_value=False
+        ):
             hint = handler.get_update_hint()
         assert hint is not None
         assert "pip install --upgrade" in hint["message"]
@@ -69,7 +71,9 @@ class TestGetUpdateHint:
 
     def test_editable_hint_for_dev_install(self) -> None:
         handler = _make_handler(update_available=True)
-        with patch("neural_memory.mcp.version_check_handler._is_editable_install", return_value=True):
+        with patch(
+            "neural_memory.mcp.version_check_handler._is_editable_install", return_value=True
+        ):
             hint = handler.get_update_hint()
         assert hint is not None
         assert hint["editable"] is True

@@ -472,9 +472,7 @@ class TestGeminiEmbedding:
 
         # Clear environment so GEMINI_API_KEY and GOOGLE_API_KEY are not set
         env_without_key = {
-            k: v
-            for k, v in os.environ.items()
-            if k not in ("GEMINI_API_KEY", "GOOGLE_API_KEY")
+            k: v for k, v in os.environ.items() if k not in ("GEMINI_API_KEY", "GOOGLE_API_KEY")
         }
         with unittest.mock.patch.dict(os.environ, env_without_key, clear=True):
             with pytest.raises(ValueError, match="API key"):
