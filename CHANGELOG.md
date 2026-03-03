@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.23.0] - 2026-03-03
+
+### Added
+
+- **nmem_explain — Connection Explainer** — New MCP tool to explain how two entities are related
+  - Finds shortest path through synapse graph via bidirectional BFS
+  - Hydrates path with fiber evidence (memory summaries)
+  - Returns structured steps + human-readable markdown explanation
+  - New engine module: `connection_explainer.py` with `ConnectionStep` and `ConnectionExplanation` dataclasses
+  - New handler mixin: `ConnectionHandler` following established mixin pattern
+  - Args: `from_entity`, `to_entity` (required), `max_hops` (optional, 1-10, default 6)
+
+### Fixed
+
+- **OpenClaw Compatibility** — Handle JSON string arguments in MCP `tools/call` handler
+  - OpenClaw sends `arguments` as JSON string instead of dict — now auto-parsed
+  - Prevents crash when receiving `"arguments": "{\"content\": \"...\"}"` format
+
+### Improved
+
+- **Bidirectional BFS** — `get_path()` in SQLite storage now supports `bidirectional=True`
+  - Uses `UNION ALL` to traverse both outgoing and incoming synapse edges
+  - Updated abstract base + all 5 storage implementations
+
+### Tests
+
+- 11 new tests for connection explainer (engine + MCP handler + integration)
+- Total: 3140+ passing
+
 ## [2.22.0] - 2026-03-03
 
 ### Fixed
