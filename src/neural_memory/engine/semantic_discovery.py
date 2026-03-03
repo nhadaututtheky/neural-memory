@@ -80,6 +80,10 @@ def _create_provider(config: BrainConfig, task_type: str = "RETRIEVAL_QUERY") ->
         from neural_memory.engine.embedding.gemini_embedding import GeminiEmbedding
 
         return GeminiEmbedding(model=model_name, task_type=task_type)
+    elif provider_name == "ollama":
+        from neural_memory.engine.embedding.ollama_embedding import OllamaEmbedding
+
+        return OllamaEmbedding(model=model_name)
     else:
         raise ValueError(f"Unknown embedding provider: {provider_name}")
 
