@@ -49,8 +49,7 @@ class OllamaEmbedding(EmbeddingProvider):
                 import httpx
             except ImportError as exc:
                 raise ImportError(
-                    "httpx is required for OllamaEmbedding. "
-                    "Install it with: pip install httpx"
+                    "httpx is required for OllamaEmbedding. Install it with: pip install httpx"
                 ) from exc
 
             self._client = httpx.AsyncClient(

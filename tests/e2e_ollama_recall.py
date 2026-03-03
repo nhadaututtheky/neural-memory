@@ -184,7 +184,9 @@ async def main() -> None:
     logger.info("  embedding_model=%s", loaded_brain.config.embedding_model)
 
     # --- Step 2: Train from markdown ---
-    logger.info("Step 2: Training from markdown file (%d lines)", len(md_path.read_text().splitlines()))
+    logger.info(
+        "Step 2: Training from markdown file (%d lines)", len(md_path.read_text().splitlines())
+    )
 
     from neural_memory.engine.doc_trainer import DocTrainer
 
@@ -262,15 +264,17 @@ async def main() -> None:
             answer_preview = f"ERROR: {e}"
             status = "ERROR"
 
-        results_data.append({
-            "index": i + 1,
-            "category": category,
-            "query": query,
-            "status": status,
-            "fibers": n_fibers,
-            "confidence": round(conf, 2),
-            "answer_preview": answer_preview,
-        })
+        results_data.append(
+            {
+                "index": i + 1,
+                "category": category,
+                "query": query,
+                "status": status,
+                "fibers": n_fibers,
+                "confidence": round(conf, 2),
+                "answer_preview": answer_preview,
+            }
+        )
 
         if (i + 1) % 10 == 0:
             logger.info("  Progress: %d/100 queries done", i + 1)
@@ -291,7 +295,9 @@ async def main() -> None:
         cat_results = [r for r in results_data if r["category"] == cat]
         cat_ok = sum(1 for r in cat_results if r["status"] == "OK")
         cat_total = len(cat_results)
-        cat_avg_conf = sum(r["confidence"] for r in cat_results if r["status"] == "OK") / max(cat_ok, 1)
+        cat_avg_conf = sum(r["confidence"] for r in cat_results if r["status"] == "OK") / max(
+            cat_ok, 1
+        )
         cat_stats[cat] = {"ok": cat_ok, "total": cat_total, "avg_conf": round(cat_avg_conf, 2)}
 
     # --- Print 100vi results ---
@@ -316,7 +322,9 @@ async def main() -> None:
     print("-" * 90)
     for r in results_data:
         marker = "OK" if r["status"] == "OK" else "FAIL"
-        print(f"  {r['index']:3d}. {marker:4s} [{r['category']:6s}] fibers={r['fibers']:2d} conf={r['confidence']:.2f} | {r['query']}")
+        print(
+            f"  {r['index']:3d}. {marker:4s} [{r['category']:6s}] fibers={r['fibers']:2d} conf={r['confidence']:.2f} | {r['query']}"
+        )
         if r["status"] == "OK" and r["fibers"] > 0:
             print(f"       -> {r['answer_preview'][:100]}")
 
@@ -330,28 +338,35 @@ async def main() -> None:
 
     # Save JSON results
     json_path = Path(__file__).resolve().parent / "results_ollama_bge_m3.json"
-    json_path.write_text(json.dumps({
-        "summary": {
-            "provider": "ollama",
-            "model": "bge-m3",
-            "total": total,
-            "ok": ok_count,
-            "fail": fail_count,
-            "error": error_count,
-            "success_rate": round(ok_count / total * 100, 1),
-            "avg_confidence": round(avg_conf, 2),
-            "avg_fibers": round(avg_fibers, 1),
-            "training_time_s": round(train_elapsed, 1),
-            "recall_time_s": round(recall_elapsed, 1),
-            "recall_per_query_s": round(recall_elapsed / total, 2),
-            "neurons_total": len(all_neurons),
-            "neurons_with_embeddings": emb_count,
-            "base_queries_ok": base_ok,
-            "base_queries_total": len(BASE_QUERIES),
-        },
-        "category_stats": cat_stats,
-        "results": results_data,
-    }, indent=2, ensure_ascii=False), encoding="utf-8")
+    json_path.write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "provider": "ollama",
+                    "model": "bge-m3",
+                    "total": total,
+                    "ok": ok_count,
+                    "fail": fail_count,
+                    "error": error_count,
+                    "success_rate": round(ok_count / total * 100, 1),
+                    "avg_confidence": round(avg_conf, 2),
+                    "avg_fibers": round(avg_fibers, 1),
+                    "training_time_s": round(train_elapsed, 1),
+                    "recall_time_s": round(recall_elapsed, 1),
+                    "recall_per_query_s": round(recall_elapsed / total, 2),
+                    "neurons_total": len(all_neurons),
+                    "neurons_with_embeddings": emb_count,
+                    "base_queries_ok": base_ok,
+                    "base_queries_total": len(BASE_QUERIES),
+                },
+                "category_stats": cat_stats,
+                "results": results_data,
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
     print(f"\nJSON results saved: {json_path}")
 
     await storage.close()
