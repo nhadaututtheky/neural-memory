@@ -166,7 +166,9 @@ async def capture_text(text: str) -> dict[str, Any]:
 
         # Use configured threshold (or DEFAULT_CONFIDENCE as floor)
         threshold = max(config.auto.min_confidence, DEFAULT_CONFIDENCE)
-        eligible = [item for item in detected if item["confidence"] >= threshold] if detected else []
+        eligible = (
+            [item for item in detected if item["confidence"] >= threshold] if detected else []
+        )
 
         brain = await storage.get_brain(config.current_brain)
         if not brain:

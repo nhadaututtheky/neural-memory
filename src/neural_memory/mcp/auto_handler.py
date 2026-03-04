@@ -259,9 +259,7 @@ class AutoHandler:
             self._passive_capture_timestamps = []
         # Prune old timestamps outside the window
         self._passive_capture_timestamps = [
-            ts
-            for ts in self._passive_capture_timestamps
-            if now - ts < _PASSIVE_CAPTURE_WINDOW_SECS
+            ts for ts in self._passive_capture_timestamps if now - ts < _PASSIVE_CAPTURE_WINDOW_SECS
         ]
         if len(self._passive_capture_timestamps) >= _PASSIVE_CAPTURE_MAX_PER_WINDOW:
             return
