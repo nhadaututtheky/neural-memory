@@ -376,9 +376,9 @@ class ConsolidationEngine:
                 )
             elif synapse.created_at is not None:
                 days_since_creation = (reference_time - synapse.created_at).total_seconds() / 86400
-                should_prune = (
-                    should_prune and days_since_creation >= self._config.prune_min_inactive_days
-                )
+                # Never-activated synapses use a shorter grace period
+                grace_period = max(1.0, self._config.prune_min_inactive_days / 7)
+                should_prune = should_prune and days_since_creation >= grace_period
 
             if should_prune:
                 # High-salience fibers resist pruning
@@ -401,30 +401,28 @@ class ConsolidationEngine:
                 if not dry_run:
                     await self._storage.delete_synapse(synapse.id)
 
-        if not pruned_synapse_ids:
-            return
-
-        # Update fiber synapse_ids to remove pruned refs
-        # Build inverted index: synapse_id -> fiber indices (only for pruned IDs)
+        # Update fiber synapse_ids to remove pruned refs (only if synapses were pruned)
         fibers = fibers_for_salience
-        synapse_to_fiber_idx: dict[str, list[int]] = {}
-        for idx, fiber in enumerate(fibers):
-            for sid in fiber.synapse_ids & pruned_synapse_ids:
-                synapse_to_fiber_idx.setdefault(sid, []).append(idx)
+        if pruned_synapse_ids:
+            # Build inverted index: synapse_id -> fiber indices (only for pruned IDs)
+            synapse_to_fiber_idx: dict[str, list[int]] = {}
+            for idx, fiber in enumerate(fibers):
+                for sid in fiber.synapse_ids & pruned_synapse_ids:
+                    synapse_to_fiber_idx.setdefault(sid, []).append(idx)
 
-        # Only update fibers that reference pruned synapses
-        affected_indices: set[int] = set()
-        for indices in synapse_to_fiber_idx.values():
-            affected_indices.update(indices)
+            # Only update fibers that reference pruned synapses
+            affected_indices: set[int] = set()
+            for indices in synapse_to_fiber_idx.values():
+                affected_indices.update(indices)
 
-        for idx in affected_indices:
-            if not dry_run:
-                fiber = fibers[idx]
-                updated_fiber = dc_replace(
-                    fiber,
-                    synapse_ids=fiber.synapse_ids - pruned_synapse_ids,
-                )
-                await self._storage.update_fiber(updated_fiber)
+            for idx in affected_indices:
+                if not dry_run:
+                    fiber = fibers[idx]
+                    updated_fiber = dc_replace(
+                        fiber,
+                        synapse_ids=fiber.synapse_ids - pruned_synapse_ids,
+                    )
+                    await self._storage.update_fiber(updated_fiber)
 
         # Find orphan neurons (no synapses, not a fiber anchor)
         if not self._config.prune_isolated_neurons:

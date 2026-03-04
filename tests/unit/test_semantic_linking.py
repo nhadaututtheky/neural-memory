@@ -89,13 +89,13 @@ class TestSemanticLinkingStep:
         config = AsyncMock()
 
         new_entity = _make_neuron("new-1", "Docker", NeuronType.ENTITY)
-        existing = [_make_neuron(f"old-{i}", "Docker", NeuronType.ENTITY) for i in range(5)]
+        existing = [_make_neuron(f"old-{i}", "Docker", NeuronType.ENTITY) for i in range(7)]
         storage.find_neurons.return_value = existing
 
         ctx = _make_ctx(entity_neurons=[new_entity])
         await step.execute(ctx, storage, config)
 
-        assert storage.add_synapse.call_count == 3  # MAX_LINKS_PER_NEURON
+        assert storage.add_synapse.call_count == 5  # MAX_LINKS_PER_NEURON
 
     @pytest.mark.asyncio
     async def test_skips_short_content(self) -> None:

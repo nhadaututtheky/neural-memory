@@ -292,11 +292,25 @@ class ExtractActionNeuronsStep:
         matches = _action_pattern().findall(ctx.content)
         seen: set[str] = set()
 
+        valid_actions: list[str] = []
         for match in matches[: self.MAX_ACTIONS]:
             action_text = match.strip()
             if len(action_text) < 3 or action_text.lower() in seen:
                 continue
             seen.add(action_text.lower())
+            valid_actions.append(action_text)
+
+        if not valid_actions:
+            return ctx
+
+        # Batch check existing action neurons in one query
+        existing_map = await storage.find_neurons_exact_batch(
+            valid_actions, type=NeuronType.ACTION
+        )
+
+        for action_text in valid_actions:
+            if action_text in existing_map:
+                continue
             neuron = Neuron.create(type=NeuronType.ACTION, content=action_text)
             await storage.add_neuron(neuron)
             ctx.action_neurons.append(neuron)
@@ -338,11 +352,25 @@ class ExtractIntentNeuronsStep:
         matches = _intent_pattern().findall(ctx.content)
         seen: set[str] = set()
 
+        valid_intents: list[str] = []
         for match in matches[: self.MAX_INTENTS]:
             intent_text = match.strip()
             if len(intent_text) < 2 or intent_text.lower() in seen:
                 continue
             seen.add(intent_text.lower())
+            valid_intents.append(intent_text)
+
+        if not valid_intents:
+            return ctx
+
+        # Batch check existing intent neurons in one query
+        existing_map = await storage.find_neurons_exact_batch(
+            valid_intents, type=NeuronType.INTENT
+        )
+
+        for intent_text in valid_intents:
+            if intent_text in existing_map:
+                continue
             neuron = Neuron.create(type=NeuronType.INTENT, content=intent_text)
             await storage.add_neuron(neuron)
             ctx.intent_neurons.append(neuron)
@@ -955,8 +983,8 @@ class SemanticLinkingStep:
     neurons with matching content. Only creates RELATED_TO synapses.
     """
 
-    MAX_NEURONS_PER_ENCODE: int = 10
-    MAX_LINKS_PER_NEURON: int = 3
+    MAX_NEURONS_PER_ENCODE: int = 20
+    MAX_LINKS_PER_NEURON: int = 5
 
     @property
     def name(self) -> str:

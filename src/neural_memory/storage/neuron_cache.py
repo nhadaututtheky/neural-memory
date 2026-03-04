@@ -28,7 +28,7 @@ class NeuronLookupCache:
         _max_entries: Maximum cache entries before eviction.
     """
 
-    def __init__(self, ttl_seconds: float = 30.0, max_entries: int = 500) -> None:
+    def __init__(self, ttl_seconds: float = 60.0, max_entries: int = 2000) -> None:
         self._ttl = ttl_seconds
         self._max_entries = max_entries
         self._cache: dict[tuple[str, str | None], tuple[float, list[Neuron]]] = {}
@@ -62,8 +62,21 @@ class NeuronLookupCache:
         self._cache[(content, neuron_type)] = (time.monotonic(), neurons)
 
     def invalidate(self) -> None:
-        """Clear all cached entries (called on neuron add/update/delete)."""
+        """Clear all cached entries (called on neuron update/delete)."""
         self._cache.clear()
+
+    def invalidate_key(self, content: str, neuron_type: str | None = None) -> None:
+        """Remove cache entries matching this content.
+
+        More efficient than full invalidation — used on neuron add where
+        only the specific key could be stale (was a miss, now should hit).
+        Evicts both the typed key and the untyped (None) key since
+        callers may lookup without a type filter.
+        """
+        self._cache.pop((content, neuron_type), None)
+        if neuron_type is not None:
+            # Also evict untyped lookups for same content
+            self._cache.pop((content, None), None)
 
     @property
     def size(self) -> int:

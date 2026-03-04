@@ -100,7 +100,8 @@ class SQLiteNeuronMixin:
             )
 
             await conn.commit()
-            self._neuron_cache.invalidate()
+            # Surgical invalidation: only evict the key that this neuron matches
+            self._neuron_cache.invalidate_key(neuron.content, neuron.type.value)
             return neuron.id
         except sqlite3.IntegrityError:
             raise ValueError(f"Neuron {neuron.id} already exists")

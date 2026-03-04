@@ -538,6 +538,7 @@ CREATE INDEX IF NOT EXISTS idx_fibers_salience ON fibers(brain_id, salience);
 CREATE INDEX IF NOT EXISTS idx_fibers_conductivity ON fibers(brain_id, conductivity);
 CREATE INDEX IF NOT EXISTS idx_fibers_updated ON fibers(brain_id, updated_at);
 CREATE INDEX IF NOT EXISTS idx_fibers_pinned ON fibers(brain_id, pinned);
+CREATE INDEX IF NOT EXISTS idx_fibers_time_range ON fibers(brain_id, created_at, time_start);
 
 -- Fiber-neuron junction table (fast lookups)
 CREATE TABLE IF NOT EXISTS fiber_neurons (
