@@ -31,7 +31,7 @@ export type ToolDefinition = {
   readonly name: string;
   readonly description: string;
   readonly parameters: JsonSchema;
-  readonly execute: (args: Record<string, unknown>) => Promise<unknown>;
+  readonly execute: (id: string, args: Record<string, unknown>) => Promise<unknown>;
 };
 
 // ── Tool factory ───────────────────────────────────────────
@@ -114,7 +114,7 @@ export function createTools(mcp: NeuralMemoryMcpClient): ToolDefinition[] {
         },
         required: ["content"],
       },
-      execute: (args) => call("nmem_remember", args),
+      execute: (_id, args) => call("nmem_remember", args),
     },
 
     {
@@ -152,7 +152,7 @@ export function createTools(mcp: NeuralMemoryMcpClient): ToolDefinition[] {
         },
         required: ["query"],
       },
-      execute: (args) => call("nmem_recall", args),
+      execute: (_id, args) => call("nmem_recall", args),
     },
 
     {
@@ -175,7 +175,7 @@ export function createTools(mcp: NeuralMemoryMcpClient): ToolDefinition[] {
           },
         },
       },
-      execute: (args) => call("nmem_context", args),
+      execute: (_id, args) => call("nmem_context", args),
     },
 
     {
@@ -199,7 +199,7 @@ export function createTools(mcp: NeuralMemoryMcpClient): ToolDefinition[] {
         },
         required: ["task"],
       },
-      execute: (args) => call("nmem_todo", args),
+      execute: (_id, args) => call("nmem_todo", args),
     },
 
     {
@@ -210,7 +210,7 @@ export function createTools(mcp: NeuralMemoryMcpClient): ToolDefinition[] {
         type: "object",
         properties: {},
       },
-      execute: (args) => call("nmem_stats", args),
+      execute: (_id, args) => call("nmem_stats", args),
     },
 
     {
@@ -222,7 +222,7 @@ export function createTools(mcp: NeuralMemoryMcpClient): ToolDefinition[] {
         type: "object",
         properties: {},
       },
-      execute: (args) => call("nmem_health", args),
+      execute: (_id, args) => call("nmem_health", args),
     },
   ];
 }

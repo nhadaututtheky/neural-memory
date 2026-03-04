@@ -506,7 +506,7 @@ def _select_strategies(hints: tuple[HealthHint, ...]) -> tuple[str, ...]:
         key=lambda item: severity_order[item[1]],
     )
 
-    return tuple(s for s, _ in sorted_strategies)
+    return tuple(s for s, _ in sorted_strategies if s != "none")
 
 
 def _compute_adaptive_interval(hint_count: int, base_interval: int) -> int:

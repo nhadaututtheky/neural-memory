@@ -128,7 +128,7 @@ async def _encode_and_store(
 
 
 def remember(
-    content: Annotated[str, typer.Argument(help="Content to remember")],
+    content: Annotated[str, typer.Argument(help="Content to remember")] = "",
     tags: Annotated[
         list[str] | None, typer.Option("--tag", "-t", help="Tags for the memory")
     ] = None,
@@ -169,6 +169,10 @@ def remember(
             help="ISO datetime of original event (e.g. '2026-03-02T08:00:00'). Defaults to now.",
         ),
     ] = None,
+    stdin: Annotated[
+        bool,
+        typer.Option("--stdin", help="Read content from stdin (safe for shell-special characters)"),
+    ] = False,
     json_output: Annotated[bool, typer.Option("--json", "-j", help="Output as JSON")] = False,
 ) -> None:
     """Store a new memory (type auto-detected if not specified).
@@ -179,7 +183,16 @@ def remember(
         nmem remember "Need to refactor auth module" --type todo --priority 7
         nmem remember "API_KEY=xxx" --redact
         nmem remember "Meeting at 8am" --timestamp "2026-03-02T08:00:00"
+        echo "content with backticks" | nmem remember --stdin --type context
     """
+    import sys
+
+    if stdin:
+        content = sys.stdin.read().strip()
+    if not content:
+        typer.secho("Error: content is required (pass as argument or use --stdin).", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
+
     store_content, sensitive_matches = _validate_content(content, force=force, redact=redact)
     mem_type = _resolve_memory_type(memory_type, store_content)
     expiry_days = expires if expires is not None else DEFAULT_EXPIRY_DAYS.get(mem_type)
