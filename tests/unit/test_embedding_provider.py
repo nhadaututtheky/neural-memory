@@ -718,7 +718,7 @@ class TestEmbeddingSettings:
         """Should accept all valid provider names."""
         from neural_memory.unified_config import EmbeddingSettings
 
-        for provider in ("sentence_transformer", "openai", "gemini", ""):
+        for provider in ("sentence_transformer", "openai", "gemini", "ollama", ""):
             s = EmbeddingSettings(provider=provider)
             assert s.provider == provider
 
@@ -754,3 +754,200 @@ class TestEmbeddingSettings:
         s = EmbeddingSettings.from_dict({"provider": "bad_provider"})
         assert s.provider == ""
         assert s.enabled is False
+
+
+# ── OllamaEmbedding tests ────────────────────────────────────────
+
+
+class TestOllamaEmbedding:
+    """Test OllamaEmbedding with mocked httpx."""
+
+    def test_default_model(self) -> None:
+        """Should default to bge-m3 model."""
+        from neural_memory.engine.embedding.ollama_embedding import OllamaEmbedding
+
+        provider = OllamaEmbedding()
+        assert provider._model == "bge-m3"
+
+    def test_custom_model_and_url(self) -> None:
+        """Should accept custom model and base URL."""
+        from neural_memory.engine.embedding.ollama_embedding import OllamaEmbedding
+
+        provider = OllamaEmbedding(model="nomic-embed-text", base_url="http://gpu-server:11434")
+        assert provider._model == "nomic-embed-text"
+        assert provider._base_url == "http://gpu-server:11434"
+
+    def test_strips_trailing_slash(self) -> None:
+        """Should strip trailing slash from base URL."""
+        from neural_memory.engine.embedding.ollama_embedding import OllamaEmbedding
+
+        provider = OllamaEmbedding(base_url="http://localhost:11434/")
+        assert provider._base_url == "http://localhost:11434"
+
+    def test_dimension_known_models(self) -> None:
+        """Should return correct dimensions for known models."""
+        from neural_memory.engine.embedding.ollama_embedding import OllamaEmbedding
+
+        assert OllamaEmbedding(model="bge-m3").dimension == 1024
+        assert OllamaEmbedding(model="nomic-embed-text").dimension == 768
+        assert OllamaEmbedding(model="mxbai-embed-large").dimension == 1024
+        assert OllamaEmbedding(model="all-minilm").dimension == 384
+
+    def test_dimension_unknown_model_defaults_to_1024(self) -> None:
+        """Should fallback to 1024 for unknown models."""
+        from neural_memory.engine.embedding.ollama_embedding import OllamaEmbedding
+
+        provider = OllamaEmbedding(model="some-future-model")
+        assert provider.dimension == 1024
+
+    def test_dimension_uses_cached_after_embed(self) -> None:
+        """Should prefer cached dimension from actual API response."""
+        from neural_memory.engine.embedding.ollama_embedding import OllamaEmbedding
+
+        provider = OllamaEmbedding(model="bge-m3")
+        provider._cached_dimension = 512  # Simulate cache from embed()
+        assert provider.dimension == 512
+
+    @pytest.mark.asyncio
+    async def test_embed_batch_empty(self) -> None:
+        """embed_batch with empty list should return empty list."""
+        from neural_memory.engine.embedding.ollama_embedding import OllamaEmbedding
+
+        provider = OllamaEmbedding()
+        result = await provider.embed_batch([])
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_embed_with_mock_client(self) -> None:
+        """Should call Ollama /api/embed and return embedding."""
+        import unittest.mock
+
+        from neural_memory.engine.embedding.ollama_embedding import OllamaEmbedding
+
+        provider = OllamaEmbedding()
+
+        mock_response = unittest.mock.MagicMock()
+        mock_response.raise_for_status = unittest.mock.MagicMock()
+        mock_response.json.return_value = {"embeddings": [[0.1, 0.2, 0.3]]}
+
+        mock_client = unittest.mock.AsyncMock()
+        mock_client.post = unittest.mock.AsyncMock(return_value=mock_response)
+
+        provider._client = mock_client
+
+        result = await provider.embed("hello")
+        assert result == [0.1, 0.2, 0.3]
+        mock_client.post.assert_called_once_with(
+            "/api/embed",
+            json={"model": "bge-m3", "input": "hello"},
+        )
+
+    @pytest.mark.asyncio
+    async def test_embed_caches_dimension(self) -> None:
+        """Should cache dimension from first API response."""
+        import unittest.mock
+
+        from neural_memory.engine.embedding.ollama_embedding import OllamaEmbedding
+
+        provider = OllamaEmbedding()
+        assert provider._cached_dimension is None
+
+        mock_response = unittest.mock.MagicMock()
+        mock_response.raise_for_status = unittest.mock.MagicMock()
+        mock_response.json.return_value = {"embeddings": [[0.1] * 1024]}
+
+        mock_client = unittest.mock.AsyncMock()
+        mock_client.post = unittest.mock.AsyncMock(return_value=mock_response)
+        provider._client = mock_client
+
+        await provider.embed("test")
+        assert provider._cached_dimension == 1024
+
+    @pytest.mark.asyncio
+    async def test_embed_batch_with_mock_client(self) -> None:
+        """Should call Ollama /api/embed with batch input."""
+        import unittest.mock
+
+        from neural_memory.engine.embedding.ollama_embedding import OllamaEmbedding
+
+        provider = OllamaEmbedding()
+
+        mock_response = unittest.mock.MagicMock()
+        mock_response.raise_for_status = unittest.mock.MagicMock()
+        mock_response.json.return_value = {
+            "embeddings": [[0.1, 0.2], [0.3, 0.4]],
+        }
+
+        mock_client = unittest.mock.AsyncMock()
+        mock_client.post = unittest.mock.AsyncMock(return_value=mock_response)
+        provider._client = mock_client
+
+        result = await provider.embed_batch(["hello", "world"])
+        assert len(result) == 2
+        assert result[0] == [0.1, 0.2]
+        assert result[1] == [0.3, 0.4]
+
+    @pytest.mark.asyncio
+    async def test_embed_batch_chunks_large_input(self) -> None:
+        """Should chunk large batches into _BATCH_SIZE per request."""
+        import unittest.mock
+
+        from neural_memory.engine.embedding.ollama_embedding import (
+            _BATCH_SIZE,
+            OllamaEmbedding,
+        )
+
+        provider = OllamaEmbedding()
+
+        # Create texts larger than batch size
+        texts = [f"text_{i}" for i in range(_BATCH_SIZE + 5)]
+
+        def make_response(embeddings: list[list[float]]) -> unittest.mock.MagicMock:
+            resp = unittest.mock.MagicMock()
+            resp.raise_for_status = unittest.mock.MagicMock()
+            resp.json.return_value = {"embeddings": embeddings}
+            return resp
+
+        # First call returns _BATCH_SIZE embeddings, second returns 5
+        mock_client = unittest.mock.AsyncMock()
+        mock_client.post = unittest.mock.AsyncMock(
+            side_effect=[
+                make_response([[0.1]] * _BATCH_SIZE),
+                make_response([[0.2]] * 5),
+            ]
+        )
+        provider._client = mock_client
+
+        result = await provider.embed_batch(texts)
+        assert len(result) == _BATCH_SIZE + 5
+        assert mock_client.post.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_lazy_import_error(self) -> None:
+        """Should raise ImportError with helpful message when httpx not installed."""
+        import unittest.mock
+
+        from neural_memory.engine.embedding.ollama_embedding import OllamaEmbedding
+
+        provider = OllamaEmbedding()
+        provider._client = None  # Force re-import
+
+        with unittest.mock.patch.dict("sys.modules", {"httpx": None}):
+            with pytest.raises(ImportError, match="httpx"):
+                await provider.embed("test")
+
+    def test_ollama_in_valid_providers(self) -> None:
+        """'ollama' should be a valid embedding provider."""
+        config = EmbeddingConfig(provider="ollama", model="bge-m3")
+        assert config.provider == "ollama"
+
+    def test_factory_creates_ollama_provider(self) -> None:
+        """_create_provider should create OllamaEmbedding for 'ollama' provider."""
+        from neural_memory.core.brain import BrainConfig
+        from neural_memory.engine.embedding.ollama_embedding import OllamaEmbedding
+        from neural_memory.engine.semantic_discovery import _create_provider
+
+        config = BrainConfig(embedding_provider="ollama", embedding_model="bge-m3")
+        provider = _create_provider(config)
+        assert isinstance(provider, OllamaEmbedding)
+        assert provider._model == "bge-m3"

@@ -114,7 +114,13 @@ class EmbeddingSettings:
     model: str = "all-MiniLM-L6-v2"
     similarity_threshold: float = 0.7
 
-    _VALID_PROVIDERS: ClassVar[tuple[str, ...]] = ("sentence_transformer", "openai", "gemini", "")
+    _VALID_PROVIDERS: ClassVar[tuple[str, ...]] = (
+        "sentence_transformer",
+        "openai",
+        "gemini",
+        "ollama",
+        "",
+    )
 
     def __post_init__(self) -> None:
         if self.provider not in self._VALID_PROVIDERS:
