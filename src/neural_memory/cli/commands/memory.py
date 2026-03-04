@@ -190,7 +190,11 @@ def remember(
     if stdin:
         content = sys.stdin.read().strip()
     if not content:
-        typer.secho("Error: content is required (pass as argument or use --stdin).", fg=typer.colors.RED, err=True)
+        typer.secho(
+            "Error: content is required (pass as argument or use --stdin).",
+            fg=typer.colors.RED,
+            err=True,
+        )
         raise typer.Exit(1)
 
     store_content, sensitive_matches = _validate_content(content, force=force, redact=redact)
