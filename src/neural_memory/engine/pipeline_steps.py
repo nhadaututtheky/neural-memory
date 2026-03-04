@@ -304,9 +304,7 @@ class ExtractActionNeuronsStep:
             return ctx
 
         # Batch check existing action neurons in one query
-        existing_map = await storage.find_neurons_exact_batch(
-            valid_actions, type=NeuronType.ACTION
-        )
+        existing_map = await storage.find_neurons_exact_batch(valid_actions, type=NeuronType.ACTION)
 
         for action_text in valid_actions:
             if action_text in existing_map:
@@ -364,9 +362,7 @@ class ExtractIntentNeuronsStep:
             return ctx
 
         # Batch check existing intent neurons in one query
-        existing_map = await storage.find_neurons_exact_batch(
-            valid_intents, type=NeuronType.INTENT
-        )
+        existing_map = await storage.find_neurons_exact_batch(valid_intents, type=NeuronType.INTENT)
 
         for intent_text in valid_intents:
             if intent_text in existing_map:
