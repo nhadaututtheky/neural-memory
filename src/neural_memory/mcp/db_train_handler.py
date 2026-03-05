@@ -83,10 +83,16 @@ class DBTrainHandler:
         raw_db_path = connection_string[len("sqlite:///") :]
         db_path = Path(raw_db_path).resolve()
 
-        # Reject path traversal: resolved path must not contain ".." components
-        # and must match what the user intended (no symlink trickery)
-        if ".." in Path(raw_db_path).parts:
-            return {"error": "Invalid database path: path traversal not allowed"}
+        # Reject path traversal: resolved path must be within cwd, user home, or temp dir
+        import tempfile
+
+        cwd = Path.cwd().resolve()
+        home_dir = Path.home().resolve()
+        temp_dir = Path(tempfile.gettempdir()).resolve()
+        system_tmp = Path("/tmp").resolve()  # noqa: S108
+        allowed_roots = (cwd, home_dir, temp_dir, system_tmp)
+        if not any(db_path.is_relative_to(root) for root in allowed_roots):
+            return {"error": "Invalid database path: must be within working directory or user home"}
         if not db_path.is_file():
             return {"error": "Database file not found"}
 

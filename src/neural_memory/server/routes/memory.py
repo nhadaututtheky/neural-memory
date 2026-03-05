@@ -310,7 +310,7 @@ async def create_neuron(
     try:
         neuron_type = NeuronType(request.type)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid neuron type: {request.type}")
+        raise HTTPException(status_code=400, detail="Invalid neuron type")
 
     neuron = Neuron(
         id=request.id or str(uuid4()),
@@ -381,7 +381,7 @@ async def update_neuron(
         try:
             updates["type"] = NeuronType(request.type)
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid neuron type: {request.type}")
+            raise HTTPException(status_code=400, detail="Invalid neuron type")
     if request.content is not None:
         updates["content"] = request.content
     if request.metadata is not None:
@@ -501,8 +501,8 @@ async def get_neuron_neighbors(
     if synapse_types:
         try:
             s_types = [SynapseType(t.strip()) for t in synapse_types.split(",")]
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=f"Invalid synapse type: {e}")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid synapse type")
 
     neighbors = await storage.get_neighbors(
         neuron_id=neuron_id,
@@ -608,12 +608,12 @@ async def create_synapse(
     try:
         synapse_type = SynapseType(request.type)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid synapse type: {request.type}")
+        raise HTTPException(status_code=400, detail="Invalid synapse type")
 
     try:
         direction = Direction(request.direction)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid direction: {request.direction}")
+        raise HTTPException(status_code=400, detail="Invalid direction")
 
     synapse = Synapse(
         id=request.id or str(uuid4()),
@@ -685,7 +685,7 @@ async def list_synapses(
         try:
             synapse_type = SynapseType(type)
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid synapse type: {type}")
+            raise HTTPException(status_code=400, detail="Invalid synapse type")
 
     synapses = await storage.get_synapses(
         source_id=source_id,

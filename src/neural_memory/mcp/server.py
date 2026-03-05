@@ -280,7 +280,7 @@ async def handle_message(server: MCPServer, message: dict[str, Any]) -> dict[str
             try:
                 await server._post_tool_capture(tool_name, tool_args, result_text)
             except Exception:
-                pass
+                logger.debug("Post-tool passive capture failed", exc_info=True)
 
             return {
                 "jsonrpc": "2.0",

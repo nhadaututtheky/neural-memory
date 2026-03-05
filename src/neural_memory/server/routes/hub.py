@@ -81,10 +81,9 @@ def _validate_strategy(strategy: str) -> ConflictStrategy:
     try:
         return ConflictStrategy(strategy)
     except ValueError:
-        valid = [s.value for s in ConflictStrategy]
         raise HTTPException(
             status_code=422,
-            detail=f"Invalid strategy '{strategy}'. Must be one of: {valid}",
+            detail="Invalid conflict strategy",
         )
 
 
