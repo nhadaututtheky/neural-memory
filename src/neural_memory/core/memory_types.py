@@ -351,35 +351,8 @@ def suggest_memory_type(content: str) -> MemoryType:
         ):
             return MemoryType.TODO
 
-    # Insight patterns — causal/discovery language (check BEFORE decision/error)
-    if any(
-        _has_keyword(content_lower, kw)
-        for kw in [
-            "learned",
-            "realized",
-            "discovered",
-            "found that",
-            "turns out",
-            "root cause",
-            "the trick",
-            "key insight",
-            "lesson learned",
-            "because",
-            "pattern",
-            "noticed that",
-            "figured out",
-        ]
-    ):
-        return MemoryType.INSIGHT
-
-    # Error patterns — problem/failure language
-    if any(
-        _has_keyword(content_lower, kw)
-        for kw in ["error", "bug", "crash", "exception", "traceback", "failed", "broken"]
-    ):
-        return MemoryType.ERROR
-
-    # Decision patterns — deliberate choice language
+    # Decision patterns — deliberate choice language (check BEFORE insight,
+    # since decisions often contain causal words like "because")
     if any(
         _has_keyword(content_lower, kw)
         for kw in [
@@ -392,9 +365,39 @@ def suggest_memory_type(content: str) -> MemoryType:
             "chose over",
             "instead of",
             "switched to",
+            "rejected",
+            "went with",
         ]
     ):
         return MemoryType.DECISION
+
+    # Error patterns — problem/failure language (check BEFORE insight,
+    # since errors may contain "root cause" or "found that")
+    if any(
+        _has_keyword(content_lower, kw)
+        for kw in ["error", "bug", "crash", "exception", "traceback", "failed", "broken"]
+    ):
+        return MemoryType.ERROR
+
+    # Insight patterns — causal/discovery language
+    if any(
+        _has_keyword(content_lower, kw)
+        for kw in [
+            "learned",
+            "realized",
+            "discovered",
+            "found that",
+            "turns out",
+            "root cause",
+            "the trick",
+            "key insight",
+            "lesson learned",
+            "noticed that",
+            "figured out",
+            "the pattern",
+        ]
+    ):
+        return MemoryType.INSIGHT
 
     # Instruction patterns (check BEFORE preference - "always use" vs "always")
     if any(
@@ -411,7 +414,8 @@ def suggest_memory_type(content: str) -> MemoryType:
 
     # Preference patterns
     if any(
-        _has_keyword(content_lower, kw) for kw in ["prefer", "like", "favorite", "hate", "dislike"]
+        _has_keyword(content_lower, kw)
+        for kw in ["prefer", "prefers", "preferred", "like", "favorite", "hate", "dislike"]
     ):
         return MemoryType.PREFERENCE
 
