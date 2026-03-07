@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.27.3] - 2026-03-08
+
+### Fixed
+
+- **OpenAI-compatible client HTTP 400** — Tool schemas now include `parameters` alias alongside `inputSchema`, fixing "schema must be type object, got type None" errors when MCP tools are forwarded through OpenAI-compatible bridges (Cursor, LiteLLM, etc.)
+
+### Added
+
+- **Cognitive Reasoning Guide** — Full workflow documentation: hypothesize, evidence, predict, verify loop with Bayesian confidence formula, end-to-end examples (`docs/guides/cognitive-reasoning.md`)
+- **Schema v21 Migration Guide** — New tables, auto-migration behavior, rollback instructions (`docs/guides/schema-v21-migration.md`)
+- **Learning Habits Guide** — 3-stage pipeline, thresholds, confidence calculation, suggestion engine (`docs/guides/learning-habits.md`)
+- **Pre-ship smoke tests** — Auto-type classifier (13 cases) and cognitive engine integration test in `scripts/pre_ship.py`
+
 ## [2.27.2] - 2026-03-07
 
 ### Fixed

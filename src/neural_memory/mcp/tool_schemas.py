@@ -66,9 +66,7 @@ def get_tool_schemas_for_tier(tier: str) -> list[dict[str, Any]]:
     if allowed is None:
         # "full" or unknown → return all
         return _with_parameters_alias(_ALL_TOOL_SCHEMAS)
-    return _with_parameters_alias(
-        [t for t in _ALL_TOOL_SCHEMAS if t["name"] in allowed]
-    )
+    return _with_parameters_alias([t for t in _ALL_TOOL_SCHEMAS if t["name"] in allowed])
 
 
 _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
