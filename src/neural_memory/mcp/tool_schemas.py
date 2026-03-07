@@ -31,9 +31,25 @@ TOOL_TIERS: dict[str, frozenset[str]] = {
 }
 
 
+def _with_parameters_alias(schemas: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Add ``parameters`` as an alias for ``inputSchema`` on each tool.
+
+    MCP clients read ``inputSchema``, but OpenAI-compatible bridges
+    (Cursor, LiteLLM, etc.) read ``parameters``.  Including both keys
+    prevents HTTP 400 errors when tools are forwarded to OpenAI API.
+    """
+    out: list[dict[str, Any]] = []
+    for tool in schemas:
+        t = {**tool}
+        if "inputSchema" in t and "parameters" not in t:
+            t["parameters"] = t["inputSchema"]
+        out.append(t)
+    return out
+
+
 def get_tool_schemas() -> list[dict[str, Any]]:
     """Return list of all MCP tool schemas (unfiltered)."""
-    return _ALL_TOOL_SCHEMAS.copy()
+    return _with_parameters_alias(_ALL_TOOL_SCHEMAS)
 
 
 def get_tool_schemas_for_tier(tier: str) -> list[dict[str, Any]]:
@@ -49,8 +65,10 @@ def get_tool_schemas_for_tier(tier: str) -> list[dict[str, Any]]:
     allowed = TOOL_TIERS.get(tier)
     if allowed is None:
         # "full" or unknown → return all
-        return _ALL_TOOL_SCHEMAS.copy()
-    return [t for t in _ALL_TOOL_SCHEMAS if t["name"] in allowed]
+        return _with_parameters_alias(_ALL_TOOL_SCHEMAS)
+    return _with_parameters_alias(
+        [t for t in _ALL_TOOL_SCHEMAS if t["name"] in allowed]
+    )
 
 
 _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
