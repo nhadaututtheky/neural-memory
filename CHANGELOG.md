@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.27.2] - 2026-03-07
+
+### Fixed
+
+- **OpenClaw plugin: lazy auto-connect** — Fixed tools returning "NeuralMemory service not running" when OpenClaw calls `register()` multiple times across subsystems (gateway, agent worker, CLI). Agent worker instance now lazily connects on first tool call via `ensureConnected()` with connection mutex to prevent race conditions (#38)
+
 ## [2.27.1] - 2026-03-06
 
 ### Added

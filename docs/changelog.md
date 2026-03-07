@@ -5,20 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.27.0] - 2026-03-06
-
-### Added
-
-- **`nmem_edit`** — Edit memory type, content, or priority by fiber ID. Preserves all neural connections
-- **`nmem_forget`** — Soft delete (expires) or hard delete (permanent removal with cascade)
-- **Enhanced MCP instructions** — Richer behavioral directives for brain growth, all 38 tools listed
-- **Enhanced plugin instructions** — Comprehensive agent guidance in `.claude-plugin/plugin.json`
+## [2.27.2] - 2026-03-07
 
 ### Fixed
 
-- **FK constraint errors** — `INSERT OR REPLACE INTO neuron_states` and `save_maturation` catch IntegrityError for deleted neurons
-- **Auto-type classifier bias** — Insight checked before decision, tightened TODO/decision patterns
-- **DECISION_PATTERNS greediness** — Removed overly broad patterns from auto_capture.py
+- **OpenClaw plugin: lazy auto-connect** — Fixed tools returning "NeuralMemory service not running" when OpenClaw calls `register()` multiple times across subsystems (gateway, agent worker, CLI). Agent worker instance now lazily connects on first tool call via `ensureConnected()` with connection mutex to prevent race conditions (#38)
+
+## [2.27.1] - 2026-03-06
+
+### Added
+
+- **`nmem_edit`** — Edit memory type, content, or priority by fiber ID. Preserves all neural connections. Supports typed_memory path (type/priority) and anchor neuron path (content update)
+- **`nmem_forget`** — Soft delete (sets expires_at for natural decay) or hard delete (permanent removal with cascade to fiber + typed_memory). Also handles orphan neuron deletion
+- **Enhanced MCP instructions** — Richer behavioral directives: brain growth tips, rich language patterns (causal/temporal/relational/decisional/comparative), memory correction guidance, all 38 tools listed
+- **Enhanced plugin instructions** — Comprehensive agent guidance in `.claude-plugin/plugin.json` for proactive memory usage
+
+### Fixed
+
+- **FK constraint errors** — `INSERT OR REPLACE INTO neuron_states` and `save_maturation` now catch `sqlite3.IntegrityError` when neuron was deleted by consolidation prune (previously crashed with FOREIGN KEY constraint failed)
+- **Auto-type classifier bias** — Reordered `suggest_memory_type()`: DECISION now checked before INSIGHT to prevent "because" from hijacking decisions. Removed overly broad "because"/"pattern" from INSIGHT keywords. Added "rejected"/"went with" to DECISION, "prefers"/"preferred" to PREFERENCE. Tightened TODO keywords and added guard against descriptive "should"
+- **DECISION_PATTERNS greediness** — Removed overly broad patterns (`"we're going to"`, `"let's use"`, `"going to"`) from `auto_capture.py` that caused false decision captures
+- **Synapse FK error message** — Distinguished FOREIGN KEY violations from UNIQUE violations in `add_synapse()` for clearer error messages
 
 - **Cognitive Reasoning Layer** — 8 new MCP tools for hypothesis-driven reasoning (38 tools total)
   - `nmem_hypothesize` — Create and manage hypotheses with Bayesian confidence tracking and auto-resolution
@@ -29,22 +36,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `nmem_gaps` — Knowledge gap metacognition: detect, track, prioritize, and resolve what the brain doesn't know
   - `nmem_schema` — Schema evolution: evolve hypotheses into new versions via SUPERSEDES synapse chain
   - `nmem_explain` — (moved to cognitive) Trace shortest path between concepts with evidence
-- **Schema v21** — Three new tables: `cognitive_state`, `hot_index`, `knowledge_gaps`
-- **Pure cognitive engine** (`engine/cognitive.py`) — Stateless scoring and confidence functions
-- **Bayesian confidence model** — Auto-resolution at confidence thresholds
-- **Prediction calibration** — Tracks correct/wrong ratio
-- **Schema version chain** — SUPERSEDES synapse + `parent_schema_id` walk with cycle guard
+- **Schema v21** — Three new tables: `cognitive_state` (hypothesis/prediction tracking), `hot_index` (ranked cognitive summary), `knowledge_gaps` (metacognition)
+- **Pure cognitive engine** (`engine/cognitive.py`) — Stateless functions: `update_confidence`, `detect_auto_resolution`, `compute_calibration`, `score_hypothesis`, `score_prediction`, `gap_priority`
+- **Bayesian confidence model** — Sigmoid-dampened shift with surprise factor and diminishing returns from total evidence
+- **Auto-resolution** — Hypotheses with confidence ≥0.9 + 3 supporting evidence auto-confirm; ≤0.1 + 3 against auto-refute
+- **Prediction calibration** — Tracks correct/wrong ratio across all resolved predictions
+- **Schema version chain** — `parent_schema_id` column + `get_schema_history()` walks the SUPERSEDES chain with cycle guard
+- **Knowledge gap detection sources** — `contradiction`, `low_confidence_hypothesis`, `user_flagged`, `recall_miss`, `stale_schema`
+
+## [2.26.1] - 2026-03-05
+
+### Added
+
+- **Dashboard: actionable health penalties** — Top penalties section shows ranked cards with score bar, penalty points lost, estimated gain if fixed, and exact action to improve each component
+- **API: `top_penalties` field** in `/api/dashboard/health` response — exposes diagnostics engine penalty analysis to frontend
+- **i18n: penalty translations** — English and Vietnamese keys for top penalties section
 
 ## [2.26.0] - 2026-03-05
 
 ### Added
 
-- **Brain Health Guide** — comprehensive guide explaining all 7 health metrics with improvement roadmap
-- **Connection Tracing docs** (`nmem_explain`) — previously undocumented feature
-- **Embedding auto-detection** (`provider = "auto"`) — auto-detects Ollama/sentence-transformers/Gemini/OpenAI
-- **Consolidation post-run hints** — warns about orphans and missing consolidation
-- **Pre-ship verification script** — automated quality gate before releases
-- **MCP instructions update** — health interpretation, priority scale, tagging, maintenance
+- **Brain Health Guide** (`docs/guides/brain-health.md`) — comprehensive guide explaining all 7 health metrics, thresholds, improvement roadmap (F through A), common issues, maintenance schedule
+- **Connection Tracing docs** (`nmem_explain`) — added to README, MCP prompt, brain health guide. Previously undocumented feature that traces shortest path between concepts
+- **Embedding auto-detection** (`provider = "auto"`) — automatically detects best available embedding provider: Ollama → sentence-transformers → Gemini → OpenAI. Lowers barrier for cross-language recall
+- **Consolidation post-run hints** — warns about orphan neurons (>20%) and missing consolidation after running `nmem consolidate`
+- **Pre-ship verification script** (`scripts/pre_ship.py`) — automated quality gate: version consistency, ruff, mypy, import smoke test, fast tests, plugin checks
+- **MCP instructions update** — health interpretation, priority scale, tagging strategy, maintenance schedule added to system prompt
+
+### Changed
+
+- README: added nmem_explain to tools table, brain health section, connection tracing section, embedding auto-detect
+- OpenClaw npm package renamed to `neuralmemory` (published on npm)
 
 ## [2.25.1] - 2026-03-05
 
@@ -54,6 +76,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Consolidation prune** — Protects fiber members from orphan pruning + invariant tests
 - **Orphan rate** — Counts fiber membership correctly, isolated E2E tests from production DB
 - **Dashboard dist** — Bundled for `pip install` compatibility
+
+### Changed
+
+- Published v2.25.0 release (was stuck in draft)
+
+## [OpenClaw Plugin 1.5.0] - 2026-03-05
+
+### Fixed
+
+- **Plugin ID mismatch warning** — Renamed package from `@neuralmemory/openclaw-plugin` to `neuralmemory` to match manifest `id`. OpenClaw's `deriveIdHint()` extracts the unscoped package name as `idHint`, which previously produced `openclaw-plugin` ≠ `neuralmemory`
+- **Tool schema provider compatibility** — Replaced `integer` with `number` (Gemini rejects `integer`), added `additionalProperties: false` (OpenAI strict mode), removed constraint keywords (`maxLength`, `maxItems`, `minimum`, `maximum`) that some providers reject. MCP server validates these server-side
+- **Pre-existing test bugs** — Config test missing `initTimeout` in expected defaults; execute tests passing args as `id` parameter
 
 ## [2.25.0] - 2026-03-04
 
