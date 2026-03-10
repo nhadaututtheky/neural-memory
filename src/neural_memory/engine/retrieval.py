@@ -19,6 +19,7 @@ from neural_memory.engine.causal_traversal import (
     trace_event_sequence,
 )
 from neural_memory.engine.lifecycle import ReinforcementManager
+from neural_memory.engine.query_expansion import expand_via_graph
 from neural_memory.engine.reconstruction import (
     SynthesisMethod,
     format_causal_chain,
@@ -29,6 +30,11 @@ from neural_memory.engine.reconstruction import (
 from neural_memory.engine.reflex_activation import CoActivation, ReflexActivation
 from neural_memory.engine.retrieval_context import format_context
 from neural_memory.engine.retrieval_types import DepthLevel, RetrievalResult, Subgraph
+from neural_memory.engine.score_fusion import (
+    RankedAnchor,
+    rrf_fuse,
+    rrf_to_activation_levels,
+)
 from neural_memory.engine.stabilization import StabilizationConfig, stabilize
 from neural_memory.engine.write_queue import DeferredWriteQueue
 from neural_memory.extraction.parser import QueryIntent, QueryParser, Stimulus
@@ -60,6 +66,7 @@ if TYPE_CHECKING:
     from neural_memory.core.brain import BrainConfig
     from neural_memory.engine.depth_prior import AdaptiveDepthSelector, DepthDecision
     from neural_memory.engine.embedding.provider import EmbeddingProvider
+    from neural_memory.engine.ppr_activation import PPRActivation
     from neural_memory.storage.base import NeuralStorage
 
 
@@ -128,6 +135,14 @@ class ReflexPipeline:
             self._embedding_provider = embedding_provider
         self._activator = SpreadingActivation(storage, config)
         self._reflex_activator = ReflexActivation(storage, config)
+
+        # PPR activator (lazy: only create if strategy requires it)
+        self._ppr_activator: PPRActivation | None = None
+        if config.activation_strategy in ("ppr", "hybrid"):
+            from neural_memory.engine.ppr_activation import PPRActivation
+
+            self._ppr_activator = PPRActivation(storage, config)
+
         self._reinforcer = ReinforcementManager(
             reinforcement_delta=config.reinforcement_delta,
         )
@@ -230,21 +245,67 @@ class ReflexPipeline:
         if temporal_result is not None:
             return temporal_result
 
-        # 3. Find anchor neurons (time-first)
-        anchor_sets = await self._find_anchors_time_first(stimulus)
+        # 3. Find anchor neurons (time-first) with ranked results
+        anchor_sets, ranked_lists = await self._find_anchors_ranked(stimulus)
 
-        # Choose activation method
-        if self._use_reflex:
+        # 3.5 RRF score fusion: compute initial activation levels from multi-retriever ranks
+        anchor_activations: dict[str, float] | None = None
+        if ranked_lists and any(ranked_lists):
+            fused_scores = rrf_fuse(ranked_lists, k=self._config.rrf_k)
+            if fused_scores:
+                anchor_activations = rrf_to_activation_levels(fused_scores)
+
+        # Choose activation method based on strategy
+        strategy = self._config.activation_strategy
+        if strategy == "ppr" and self._ppr_activator is not None:
+            # Personalized PageRank activation
+            activations, intersections = await self._ppr_activator.activate_from_multiple(
+                anchor_sets,
+                anchor_activations=anchor_activations,
+            )
+            co_activations: list[CoActivation] = []
+        elif strategy == "hybrid" and self._ppr_activator is not None:
+            # Hybrid: PPR primary + reflex for fiber pathways
+            ppr_activations, ppr_intersections = await self._ppr_activator.activate_from_multiple(
+                anchor_sets,
+                anchor_activations=anchor_activations,
+            )
+            # Also run reflex if fibers exist
+            reflex_activations: dict[str, ActivationResult] = {}
+            co_activations = []
+            if self._use_reflex:
+                reflex_activations, _, co_activations = await self._reflex_query(
+                    anchor_sets,
+                    reference_time,
+                    anchor_activations=anchor_activations,
+                )
+            # Merge: PPR primary, reflex fills gaps (dampened 0.6x)
+            activations = dict(ppr_activations)
+            for nid, reflex_result in reflex_activations.items():
+                existing = activations.get(nid)
+                dampened = reflex_result.activation_level * 0.6
+                if existing is None or dampened > existing.activation_level:
+                    activations[nid] = ActivationResult(
+                        neuron_id=nid,
+                        activation_level=dampened,
+                        hop_distance=reflex_result.hop_distance,
+                        path=reflex_result.path,
+                        source_anchor=reflex_result.source_anchor,
+                    )
+            intersections = ppr_intersections
+        elif self._use_reflex:
             # Reflex activation: trail-based through fiber pathways
             activations, intersections, co_activations = await self._reflex_query(
                 anchor_sets,
                 reference_time,
+                anchor_activations=anchor_activations,
             )
         else:
             # Classic spreading activation
             activations, intersections = await self._activator.activate_from_multiple(
                 anchor_sets,
                 max_hops=self._depth_to_hops(depth),
+                anchor_activations=anchor_activations,
             )
             co_activations = []
 
@@ -656,6 +717,7 @@ class ReflexPipeline:
         self,
         anchor_sets: list[list[str]],
         reference_time: datetime,
+        anchor_activations: dict[str, float] | None = None,
     ) -> tuple[dict[str, ActivationResult], list[str], list[CoActivation]]:
         """
         Execute hybrid reflex + classic activation.
@@ -674,6 +736,7 @@ class ReflexPipeline:
             activations, intersections = await self._activator.activate_from_multiple(
                 anchor_sets,
                 max_hops=self._config.max_spread_hops,
+                anchor_activations=anchor_activations,
             )
             return activations, intersections, []
 
@@ -682,6 +745,7 @@ class ReflexPipeline:
             anchor_sets=anchor_sets,
             fibers=fibers,
             reference_time=reference_time,
+            anchor_activations=anchor_activations,
         )
 
         # --- Phase 2: Limited classic BFS (discovery) ---
@@ -689,6 +753,7 @@ class ReflexPipeline:
         classic_activations, classic_intersections = await self._activator.activate_from_multiple(
             anchor_sets,
             max_hops=discovery_hops,
+            anchor_activations=anchor_activations,
         )
 
         # --- Phase 3: Merge results ---
@@ -1010,17 +1075,23 @@ class ReflexPipeline:
         scored.sort(key=lambda x: x[1], reverse=True)
         return [nid for nid, _ in scored[:top_k]]
 
-    async def _find_anchors_time_first(self, stimulus: Stimulus) -> list[list[str]]:
-        """
-        Find anchor neurons with time as primary signal.
+    async def _find_anchors_ranked(
+        self, stimulus: Stimulus
+    ) -> tuple[list[list[str]], list[list[RankedAnchor]]]:
+        """Find anchor neurons with ranked results for RRF fusion.
+
+        Returns both flat anchor_sets (for activation) and ranked lists
+        (for RRF score fusion). The ranked lists preserve retriever
+        identity and position so RRF can weight them appropriately.
 
         Priority order:
         1. Time neurons (weight 1.0) - temporal context
         2. Entity neurons (weight 0.8) - who/what
-        3. Action neurons (weight 0.6) - verbs
-        4. Concept neurons (weight 0.4) - abstract
+        3. Keyword neurons (weight 0.6) - expanded terms
+        4. Embedding neurons (weight 1.0) - semantic similarity
         """
         anchor_sets: list[list[str]] = []
+        ranked_lists: list[list[RankedAnchor]] = []
 
         # 1. TIME ANCHORS FIRST (primary) — batch via asyncio.gather
         time_anchors: list[str] = []
@@ -1039,6 +1110,12 @@ class ReflexPipeline:
 
         if time_anchors:
             anchor_sets.append(time_anchors)
+            ranked_lists.append(
+                [
+                    RankedAnchor(neuron_id=nid, rank=i + 1, retriever="time")
+                    for i, nid in enumerate(time_anchors)
+                ]
+            )
 
         # 2 & 3. Entity + keyword anchors (parallel)
         entity_tasks = [
@@ -1053,11 +1130,11 @@ class ReflexPipeline:
             for keyword in expanded_keywords[:8]  # cap at 8 to limit queries
         ]
 
+        entity_anchors: list[str] = []
         all_tasks = entity_tasks + keyword_tasks
         if all_tasks:
             all_results = await asyncio.gather(*all_tasks)
 
-            entity_anchors: list[str] = []
             for neurons in all_results[: len(entity_tasks)]:
                 entity_anchors.extend(n.id for n in neurons)
 
@@ -1067,16 +1144,49 @@ class ReflexPipeline:
 
             if entity_anchors:
                 anchor_sets.append(entity_anchors)
+                ranked_lists.append(
+                    [
+                        RankedAnchor(neuron_id=nid, rank=i + 1, retriever="entity")
+                        for i, nid in enumerate(entity_anchors)
+                    ]
+                )
             if keyword_anchors:
                 anchor_sets.append(keyword_anchors)
+                ranked_lists.append(
+                    [
+                        RankedAnchor(neuron_id=nid, rank=i + 1, retriever="keyword")
+                        for i, nid in enumerate(keyword_anchors)
+                    ]
+                )
 
         # 4. EMBEDDING ANCHORS - parallel source (always, not just fallback)
         if self._embedding_provider is not None:
             embedding_anchors = await self._find_embedding_anchors(stimulus.raw_query)
             if embedding_anchors:
                 anchor_sets.append(embedding_anchors)
+                ranked_lists.append(
+                    [
+                        RankedAnchor(neuron_id=nid, rank=i + 1, retriever="embedding")
+                        for i, nid in enumerate(embedding_anchors)
+                    ]
+                )
 
-        return anchor_sets
+        # 5. GRAPH EXPANSION — 1-hop neighbors of entity anchors as soft anchors
+        if self._config.graph_expansion_enabled and entity_anchors:
+            try:
+                expansion_ids, expansion_ranked = await expand_via_graph(
+                    self._storage,
+                    seed_neuron_ids=entity_anchors,
+                    max_expansions=self._config.graph_expansion_max,
+                    min_synapse_weight=self._config.graph_expansion_min_weight,
+                )
+                if expansion_ids:
+                    anchor_sets.append(expansion_ids)
+                    ranked_lists.append(expansion_ranked)
+            except Exception:
+                logger.debug("Graph expansion failed (non-critical)", exc_info=True)
+
+        return anchor_sets, ranked_lists
 
     async def _find_matching_fibers(
         self,

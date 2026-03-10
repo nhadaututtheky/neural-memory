@@ -75,6 +75,7 @@ class ReflexActivation:
         fibers: list[Fiber],
         reference_time: datetime | None = None,
         decay_rate: float = 0.15,
+        anchor_activations: dict[str, float] | None = None,
     ) -> dict[str, ActivationResult]:
         """
         Spread activation along fiber pathways with trail decay.
@@ -83,10 +84,11 @@ class ReflexActivation:
             new_level = level * (1 - decay) * synapse.weight * fiber.conductivity * time_factor
 
         Args:
-            anchor_neurons: Starting neurons with activation = 1.0
+            anchor_neurons: Starting neurons (initial level from anchor_activations or 1.0)
             fibers: Fibers to conduct through
             reference_time: Reference time for time factor calculation
             decay_rate: Base decay rate per hop
+            anchor_activations: Optional per-anchor initial activation levels (from RRF).
 
         Returns:
             Dict mapping neuron_id to ActivationResult
@@ -98,9 +100,12 @@ class ReflexActivation:
 
         # Initialize anchor neurons
         for anchor_id in anchor_neurons:
+            initial_level = (
+                anchor_activations.get(anchor_id, 1.0) if anchor_activations is not None else 1.0
+            )
             results[anchor_id] = ActivationResult(
                 neuron_id=anchor_id,
-                activation_level=1.0,
+                activation_level=initial_level,
                 hop_distance=0,
                 path=[anchor_id],
                 source_anchor=anchor_id,
@@ -168,7 +173,8 @@ class ReflexActivation:
             decay_rate: Decay rate per hop
             time_factor: Time-based conductivity factor
         """
-        current_level = 1.0
+        anchor_result = results.get(anchor_id)
+        current_level = anchor_result.activation_level if anchor_result else 1.0
         path = [fiber.pathway[start_pos]]
         pos = start_pos + direction
         hops = 0
@@ -299,6 +305,7 @@ class ReflexActivation:
         anchor_sets: list[list[str]],
         fibers: list[Fiber],
         reference_time: datetime | None = None,
+        anchor_activations: dict[str, float] | None = None,
     ) -> tuple[dict[str, ActivationResult], list[CoActivation]]:
         """
         Activate from multiple anchor sets with co-activation binding.
@@ -309,6 +316,7 @@ class ReflexActivation:
             anchor_sets: List of anchor neuron lists (e.g., [time_anchors, entity_anchors])
             fibers: Fibers to conduct through
             reference_time: Reference time for time factor
+            anchor_activations: Optional per-anchor initial activation levels (from RRF).
 
         Returns:
             Tuple of (combined activations, co-activations)
@@ -322,6 +330,7 @@ class ReflexActivation:
                 anchor_neurons=anchors,
                 fibers=fibers,
                 reference_time=reference_time,
+                anchor_activations=anchor_activations,
             )
             for anchors in anchor_sets
             if anchors

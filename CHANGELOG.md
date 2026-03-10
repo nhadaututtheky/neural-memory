@@ -7,9 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.29.0] - 2026-03-10
+
 ### Added
 
+- **Reciprocal Rank Fusion (RRF)** — Multi-retriever score blending for anchor ranking. Combines BM25/FTS5, embedding similarity, and graph expansion ranks into unified scores using the RRF formula (`score = Σ weight_i / (k + rank_i)`). Anchors now start with differentiated activation levels instead of uniform 1.0. Config: `rrf_k` (default 60).
+- **Graph-based query expansion** — 1-hop neighbor traversal from entity/concept anchors adds soft expansion anchors. Exploits knowledge graph structure for associative priming (e.g., "auth" → OAuth2 → JWT, session). Config: `graph_expansion_enabled`, `graph_expansion_max`, `graph_expansion_min_weight`.
+- **Personalized PageRank (PPR) activation** — Optional replacement for classic BFS spreading activation. Distributes activation proportional to edge weights / out-degree with damping (teleport back to seed set), naturally handling hub dampening. Opt-in via `activation_strategy = "ppr"` or `"hybrid"` (PPR + reflex). Config: `ppr_damping`, `ppr_iterations`, `ppr_epsilon`.
 - **Tag filtering in Query API and MCP** — `POST /query` accepts `tags: list[str]` (AND filter, max 20). `nmem_recall` accepts `tags: list[str]` to scope results to specific tag sets. Filters across `tags`, `auto_tags`, and `agent_tags` columns. Backward compatible — `tags=None` returns all results as before.
+
+### Fixed
+
+- **Marketplace plugin install** — Removed unrecognized `features` key from `marketplace.json` that caused Claude Code `/plugin marketplace add` to fail with schema validation error (#49).
 
 ## [2.28.0] - 2026-03-08
 

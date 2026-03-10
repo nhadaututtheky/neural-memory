@@ -84,6 +84,7 @@ class SpreadingActivation:
         max_hops: int | None = None,
         decay_factor: float = 0.5,
         min_activation: float | None = None,
+        anchor_activations: dict[str, float] | None = None,
     ) -> dict[str, ActivationResult]:
         """
         Spread activation from anchor neurons through the graph.
@@ -93,10 +94,12 @@ class SpreadingActivation:
             activation(hop) = initial * decay_factor^hop * synapse_weight
 
         Args:
-            anchor_neurons: Starting neurons with activation = 1.0
+            anchor_neurons: Starting neurons (initial level from anchor_activations or 1.0)
             max_hops: Maximum number of hops (default: from config)
             decay_factor: How much activation decays per hop
             min_activation: Minimum activation to continue spreading
+            anchor_activations: Optional per-anchor initial activation levels (from RRF fusion).
+                               If None, all anchors start at 1.0.
 
         Returns:
             Dict mapping neuron_id to ActivationResult
@@ -125,9 +128,13 @@ class SpreadingActivation:
             if anchor_id not in anchor_neurons_map:
                 continue
 
+            initial_level = (
+                anchor_activations.get(anchor_id, 1.0) if anchor_activations is not None else 1.0
+            )
+
             state = ActivationState(
                 neuron_id=anchor_id,
-                level=1.0,
+                level=initial_level,
                 hops=0,
                 path=[anchor_id],
                 source=anchor_id,
@@ -137,7 +144,7 @@ class SpreadingActivation:
             # Record anchor activation
             results[anchor_id] = ActivationResult(
                 neuron_id=anchor_id,
-                activation_level=1.0,
+                activation_level=initial_level,
                 hop_distance=0,
                 path=[anchor_id],
                 source_anchor=anchor_id,
@@ -234,6 +241,7 @@ class SpreadingActivation:
         self,
         anchor_sets: list[list[str]],
         max_hops: int | None = None,
+        anchor_activations: dict[str, float] | None = None,
     ) -> tuple[dict[str, ActivationResult], list[str]]:
         """
         Activate from multiple anchor sets and find intersections.
@@ -245,6 +253,7 @@ class SpreadingActivation:
         Args:
             anchor_sets: List of anchor neuron lists
             max_hops: Maximum hops for each activation
+            anchor_activations: Optional per-anchor initial activation levels (from RRF).
 
         Returns:
             Tuple of (combined activations, intersection neuron IDs)
@@ -253,7 +262,11 @@ class SpreadingActivation:
             return {}, []
 
         # Activate from each set in parallel
-        tasks = [self.activate(anchors, max_hops) for anchors in anchor_sets if anchors]
+        tasks = [
+            self.activate(anchors, max_hops, anchor_activations=anchor_activations)
+            for anchors in anchor_sets
+            if anchors
+        ]
         activation_results = list(await asyncio.gather(*tasks)) if tasks else []
 
         if not activation_results:

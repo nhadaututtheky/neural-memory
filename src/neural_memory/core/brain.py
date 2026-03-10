@@ -71,6 +71,17 @@ class BrainConfig:
     # Memory compression
     compression_enabled: bool = True
     compression_tier_thresholds: tuple[int, ...] = (7, 30, 90, 180)
+    # Retrieval: Reciprocal Rank Fusion
+    rrf_k: int = 60
+    # Retrieval: Graph-based query expansion
+    graph_expansion_enabled: bool = True
+    graph_expansion_max: int = 10
+    graph_expansion_min_weight: float = 0.3
+    # Retrieval: Activation strategy
+    activation_strategy: str = "classic"  # "ppr" | "classic" | "reflex" | "hybrid"
+    ppr_damping: float = 0.15
+    ppr_iterations: int = 20
+    ppr_epsilon: float = 1e-6
 
     def with_updates(self, **kwargs: Any) -> BrainConfig:
         """Create a new config with updated values."""
