@@ -10,6 +10,7 @@ import * as vscode from "vscode";
 import { NeuralMemoryClient } from "../../server/client";
 import type { ServerLifecycle } from "../../server/lifecycle";
 import type { GraphData } from "../../server/types";
+import { readCurrentBrain } from "../../commands/brain";
 import { getConfig } from "../../utils/config";
 import { getGraphHtml, getNonce } from "./graphTemplate";
 
@@ -167,7 +168,7 @@ export class GraphPanel {
 
     try {
       const client = new NeuralMemoryClient(this._server.baseUrl);
-      this._fullData = await client.getGraph();
+      this._fullData = await client.getGraph(readCurrentBrain());
       this._sendSlicedData();
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);

@@ -14,7 +14,7 @@ export function getConfig(): NeuralMemoryConfig {
 
   return {
     pythonPath: cfg.get<string>("pythonPath", "python"),
-    autoStart: cfg.get<boolean>("autoStart", false),
+    autoStart: cfg.get<boolean>("autoStart", true),
     serverUrl: cfg.get<string>("serverUrl", "http://127.0.0.1:8000"),
     graphNodeLimit: cfg.get<number>("graphNodeLimit", 1000),
     codeLensEnabled: cfg.get<boolean>("codeLensEnabled", true),

@@ -50,14 +50,29 @@ export function listLocalBrains(): readonly string[] {
 function writeCurrentBrain(brainName: string): void {
   try {
     if (!fs.existsSync(CONFIG_PATH)) {
+      // Create config directory + minimal config file
+      const configDir = path.dirname(CONFIG_PATH);
+      if (!fs.existsSync(configDir)) {
+        fs.mkdirSync(configDir, { recursive: true });
+      }
+      fs.writeFileSync(
+        CONFIG_PATH,
+        `current_brain = "${brainName}"\n`,
+        "utf-8",
+      );
       return;
     }
     const content = fs.readFileSync(CONFIG_PATH, "utf-8");
-    const updated = content.replace(
-      /current_brain\s*=\s*"[^"]*"/,
-      `current_brain = "${brainName}"`,
-    );
-    fs.writeFileSync(CONFIG_PATH, updated, "utf-8");
+    if (/current_brain\s*=/.test(content)) {
+      const updated = content.replace(
+        /current_brain\s*=\s*"[^"]*"/,
+        `current_brain = "${brainName}"`,
+      );
+      fs.writeFileSync(CONFIG_PATH, updated, "utf-8");
+    } else {
+      // Key doesn't exist — append it
+      fs.appendFileSync(CONFIG_PATH, `\ncurrent_brain = "${brainName}"\n`, "utf-8");
+    }
   } catch {
     // Config write failed — non-critical, brain switch still works for this session
   }

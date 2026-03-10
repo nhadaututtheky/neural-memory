@@ -94,7 +94,7 @@ export async function activate(
 
   // 9. Refresh everything when server reconnects
   const serverRef = server;
-  serverRef.onReady(async () => {
+  const onReadyDisposable = serverRef.onReady(async () => {
     codeLens.refresh();
     triggerWatcher.refresh();
     memoryTree.refresh();
@@ -102,6 +102,7 @@ export async function activate(
     // Reconnect WebSocket if server restarts
     if (syncClient) {
       syncClient.disconnect();
+      syncClient = undefined;
     }
     const currentBrain = readCurrentBrain();
     syncClient = await connectWebSocket(
@@ -110,10 +111,9 @@ export async function activate(
       outputChannel,
       { codeLens, triggerWatcher, memoryTree, statusBar },
     );
-    if (syncClient) {
-      context.subscriptions.push(syncClient);
-    }
+    // Don't push to subscriptions — we manage lifecycle manually above
   });
+  context.subscriptions.push(onReadyDisposable);
 
   outputChannel.appendLine("NeuralMemory extension activated.");
 

@@ -71,12 +71,12 @@ export async function checkForUpdates(
 }
 
 function getLocalVersion(): string {
-  const ext = vscode.extensions.getExtension("neuralmemory.neuralmemory");
+  const ext = vscode.extensions.getExtension("neuralmem.neuralmemory");
   if (ext) {
     return ext.packageJSON.version as string;
   }
-  // Fallback: read from package.json at compile time
-  return "0.1.0";
+  // Fallback: read version from package.json (kept in sync with releases)
+  return "0.5.0";
 }
 
 async function fetchLatestRelease(): Promise<GitHubRelease | null> {

@@ -119,30 +119,36 @@ export class NeuralMemoryClient {
   }
 
   async importMemories(
-    brainId: string,
-    request: ImportRequest,
+    _brainId: string,
+    _request: ImportRequest,
   ): Promise<ImportResponse> {
-    return this._post<ImportResponse>("/memory/import", request, brainId);
+    throw new Error(
+      "Import is available via MCP (nmem_import) or CLI (nmem import). REST endpoint not yet implemented.",
+    );
   }
 
   async eternal(
-    brainId: string,
-    request: EternalRequest,
+    _brainId: string,
+    _request: EternalRequest,
   ): Promise<EternalResponse> {
-    return this._post<EternalResponse>("/memory/eternal", request, brainId);
+    throw new Error(
+      "Eternal context is available via MCP (nmem_eternal). REST endpoint not yet implemented.",
+    );
   }
 
   async recap(
-    brainId: string,
-    request: RecapRequest,
+    _brainId: string,
+    _request: RecapRequest,
   ): Promise<RecapResponse> {
-    return this._post<RecapResponse>("/memory/recap", request, brainId);
+    throw new Error(
+      "Recap is available via MCP (nmem_recap). REST endpoint not yet implemented.",
+    );
   }
 
   // ============ Graph ============
 
-  async getGraph(): Promise<GraphData> {
-    return this._get<GraphData>("/api/graph");
+  async getGraph(brainId?: string): Promise<GraphData> {
+    return this._get<GraphData>("/api/graph", brainId);
   }
 
   // ============ Brain ============

@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.0] - 2026-03-10
+
+### Fixed
+
+- **Extension ID typo** in update checker — was `neuralmemory.neuralmemory`, corrected to `neuralmem.neuralmemory`. Prevents false "update available" notifications.
+- **autoStart default mismatch** — config.ts fallback was `false` while package.json declared `true`. Now both use `true`.
+- **Brain switch not persisted** on fresh install — `writeCurrentBrain()` now creates `~/.neuralmemory/config.toml` if it doesn't exist, instead of silently returning.
+- **Graph explorer missing brain scope** — `getGraph()` now passes `X-Brain-ID` header to ensure correct brain data is returned.
+- **SyncClient memory leak** — reconnect no longer pushes duplicate SyncClient instances into subscriptions array. Old client is properly disconnected and dereferenced.
+- **Broken REST endpoints** — Import, Eternal, and Recap commands now show clear error messages explaining these features are available via MCP/CLI, instead of silently failing with HTTP 404.
+
+### Changed
+
+- Fallback version in update checker updated from `0.1.0` to `0.5.0`
+- Published to Open VSX Registry for IDE fork compatibility (Cursor, Windsurf, VSCodium, etc.)
+
 ## [0.4.1] - 2026-02-25
 
 ### Changed
