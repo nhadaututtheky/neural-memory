@@ -100,8 +100,8 @@ async def query_memory(
     pipeline = ReflexPipeline(storage, brain.config)
 
     depth = DepthLevel(request.depth) if request.depth is not None else None
-    # Filter out empty/whitespace-only tags
-    tags = {t.strip() for t in request.tags if t.strip()} if request.tags else None
+    # Filter out empty/whitespace-only tags, cap at 20
+    tags = {t.strip()[:100] for t in request.tags[:20] if t.strip()} if request.tags else None
     if tags is not None and not tags:
         tags = None
 

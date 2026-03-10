@@ -109,6 +109,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "tags": {
                     "type": "array",
                     "items": {"type": "string", "maxLength": 100},
+                    # maxItems: 50 for storage (remember) vs 20 for filtering (recall)
+                    # — storing supports richer tagging, filtering caps for query perf
                     "maxItems": 50,
                     "description": "Tags for categorization",
                 },

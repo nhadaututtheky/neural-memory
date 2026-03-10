@@ -28,6 +28,23 @@ from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline
 from neural_memory.mcp.constants import MAX_CONTENT_LENGTH
 from neural_memory.utils.timeutils import utcnow
 
+# Max tags per recall query (remember allows 50 for storage, recall caps at 20 for filtering)
+_MAX_RECALL_TAGS = 20
+_MAX_TAG_LENGTH = 100
+
+
+def _parse_tags(args: dict[str, Any], *, max_items: int = _MAX_RECALL_TAGS) -> set[str] | None:
+    """Parse and validate tags from MCP tool arguments.
+
+    Returns a set of valid tag strings, or None if no valid tags provided.
+    """
+    raw_tags = args.get("tags")
+    if not raw_tags or not isinstance(raw_tags, list):
+        return None
+    tags = {t for t in raw_tags[:max_items] if isinstance(t, str) and 0 < len(t) <= _MAX_TAG_LENGTH}
+    return tags or None
+
+
 if TYPE_CHECKING:
     from neural_memory.engine.hooks import HookRegistry
     from neural_memory.mcp.maintenance_handler import HealthPulse
@@ -675,12 +692,7 @@ class ToolHandler:
             return {"error": f"Invalid depth level: {args.get('depth')}. Must be 0-3."}
         max_tokens = min(args.get("max_tokens", 500), 10_000)
         min_confidence = args.get("min_confidence", 0.0)
-        raw_tags = args.get("tags")
-        tags: set[str] | None = None
-        if raw_tags and isinstance(raw_tags, list):
-            tags = {t for t in raw_tags[:20] if isinstance(t, str) and 0 < len(t) <= 100}
-            if not tags:
-                tags = None
+        tags = _parse_tags(args)
         min_trust: float | None = None
         raw_min_trust = args.get("min_trust")
         if raw_min_trust is not None:
@@ -906,13 +918,7 @@ class ToolHandler:
             depth = 1
         max_tokens = min(int(args.get("max_tokens", 500)), 10_000)
 
-        # Parse tags for cross-brain filtering
-        raw_tags = args.get("tags")
-        tags: set[str] | None = None
-        if raw_tags and isinstance(raw_tags, list):
-            tags = {t for t in raw_tags[:20] if isinstance(t, str) and 0 < len(t) <= 100}
-            if not tags:
-                tags = None
+        tags = _parse_tags(args)
 
         try:
             result = await cross_brain_recall(

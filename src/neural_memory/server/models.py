@@ -41,9 +41,8 @@ class QueryRequest(BaseModel):
     )
     tags: list[str] | None = Field(
         None,
-        max_length=20,
         description="Filter by tags (AND — all must match). Checks tags, auto_tags, and agent_tags.",
-        json_schema_extra={"items": {"type": "string", "maxLength": 100}},
+        json_schema_extra={"maxItems": 20, "items": {"type": "string", "maxLength": 100}},
     )
 
 
