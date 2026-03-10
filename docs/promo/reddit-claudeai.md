@@ -1,6 +1,6 @@
 # Reddit r/ClaudeAI Post
 
-**Title:** I built a persistent memory system for Claude Code that works like a brain — Neural Memory (open source, 38 MCP tools)
+**Title:** I built a persistent memory system for Claude Code that works like a brain — Neural Memory (open source, 39 MCP tools)
 
 **Body:**
 
@@ -16,7 +16,7 @@ When you remember "Alice", it doesn't just find text containing "Alice". It acti
 
 ## What it does
 
-- **38 MCP tools**: `nmem_remember`, `nmem_recall`, `nmem_context`, `nmem_explain`, `nmem_habits`, and more
+- **39 MCP tools**: `nmem_remember`, `nmem_recall`, `nmem_context`, `nmem_explain`, `nmem_habits`, and more
 - **Spreading activation retrieval**: memories surface through association, not search
 - **Connection explainer**: ask "how are X and Y connected?" and get the exact path through the knowledge graph
 - **Habits tracking**: detects recurring patterns in your workflow
@@ -49,9 +49,9 @@ Or configure MCP manually:
 
 ## Numbers
 
-- 3,150+ tests, 68% coverage
-- v2.25.0, production-stable
-- 11 memory types, 24 synapse types
+- 3,500+ tests, 68% coverage
+- v2.29.0, production-stable
+- 14 memory types, 24 synapse types
 - Python 3.11+, async, MIT license
 - Optional embeddings: Ollama, Gemini (free), OpenAI, sentence-transformers
 

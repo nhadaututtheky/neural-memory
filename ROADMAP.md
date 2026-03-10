@@ -4,7 +4,7 @@
 > Every item passes the VISION.md 4-question test + brain test.
 > ZERO LLM dependency — pure algorithmic, regex, graph-based.
 
-**Current state**: v2.26.1 — 38 MCP tools, 3200+ tests, schema v21, SQLite + FalkorDB backends, cognitive reasoning layer.
+**Current state**: v2.29.0 — 39 MCP tools, 3500+ tests, schema v22, SQLite + FalkorDB backends, cognitive reasoning layer.
 **Architecture**: Spreading activation reflex engine, biological memory model, MCP standard.
 
 ---
@@ -14,7 +14,7 @@
 | Capability | Status |
 |------------|--------|
 | Spreading activation (4 depth levels) | Shipped |
-| 11 memory types, 24 synapse types | Shipped |
+| 14 memory types, 24 synapse types | Shipped |
 | Hebbian learning + memory decay | Shipped |
 | Sleep consolidation (ENRICH/DREAM/PRUNE) | Shipped |
 | Multi-format KB training (PDF/DOCX/PPTX/HTML/JSON/XLSX/CSV) | Shipped |

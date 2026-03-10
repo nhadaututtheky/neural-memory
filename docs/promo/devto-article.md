@@ -64,9 +64,9 @@ Memories have a lifecycle:
 - **Pruning**: orphan neurons (no connections) get cleaned up
 - **Merging**: duplicate information gets consolidated
 
-## 38 MCP Tools
+## 39 MCP Tools
 
-Neural Memory exposes 38 tools via the [Model Context Protocol](https://modelcontextprotocol.io/):
+Neural Memory exposes 39 tools via the [Model Context Protocol](https://modelcontextprotocol.io/):
 
 | Tool | What it does |
 |------|-------------|
@@ -118,9 +118,9 @@ model = "nomic-embed-text"
 
 ## Numbers
 
-- **3,150+ tests**, 68% coverage
-- **v2.25.0**, production-stable since v2.10
-- **11 memory types**, 24 synapse types, schema v21
+- **3,500+ tests**, 68% coverage
+- **v2.29.0**, production-stable since v2.10
+- **14 memory types**, 24 synapse types, schema v22
 - **Python 3.11+**, async via aiosqlite
 - **MIT license**
 - **Dashboard**: FastAPI + React web UI for visualization

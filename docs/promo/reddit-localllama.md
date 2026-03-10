@@ -25,12 +25,12 @@ This gives you multi-hop reasoning for free. "Why did the outage happen?" traces
 ## Technical details
 
 - **Storage**: SQLite via aiosqlite (async), FTS5 for text search
-- **Graph**: 11 neuron types, 24 synapse types, fiber bundles for episodic grouping
+- **Graph**: 14 neuron types, 24 synapse types, fiber bundles for episodic grouping
 - **Retrieval**: Spreading activation with configurable decay, threshold, and max hops
 - **Consolidation**: Memory lifecycle — decay, reinforcement, pruning of orphan nodes
 - **Extraction**: Entity/keyword/temporal extraction, Vietnamese NLP support
-- **MCP server**: 38 tools (incl. cognitive reasoning), stdio transport, works with Claude Code, Cursor, etc.
-- **Tests**: 3,200+, 67% coverage, CI with mypy + ruff + pytest
+- **MCP server**: 39 tools (incl. cognitive reasoning), stdio transport, works with Claude Code, Cursor, etc.
+- **Tests**: 3,500+, 67% coverage, CI with mypy + ruff + pytest
 
 ## What makes it interesting for local LLM users
 

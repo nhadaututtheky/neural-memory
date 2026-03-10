@@ -12,7 +12,7 @@
 
 NeuralMemory stores experiences as interconnected neurons and recalls them through spreading activation, mimicking how the human brain works. Instead of searching a database, memories surface through associative recall — activating related concepts until the relevant memory emerges.
 
-**38 MCP tools** · **11 memory types** · **24 synapse types** · **Schema v21** · **3200+ tests** · **Cognitive reasoning layer**
+**39 MCP tools** · **14 memory types** · **24 synapse types** · **Schema v22** · **3500+ tests** · **Cognitive reasoning layer**
 
 ## Why Not RAG / Vector Search?
 
@@ -536,7 +536,7 @@ git clone https://github.com/nhadaututtheky/neural-memory
 cd neural-memory
 pip install -e ".[dev]"
 
-# Run tests (3200+ tests)
+# Run tests (3500+ tests)
 pytest tests/ -v
 
 # Lint & format
