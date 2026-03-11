@@ -127,9 +127,7 @@ class SQLiteSessionsMixin:
             for row in rows
         ]
 
-    async def _prune_session_summaries(
-        self, conn: aiosqlite.Connection, brain_id: str
-    ) -> None:
+    async def _prune_session_summaries(self, conn: aiosqlite.Connection, brain_id: str) -> None:
         """Keep only the most recent MAX_SUMMARIES_PER_BRAIN summaries."""
         await conn.execute(
             """DELETE FROM session_summaries

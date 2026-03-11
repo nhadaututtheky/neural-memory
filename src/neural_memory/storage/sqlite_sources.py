@@ -128,7 +128,9 @@ class SQLiteSourcesMixin:
             try:
                 SourceStatus(status)
             except ValueError:
-                raise ValueError(f"Invalid status: {status!r}. Must be one of {[s.value for s in SourceStatus]}")
+                raise ValueError(
+                    f"Invalid status: {status!r}. Must be one of {[s.value for s in SourceStatus]}"
+                )
             sets.append("status = ?")
             params.append(status)
         if version is not None:
@@ -201,21 +203,31 @@ def _row_to_source(row: dict[str, Any]) -> Source:
     try:
         metadata = json.loads(str(raw_metadata)) if raw_metadata else {}
     except (json.JSONDecodeError, ValueError):
-        logger.warning("_row_to_source: invalid JSON in metadata for source %s, using {}", row.get("id"))
+        logger.warning(
+            "_row_to_source: invalid JSON in metadata for source %s, using {}", row.get("id")
+        )
         metadata = {}
 
     raw_source_type = str(row["source_type"])
     try:
         source_type = SourceType(raw_source_type)
     except ValueError:
-        logger.warning("_row_to_source: unknown source_type %r for source %s, falling back to DOCUMENT", raw_source_type, row.get("id"))
+        logger.warning(
+            "_row_to_source: unknown source_type %r for source %s, falling back to DOCUMENT",
+            raw_source_type,
+            row.get("id"),
+        )
         source_type = SourceType.DOCUMENT
 
     raw_status = str(row["status"])
     try:
         status = SourceStatus(raw_status)
     except ValueError:
-        logger.warning("_row_to_source: unknown status %r for source %s, falling back to ACTIVE", raw_status, row.get("id"))
+        logger.warning(
+            "_row_to_source: unknown status %r for source %s, falling back to ACTIVE",
+            raw_status,
+            row.get("id"),
+        )
         status = SourceStatus.ACTIVE
 
     return Source(

@@ -164,22 +164,15 @@ class SessionState:
         """Return top topics sorted by EMA weight."""
         if not self.topic_ema:
             return []
-        sorted_topics = sorted(
-            self.topic_ema.items(), key=lambda x: x[1], reverse=True
-        )
+        sorted_topics = sorted(self.topic_ema.items(), key=lambda x: x[1], reverse=True)
         return [topic for topic, _score in sorted_topics[:limit]]
 
     def get_topic_weights(self, limit: int = MAX_TOPICS_RETURNED) -> dict[str, float]:
         """Return top topics with their EMA weights."""
         if not self.topic_ema:
             return {}
-        sorted_topics = sorted(
-            self.topic_ema.items(), key=lambda x: x[1], reverse=True
-        )
-        return {
-            topic: round(score, 4)
-            for topic, score in sorted_topics[:limit]
-        }
+        sorted_topics = sorted(self.topic_ema.items(), key=lambda x: x[1], reverse=True)
+        return {topic: round(score, 4) for topic, score in sorted_topics[:limit]}
 
     def needs_persist(self) -> bool:
         """Check if session summary should be persisted."""
@@ -288,13 +281,12 @@ class SessionManager:
 
     def _expire_stale(self, now: float) -> None:
         """Remove sessions that have been inactive too long."""
-        expired_ids = [
-            sid for sid, state in self._sessions.items()
-            if state.is_expired(now)
-        ]
+        expired_ids = [sid for sid, state in self._sessions.items() if state.is_expired(now)]
         for sid in expired_ids:
             removed = self._sessions.pop(sid)
             logger.debug(
                 "Session expired: %s (%d queries, %d topics)",
-                sid, removed.query_count, len(removed.topic_ema),
+                sid,
+                removed.query_count,
+                len(removed.topic_ema),
             )
