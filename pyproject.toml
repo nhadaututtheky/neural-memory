@@ -55,6 +55,10 @@ neo4j = [
 falkordb = [
     "falkordb>=1.0.0,<2.0",
 ]
+postgres = [
+    "asyncpg>=0.29.0",
+    "pgvector>=0.2.0",
+]
 encryption = [
     "cryptography>=41.0",
 ]

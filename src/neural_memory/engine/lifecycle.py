@@ -13,6 +13,7 @@ from dataclasses import replace as dc_replace
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from neural_memory.core.neuron import NeuronState
 from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.utils.timeutils import utcnow
 
@@ -251,6 +252,7 @@ class DecayManager:
             for syn in synapses_list:
                 synapse_map[syn.id] = syn
 
+        to_update: list[Synapse] = []
         for fiber in eligible_fibers:
             for synapse_id in fiber.synapse_ids:
                 synapse = synapse_map.get(synapse_id)
@@ -258,9 +260,11 @@ class DecayManager:
                     continue
 
                 reinforced = synapse.reinforce(boost_delta)
-                await storage.update_synapse(reinforced)
+                to_update.append(reinforced)
                 consolidated += 1
 
+        if to_update:
+            await storage.update_synapses_batch(to_update)
         return consolidated
 
 
@@ -310,6 +314,7 @@ class ReinforcementManager:
         states_map = await storage.get_neuron_states_batch(neuron_ids)
         now = utcnow()
 
+        to_update: list[NeuronState] = []
         for neuron_id in neuron_ids:
             state = states_map.get(neuron_id)
             if state:
@@ -324,8 +329,11 @@ class ReinforcementManager:
                     access_frequency=state.access_frequency + 1,
                     last_activated=now,
                 )
-                await storage.update_neuron_state(reinforced_state)
+                to_update.append(reinforced_state)
                 reinforced += 1
+
+        if to_update:
+            await storage.update_neuron_states_batch(to_update)
 
         # Rehearse maturation records for fibers connected to reinforced neurons.
         # This is required for EPISODIC → SEMANTIC transition (needs 3+ distinct days).
@@ -361,6 +369,7 @@ class ReinforcementManager:
             else:
                 synapse_map_2 = {}
 
+            synapse_updates: list[Synapse] = []
             for synapse_id in synapse_ids:
                 synapse = synapse_map_2.get(synapse_id)
                 if synapse is None:
@@ -372,7 +381,10 @@ class ReinforcementManager:
                         self.max_weight,
                     )
                     reinforced_synapse = synapse.reinforce(new_weight - synapse.weight)
-                    await storage.update_synapse(reinforced_synapse)
+                    synapse_updates.append(reinforced_synapse)
                     reinforced += 1
+
+            if synapse_updates:
+                await storage.update_synapses_batch(synapse_updates)
 
         return reinforced

@@ -96,8 +96,10 @@ class InMemoryStorage(
         content_exact: str | None = None,
         time_range: tuple[datetime, datetime] | None = None,
         limit: int = 100,
+        offset: int = 0,
     ) -> list[Neuron]:
-        limit = min(limit, 1000)
+        full_scan = content_contains is None and content_exact is None
+        limit = min(limit, 10000 if full_scan else 1000)
         brain_id = self._get_brain_id()
         results: list[Neuron] = []
 
@@ -115,10 +117,9 @@ class InMemoryStorage(
                     continue
 
             results.append(neuron)
-            if len(results) >= limit:
-                break
 
-        return results
+        results.sort(key=lambda n: n.id)
+        return results[offset : offset + limit]
 
     async def update_neuron(self, neuron: Neuron) -> None:
         brain_id = self._get_brain_id()
