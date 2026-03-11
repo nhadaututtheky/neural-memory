@@ -1115,7 +1115,7 @@ class ConsolidationEngine:
         # Paginate through all neurons to collect anchors (avoid OOM)
         batch_size = 5000
         offset = 0
-        anchors: list = []
+        anchors: list[Neuron] = []
         while True:
             batch = await self._storage.find_neurons(limit=batch_size, offset=offset)
             if not batch:

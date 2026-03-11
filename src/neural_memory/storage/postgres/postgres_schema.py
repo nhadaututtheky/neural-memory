@@ -6,8 +6,16 @@ from typing import Any
 
 SCHEMA_VERSION = 1
 
+_EMBEDDING_DIM_PLACEHOLDER = "__EMBEDDING_DIM__"
+
+
+def _build_init_sql(embedding_dim: int = 384) -> list[str]:
+    """Build schema SQL with the given embedding vector dimension."""
+    return [s.replace(_EMBEDDING_DIM_PLACEHOLDER, str(embedding_dim)) for s in _INIT_SQL_TEMPLATE]
+
+
 # Run in order: enables pgvector and creates tables
-INIT_SQL = [
+_INIT_SQL_TEMPLATE = [
     "CREATE EXTENSION IF NOT EXISTS vector",
     # Brains
     """
@@ -16,7 +24,7 @@ INIT_SQL = [
         name TEXT NOT NULL,
         config JSONB NOT NULL,
         owner_id TEXT,
-        is_public INTEGER DEFAULT 0,
+        is_public BOOLEAN DEFAULT FALSE,
         shared_with JSONB DEFAULT '[]',
         created_at TIMESTAMPTZ NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL
@@ -35,7 +43,7 @@ INIT_SQL = [
         content_tsv tsvector GENERATED ALWAYS AS (
             to_tsvector('english', content)
         ) STORED,
-        embedding vector(384),  -- Common dim (MiniLM 384); ALTER for OpenAI 1536
+        embedding vector(__EMBEDDING_DIM__),
         device_id TEXT DEFAULT '',
         device_origin TEXT DEFAULT '',
         updated_at TEXT DEFAULT '',
@@ -185,13 +193,13 @@ INIT_SQL = [
 ]
 
 
-async def ensure_schema(pool: Any) -> None:
+async def ensure_schema(pool: Any, embedding_dim: int = 384) -> None:
     """Create pgvector extension and all tables if they don't exist."""
     import asyncpg
 
     conn: asyncpg.Connection = await pool.acquire()
     try:
-        for sql in INIT_SQL:
+        for sql in _build_init_sql(embedding_dim):
             stmt = sql.strip()
             if stmt:
                 try:

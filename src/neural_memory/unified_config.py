@@ -655,6 +655,7 @@ class PostgresConfig:
     database: str = "neuralmemory"
     user: str = "postgres"
     password: str = ""
+    embedding_dim: int = 384
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -663,6 +664,7 @@ class PostgresConfig:
             "database": self.database,
             "user": self.user,
             "password": "***" if self.password else "",
+            "embedding_dim": self.embedding_dim,
         }
 
     @classmethod
@@ -693,7 +695,11 @@ class PostgresConfig:
                 "PostgreSQL password read from config.toml — prefer NEURAL_MEMORY_POSTGRES_PASSWORD env var"
             )
         password = str(password_env or password_file)[:256]
-        return cls(host=host, port=port, database=database, user=user, password=password)
+        try:
+            embedding_dim = max(1, int(data.get("embedding_dim", 384)))
+        except (ValueError, TypeError):
+            embedding_dim = 384
+        return cls(host=host, port=port, database=database, user=user, password=password, embedding_dim=embedding_dim)
 
 
 @dataclass(frozen=True)
@@ -1519,6 +1525,20 @@ async def _get_postgres_storage(config: UnifiedConfig, name: str) -> NeuralStora
     from neural_memory.storage.postgres.postgres_store import PostgreSQLStorage
 
     if _postgres_storage is not None:
+        # Verify the pool is still alive before reusing
+        pool = getattr(_postgres_storage, "_pool", None)
+        if pool is None or pool.is_closing():
+            logger.warning("PostgreSQL connection pool closed, reconnecting")
+            _postgres_storage = None
+        else:
+            try:
+                async with pool.acquire() as conn:
+                    await conn.execute("SELECT 1")
+            except Exception:
+                logger.warning("PostgreSQL connection lost, reconnecting")
+                _postgres_storage = None
+
+    if _postgres_storage is not None:
         brain = await _postgres_storage.get_brain(name)
         if brain is None:
             brain = await _postgres_storage.find_brain_by_name(name)
@@ -1549,6 +1569,7 @@ async def _get_postgres_storage(config: UnifiedConfig, name: str) -> NeuralStora
         database=pg.database,
         user=pg.user,
         password=pg.password,
+        embedding_dim=pg.embedding_dim,
     )
     await storage.initialize()
 

@@ -19,7 +19,7 @@ import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from neural_memory.core.neuron import NeuronType
+from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
 
 if TYPE_CHECKING:
@@ -188,7 +188,7 @@ async def discover_semantic_synapses(
     # Paginate through all neurons to collect CONCEPT+ENTITY (avoid OOM)
     batch_size = 5000
     offset = 0
-    eligible: list = []
+    eligible: list[Neuron] = []
     while True:
         batch = await storage.find_neurons(limit=batch_size, offset=offset)
         if not batch:

@@ -43,7 +43,7 @@ class PostgresBrainMixin(PostgresBaseMixin):
             brain.name,
             config_json,
             brain.owner_id,
-            1 if brain.is_public else 0,
+            brain.is_public,
             shared_json,
             brain.created_at,
             now,

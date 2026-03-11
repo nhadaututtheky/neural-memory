@@ -44,12 +44,14 @@ class PostgreSQLStorage(
         database: str = "neuralmemory",
         user: str = "postgres",
         password: str = "",
+        embedding_dim: int = 384,
     ) -> None:
         self._host = host
         self._port = port
         self._database = database
         self._user = user
         self._password = password
+        self._embedding_dim = embedding_dim
         self._pool: Any = None
         self._current_brain_id: str | None = None
 
@@ -67,7 +69,7 @@ class PostgreSQLStorage(
             max_size=10,
             command_timeout=60,
         )
-        await ensure_schema(self._pool)
+        await ensure_schema(self._pool, embedding_dim=self._embedding_dim)
         logger.info("PostgreSQL connected: %s:%d/%s", self._host, self._port, self._database)
 
     @property

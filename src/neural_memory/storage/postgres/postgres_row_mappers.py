@@ -17,6 +17,7 @@ from neural_memory.core.memory_types import (
 )
 from neural_memory.core.neuron import Neuron, NeuronState, NeuronType
 from neural_memory.core.synapse import Direction, Synapse, SynapseType
+from neural_memory.utils.timeutils import utcnow as _utcnow
 
 
 def _get(record: Any, key: str, default: Any = None) -> Any:
@@ -37,6 +38,12 @@ def _to_naive_utc(dt: datetime | None) -> datetime | None:
     return dt
 
 
+def _to_naive_utc_required(dt: datetime | None) -> datetime:
+    """Like _to_naive_utc but returns utcnow() as fallback for required fields."""
+    result = _to_naive_utc(dt)
+    return result if result is not None else _utcnow()
+
+
 def row_to_neuron(record: Any) -> Neuron:
     """Convert asyncpg record to Neuron."""
     return Neuron(
@@ -45,7 +52,7 @@ def row_to_neuron(record: Any) -> Neuron:
         content=str(record["content"]),
         metadata=json.loads(record["metadata"]) if record["metadata"] else {},
         content_hash=int(_get(record, "content_hash", 0)),
-        created_at=_to_naive_utc(
+        created_at=_to_naive_utc_required(
             record["created_at"]
             if hasattr(record["created_at"], "isoformat")
             else datetime.fromisoformat(str(record["created_at"]))
@@ -61,7 +68,7 @@ def row_to_neuron_state(record: Any) -> NeuronState:
         access_frequency=int(_get(record, "access_frequency", 0)),
         last_activated=_to_naive_utc(record["last_activated"]),
         decay_rate=float(_get(record, "decay_rate", 0.1)),
-        created_at=_to_naive_utc(
+        created_at=_to_naive_utc_required(
             record["created_at"]
             if hasattr(record["created_at"], "isoformat")
             else datetime.fromisoformat(str(record["created_at"]))
@@ -85,7 +92,7 @@ def row_to_synapse(record: Any) -> Synapse:
         metadata=json.loads(record["metadata"]) if record["metadata"] else {},
         reinforced_count=int(_get(record, "reinforced_count", 0)),
         last_activated=_to_naive_utc(record["last_activated"]),
-        created_at=_to_naive_utc(
+        created_at=_to_naive_utc_required(
             record["created_at"]
             if hasattr(record["created_at"], "isoformat")
             else datetime.fromisoformat(str(record["created_at"]))
@@ -105,10 +112,10 @@ def row_to_fiber(record: Any) -> Fiber:
         agent_tags = tags_raw
     metadata = json.loads(record["metadata"]) if record["metadata"] else {}
 
-    created_at = record["created_at"]
-    if not hasattr(created_at, "isoformat"):
-        created_at = datetime.fromisoformat(str(created_at))
-    created_at = _to_naive_utc(created_at)
+    created_at_raw = record["created_at"]
+    if not hasattr(created_at_raw, "isoformat"):
+        created_at_raw = datetime.fromisoformat(str(created_at_raw))
+    created_at: datetime = _to_naive_utc_required(created_at_raw)
 
     last_conducted = record["last_conducted"]
     time_start = record["time_start"]
@@ -172,12 +179,12 @@ def row_to_brain(record: Any) -> Brain:
         owner_id=record["owner_id"],
         is_public=bool(_get(record, "is_public", 0)),
         shared_with=shared_with,
-        created_at=_to_naive_utc(
+        created_at=_to_naive_utc_required(
             record["created_at"]
             if hasattr(record["created_at"], "isoformat")
             else datetime.fromisoformat(str(record["created_at"]))
         ),
-        updated_at=_to_naive_utc(
+        updated_at=_to_naive_utc_required(
             record["updated_at"]
             if hasattr(record["updated_at"], "isoformat")
             else datetime.fromisoformat(str(record["updated_at"]))
@@ -247,7 +254,7 @@ def pg_row_to_typed_memory(record: Any) -> TypedMemory:
         project_id=record["project_id"],
         tags=frozenset(tags_list),
         metadata=metadata,
-        created_at=_to_naive_utc(
+        created_at=_to_naive_utc_required(
             record["created_at"]
             if hasattr(record["created_at"], "isoformat")
             else datetime.fromisoformat(str(record["created_at"]))
