@@ -203,3 +203,122 @@ class SQLiteCalibrationMixin:
             }
 
         return result
+
+    # ------------------------------------------------------------------
+    # Retriever calibration: per-brain EMA weights for RRF
+    # ------------------------------------------------------------------
+
+    async def save_retriever_outcome(
+        self,
+        retriever_type: str,
+        contributed: bool,
+    ) -> None:
+        """Record whether a retriever type contributed to a successful recall.
+
+        Args:
+            retriever_type: One of "time", "entity", "keyword", "embedding", "graph_expansion".
+            contributed: True if this retriever had neurons in the final result.
+        """
+        conn = self._ensure_conn()
+        brain_id = self._get_brain_id()
+        now = utcnow().isoformat()
+
+        await conn.execute(
+            """INSERT INTO retriever_calibration
+               (brain_id, retriever_type, contributed, created_at)
+               VALUES (?, ?, ?, ?)""",
+            (brain_id, retriever_type, 1 if contributed else 0, now),
+        )
+        await conn.commit()
+
+    async def get_retriever_weights(
+        self,
+        window: int = 100,
+    ) -> dict[str, float]:
+        """Compute per-retriever success EMA weights.
+
+        Returns dict of {retriever_type: weight} where weight is EMA of
+        contribution rate. Higher weight = retriever contributes more often
+        to successful recalls for this brain.
+
+        Default weights (from score_fusion) are returned for retrievers
+        with no data.
+        """
+        from neural_memory.engine.score_fusion import DEFAULT_RETRIEVER_WEIGHTS
+
+        conn = self._ensure_read_conn()
+        brain_id = self._get_brain_id()
+        capped = min(window, 500)
+
+        cursor = await conn.execute(
+            """SELECT retriever_type, contributed
+               FROM retriever_calibration
+               WHERE brain_id = ?
+               ORDER BY created_at DESC
+               LIMIT ?""",
+            (brain_id, capped * 10),
+        )
+        rows = await cursor.fetchall()
+
+        if not rows:
+            return dict(DEFAULT_RETRIEVER_WEIGHTS)
+
+        # Group by retriever type
+        by_type: dict[str, list[int]] = {}
+        for rtype, contributed in rows:
+            if rtype not in by_type:
+                by_type[rtype] = []
+            by_type[rtype].append(contributed)
+
+        alpha = 2.0 / (min(capped, 50) + 1)  # EMA alpha (slow: alpha ~0.04)
+        result = dict(DEFAULT_RETRIEVER_WEIGHTS)
+
+        for rtype, data in by_type.items():
+            samples = data[:capped]
+            if not samples:
+                continue
+
+            # Compute EMA (oldest first)
+            oldest_first = list(reversed(samples))
+            ema = float(oldest_first[0])
+            for val in oldest_first[1:]:
+                ema = alpha * float(val) + (1.0 - alpha) * ema
+
+            # Blend with default weight (never go below 0.1 or above 2.0)
+            default_w = DEFAULT_RETRIEVER_WEIGHTS.get(rtype, 0.5)
+            # Weight = default * (0.5 + ema). Range: default*0.5 to default*1.5
+            adjusted = default_w * (0.5 + ema)
+            result[rtype] = round(max(0.1, min(2.0, adjusted)), 4)
+
+        return result
+
+    # ------------------------------------------------------------------
+    # Graph density: avg synapses per neuron for strategy auto-selection
+    # ------------------------------------------------------------------
+
+    async def get_graph_density(self) -> float:
+        """Compute average synapses per neuron for the current brain.
+
+        Returns 0.0 if no neurons exist.
+        Used by retrieval engine to auto-select activation strategy.
+        """
+        conn = self._ensure_read_conn()
+        brain_id = self._get_brain_id()
+
+        cursor = await conn.execute(
+            "SELECT COUNT(*) FROM neurons WHERE brain_id = ?",
+            (brain_id,),
+        )
+        row = await cursor.fetchone()
+        neuron_count = row[0] if row else 0
+        if neuron_count == 0:
+            return 0.0
+
+        cursor = await conn.execute(
+            "SELECT COUNT(*) FROM synapses WHERE brain_id = ?",
+            (brain_id,),
+        )
+        row = await cursor.fetchone()
+        synapse_count = row[0] if row else 0
+
+        return synapse_count / neuron_count

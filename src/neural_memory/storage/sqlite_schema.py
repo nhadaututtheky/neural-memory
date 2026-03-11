@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 24
+SCHEMA_VERSION = 25
 
 # â”€â”€ Migrations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Each entry maps (from_version -> to_version) with a list of SQL statements.
@@ -455,6 +455,20 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
         )""",
         "CREATE INDEX IF NOT EXISTS idx_session_summaries_brain ON session_summaries(brain_id, ended_at)",
         "CREATE INDEX IF NOT EXISTS idx_session_summaries_session ON session_summaries(session_id)",
+    ],
+    (24, 25): [
+        # Retriever calibration: per-brain EMA weights for dynamic RRF
+        """CREATE TABLE IF NOT EXISTS retriever_calibration (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            brain_id TEXT NOT NULL,
+            retriever_type TEXT NOT NULL,
+            contributed INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_retriever_cal_brain ON retriever_calibration(brain_id, retriever_type, created_at)",
+        # Graph density metric in brain metadata
+        """ALTER TABLE brains ADD COLUMN graph_density REAL NOT NULL DEFAULT 0.0""",
     ],
 }
 

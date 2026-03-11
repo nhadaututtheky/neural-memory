@@ -358,8 +358,8 @@ class TestAutoPromote:
 class TestTrustScore:
     """Trust score field on TypedMemory."""
 
-    def test_schema_version_24(self):
-        assert SCHEMA_VERSION == 24
+    def test_schema_version_25(self):
+        assert SCHEMA_VERSION == 25
 
     def test_trust_score_field_on_typed_memory(self):
         tm = TypedMemory.create(

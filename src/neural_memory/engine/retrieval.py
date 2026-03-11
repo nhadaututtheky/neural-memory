@@ -138,7 +138,7 @@ class ReflexPipeline:
 
         # PPR activator (lazy: only create if strategy requires it)
         self._ppr_activator: PPRActivation | None = None
-        if config.activation_strategy in ("ppr", "hybrid"):
+        if config.activation_strategy in ("ppr", "hybrid", "auto"):
             from neural_memory.engine.ppr_activation import PPRActivation
 
             self._ppr_activator = PPRActivation(storage, config)
@@ -221,6 +221,15 @@ class ReflexPipeline:
 
         # 2. Auto-detect depth if not specified
         _depth_decision: DepthDecision | None = None
+        _session_state = None
+        if session_id:
+            try:
+                from neural_memory.engine.session_state import SessionManager
+
+                _session_state = SessionManager.get_instance().get(session_id)
+            except Exception:
+                pass
+
         if depth is None:
             rule_depth = self._detect_depth(stimulus)
             if self._adaptive_selector is not None:
@@ -228,6 +237,7 @@ class ReflexPipeline:
                     _depth_decision = await self._adaptive_selector.select_depth(
                         stimulus,
                         rule_depth,
+                        session_state=_session_state,
                     )
                     depth = _depth_decision.depth
                 except NotImplementedError:
@@ -250,14 +260,28 @@ class ReflexPipeline:
         anchor_sets, ranked_lists = await self._find_anchors_ranked(stimulus)
 
         # 3.5 RRF score fusion: compute initial activation levels from multi-retriever ranks
+        # Use dynamic per-brain retriever weights when available
+        _rrf_weights: dict[str, float] | None = None
+        try:
+            _rrf_weights = await self._storage.get_retriever_weights()  # type: ignore[attr-defined]
+        except (AttributeError, NotImplementedError, Exception):
+            pass  # Storage doesn't support retriever calibration — use defaults
+
         anchor_activations: dict[str, float] | None = None
         if ranked_lists and any(ranked_lists):
-            fused_scores = rrf_fuse(ranked_lists, k=self._config.rrf_k)
+            fused_scores = rrf_fuse(
+                ranked_lists,
+                k=self._config.rrf_k,
+                retriever_weights=_rrf_weights,
+            )
             if fused_scores:
                 anchor_activations = rrf_to_activation_levels(fused_scores)
 
-        # Choose activation method based on strategy
+        # Choose activation method based on strategy (auto-select from graph density)
         strategy = self._config.activation_strategy
+        if strategy == "auto":
+            strategy = await self._auto_select_strategy()
+
         if strategy == "ppr" and self._ppr_activator is not None:
             # Personalized PageRank activation
             activations, intersections = await self._ppr_activator.activate_from_multiple(
@@ -481,6 +505,25 @@ class ReflexPipeline:
             # AttributeError: storage doesn't have calibration mixin (e.g. InMemoryStorage)
             logger.debug("Calibration record save failed (non-critical)", exc_info=True)
 
+        # Record retriever contribution outcomes for dynamic RRF weights (non-critical)
+        if ranked_lists and fibers_matched:
+            try:
+                # Which neurons ended up in final results?
+                result_neuron_ids = {
+                    next(iter(f.neuron_ids)) for f in fibers_matched if f.neuron_ids
+                }
+                for ranked_list in ranked_lists:
+                    if not ranked_list:
+                        continue
+                    rtype = ranked_list[0].retriever
+                    contributed = any(ra.neuron_id in result_neuron_ids for ra in ranked_list)
+                    await self._storage.save_retriever_outcome(  # type: ignore[attr-defined]
+                        retriever_type=rtype,
+                        contributed=contributed,
+                    )
+            except (AttributeError, Exception):
+                logger.debug("Retriever outcome save failed (non-critical)", exc_info=True)
+
         # Record adaptive depth outcome (non-critical)
         if _depth_decision is not None:
             result.metadata["depth_selection"] = {
@@ -570,6 +613,29 @@ class ReflexPipeline:
                 logger.debug("Session recording failed (non-critical)", exc_info=True)
 
         return result
+
+    async def _auto_select_strategy(self) -> str:
+        """Auto-select activation strategy based on graph density.
+
+        Sparse graph (avg <3 synapses/neuron) → classic BFS reaches more.
+        Dense graph (avg >8 synapses/neuron) → PPR dampens hub noise.
+        Medium → hybrid.
+        """
+        try:
+            density = await self._storage.get_graph_density()  # type: ignore[attr-defined]
+        except (AttributeError, NotImplementedError, Exception):
+            return "classic"  # Fallback if storage doesn't support it
+
+        if density < 3.0:
+            return "classic"
+        elif density > 8.0:
+            if self._ppr_activator is not None:
+                return "ppr"
+            return "classic"
+        else:
+            if self._ppr_activator is not None:
+                return "hybrid"
+            return "classic"
 
     def _detect_depth(self, stimulus: Stimulus) -> DepthLevel:
         """Auto-detect required depth from query intent."""
