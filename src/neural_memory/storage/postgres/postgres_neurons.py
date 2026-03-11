@@ -91,9 +91,11 @@ class PostgresNeuronMixin(PostgresBaseMixin):
         content_exact: str | None = None,
         time_range: tuple[datetime, datetime] | None = None,
         limit: int = 100,
+        offset: int = 0,
     ) -> list[Neuron]:
         brain_id = self._get_brain_id()
-        limit = min(limit, 1000)
+        full_scan = content_contains is None and content_exact is None
+        limit = min(limit, 10000 if full_scan else 1000)
 
         if content_exact is not None:
             row = await self._query_one(
@@ -127,8 +129,8 @@ class PostgresNeuronMixin(PostgresBaseMixin):
             query += f" AND created_at >= ${idx} AND created_at <= ${idx + 1}"
             params.extend([start.isoformat(), end.isoformat()])
 
-        query += " ORDER BY created_at DESC LIMIT $" + str(len(params) + 1)
-        params.append(limit)
+        query += " ORDER BY id LIMIT $" + str(len(params) + 1) + " OFFSET $" + str(len(params) + 2)
+        params.extend([limit, offset])
 
         rows = await self._query_ro(query, *params)
         return [row_to_neuron(r) for r in rows]
@@ -234,6 +236,44 @@ class PostgresNeuronMixin(PostgresBaseMixin):
                 if hasattr(state.created_at, "isoformat")
                 else str(state.created_at)
             ),
+        )
+
+    async def update_neuron_states_batch(self, states: list[NeuronState]) -> None:
+        """Update multiple neuron states in one batch."""
+        if not states:
+            return
+        brain_id = self._get_brain_id()
+        args_list = [
+            (
+                s.neuron_id,
+                brain_id,
+                s.activation_level,
+                s.access_frequency,
+                s.last_activated,
+                s.decay_rate,
+                s.firing_threshold,
+                s.refractory_until,
+                s.refractory_period_ms,
+                s.homeostatic_target,
+                (
+                    s.created_at.isoformat()
+                    if hasattr(s.created_at, "isoformat")
+                    else str(s.created_at)
+                ),
+            )
+            for s in states
+        ]
+        await self._executemany(
+            """INSERT INTO neuron_states
+               (neuron_id, brain_id, activation_level, access_frequency,
+                last_activated, decay_rate, firing_threshold, refractory_until,
+                refractory_period_ms, homeostatic_target, created_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+               ON CONFLICT (brain_id, neuron_id) DO UPDATE SET
+                 activation_level = EXCLUDED.activation_level,
+                 access_frequency = EXCLUDED.access_frequency,
+                 last_activated = EXCLUDED.last_activated""",
+            args_list,
         )
 
     async def find_neurons_by_embedding(

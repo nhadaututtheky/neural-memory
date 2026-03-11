@@ -172,15 +172,18 @@ class SQLiteNeuronMixin:
         content_exact: str | None = None,
         time_range: tuple[datetime, datetime] | None = None,
         limit: int = 100,
+        offset: int = 0,
     ) -> list[Neuron]:
         # Cache shortcut for exact-match lookups (most repeated pattern)
         if content_exact is not None and content_contains is None and time_range is None:
             type_val = type.value if type is not None else None
             cached = self._neuron_cache.get(content_exact, type_val)
             if cached is not None:
-                return cached[:limit]
+                return cached[offset : offset + limit]
 
-        limit = min(limit, 1000)
+        # Full-scan path (no content filter): allow larger batches for pagination
+        full_scan = content_contains is None and content_exact is None
+        limit = min(limit, 10000 if full_scan else 1000)
         conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
@@ -206,8 +209,8 @@ class SQLiteNeuronMixin:
                 params.append(start.isoformat())
                 params.append(end.isoformat())
 
-            query += " ORDER BY fts.rank LIMIT ?"
-            params.append(limit)
+            query += " ORDER BY fts.rank LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
         else:
             # Fallback: original LIKE query (or exact match / no content filter)
             query = "SELECT * FROM neurons WHERE brain_id = ?"
@@ -235,8 +238,8 @@ class SQLiteNeuronMixin:
                 params.append(start.isoformat())
                 params.append(end.isoformat())
 
-            query += " LIMIT ?"
-            params.append(limit)
+            query += " ORDER BY id LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
 
         async with conn.execute(query, params) as cursor:
             rows = await cursor.fetchall()
@@ -381,6 +384,42 @@ class SQLiteNeuronMixin:
             logging.getLogger(__name__).debug(
                 "Skipping state update for deleted neuron %s", state.neuron_id
             )
+
+    async def update_neuron_states_batch(self, states: list[NeuronState]) -> None:
+        """Update multiple neuron states in one batch."""
+        if not states:
+            return
+        conn = self._ensure_conn()
+        brain_id = self._get_brain_id()
+
+        rows = [
+            (
+                s.neuron_id,
+                brain_id,
+                s.activation_level,
+                s.access_frequency,
+                s.last_activated.isoformat() if s.last_activated else None,
+                s.decay_rate,
+                s.firing_threshold,
+                s.refractory_until.isoformat() if s.refractory_until else None,
+                s.refractory_period_ms,
+                s.homeostatic_target,
+                s.created_at.isoformat(),
+            )
+            for s in states
+        ]
+        try:
+            await conn.executemany(
+                """INSERT OR REPLACE INTO neuron_states
+                   (neuron_id, brain_id, activation_level, access_frequency,
+                    last_activated, decay_rate, firing_threshold, refractory_until,
+                    refractory_period_ms, homeostatic_target, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                rows,
+            )
+            await conn.commit()
+        except sqlite3.IntegrityError:
+            pass  # Neurons may have been pruned; skip silently as in update_neuron_state
 
     async def get_all_neuron_states(self) -> list[NeuronState]:
         """Get all neuron states for current brain."""

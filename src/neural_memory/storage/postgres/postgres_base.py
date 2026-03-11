@@ -58,6 +58,16 @@ class PostgresBaseMixin:
         finally:
             await self._pool.release(conn)
 
+    async def _executemany(self, sql: str, args_list: list[tuple[Any, ...]], timeout: float = 30.0) -> None:
+        """Execute a parameterized query for each args tuple in one connection."""
+        import asyncpg
+
+        conn: asyncpg.Connection = await self._pool.acquire()
+        try:
+            await conn.executemany(sql, args_list, timeout=timeout)
+        finally:
+            await self._pool.release(conn)
+
     @staticmethod
     def _serialize_metadata(meta: dict[str, Any]) -> str:
         return json.dumps(meta)

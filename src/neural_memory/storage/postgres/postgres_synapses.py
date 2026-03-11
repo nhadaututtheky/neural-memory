@@ -140,6 +140,31 @@ class PostgresSynapseMixin(PostgresBaseMixin):
         if r == "UPDATE 0":
             raise ValueError(f"Synapse {synapse.id} does not exist")
 
+    async def update_synapses_batch(self, synapses: list[Synapse]) -> None:
+        """Update multiple synapses in one batch."""
+        if not synapses:
+            return
+        brain_id = self._get_brain_id()
+        args_list = [
+            (
+                s.type.value,
+                s.weight,
+                s.direction.value,
+                json.dumps(s.metadata),
+                s.reinforced_count,
+                s.last_activated,
+                brain_id,
+                s.id,
+            )
+            for s in synapses
+        ]
+        await self._executemany(
+            """UPDATE synapses SET type = $1, weight = $2, direction = $3,
+               metadata = $4, reinforced_count = $5, last_activated = $6
+               WHERE brain_id = $7 AND id = $8""",
+            args_list,
+        )
+
     async def delete_synapse(self, synapse_id: str) -> bool:
         brain_id = self._get_brain_id()
         r = await self._query(

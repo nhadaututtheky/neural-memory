@@ -48,15 +48,13 @@ class PostgresFiberMixin(PostgresBaseMixin):
                 fiber.created_at.isoformat(),
             )
             if fiber.neuron_ids:
-                for nid in fiber.neuron_ids:
-                    await self._query(
-                        """INSERT INTO fiber_neurons (brain_id, fiber_id, neuron_id)
-                           VALUES ($1, $2, $3)
-                           ON CONFLICT (brain_id, fiber_id, neuron_id) DO NOTHING""",
-                        brain_id,
-                        fiber.id,
-                        nid,
-                    )
+                args_list = [(brain_id, fiber.id, nid) for nid in fiber.neuron_ids]
+                await self._executemany(
+                    """INSERT INTO fiber_neurons (brain_id, fiber_id, neuron_id)
+                       VALUES ($1, $2, $3)
+                       ON CONFLICT (brain_id, fiber_id, neuron_id) DO NOTHING""",
+                    args_list,
+                )
             return fiber.id
         except Exception as e:
             from asyncpg.exceptions import UniqueViolationError

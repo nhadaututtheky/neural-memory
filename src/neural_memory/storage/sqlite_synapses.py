@@ -156,6 +156,34 @@ class SQLiteSynapseMixin:
 
         await conn.commit()
 
+    async def update_synapses_batch(self, synapses: list[Synapse]) -> None:
+        """Update multiple synapses in one batch."""
+        if not synapses:
+            return
+        conn = self._ensure_conn()
+        brain_id = self._get_brain_id()
+
+        rows = [
+            (
+                s.type.value,
+                s.weight,
+                s.direction.value,
+                json.dumps(s.metadata),
+                s.reinforced_count,
+                s.last_activated.isoformat() if s.last_activated else None,
+                s.id,
+                brain_id,
+            )
+            for s in synapses
+        ]
+        await conn.executemany(
+            """UPDATE synapses SET type = ?, weight = ?, direction = ?,
+               metadata = ?, reinforced_count = ?, last_activated = ?
+               WHERE id = ? AND brain_id = ?""",
+            rows,
+        )
+        await conn.commit()
+
     async def delete_synapse(self, synapse_id: str) -> bool:
         conn = self._ensure_conn()
         brain_id = self._get_brain_id()
@@ -316,10 +344,11 @@ class SQLiteSynapseMixin:
         Args:
             source_id: Starting neuron ID.
             target_id: Destination neuron ID.
-            max_hops: Maximum path length.
+            max_hops: Maximum path length (capped at 10 for consistency with postgres).
             bidirectional: If True, traverse both outgoing and incoming
                 synapse edges (treats the graph as undirected).
         """
+        max_hops = min(max_hops, 10)
         conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
