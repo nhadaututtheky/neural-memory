@@ -1,8 +1,8 @@
-"""Shared fixtures for FalkorDB storage tests.
+"""Shared fixtures for PostgreSQL storage tests.
 
-All tests in this directory require a running FalkorDB instance.
-Set FALKORDB_TEST_HOST / FALKORDB_TEST_PORT env vars to override defaults.
-Tests are auto-skipped when FalkorDB is not reachable or not installed.
+All tests in this directory require a running PostgreSQL instance with pgvector.
+Set POSTGRES_TEST_HOST / POSTGRES_TEST_PORT / POSTGRES_TEST_DB env vars to override.
+Tests are auto-skipped when Postgres is not reachable or asyncpg not installed.
 """
 
 from __future__ import annotations
@@ -14,46 +14,59 @@ from typing import Any
 import pytest
 import pytest_asyncio
 
-FALKORDB_HOST = os.environ.get("FALKORDB_TEST_HOST", "localhost")
-FALKORDB_PORT = int(os.environ.get("FALKORDB_TEST_PORT", "6379"))
+POSTGRES_HOST = os.environ.get("POSTGRES_TEST_HOST", "localhost")
+POSTGRES_PORT = int(os.environ.get("POSTGRES_TEST_PORT", "5432"))
+POSTGRES_DB = os.environ.get("POSTGRES_TEST_DB", "neuralmemory_test")
+POSTGRES_USER = os.environ.get("POSTGRES_TEST_USER", "postgres")
+POSTGRES_PASSWORD = os.environ.get("POSTGRES_TEST_PASSWORD", "")
 
 
-def falkordb_available(host: str = FALKORDB_HOST, port: int = FALKORDB_PORT) -> bool:
-    """Check if FalkorDB package + server are both available."""
+def postgres_available() -> bool:
+    """Check if asyncpg + Postgres server are both available."""
     try:
-        from falkordb import FalkorDB as FalkorDBClient
+        import asyncpg
 
-        db = FalkorDBClient(host=host, port=port)
-        g = db.select_graph("__ping__")
-        g.query("RETURN 1")
-        g.delete()
-        return True
-    except Exception:
+        async def _check() -> bool:
+            try:
+                conn = await asyncpg.connect(
+                    host=POSTGRES_HOST,
+                    port=POSTGRES_PORT,
+                    database=POSTGRES_DB,
+                    user=POSTGRES_USER,
+                    password=POSTGRES_PASSWORD or None,
+                    timeout=3,
+                )
+                await conn.execute("SELECT 1")
+                await conn.close()
+                return True
+            except Exception:
+                return False
+
+        import asyncio
+
+        return asyncio.run(_check())
+    except ImportError:
         return False
 
 
-_FALKORDB_AVAILABLE = falkordb_available()
-_SKIP_REASON = f"FalkorDB not available at {FALKORDB_HOST}:{FALKORDB_PORT}"
+_POSTGRES_AVAILABLE = postgres_available()
+_SKIP_REASON = f"PostgreSQL not available at {POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
 
 
 @pytest.fixture(autouse=True)
-def _require_falkordb(request: pytest.FixtureRequest) -> None:
-    """Skip FalkorDB tests when FalkorDB is not available.
-
-    Does NOT apply to tests under postgres/ (they use their own conftest).
-    """
-    if "postgres" in str(request.node.fspath):
-        return
-    if not _FALKORDB_AVAILABLE:
+def _require_postgres() -> None:
+    """Skip all tests when Postgres is not available."""
+    if not _POSTGRES_AVAILABLE:
         pytest.skip(_SKIP_REASON)
 
 
 def _import_deps() -> dict[str, Any]:
-    """Lazy-import FalkorDB storage deps. Only called when tests actually run."""
+    """Lazy-import Postgres storage deps."""
     from neural_memory.core.brain import Brain
+    from neural_memory.core.fiber import Fiber
     from neural_memory.core.neuron import Neuron, NeuronType
     from neural_memory.core.synapse import Synapse, SynapseType
-    from neural_memory.storage.falkordb.falkordb_store import FalkorDBStorage
+    from neural_memory.storage.postgres.postgres_store import PostgreSQLStorage
 
     return {
         "Brain": Brain,
@@ -61,7 +74,8 @@ def _import_deps() -> dict[str, Any]:
         "NeuronType": NeuronType,
         "Synapse": Synapse,
         "SynapseType": SynapseType,
-        "FalkorDBStorage": FalkorDBStorage,
+        "Fiber": Fiber,
+        "PostgreSQLStorage": PostgreSQLStorage,
     }
 
 
@@ -73,18 +87,23 @@ def brain_id() -> str:
 
 @pytest_asyncio.fixture
 async def storage(brain_id: str) -> Any:
-    """FalkorDB storage with a clean test brain."""
+    """PostgreSQL storage with a clean test brain."""
     deps = _import_deps()
-    store = deps["FalkorDBStorage"](host=FALKORDB_HOST, port=FALKORDB_PORT)
+    store = deps["PostgreSQLStorage"](
+        host=POSTGRES_HOST,
+        port=POSTGRES_PORT,
+        database=POSTGRES_DB,
+        user=POSTGRES_USER,
+        password=POSTGRES_PASSWORD,
+    )
     await store.initialize()
 
     brain = deps["Brain"].create(name=brain_id, brain_id=brain_id)
     await store.save_brain(brain)
-    await store.set_brain_with_indexes(brain_id)
+    store.set_brain(brain_id)
 
     yield store
 
-    # Cleanup: clear test brain graph
     try:
         await store.clear(brain_id)
     except Exception:
@@ -139,5 +158,5 @@ def sample_synapses(sample_neurons: list[Any]) -> list[Any]:
         synapse_cls.create(n[0].id, n[1].id, st.HAPPENED_AT, weight=0.8),
         synapse_cls.create(n[1].id, n[2].id, st.AT_LOCATION, weight=0.6),
         synapse_cls.create(n[2].id, n[3].id, st.CAUSED_BY, weight=0.7),
-        synapse_cls.create(n[3].id, n[4].id, st.RELATES_TO, weight=0.9),
+        synapse_cls.create(n[3].id, n[4].id, st.RELATED_TO, weight=0.9),
     ]

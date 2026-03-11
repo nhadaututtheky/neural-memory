@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from neural_memory.core.fiber import Fiber
 from neural_memory.storage.postgres.postgres_base import PostgresBaseMixin
@@ -45,7 +45,7 @@ class PostgresFiberMixin(PostgresBaseMixin):
                 json.dumps(fiber.metadata),
                 fiber.compression_tier,
                 1 if fiber.pinned else 0,
-                fiber.created_at.isoformat(),
+                fiber.created_at,
             )
             if fiber.neuron_ids:
                 args_list = [(brain_id, fiber.id, nid) for nid in fiber.neuron_ids]
@@ -90,14 +90,14 @@ class PostgresFiberMixin(PostgresBaseMixin):
 
         if contains_neuron is not None:
             params.append(contains_neuron)
-            query += f" AND id IN (SELECT fiber_id FROM fiber_neurons WHERE brain_id = $1 AND neuron_id = ${len(params)})"
+            query += f" AND id IN (SELECT fiber_id FROM fiber_neurons WHERE brain_id = $1 AND neuron_id = ${len(params)})"  # noqa: S608
 
         if time_overlaps is not None:
             start, end = time_overlaps
             idx = len(params) + 1
             query += f" AND (time_start IS NULL OR time_start <= ${idx + 1})"
             query += f" AND (time_end IS NULL OR time_end >= ${idx})"
-            params.extend([end.isoformat(), start.isoformat()])
+            params.extend([end, start])
 
         if min_salience is not None:
             params.append(min_salience)
@@ -107,14 +107,15 @@ class PostgresFiberMixin(PostgresBaseMixin):
             params.append(metadata_key)
             query += f" AND metadata ? ${len(params)}"
 
+        if tags is not None and tags:
+            params.append(json.dumps(list(tags)))
+            query += f" AND tags @> ${len(params)}::jsonb"
+
         params.append(limit)
         query += f" ORDER BY salience DESC LIMIT ${len(params)}"
 
         rows = await self._query_ro(query, *params)
-        fibers = [row_to_fiber(r) for r in rows]
-        if tags is not None:
-            fibers = [f for f in fibers if tags.issubset(f.tags)]
-        return fibers[:limit]
+        return [row_to_fiber(r) for r in rows]
 
     async def update_fiber(self, fiber: Fiber) -> None:
         brain_id = self._get_brain_id()
@@ -158,4 +159,21 @@ class PostgresFiberMixin(PostgresBaseMixin):
             brain_id,
             fiber_id,
         )
-        return r != "DELETE 0"
+        return bool(r != "DELETE 0")
+
+    async def get_fibers(
+        self,
+        limit: int = 10,
+        order_by: Literal["created_at", "salience", "frequency"] = "created_at",
+        descending: bool = True,
+    ) -> list[Fiber]:
+        """Get fibers with ordering."""
+        brain_id = self._get_brain_id()
+        limit = min(limit, 1000)
+        _allowed_order = {"created_at", "salience", "frequency"}
+        if order_by not in _allowed_order:
+            order_by = "created_at"
+        order_dir = "DESC" if descending else "ASC"
+        query = f"SELECT * FROM fibers WHERE brain_id = $1 ORDER BY {order_by} {order_dir} LIMIT $2"  # noqa: S608
+        rows = await self._query_ro(query, brain_id, limit)
+        return [row_to_fiber(r) for r in rows]

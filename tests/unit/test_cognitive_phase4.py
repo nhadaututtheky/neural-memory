@@ -25,6 +25,7 @@ def _make_storage(brain_id: str | None = "test-brain") -> AsyncMock:
     storage.list_cognitive_states = AsyncMock(return_value=[])
     storage.list_predictions = AsyncMock(return_value=[])
     storage.get_neuron = AsyncMock(return_value=MagicMock(content="test content"))
+    storage.get_neurons_batch = AsyncMock(return_value={})
     storage.refresh_hot_index = AsyncMock(return_value=0)
     storage.add_knowledge_gap = AsyncMock(return_value="gap-1")
     storage.get_knowledge_gap = AsyncMock(return_value=None)
@@ -138,6 +139,9 @@ class TestCognitiveRefresh:
                 },
             ]
         )
+        storage.get_neurons_batch = AsyncMock(
+            return_value={"h-1": MagicMock(content="hypothesis content")}
+        )
         storage.refresh_hot_index = AsyncMock(return_value=1)
         handler = _make_handler(storage)
 
@@ -159,6 +163,9 @@ class TestCognitiveRefresh:
                     "created_at": "2026-03-01",
                 },
             ]
+        )
+        storage.get_neurons_batch = AsyncMock(
+            return_value={"p-1": MagicMock(content="prediction content")}
         )
         storage.refresh_hot_index = AsyncMock(return_value=1)
         handler = _make_handler(storage)
@@ -189,6 +196,12 @@ class TestCognitiveRefresh:
                     "created_at": "2026-03-01",
                 },
             ]
+        )
+        storage.get_neurons_batch = AsyncMock(
+            return_value={
+                "h-1": MagicMock(content="hyp 1"),
+                "h-2": MagicMock(content="hyp 2"),
+            }
         )
         handler = _make_handler(storage)
 

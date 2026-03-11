@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 SCHEMA_VERSION = 1
 
 # Run in order: enables pgvector and creates tables
@@ -138,6 +140,48 @@ INIT_SQL = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_fiber_neurons_neuron ON fiber_neurons(brain_id, neuron_id)",
+    # Typed memories
+    """
+    CREATE TABLE IF NOT EXISTS typed_memories (
+        fiber_id TEXT NOT NULL,
+        brain_id TEXT NOT NULL,
+        memory_type TEXT NOT NULL,
+        priority INTEGER DEFAULT 5,
+        provenance JSONB NOT NULL,
+        expires_at TIMESTAMPTZ,
+        project_id TEXT,
+        tags JSONB DEFAULT '[]',
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ NOT NULL,
+        trust_score DOUBLE PRECISION DEFAULT NULL,
+        source TEXT DEFAULT NULL,
+        PRIMARY KEY (brain_id, fiber_id),
+        FOREIGN KEY (brain_id, fiber_id) REFERENCES fibers(brain_id, id) ON DELETE CASCADE,
+        FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_typed_memories_type ON typed_memories(brain_id, memory_type)",
+    "CREATE INDEX IF NOT EXISTS idx_typed_memories_project ON typed_memories(brain_id, project_id)",
+    "CREATE INDEX IF NOT EXISTS idx_typed_memories_expires ON typed_memories(brain_id, expires_at)",
+    "CREATE INDEX IF NOT EXISTS idx_typed_memories_trust ON typed_memories(brain_id, trust_score)",
+    # Projects
+    """
+    CREATE TABLE IF NOT EXISTS projects (
+        id TEXT NOT NULL,
+        brain_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        start_date TIMESTAMPTZ NOT NULL,
+        end_date TIMESTAMPTZ,
+        tags JSONB DEFAULT '[]',
+        priority DOUBLE PRECISION DEFAULT 1.0,
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ NOT NULL,
+        PRIMARY KEY (brain_id, id),
+        FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_projects_name ON projects(brain_id, name)",
 ]
 
 

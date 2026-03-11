@@ -5,19 +5,16 @@ from __future__ import annotations
 import json
 from collections import deque
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 from neural_memory.core.neuron import Neuron
 from neural_memory.core.synapse import Direction, Synapse, SynapseType
-from neural_memory.utils.timeutils import utcnow as _utcnow
 from neural_memory.storage.postgres.postgres_base import PostgresBaseMixin
 from neural_memory.storage.postgres.postgres_row_mappers import (
     row_to_neuron,
     row_to_synapse,
 )
-
-if TYPE_CHECKING:
-    pass
+from neural_memory.utils.timeutils import utcnow as _utcnow
 
 
 def _row_to_joined_synapse(row: Any) -> Synapse:
@@ -47,10 +44,9 @@ class PostgresSynapseMixin(PostgresBaseMixin):
         brain_id = self._get_brain_id()
 
         rows = await self._query_ro(
-            "SELECT id FROM neurons WHERE brain_id = $1 AND id IN ($2, $3)",
+            "SELECT id FROM neurons WHERE brain_id = $1 AND id = ANY($2::text[])",
             brain_id,
-            synapse.source_id,
-            synapse.target_id,
+            [synapse.source_id, synapse.target_id],
         )
         found = {str(r["id"]) for r in rows}
         if synapse.source_id not in found:
@@ -74,7 +70,7 @@ class PostgresSynapseMixin(PostgresBaseMixin):
                 json.dumps(synapse.metadata),
                 synapse.reinforced_count,
                 synapse.last_activated,
-                synapse.created_at.isoformat(),
+                synapse.created_at,
             )
             return synapse.id
         except Exception as e:
@@ -121,6 +117,56 @@ class PostgresSynapseMixin(PostgresBaseMixin):
 
         rows = await self._query_ro(query, *params)
         return [row_to_synapse(r) for r in rows]
+
+    async def get_all_synapses(self) -> list[Synapse]:
+        return await self.get_synapses()
+
+    async def get_synapses_for_neurons(
+        self,
+        neuron_ids: list[str],
+        direction: str = "out",
+    ) -> dict[str, list[Synapse]]:
+        if not neuron_ids:
+            return {}
+        brain_id = self._get_brain_id()
+        result: dict[str, list[Synapse]] = {nid: [] for nid in neuron_ids}
+        nid_set = set(neuron_ids)
+
+        if direction == "out":
+            rows = await self._query_ro(
+                "SELECT * FROM synapses WHERE brain_id = $1 AND source_id = ANY($2::text[])",
+                brain_id,
+                neuron_ids,
+            )
+            for r in rows:
+                syn = row_to_synapse(r)
+                if syn.source_id in nid_set:
+                    result[syn.source_id].append(syn)
+        elif direction == "in":
+            rows = await self._query_ro(
+                "SELECT * FROM synapses WHERE brain_id = $1 AND target_id = ANY($2::text[])",
+                brain_id,
+                neuron_ids,
+            )
+            for r in rows:
+                syn = row_to_synapse(r)
+                if syn.target_id in nid_set:
+                    result[syn.target_id].append(syn)
+        else:
+            rows = await self._query_ro(
+                """SELECT * FROM synapses WHERE brain_id = $1
+                   AND (source_id = ANY($2::text[]) OR target_id = ANY($2::text[]))""",
+                brain_id,
+                neuron_ids,
+            )
+            for r in rows:
+                syn = row_to_synapse(r)
+                if syn.source_id in nid_set:
+                    result[syn.source_id].append(syn)
+                if syn.target_id in nid_set:
+                    result[syn.target_id].append(syn)
+
+        return result
 
     async def update_synapse(self, synapse: Synapse) -> None:
         brain_id = self._get_brain_id()
@@ -172,7 +218,7 @@ class PostgresSynapseMixin(PostgresBaseMixin):
             brain_id,
             synapse_id,
         )
-        return r != "DELETE 0"
+        return bool(r != "DELETE 0")
 
     async def get_neighbors(
         self,
@@ -183,39 +229,44 @@ class PostgresSynapseMixin(PostgresBaseMixin):
     ) -> list[tuple[Neuron, Synapse]]:
         brain_id = self._get_brain_id()
         results: list[tuple[Neuron, Synapse]] = []
-        extra = []
-        params: list[Any] = [brain_id, neuron_id]
-        if synapse_types:
-            extra.append("s.type = ANY($%s::text[])" % str(len(params) + 1))
-            params.append([t.value for t in synapse_types])
-        if min_weight is not None:
-            extra.append("s.weight >= $%s" % str(len(params) + 1))
-            params.append(min_weight)
-        where_extra = " AND " + " AND ".join(extra) if extra else ""
+        if synapse_types and min_weight is not None:
+            where_extra = " AND s.type = ANY($3::text[]) AND s.weight >= $4"
+            params: list[Any] = [brain_id, neuron_id, [t.value for t in synapse_types], min_weight]
+        elif synapse_types:
+            where_extra = " AND s.type = ANY($3::text[])"
+            params = [brain_id, neuron_id, [t.value for t in synapse_types]]
+        elif min_weight is not None:
+            where_extra = " AND s.weight >= $3"
+            params = [brain_id, neuron_id, min_weight]
+        else:
+            where_extra = ""
+            params = [brain_id, neuron_id]
 
         if direction in ("out", "both"):
-            q = f"""
-                SELECT n.*, s.id as s_id, s.source_id, s.target_id, s.type as s_type,
-                       s.weight, s.direction, s.metadata as s_metadata,
-                       s.reinforced_count, s.last_activated as s_last_activated,
-                       s.created_at as s_created_at
-                FROM synapses s
-                JOIN neurons n ON s.target_id = n.id AND s.brain_id = n.brain_id
-                WHERE s.brain_id = $1 AND s.source_id = $2{where_extra}
-            """
+            base = (
+                "SELECT n.*, s.id as s_id, s.source_id, s.target_id, s.type as s_type, "
+                "s.weight, s.direction, s.metadata as s_metadata, "
+                "s.reinforced_count, s.last_activated as s_last_activated, "
+                "s.created_at as s_created_at "
+                "FROM synapses s "
+                "JOIN neurons n ON s.target_id = n.id AND s.brain_id = n.brain_id "
+                "WHERE s.brain_id = $1 AND s.source_id = $2"
+            )
+            q = base + where_extra
             rows = await self._query_ro(q, *params)
             results.extend((row_to_neuron(r), _row_to_joined_synapse(r)) for r in rows)
 
         if direction in ("in", "both"):
-            q = f"""
-                SELECT n.*, s.id as s_id, s.source_id, s.target_id, s.type as s_type,
-                       s.weight, s.direction, s.metadata as s_metadata,
-                       s.reinforced_count, s.last_activated as s_last_activated,
-                       s.created_at as s_created_at
-                FROM synapses s
-                JOIN neurons n ON s.source_id = n.id AND s.brain_id = n.brain_id
-                WHERE s.brain_id = $1 AND s.target_id = $2{where_extra}
-            """
+            base = (
+                "SELECT n.*, s.id as s_id, s.source_id, s.target_id, s.type as s_type, "
+                "s.weight, s.direction, s.metadata as s_metadata, "
+                "s.reinforced_count, s.last_activated as s_last_activated, "
+                "s.created_at as s_created_at "
+                "FROM synapses s "
+                "JOIN neurons n ON s.source_id = n.id AND s.brain_id = n.brain_id "
+                "WHERE s.brain_id = $1 AND s.target_id = $2"
+            )
+            q = base + where_extra
             rows = await self._query_ro(q, *params)
             seen_sids = {s.id for _, s in results}
             for r in rows:
@@ -236,10 +287,9 @@ class PostgresSynapseMixin(PostgresBaseMixin):
         brain_id = self._get_brain_id()
         max_hops = min(max_hops, 10)
         check = await self._query_ro(
-            "SELECT id FROM neurons WHERE brain_id = $1 AND id IN ($2, $3)",
+            "SELECT id FROM neurons WHERE brain_id = $1 AND id = ANY($2::text[])",
             brain_id,
-            source_id,
-            target_id,
+            [source_id, target_id],
         )
         if len(check) < 2:
             return None
@@ -282,15 +332,13 @@ class PostgresSynapseMixin(PostgresBaseMixin):
 
         return None
 
-    async def _build_path_result(
-        self, path: list[tuple[str, str]]
-    ) -> list[tuple[Neuron, Synapse]]:
+    async def _build_path_result(self, path: list[tuple[str, str]]) -> list[tuple[Neuron, Synapse]]:
         """Build path from IDs using batch fetches."""
         if not path:
             return []
         neuron_ids = [pid for pid, _ in path]
         synapse_ids = [sid for _, sid in path]
-        neurons = await self.get_neurons_batch(neuron_ids)
+        neurons = await self.get_neurons_batch(neuron_ids)  # type: ignore[attr-defined]
         syn_map = await self._get_synapses_batch(synapse_ids)
         result: list[tuple[Neuron, Synapse]] = []
         for nid, sid in path:

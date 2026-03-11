@@ -33,10 +33,6 @@ class PostgresNeuronMixin(PostgresBaseMixin):
         meta = {k: v for k, v in neuron.metadata.items() if k != "_embedding"}
         meta_json = json.dumps(meta)
         created = neuron.created_at
-        if hasattr(created, "isoformat"):
-            created_str = created.isoformat()
-        else:
-            created_str = str(created)
 
         await self._query(
             """INSERT INTO neurons
@@ -48,7 +44,7 @@ class PostgresNeuronMixin(PostgresBaseMixin):
             neuron.content,
             meta_json,
             neuron.content_hash,
-            created_str,
+            created,
         )
 
         # Init neuron state
@@ -58,7 +54,7 @@ class PostgresNeuronMixin(PostgresBaseMixin):
                VALUES ($1, $2, 0.0, 0, $3)""",
             neuron.id,
             brain_id,
-            created_str,
+            created,
         )
         return neuron.id
 
@@ -127,7 +123,7 @@ class PostgresNeuronMixin(PostgresBaseMixin):
             start, end = time_range
             idx = len(params) + 1
             query += f" AND created_at >= ${idx} AND created_at <= ${idx + 1}"
-            params.extend([start.isoformat(), end.isoformat()])
+            params.extend([start, end])
 
         query += " ORDER BY id LIMIT $" + str(len(params) + 1) + " OFFSET $" + str(len(params) + 2)
         params.extend([limit, offset])
@@ -155,9 +151,7 @@ class PostgresNeuronMixin(PostgresBaseMixin):
         if type_filter is not None:
             query += " AND n.type = $3"
             params.append(type_filter.value)
-        query += " ORDER BY ns.access_frequency DESC NULLS LAST LIMIT $" + str(
-            len(params) + 1
-        )
+        query += " ORDER BY ns.access_frequency DESC NULLS LAST LIMIT $" + str(len(params) + 1)
         params.append(limit)
         rows = await self._query_ro(query, *params)
         return [
@@ -196,7 +190,7 @@ class PostgresNeuronMixin(PostgresBaseMixin):
             brain_id,
             neuron_id,
         )
-        return r != "DELETE 0"
+        return bool(r != "DELETE 0")
 
     async def get_neuron_state(self, neuron_id: str) -> NeuronState | None:
         brain_id = self._get_brain_id()
@@ -208,6 +202,27 @@ class PostgresNeuronMixin(PostgresBaseMixin):
         if row is None:
             return None
         return row_to_neuron_state(row)
+
+    async def get_neuron_states_batch(self, neuron_ids: list[str]) -> dict[str, NeuronState]:
+        """Batch fetch neuron states in a single query."""
+        if not neuron_ids:
+            return {}
+        brain_id = self._get_brain_id()
+        rows = await self._query_ro(
+            "SELECT * FROM neuron_states WHERE brain_id = $1 AND neuron_id = ANY($2::text[])",
+            brain_id,
+            neuron_ids,
+        )
+        return {str(r["neuron_id"]): row_to_neuron_state(r) for r in rows}
+
+    async def get_all_neuron_states(self) -> list[NeuronState]:
+        """Get all neuron states for current brain."""
+        brain_id = self._get_brain_id()
+        rows = await self._query_ro(
+            "SELECT * FROM neuron_states WHERE brain_id = $1 LIMIT 10000",
+            brain_id,
+        )
+        return [row_to_neuron_state(r) for r in rows]
 
     async def update_neuron_state(self, state: NeuronState) -> None:
         brain_id = self._get_brain_id()
@@ -228,14 +243,10 @@ class PostgresNeuronMixin(PostgresBaseMixin):
             state.last_activated,
             state.decay_rate,
             state.firing_threshold,
-            state.last_activated,
+            state.refractory_until,
             state.refractory_period_ms,
             state.homeostatic_target,
-            (
-                state.created_at.isoformat()
-                if hasattr(state.created_at, "isoformat")
-                else str(state.created_at)
-            ),
+            state.created_at,
         )
 
     async def update_neuron_states_batch(self, states: list[NeuronState]) -> None:
@@ -255,11 +266,7 @@ class PostgresNeuronMixin(PostgresBaseMixin):
                 s.refractory_until,
                 s.refractory_period_ms,
                 s.homeostatic_target,
-                (
-                    s.created_at.isoformat()
-                    if hasattr(s.created_at, "isoformat")
-                    else str(s.created_at)
-                ),
+                s.created_at,
             )
             for s in states
         ]
@@ -311,5 +318,5 @@ class PostgresNeuronMixin(PostgresBaseMixin):
                 )
             return [(row_to_neuron(r), float(r["score"])) for r in rows]
         except Exception:
-            logger.debug("Embedding similarity search failed", exc_info=True)
+            logger.error("Embedding similarity search failed", exc_info=True)
             return []

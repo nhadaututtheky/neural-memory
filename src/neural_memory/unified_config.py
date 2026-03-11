@@ -1519,7 +1519,27 @@ async def _get_postgres_storage(config: UnifiedConfig, name: str) -> NeuralStora
     from neural_memory.storage.postgres.postgres_store import PostgreSQLStorage
 
     if _postgres_storage is not None:
-        _postgres_storage.set_brain(name)
+        brain = await _postgres_storage.get_brain(name)
+        if brain is None:
+            brain = await _postgres_storage.find_brain_by_name(name)
+        if brain is None:
+            from neural_memory.core.brain import BrainConfig
+
+            brain_config = BrainConfig(
+                decay_rate=config.brain.decay_rate,
+                reinforcement_delta=config.brain.reinforcement_delta,
+                activation_threshold=config.brain.activation_threshold,
+                max_spread_hops=config.brain.max_spread_hops,
+                max_context_tokens=config.brain.max_context_tokens,
+                freshness_weight=config.brain.freshness_weight,
+                embedding_enabled=config.embedding.enabled,
+                embedding_provider=config.embedding.provider,
+                embedding_model=config.embedding.model,
+                embedding_similarity_threshold=config.embedding.similarity_threshold,
+            )
+            brain = Brain.create(name=name, config=brain_config, brain_id=name)
+            await _postgres_storage.save_brain(brain)
+        _postgres_storage.set_brain(brain.id)
         return _postgres_storage
 
     pg = config.postgres

@@ -12,11 +12,13 @@ from neural_memory.storage.postgres.postgres_fibers import PostgresFiberMixin
 from neural_memory.storage.postgres.postgres_neurons import PostgresNeuronMixin
 from neural_memory.storage.postgres.postgres_schema import ensure_schema
 from neural_memory.storage.postgres.postgres_synapses import PostgresSynapseMixin
+from neural_memory.storage.postgres.postgres_typed import PostgresTypedMemoryMixin
 
 logger = logging.getLogger(__name__)
 
 
 class PostgreSQLStorage(
+    PostgresTypedMemoryMixin,
     PostgresNeuronMixin,
     PostgresSynapseMixin,
     PostgresFiberMixin,
@@ -66,9 +68,7 @@ class PostgreSQLStorage(
             command_timeout=60,
         )
         await ensure_schema(self._pool)
-        logger.info(
-            "PostgreSQL connected: %s:%d/%s", self._host, self._port, self._database
-        )
+        logger.info("PostgreSQL connected: %s:%d/%s", self._host, self._port, self._database)
 
     @property
     def brain_id(self) -> str | None:
