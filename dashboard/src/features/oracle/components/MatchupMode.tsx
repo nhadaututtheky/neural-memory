@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { Trophy } from "lucide-react"
 import { FlipCard } from "./FlipCard"
 import { generateMatchup, getMatchupPrompt } from "../engine/reading-engine"
@@ -11,6 +11,13 @@ interface MatchupModeProps {
 
 const TOTAL_ROUNDS = 5
 
+// Normalize activation (0-10) and connectionCount to comparable 0-10 scale
+function cardScore(card: OracleCard): number {
+  const activationScore = card.activation // already 0-10
+  const connectionScore = Math.min(card.connectionCount, 20) / 2 // cap at 20, scale to 0-10
+  return activationScore + connectionScore
+}
+
 export function MatchupMode({ cards }: MatchupModeProps) {
   const { t } = useTranslation()
   const [state, setState] = useState<MatchupState | null>(() =>
@@ -20,6 +27,14 @@ export function MatchupMode({ cards }: MatchupModeProps) {
   const [picks, setPicks] = useState<string[]>([])
   const [chosen, setChosen] = useState<"A" | "B" | null>(null)
   const [gameOver, setGameOver] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [])
 
   const choose = useCallback(
     (side: "A" | "B") => {
@@ -27,14 +42,14 @@ export function MatchupMode({ cards }: MatchupModeProps) {
       setChosen(side)
 
       const picked = side === "A" ? state.cardA : state.cardB
-      const newScore = score + picked.activation + picked.connectionCount
+      const newScore = score + cardScore(picked)
       const newPicks = [...picks, state.cardA.id, state.cardB.id]
 
       setScore(newScore)
       setPicks(newPicks)
 
       // Advance to next round after short delay
-      setTimeout(() => {
+      timerRef.current = setTimeout(() => {
         if (state.round >= TOTAL_ROUNDS) {
           setGameOver(true)
           return
@@ -54,6 +69,7 @@ export function MatchupMode({ cards }: MatchupModeProps) {
   )
 
   const restart = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current)
     setState(generateMatchup(cards, 1, TOTAL_ROUNDS))
     setScore(0)
     setPicks([])
@@ -68,7 +84,7 @@ export function MatchupMode({ cards }: MatchupModeProps) {
   if (gameOver) {
     return (
       <div className="flex flex-col items-center gap-6 animate-in fade-in duration-500">
-        <Trophy className="size-12 text-amber-400" />
+        <Trophy className="size-12 text-amber-400" aria-hidden="true" />
         <h2 className="font-display text-2xl font-bold">
           {t("oracle.matchupComplete")}
         </h2>
@@ -124,7 +140,7 @@ export function MatchupMode({ cards }: MatchupModeProps) {
           const isOther = chosen !== null && chosen !== side
 
           return (
-            <div key={card.id} className="flex flex-col items-center gap-3">
+            <div key={`${state.round}-${side}`} className="flex flex-col items-center gap-3">
               <div
                 className={`transition-all duration-500 ${
                   isChosen

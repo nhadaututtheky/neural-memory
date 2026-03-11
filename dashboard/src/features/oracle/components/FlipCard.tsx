@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import type { OracleCard } from "../engine/types"
 import { CardFace } from "./CardFace"
 import { CardBack } from "./CardBack"
@@ -12,21 +12,23 @@ interface FlipCardProps {
 
 export function FlipCard({ card, autoFlipDelay, onFlip, className = "" }: FlipCardProps) {
   const [isFlipped, setIsFlipped] = useState(false)
+  const onFlipRef = useRef(onFlip)
+  onFlipRef.current = onFlip
 
   useEffect(() => {
     if (autoFlipDelay !== undefined && autoFlipDelay >= 0) {
       const timer = setTimeout(() => {
         setIsFlipped(true)
-        onFlip?.()
+        onFlipRef.current?.()
       }, autoFlipDelay)
       return () => clearTimeout(timer)
     }
-  }, [autoFlipDelay, onFlip])
+  }, [autoFlipDelay])
 
   const handleFlip = () => {
     const next = !isFlipped
     setIsFlipped(next)
-    if (next) onFlip?.()
+    if (next) onFlipRef.current?.()
   }
 
   return (
@@ -36,7 +38,7 @@ export function FlipCard({ card, autoFlipDelay, onFlip, className = "" }: FlipCa
       onClick={handleFlip}
       role="button"
       tabIndex={0}
-      aria-label={isFlipped ? `Card: ${card.title}` : "Tap to reveal card"}
+      aria-label={isFlipped ? `Card: ${card.title} — ${card.content}` : "Tap to reveal card"}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault()
@@ -45,7 +47,7 @@ export function FlipCard({ card, autoFlipDelay, onFlip, className = "" }: FlipCa
       }}
     >
       <div
-        className="relative h-full w-full transition-transform duration-600"
+        className="relative h-full w-full"
         style={{
           transformStyle: "preserve-3d",
           transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",

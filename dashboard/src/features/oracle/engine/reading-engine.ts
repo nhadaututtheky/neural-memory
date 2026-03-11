@@ -12,6 +12,14 @@ function dailySeed(date: string, brainName: string): number {
   return Math.abs(hash)
 }
 
+// Combine two seeds into a distinct hash
+function combineSeed(a: number, b: number): number {
+  let h = (a * 2654435761) ^ b
+  h = Math.imul(h ^ (h >>> 16), 2246822507)
+  h = Math.imul(h ^ (h >>> 13), 3266489909)
+  return (h ^ (h >>> 16)) >>> 0
+}
+
 // Seeded pseudo-random (mulberry32)
 function seededRandom(seed: number): () => number {
   let s = seed | 0
@@ -37,6 +45,7 @@ function pickN<T>(items: readonly T[], n: number, rand: () => number): T[] {
 
 // Pick a template string using random
 function pickTemplate(templates: readonly string[], rand: () => number): string {
+  if (templates.length === 0) return ""
   return templates[Math.floor(rand() * templates.length)]
 }
 
@@ -62,10 +71,14 @@ export function generateDailyReading(
   const seed = dailySeed(today, brainName)
   const rand = seededRandom(seed)
 
-  // Sort by activation descending, then pick from top half for better cards
+  // Sort by activation descending, then pick from top 60% (min 3)
   const sorted = [...cards].sort((a, b) => b.activation - a.activation)
   const topPool = sorted.slice(0, Math.max(Math.ceil(sorted.length * 0.6), 3))
-  const [past, present, future] = pickN(topPool, 3, rand)
+  const picked = pickN(topPool, 3, rand)
+
+  // Guard: pickN must return exactly 3
+  if (picked.length < 3) return null
+  const [past, present, future] = picked
 
   const interpretation = interpolate(
     pickTemplate(DAILY_INTERPRETATIONS, rand),
@@ -92,8 +105,12 @@ export function generateWhatIf(
 
   // Pick 2 decisions + 1 wildcard
   const decisions = pickN(cards, 2, rand)
+  if (decisions.length < 2) return null
+
   const remaining = cards.filter((c) => !decisions.includes(c))
-  const [wildcard] = pickN(remaining.length > 0 ? remaining : cards, 1, rand)
+  const wildcardPick = pickN(remaining.length > 0 ? remaining : cards, 1, rand)
+  if (wildcardPick.length === 0) return null
+  const wildcard = wildcardPick[0]
 
   const scenario = interpolate(pickTemplate(WHAT_IF_TEMPLATES, rand), {
     cardA: decisions[0].content,
@@ -116,12 +133,15 @@ export function generateMatchup(
 ): MatchupState | null {
   if (cards.length < 2) return null
 
-  const rand = seededRandom(seed ?? Date.now() + round)
+  // Use combineSeed to avoid collision between rounds in same millisecond
+  const baseSeed = seed ?? Date.now()
+  const rand = seededRandom(combineSeed(baseSeed, round * 7919))
   const available = cards.filter((c) => !previousPicks.includes(c.id))
   const pool = available.length >= 2 ? available : cards
 
-  const [cardA, cardB] = pickN(pool, 2, rand)
-  return { cardA, cardB, round, score: 0, totalRounds }
+  const picked = pickN(pool, 2, rand)
+  if (picked.length < 2) return null
+  return { cardA: picked[0], cardB: picked[1], round, score: 0, totalRounds }
 }
 
 export function getMatchupPrompt(
@@ -129,7 +149,9 @@ export function getMatchupPrompt(
   cardB: OracleCard,
   seed?: number,
 ): string {
-  const rand = seededRandom(seed ?? Date.now())
+  // Use stable seed from card IDs so prompt doesn't change on re-render
+  const stableSeed = seed ?? dailySeed(cardA.id, cardB.id)
+  const rand = seededRandom(stableSeed)
   return interpolate(pickTemplate(MATCHUP_PROMPTS, rand), {
     suitA: cardA.suit.name,
     suitB: cardB.suit.name,

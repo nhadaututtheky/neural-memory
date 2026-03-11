@@ -31,7 +31,7 @@ export interface OracleCard {
   readonly title: string
   readonly content: string
   readonly suit: CardSuit
-  readonly suitKey: string
+  readonly suitKey: CardSuitKey | "unknown"
   readonly activation: number
   readonly connectionCount: number
   readonly age: string

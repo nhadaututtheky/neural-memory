@@ -65,9 +65,9 @@ export function CardFace({ card, className = "" }: CardFaceProps) {
 
         {/* Stats row */}
         <div className="mt-4 flex items-center justify-between text-xs text-white/50">
-          <span title="Activation">⚡ {card.activation}</span>
-          <span title="Connections">🔗 {card.connectionCount}</span>
-          <span title="Age">📅 {card.age}</span>
+          <span aria-label={`Activation ${card.activation}`}><span aria-hidden="true">⚡</span> {card.activation}</span>
+          <span aria-label={`Connections ${card.connectionCount}`}><span aria-hidden="true">🔗</span> {card.connectionCount}</span>
+          <span aria-label={`Age ${card.age}`}><span aria-hidden="true">📅</span> {card.age}</span>
         </div>
 
         {/* Suit badge */}

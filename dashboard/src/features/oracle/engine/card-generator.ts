@@ -1,11 +1,11 @@
 import type { GraphNeuron, GraphSynapse } from "@/api/types"
-import { CARD_SUITS, DEFAULT_SUIT, type OracleCard, type CardSuitKey } from "./types"
+import { CARD_SUITS, DEFAULT_SUIT, type OracleCard, type CardSuit, type CardSuitKey } from "./types"
 
-function getSuit(neuronType: string) {
+function getSuit(neuronType: string): { suit: CardSuit; key: CardSuitKey | "unknown" } {
   if (neuronType in CARD_SUITS) {
-    return { suit: CARD_SUITS[neuronType as CardSuitKey], key: neuronType }
+    return { suit: CARD_SUITS[neuronType as CardSuitKey], key: neuronType as CardSuitKey }
   }
-  return { suit: DEFAULT_SUIT, key: "unknown" }
+  return { suit: DEFAULT_SUIT, key: "unknown" as const }
 }
 
 function formatAge(createdAt: string): string {

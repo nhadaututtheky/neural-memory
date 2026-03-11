@@ -35,7 +35,7 @@ export function CardBack({ className = "" }: CardBackProps) {
       </div>
 
       {/* Center symbol */}
-      <div className="absolute inset-0 flex items-center justify-center">
+      <div className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
         <div className="relative">
           <div
             className="text-5xl font-bold opacity-20"

@@ -50,7 +50,7 @@ export function WhatIfMode({ cards }: WhatIfModeProps) {
 
       <div className="flex flex-wrap justify-center gap-6">
         {allCards.map((card, i) => (
-          <div key={card.id} className="flex flex-col items-center gap-2">
+          <div key={`slot-${i}`} className="flex flex-col items-center gap-2">
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               {i < 2 ? t("oracle.memory") + ` ${i + 1}` : t("oracle.wildcard")}
             </span>

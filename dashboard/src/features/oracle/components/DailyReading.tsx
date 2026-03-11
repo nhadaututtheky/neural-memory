@@ -29,7 +29,7 @@ export function DailyReading({ cards, brainName }: DailyReadingProps) {
 
       <div className="flex flex-wrap justify-center gap-6">
         {positionCards.map((card, i) => (
-          <div key={card.id} className="flex flex-col items-center gap-2">
+          <div key={POSITIONS[i]} className="flex flex-col items-center gap-2">
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               {t(`oracle.${POSITIONS[i]}`)}
             </span>
