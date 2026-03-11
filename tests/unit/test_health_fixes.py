@@ -302,7 +302,7 @@ class TestDiversityMetric:
     def test_diversity_total_synapse_types_matches_enum(self) -> None:
         """_TOTAL_SYNAPSE_TYPES should match the actual enum member count."""
         assert len(SynapseType) == DiagnosticsEngine._TOTAL_SYNAPSE_TYPES
-        assert len(SynapseType) == 32
+        assert len(SynapseType) == 35
 
 
 class TestTokenEstimation:
@@ -485,4 +485,4 @@ class TestVersionBump:
     def test_version_is_current(self) -> None:
         import neural_memory
 
-        assert neural_memory.__version__ == "2.29.0"
+        assert neural_memory.__version__ == "3.0.0"

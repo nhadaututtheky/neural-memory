@@ -22,6 +22,7 @@ from neural_memory.core.memory_types import (
     get_decay_rate,
     suggest_memory_type,
 )
+from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.engine.encoder import MemoryEncoder
 from neural_memory.engine.hooks import HookEvent
 from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline
@@ -74,6 +75,86 @@ async def _get_brain_or_error(
     if not brain:
         return None, {"error": "No brain configured"}
     return brain, None
+
+
+async def _build_citation_audit(
+    storage: NeuralStorage,
+    neuron_id: str,
+    include_citations: bool = True,
+) -> dict[str, Any]:
+    """Build citation and audit trail for a neuron from its synapses.
+
+    Looks up SOURCE_OF, STORED_BY, VERIFIED_AT, APPROVED_BY synapses
+    connected to the neuron and returns citation + audit dicts.
+    """
+    from neural_memory.core.synapse import SynapseType
+
+    result: dict[str, Any] = {}
+
+    # Fetch incoming synapses for this neuron
+    synapses = await storage.get_synapses(target_id=neuron_id)
+
+    # Build citation from SOURCE_OF synapse
+    if include_citations:
+        source_synapses = [s for s in synapses if s.type == SynapseType.SOURCE_OF]
+        if source_synapses:
+            source_syn = source_synapses[0]
+            try:
+                source_obj = await storage.get_source(source_syn.source_id)
+                if source_obj:
+                    from neural_memory.engine.citation import (
+                        CitationFormat,
+                        CitationInput,
+                        format_citation,
+                    )
+
+                    citation_input = CitationInput(
+                        source_name=source_obj.name,
+                        source_type=source_obj.source_type.value,
+                        source_version=source_obj.version,
+                        effective_date=(
+                            source_obj.effective_date.isoformat()
+                            if source_obj.effective_date
+                            else None
+                        ),
+                        neuron_id=neuron_id,
+                        metadata=source_obj.metadata,
+                    )
+                    result["citation"] = {
+                        "inline": format_citation(citation_input, CitationFormat.INLINE),
+                        "footnote": format_citation(citation_input, CitationFormat.FOOTNOTE),
+                        "source_id": source_obj.id,
+                        "source_name": source_obj.name,
+                        "source_type": source_obj.source_type.value,
+                    }
+            except Exception:
+                logger.debug("Citation generation failed", exc_info=True)
+
+    # Build audit trail from STORED_BY, VERIFIED_AT, APPROVED_BY synapses
+    stored_by_syns = [s for s in synapses if s.type == SynapseType.STORED_BY]
+    verified_syns = [s for s in synapses if s.type == SynapseType.VERIFIED_AT]
+    approved_syns = [s for s in synapses if s.type == SynapseType.APPROVED_BY]
+
+    if stored_by_syns or verified_syns or approved_syns:
+        audit: dict[str, Any] = {}
+        if stored_by_syns:
+            syn = stored_by_syns[0]
+            audit["stored_by"] = syn.metadata.get("actor", syn.source_id)
+            audit["stored_at"] = syn.created_at.isoformat() if syn.created_at else None
+        if verified_syns:
+            syn = verified_syns[0]
+            audit["verified"] = True
+            audit["verified_by"] = syn.metadata.get("actor", syn.source_id)
+            audit["verified_at"] = syn.created_at.isoformat() if syn.created_at else None
+        else:
+            audit["verified"] = False
+        if approved_syns:
+            syn = approved_syns[0]
+            audit["approved_by"] = syn.metadata.get("actor", syn.source_id)
+            audit["approved_at"] = syn.created_at.isoformat() if syn.created_at else None
+        result["audit"] = audit
+
+    return result
 
 
 class ToolHandler:
@@ -429,8 +510,34 @@ class ToolHandler:
                 if source_obj is not None:
                     # Store source_id in typed_memory's source field
                     await storage.update_typed_memory_source(result.fiber.id, f"source:{source_id}")
+                    # Create SOURCE_OF synapse: source → anchor neuron
+                    from neural_memory.core.synapse import Synapse, SynapseType
+
+                    source_syn = Synapse.create(
+                        source_id=source_id,
+                        target_id=result.fiber.anchor_neuron_id,
+                        type=SynapseType.SOURCE_OF,
+                        weight=1.0,
+                    )
+                    await storage.add_synapse(source_syn)
                 else:
                     logger.warning("source_id '%s' not found, skipping source link", source_id)
+
+            # Create STORED_BY audit synapse: anchor → agent identifier
+            try:
+                from neural_memory.core.synapse import Synapse, SynapseType
+
+                stored_by_actor = args.get("stored_by", "mcp_agent")
+                stored_by_syn = Synapse.create(
+                    source_id=result.fiber.anchor_neuron_id,
+                    target_id=result.fiber.anchor_neuron_id,  # self-referencing audit
+                    type=SynapseType.STORED_BY,
+                    weight=1.0,
+                    metadata={"actor": stored_by_actor, "tool": "nmem_remember"},
+                )
+                await storage.add_synapse(stored_by_syn)
+            except Exception:
+                logger.debug("STORED_BY synapse creation failed (non-critical)", exc_info=True)
 
             await storage.batch_save()
         finally:
@@ -709,6 +816,7 @@ class ToolHandler:
         if recall_mode not in ("associative", "exact"):
             return {"error": f"Invalid mode: {recall_mode}. Must be 'associative' or 'exact'."}
         tags = _parse_tags(args)
+        include_citations = args.get("include_citations", True)
         min_trust: float | None = None
         raw_min_trust = args.get("min_trust")
         if raw_min_trust is not None:
@@ -833,6 +941,14 @@ class ToolHandler:
                 structure = anchor.metadata.get("_structure") if anchor.metadata else None
                 if structure:
                     item["structure"] = structure
+
+                # Citation + audit trail (Phase 4)
+                citation_audit = await _build_citation_audit(storage, anchor.id, include_citations)
+                if citation_audit.get("citation"):
+                    item["citation"] = citation_audit["citation"]
+                if citation_audit.get("audit"):
+                    item["audit"] = citation_audit["audit"]
+
                 exact_items.append(item)
 
             response: dict[str, Any] = {
@@ -1896,6 +2012,119 @@ class ToolHandler:
             return {"deleted": True, "source_id": source_id}
 
         return {"error": f"Unknown action: {action}"}
+
+    # ========== Provenance ==========
+
+    async def _provenance(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Trace provenance, verify, or approve a neuron."""
+        action = args.get("action", "")
+        if not action:
+            return {"error": "action is required (trace, verify, approve)"}
+
+        neuron_id = args.get("neuron_id")
+        if not neuron_id or not isinstance(neuron_id, str):
+            return {"error": "neuron_id is required"}
+
+        storage = await self.get_storage()
+        _require_brain_id(storage)
+
+        # Verify neuron exists
+        neuron = await storage.get_neuron(neuron_id)
+        if neuron is None:
+            return {"error": f"Neuron '{neuron_id}' not found"}
+
+        if action == "trace":
+            return await self._provenance_trace(storage, neuron_id)
+
+        if action == "verify":
+            actor = args.get("actor", "mcp_agent")
+            return await self._provenance_add_audit(
+                storage, neuron_id, SynapseType.VERIFIED_AT, actor
+            )
+
+        if action == "approve":
+            actor = args.get("actor", "mcp_agent")
+            return await self._provenance_add_audit(
+                storage, neuron_id, SynapseType.APPROVED_BY, actor
+            )
+
+        return {"error": f"Unknown action: {action}. Use trace, verify, or approve."}
+
+    async def _provenance_trace(self, storage: NeuralStorage, neuron_id: str) -> dict[str, Any]:
+        """Trace full provenance chain for a neuron."""
+        synapses = await storage.get_synapses(target_id=neuron_id)
+
+        chain: list[dict[str, Any]] = []
+
+        for syn in synapses:
+            if syn.type == SynapseType.SOURCE_OF:
+                source_obj = await storage.get_source(syn.source_id)
+                chain.append(
+                    {
+                        "type": "source",
+                        "source_id": syn.source_id,
+                        "source_name": source_obj.name if source_obj else None,
+                        "source_type": source_obj.source_type.value if source_obj else None,
+                        "timestamp": syn.created_at.isoformat() if syn.created_at else None,
+                    }
+                )
+            elif syn.type == SynapseType.STORED_BY:
+                chain.append(
+                    {
+                        "type": "stored_by",
+                        "actor": syn.metadata.get("actor", syn.source_id),
+                        "tool": syn.metadata.get("tool"),
+                        "timestamp": syn.created_at.isoformat() if syn.created_at else None,
+                    }
+                )
+            elif syn.type == SynapseType.VERIFIED_AT:
+                chain.append(
+                    {
+                        "type": "verified",
+                        "actor": syn.metadata.get("actor", syn.source_id),
+                        "timestamp": syn.created_at.isoformat() if syn.created_at else None,
+                    }
+                )
+            elif syn.type == SynapseType.APPROVED_BY:
+                chain.append(
+                    {
+                        "type": "approved",
+                        "actor": syn.metadata.get("actor", syn.source_id),
+                        "timestamp": syn.created_at.isoformat() if syn.created_at else None,
+                    }
+                )
+
+        return {
+            "neuron_id": neuron_id,
+            "provenance": chain,
+            "has_source": any(e["type"] == "source" for e in chain),
+            "is_verified": any(e["type"] == "verified" for e in chain),
+            "is_approved": any(e["type"] == "approved" for e in chain),
+        }
+
+    async def _provenance_add_audit(
+        self,
+        storage: NeuralStorage,
+        neuron_id: str,
+        synapse_type: SynapseType,
+        actor: str,
+    ) -> dict[str, Any]:
+        """Add a VERIFIED_AT or APPROVED_BY audit synapse."""
+        syn = Synapse.create(
+            source_id=neuron_id,
+            target_id=neuron_id,  # self-referencing audit
+            type=synapse_type,
+            weight=1.0,
+            metadata={"actor": actor, "tool": "nmem_provenance"},
+        )
+        await storage.add_synapse(syn)
+        return {
+            "success": True,
+            "neuron_id": neuron_id,
+            "action": synapse_type.value,
+            "actor": actor,
+            "synapse_id": syn.id,
+        }
 
     # ========== Show, Edit & Forget ==========
 

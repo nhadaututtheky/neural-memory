@@ -69,6 +69,11 @@ class SynapseType(StrEnum):
     # Source tracking
     SOURCE_OF = "source_of"  # Source -> Neuron (provenance link)
 
+    # Audit trail
+    STORED_BY = "stored_by"  # Neuron -> Agent/User (who stored it)
+    VERIFIED_AT = "verified_at"  # Neuron -> Verifier (verification event)
+    APPROVED_BY = "approved_by"  # Neuron -> Approver (approval event)
+
     # Cognitive layer — schema relationships
     SUPERSEDES = "supersedes"  # Schema_v2 -> Schema_v1 (model evolution)
     DERIVED_FROM = "derived_from"  # Hypothesis/Prediction -> Schema (reasoning origin)

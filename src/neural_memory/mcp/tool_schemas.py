@@ -278,6 +278,10 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "enum": ["associative", "exact"],
                     "description": "Recall mode: 'associative' (default) returns formatted context, 'exact' returns raw neuron contents verbatim without truncation or summarization.",
                 },
+                "include_citations": {
+                    "type": "boolean",
+                    "description": "Include citation and audit trail in exact recall results (default: true).",
+                },
             },
             "required": ["query"],
         },
@@ -295,6 +299,31 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 },
             },
             "required": ["memory_id"],
+        },
+    },
+    {
+        "name": "nmem_provenance",
+        "description": "Trace provenance, verify, or approve a memory neuron. "
+        "Use 'trace' to see full provenance chain (source, stored_by, verified, approved). "
+        "Use 'verify' or 'approve' to add audit trail entries.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["trace", "verify", "approve"],
+                    "description": "Action: trace (view chain), verify (mark verified), approve (mark approved).",
+                },
+                "neuron_id": {
+                    "type": "string",
+                    "description": "Neuron ID to trace/verify/approve.",
+                },
+                "actor": {
+                    "type": "string",
+                    "description": "Who is performing the verification/approval (default: mcp_agent).",
+                },
+            },
+            "required": ["action", "neuron_id"],
         },
     },
     {

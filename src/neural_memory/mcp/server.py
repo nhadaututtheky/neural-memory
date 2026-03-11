@@ -216,6 +216,7 @@ class MCPServer(
             "nmem_schema": self._schema,
             "nmem_show": self._show,
             "nmem_source": self._source,
+            "nmem_provenance": self._provenance,
             "nmem_edit": self._edit,
             "nmem_forget": self._forget,
             "nmem_consolidate": self._consolidate,

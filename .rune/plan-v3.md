@@ -6,12 +6,12 @@ Vision Pillar 4: Brain that knows its sources. Verbatim + Navigational recall mo
 
 | # | Name | Status | Plan File | Summary |
 |---|------|--------|-----------|---------|
-| 0 | Stability | ⬚ | plan-v3-phase0.md | Fix #53 SharedStorage parity, close bugs |
-| 1 | Exact Recall | ⬚ | plan-v3-phase1.md | `nmem_show` (#35) + `mode="exact"` in recall |
-| 2 | Source Registry | ⬚ | plan-v3-phase2.md | Schema v23, sources table, SOURCE_OF synapse |
-| 3 | Structured Encoding | ⬚ | plan-v3-phase3.md | Schema-aware encoder, tabular data support |
-| 4 | Citation + Audit | ⬚ | plan-v3-phase4.md | Citation output format, audit synapses |
-| 5 | DX Sprint | ⬚ | plan-v3-phase5.md | One-line installer, first-run wizard, embedding UX |
+| 0 | Stability | ✅ Done | plan-v3-phase0.md | Fix #53 SharedStorage parity, close bugs |
+| 1 | Exact Recall | ✅ Done | plan-v3-phase1.md | `nmem_show` (#35) + `mode="exact"` in recall |
+| 2 | Source Registry | ✅ Done | plan-v3-phase2.md | Schema v23, sources table, SOURCE_OF synapse |
+| 3 | Structured Encoding | ✅ Done | plan-v3-phase3.md | Schema-aware encoder, tabular data support |
+| 4 | Citation + Audit | ✅ Done | plan-v3-phase4.md | Citation output format, audit synapses |
+| 5 | DX Sprint | ⬚ Pending | plan-v3-phase5.md | One-line installer, first-run wizard, embedding UX |
 
 ## Key Decisions
 
