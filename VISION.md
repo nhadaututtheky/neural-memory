@@ -18,7 +18,7 @@ không cần keyword match, không cần cosine similarity.
 
 ---
 
-## 3 Trụ Cột Cốt Lõi
+## 4 Trụ Cột Cốt Lõi
 
 ### 1. Recall Through Activation (Kích hoạt, không tìm kiếm)
 
@@ -62,11 +62,53 @@ Toàn bộ phản xạ và liên tưởng được chuyển giao nguyên vẹn.
 - Tập trung vào Packaging và Standardization để "Swap não" mượt mà
 - MCP protocol → bất kỳ AI agent nào cũng plug-in được
 
+### 4. Source-Aware Memory (Nhớ Nguồn, Không Chỉ Nhớ Nội Dung)
+
+```
+Luật sư không nhớ nguyên văn 10,000 điều luật.
+Luật sư nhớ: "lãi suất" → Điều 468 BLDS → mở sách ra đọc.
+Kế toán nhớ chính xác: "Lương tháng 3 = 25 triệu, vì hợp đồng quy định."
+```
+
+Não thật có **2 chế độ nhớ** — NeuralMemory phải hỗ trợ cả hai:
+
+#### Chế độ 1: Verbatim Memory (Nhớ Nguyên Văn)
+
+- Nhớ chính xác: con số, giá trị, dữ kiện cụ thể
+- Kèm audit trail: ai lưu, khi nào, tại sao, từ đâu ra
+- Use case: kế toán, dữ liệu tài chính, thông số kỹ thuật
+- **Recall trả đúng giá trị gốc**, không summarize
+
+#### Chế độ 2: Navigational Memory (Nhớ Đường Đi)
+
+- Không nhớ nguyên văn — nhớ **graph path** đến nguồn gốc
+- Neuron chứa pointer (source, article, page) thay vì full text
+- Khi cần exact quote → resolve pointer → fetch từ source gốc
+- Use case: luật pháp, tài liệu tham khảo, knowledge base lớn
+- **Recall trả con đường + metadata**, source resolution trả nguyên văn
+
+#### Source = First-Class Concept
+
+```
+Source (e.g. "Bộ luật Dân sự 2015")
+  ├── version, effective_date, status (active/repealed)
+  ├── file_hash (integrity verification)
+  └── Neurons linked via SOURCE_OF synapse
+      ├── Neuron: "Điều 468 — Lãi suất" (pointer + summary)
+      ├── Neuron: "Điều 466 — Nghĩa vụ trả nợ" (pointer + summary)
+      └── Synapse: Điều 468 REFERENCES → Điều 466
+```
+
+- Mọi neuron phải trả lời được: **"Thông tin này từ đâu ra?"**
+- Source tracking không phải metadata tùy chọn — nó là **thuộc tính cốt lõi**
+- Agent cite source thay vì bịa → trustworthy, verifiable
+- **Brain test**: Não biết "tôi đọc cái này ở đâu" (source memory) → Yes ✅
+
 ---
 
 ## Công Thức Kiểm Tra Mỗi Khi Update
 
-Trước khi thêm feature, refactor, hoặc mở rộng, **tự hỏi 4 câu này**:
+Trước khi thêm feature, refactor, hoặc mở rộng, **tự hỏi 5 câu này**:
 
 ### Câu 1: Activation hay Search?
 
@@ -92,6 +134,12 @@ Nếu "không" → **lệch khỏi key cốt lõi**.
 
 Đây là lợi thế lớn nhất của associative vs search. Nếu mất lợi thế này → **lệch hướng**.
 
+### Câu 5: Truy xuất nguồn được không?
+
+> Agent có thể trả lời "thông tin này từ đâu ra?" với source + timestamp + confidence không?
+
+Nếu "không" → **thiếu accountability**. Memory không có nguồn = hallucination risk.
+
 ---
 
 ## Brain Test
@@ -109,6 +157,11 @@ Ngoài 4 câu trên, luôn hỏi thêm:
 | Conflict resolution on merge | Hai nguồn mâu thuẫn → não chọn | Yes |
 | Temporal & causal links | "Vì A nên B" | Yes |
 | Emotional valence | Ký ức gắn cảm xúc | Yes |
+| Source memory ("đọc ở đâu?") | Não nhớ nguồn gốc thông tin | Yes |
+| Verbatim recall (exact data) | Não nhớ chính xác số điện thoại | Yes |
+| Navigational recall (know where) | "Nó ở trang 5 chương 3" | Yes |
+| Structured data (tables, rows) | Não hiểu cấu trúc dữ liệu | Yes |
+| Audit trail (ai nói, khi nào) | Não nhớ ai nói gì | Yes |
 | Full-text search engine | Não không grep | **No** |
 | Vector similarity ranking | Não không tính cosine | **Careful** |
 | AI-generated summaries | Não tự tóm tắt | Yes |
@@ -139,36 +192,47 @@ Create → Reinforce → Decay → Consolidate → Forget
 > **Chi tiết đầy đủ xem [ROADMAP.md](ROADMAP.md)** — versioned roadmap v0.14.0 → v1.0.0
 > với gap coverage matrix, expert feedback mapping, và VISION.md checklist per phase.
 
-### Đã có (v0.13.0)
+### Đã có (v2.29.0)
 
-- [x] Spreading activation retrieval (4 depth levels)
+- [x] Spreading activation retrieval (4 depth levels + RRF score fusion)
 - [x] Hebbian learning (reinforcement through use)
 - [x] Memory decay over time (type-aware)
-- [x] Sleep & Consolidate (prune/merge/summarize/mature)
-- [x] Typed memories with priorities and expiry
+- [x] Sleep & Consolidate (13 strategies: prune/merge/summarize/mature/infer/dream/...)
+- [x] Typed memories (14 types) with priorities and expiry
 - [x] Brain export/import/merge (portable consciousness)
 - [x] Conflict resolution (4 strategies)
-- [x] MCP protocol (standard memory layer)
+- [x] MCP protocol (40 tools, standard memory layer)
 - [x] VS Code extension
-- [x] REST API + WebSocket sync
-- [x] Cognitive runtime (firing threshold, refractory period, homeostasis)
-- [x] SimHash deduplication
+- [x] REST API + WebSocket sync + Multi-device hub
+- [x] Cognitive layer (hypothesize/evidence/predict/verify/gaps/schema)
+- [x] SimHash deduplication + graph query expansion
 - [x] Score breakdown (activation, freshness, frequency, intersection)
-- [x] Auto-tags (entity + keyword extraction)
+- [x] Auto-tags (entity + keyword extraction, Vietnamese NLP)
+- [x] Personalized PageRank activation (opt-in)
+- [x] Multi-format KB training (PDF/DOCX/PPTX/HTML/JSON/XLSX/CSV)
+- [x] Fernet encryption + sensitive content auto-detect
+
+### Chưa có — Cần cho Pillar 4 (Source-Aware Memory)
+
+| Feature | Why | Brain Analogy |
+|---------|-----|---------------|
+| **Source Registry** | Mọi neuron trả lời "từ đâu ra?" | Não nhớ "tôi đọc ở sách X" |
+| **Exact Recall Mode** | Trả raw content, không summarize | Não đọc lại nguyên văn khi cần |
+| **Structured Encoding** | Schema-aware (tabular data, key-value) | Não hiểu cấu trúc, không chỉ text |
+| **Citation Engine** | Built-in `[cite:source/article]` output | Não trích dẫn có nguồn |
+| **Audit Synapse** | STORED_BY, VERIFIED_AT, APPROVED_BY | Não nhớ ai nói, khi nào |
+| **Source Resolution** | Pointer → external DB/file lookup | Não biết "mở sách ra trang X" |
 
 ### Hướng phát triển tiếp theo
 
 | Version | Theme | Key Deliverable |
 |---------|-------|-----------------|
-| v0.14.0 | Relation Extraction | Auto-synapses from content + tag origin tracking |
-| v0.15.0 | Associative Inference | Co-activation → persistent synapses + tag normalization |
-| v0.16.0 | Emotional Valence | Sentiment at encode time, emotion synapses |
-| v0.17.0 | Brain Diagnostics | Purity score, health report, `nmem health` |
-| v0.18.0 | Advanced Consolidation | ENRICH + DREAM strategies |
-| v0.19.0 | Temporal Reasoning | Causal chain queries, "Why?" and "When?" |
-| v1.0.0 | Portable Consciousness v2 | Brain versioning, partial transplant, marketplace |
+| v3.0 | Source-Aware Memory | Source registry, exact recall, structured encoding |
+| v3.x | Brain Intelligence | Adaptive retrieval, predictive priming, drift detection |
+| v4.0 | Scale & Performance | Tiered storage, ANN index, brain sharding |
+| v5.0 | Platform & Ecosystem | Brain Protocol spec, plugin architecture, federation |
 
-See [ROADMAP.md](ROADMAP.md) for full details, dependency graph, and coverage matrices.
+See [ROADMAP.md](ROADMAP.md) for full details.
 
 ---
 
@@ -183,14 +247,43 @@ See [ROADMAP.md](ROADMAP.md) for full details, dependency graph, and coverage ma
 | A cache | A consciousness module |
 | Flat storage | Temporal-causal topology |
 | Vendor-locked | A portable open standard |
+| A black box | A source-traceable knowledge graph |
+| A text blob store | A structured, typed memory with provenance |
+
+---
+
+## Two Memory Modes (Hai Chế Độ Nhớ)
+
+NeuralMemory phải hỗ trợ cả hai cách não thật nhớ thông tin:
+
+```
+┌──────────────────────┐     ┌──────────────────────┐
+│  VERBATIM MODE       │     │  NAVIGATIONAL MODE   │
+│  "Nhớ chính xác"     │     │  "Biết đường đi"     │
+│                      │     │                      │
+│  Kế toán nhớ:        │     │  Luật sư nhớ:        │
+│  "Lương A = 25tr"    │     │  "lãi suất → Đ.468"  │
+│  → recall trả exact  │     │  → recall trả pointer │
+│  → kèm audit trail   │     │  → resolve trả exact  │
+│                      │     │                      │
+│  Data IN brain       │     │  Graph IN brain       │
+│  (episodic memory)   │     │  Data IN source       │
+│                      │     │  (semantic + pointer)  │
+└──────────────────────┘     └──────────────────────┘
+```
+
+Cả hai chế độ đều dùng **spreading activation** — khác nhau ở:
+- Verbatim: neuron content = exact data, recall trả content trực tiếp
+- Navigational: neuron content = summary + pointer, recall trả path, resolution trả content
 
 ---
 
 ## One-Line North Star
 
 > **NeuralMemory: Bộ nhớ sinh học cho AI — kích hoạt thay vì tìm kiếm,
-> liên tưởng thay vì truy vấn, di động thay vì gắn chặt.**
+> liên tưởng thay vì truy vấn, truy xuất nguồn thay vì bịa đặt,
+> di động thay vì gắn chặt.**
 
 ---
 
-*Last updated: 2026-02-08*
+*Last updated: 2026-03-11*
