@@ -235,7 +235,12 @@ class PostgresNeuronMixin(PostgresBaseMixin):
                ON CONFLICT (brain_id, neuron_id) DO UPDATE SET
                  activation_level = EXCLUDED.activation_level,
                  access_frequency = EXCLUDED.access_frequency,
-                 last_activated = EXCLUDED.last_activated""",
+                 last_activated = EXCLUDED.last_activated,
+                 decay_rate = EXCLUDED.decay_rate,
+                 firing_threshold = EXCLUDED.firing_threshold,
+                 refractory_until = EXCLUDED.refractory_until,
+                 refractory_period_ms = EXCLUDED.refractory_period_ms,
+                 homeostatic_target = EXCLUDED.homeostatic_target""",
             state.neuron_id,
             brain_id,
             state.activation_level,
@@ -279,7 +284,12 @@ class PostgresNeuronMixin(PostgresBaseMixin):
                ON CONFLICT (brain_id, neuron_id) DO UPDATE SET
                  activation_level = EXCLUDED.activation_level,
                  access_frequency = EXCLUDED.access_frequency,
-                 last_activated = EXCLUDED.last_activated""",
+                 last_activated = EXCLUDED.last_activated,
+                 decay_rate = EXCLUDED.decay_rate,
+                 firing_threshold = EXCLUDED.firing_threshold,
+                 refractory_until = EXCLUDED.refractory_until,
+                 refractory_period_ms = EXCLUDED.refractory_period_ms,
+                 homeostatic_target = EXCLUDED.homeostatic_target""",
             args_list,
         )
 

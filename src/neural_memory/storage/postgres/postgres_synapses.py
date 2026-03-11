@@ -315,10 +315,7 @@ class PostgresSynapseMixin(PostgresBaseMixin):
             current_id, path = queue.popleft()
             if len(path) >= max_hops:
                 continue
-            if bidirectional:
-                rows = await self._query_ro(edge_sql, current_id, brain_id, current_id, brain_id)
-            else:
-                rows = await self._query_ro(edge_sql, current_id, brain_id)
+            rows = await self._query_ro(edge_sql, current_id, brain_id)
 
             for row in rows:
                 next_id = str(row["next_id"])

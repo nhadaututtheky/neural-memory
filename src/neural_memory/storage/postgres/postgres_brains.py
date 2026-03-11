@@ -343,7 +343,10 @@ class PostgresBrainMixin(PostgresBaseMixin):
                             nid,
                         )
         finally:
-            self._current_brain_id = old_brain_id
+            if old_brain_id is not None:
+                self.set_brain(old_brain_id)  # type: ignore[attr-defined]
+            else:
+                self._current_brain_id = None
 
         return brain_id
 
