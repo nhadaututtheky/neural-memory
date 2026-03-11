@@ -598,6 +598,14 @@ class ReflexPipeline:
                         retriever_type=rtype,
                         contributed=contributed,
                     )
+                # Periodic pruning: cap retriever_calibration per type (every ~100 saves)
+                import random as _rnd
+
+                if _rnd.random() < 0.01:  # ~1% chance per save → prunes ~every 100 saves
+                    try:
+                        await self._storage.prune_retriever_calibration()  # type: ignore[attr-defined]
+                    except (AttributeError, Exception):
+                        pass
             except (AttributeError, Exception):
                 logger.debug("Retriever outcome save failed (non-critical)", exc_info=True)
 
@@ -610,11 +618,18 @@ class ReflexPipeline:
             }
             if self._adaptive_selector is not None:
                 try:
+                    # Infer agent_used_result from priming hit rate:
+                    # If primed neurons appeared in result → agent is using the recall
+                    _agent_signal: bool | None = None
+                    if _primed_neuron_ids and activations:
+                        _result_nids = set(activations.keys())
+                        _agent_signal = bool(_primed_neuron_ids & _result_nids)
                     await self._adaptive_selector.record_outcome(
                         stimulus=stimulus,
                         depth_used=depth,
                         confidence=reconstruction.confidence,
                         fibers_matched=len(fibers_matched),
+                        agent_used_result=_agent_signal,
                     )
                 except (NotImplementedError, Exception):
                     logger.debug("Depth prior update failed (non-critical)", exc_info=True)

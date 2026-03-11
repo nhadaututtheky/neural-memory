@@ -270,7 +270,7 @@ class SQLiteCalibrationMixin:
                 by_type[rtype] = []
             by_type[rtype].append(contributed)
 
-        alpha = 2.0 / (min(capped, 50) + 1)  # EMA alpha (slow: alpha ~0.04)
+        alpha = 2.0 / (capped + 1)  # EMA alpha: 2/(window+1) per standard convention
         result = dict(DEFAULT_RETRIEVER_WEIGHTS)
 
         for rtype, data in by_type.items():
@@ -291,6 +291,38 @@ class SQLiteCalibrationMixin:
             result[rtype] = round(max(0.1, min(2.0, adjusted)), 4)
 
         return result
+
+    async def prune_retriever_calibration(self, keep_per_type: int = 500) -> int:
+        """Cap retriever_calibration rows per brain per type. Returns count deleted."""
+        conn = self._ensure_conn()
+        brain_id = self._get_brain_id()
+
+        cursor = await conn.execute(
+            """SELECT retriever_type, COUNT(*) as cnt
+               FROM retriever_calibration
+               WHERE brain_id = ?
+               GROUP BY retriever_type
+               HAVING cnt > ?""",
+            (brain_id, keep_per_type),
+        )
+        over_limit = await cursor.fetchall()
+
+        total_deleted = 0
+        for rtype, cnt in over_limit:
+            excess = cnt - keep_per_type
+            cursor = await conn.execute(
+                """DELETE FROM retriever_calibration WHERE rowid IN (
+                    SELECT rowid FROM retriever_calibration
+                    WHERE brain_id = ? AND retriever_type = ?
+                    ORDER BY created_at ASC LIMIT ?
+                )""",
+                (brain_id, rtype, excess),
+            )
+            total_deleted += cursor.rowcount
+
+        if total_deleted > 0:
+            await conn.commit()
+        return total_deleted
 
     # ------------------------------------------------------------------
     # Graph density: avg synapses per neuron for strategy auto-selection
