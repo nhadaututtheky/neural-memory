@@ -220,7 +220,7 @@ async def detect_temporal_drift(
     """
     try:
         summaries = await storage.get_session_summaries(limit=20)  # type: ignore[attr-defined]
-    except (AttributeError, Exception):
+    except Exception:
         return []
 
     if len(summaries) < 4:
@@ -294,13 +294,13 @@ async def run_drift_detection(
         cooccurrences = await storage.get_tag_cooccurrence(  # type: ignore[attr-defined]
             min_count=MIN_COOCCURRENCE_COUNT,
         )
-    except (AttributeError, NotImplementedError, Exception):
+    except Exception:
         cooccurrences = []
 
     # 2. Get fiber counts per tag
     try:
         tag_fiber_counts = await storage.get_tag_fiber_counts()  # type: ignore[attr-defined]
-    except (AttributeError, NotImplementedError, Exception):
+    except Exception:
         tag_fiber_counts = {}
 
     # 3. Detect clusters
@@ -316,7 +316,7 @@ async def run_drift_detection(
                 confidence=report.cluster.confidence,
                 status="detected",
             )
-        except (AttributeError, Exception):
+        except Exception:
             pass
 
     # 5. Detect temporal drift

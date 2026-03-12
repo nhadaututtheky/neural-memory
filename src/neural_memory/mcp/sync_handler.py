@@ -281,7 +281,7 @@ class SyncToolHandler:
                             "devices": data.get("usage", {}).get("devices", 0),
                         }
         except Exception:
-            pass
+            logger.debug("Failed to fetch cloud usage", exc_info=True)
         return None
 
     async def _sync_config(self, args: dict[str, Any]) -> dict[str, Any]:

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.1] - 2026-03-12
+
+### Security
+
+- **Fix path traversal** in `index_handler.py` — adapter connection paths now validated with `is_relative_to()` against allowed directories (cwd, home, temp)
+- **Fix path traversal** in `pre_compact.py` hook — stdin transcript path now validated against `~/.claude` directory
+- **Update `cryptography>=46.0.5`** — fix CVE-2026-26007
+- **Add `python-multipart>=0.0.22`** floor constraint — fix CVE-2026-24486
+- **Remove internal info from error messages** — 9 locations no longer leak memory IDs, hypothesis IDs, or filesystem paths to clients
+- **CORS hardening** — replace `localhost:*` wildcard with explicit port list (3000, 3001, 5173, 5174, 8000, 8080, 8888)
+
+### Fixed
+
+- Fix 8 silent `except Exception: pass` blocks — all now log at DEBUG level with `exc_info=True`
+- Fix 14 redundant exception tuples (`except (AttributeError, Exception)` → `except Exception`)
+- Remove unused `python-dateutil` from core dependencies
+
 ## [4.0.0] - 2026-03-12
 
 ### Added

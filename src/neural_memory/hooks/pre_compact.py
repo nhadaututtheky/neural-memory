@@ -260,6 +260,14 @@ def main() -> None:
         hook_input = read_hook_input()
         transcript_path = hook_input.get("transcript_path", "")
         if transcript_path:
+            # Validate stdin transcript path is within Claude data directory
+            from pathlib import Path
+
+            resolved = Path(transcript_path).resolve()
+            allowed_dir = Path.home().resolve() / ".claude"
+            if not resolved.is_relative_to(allowed_dir):
+                print("Transcript path outside allowed directory, skipping", file=sys.stderr)  # noqa: T201
+                sys.exit(0)
             text = read_transcript_tail(transcript_path)
         else:
             # No transcript path — nothing to flush

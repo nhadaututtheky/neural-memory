@@ -35,7 +35,11 @@ class Config:
 
     # CORS settings
     cors_origins: list[str] = field(
-        default_factory=lambda: ["http://localhost:*", "http://127.0.0.1:*"]
+        default_factory=lambda: [
+            f"http://{host}:{port}"
+            for host in ("localhost", "127.0.0.1")
+            for port in (3000, 3001, 5173, 5174, 8000, 8080, 8888)
+        ]
     )
 
     # Trusted networks (CIDR notation, e.g. "172.16.0.0/12,192.168.0.0/16")

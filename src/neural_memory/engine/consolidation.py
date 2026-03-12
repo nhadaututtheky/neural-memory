@@ -993,6 +993,9 @@ class ConsolidationEngine:
         try:
             all_states = await self._storage.get_all_neuron_states()
         except Exception:
+            logging.getLogger(__name__).debug(
+                "Failed to get neuron states for dream cycle", exc_info=True
+            )
             return
 
         dormant = [s for s in all_states if s.access_frequency == 0]

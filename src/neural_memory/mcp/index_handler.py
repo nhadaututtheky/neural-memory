@@ -43,9 +43,9 @@ class IndexHandler:
         cwd = Path(".").resolve()
         path = Path(args.get("path", ".")).resolve()
         if not path.is_dir():
-            return {"error": f"Not a directory: {path}"}
+            return {"error": "Not a directory"}
         if not path.is_relative_to(cwd):
-            return {"error": f"Path must be within working directory: {cwd}"}
+            return {"error": "Path must be within working directory"}
 
         extensions = set(args.get("extensions", [".py"]))
         encoder = CodebaseEncoder(storage, brain.config)
@@ -143,12 +143,23 @@ def _validate_local_path(path_str: str) -> str | None:
     """Validate a local filesystem path for adapter connections.
 
     Returns resolved path string if valid, None if invalid.
+    Rejects path traversal by requiring the path to be within
+    cwd, user home, or temp directory.
     """
+    import tempfile
     from pathlib import Path
 
     resolved = Path(path_str).resolve()
     if not resolved.exists():
         return None
+
+    cwd = Path.cwd().resolve()
+    home_dir = Path.home().resolve()
+    temp_dir = Path(tempfile.gettempdir()).resolve()
+    allowed_roots = (cwd, home_dir, temp_dir)
+    if not any(resolved.is_relative_to(root) for root in allowed_roots):
+        return None
+
     return str(resolved)
 
 

@@ -356,7 +356,7 @@ def import_brain_cmd(
 
             try:
                 local_snapshot = await storage.export_brain(brain_name)
-            except (ValueError, Exception):
+            except Exception:
                 # No existing brain, just import directly
                 await storage.import_brain(incoming_snapshot, brain_name)
                 typer.echo(

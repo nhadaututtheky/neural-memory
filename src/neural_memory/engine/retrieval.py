@@ -232,7 +232,7 @@ class ReflexPipeline:
 
                 _session_state = SessionManager.get_instance().get(session_id)
             except Exception:
-                pass
+                logger.debug("Failed to load session state for %s", session_id, exc_info=True)
 
         if depth is None:
             rule_depth = self._detect_depth(stimulus)
@@ -268,7 +268,7 @@ class ReflexPipeline:
         _rrf_weights: dict[str, float] | None = None
         try:
             _rrf_weights = await self._storage.get_retriever_weights()  # type: ignore[attr-defined]
-        except (AttributeError, NotImplementedError, Exception):
+        except Exception:
             pass  # Storage doesn't support retriever calibration — use defaults
 
         anchor_activations: dict[str, float] | None = None
@@ -407,7 +407,7 @@ class ReflexPipeline:
                 )
                 for gate, stats in _raw_cal.items()
             }
-        except (AttributeError, Exception):
+        except Exception:
             logger.debug("Gate calibration fetch failed (non-critical)", exc_info=True)
 
         _sufficiency = check_sufficiency(
@@ -578,7 +578,7 @@ class ReflexPipeline:
                 actual_fibers=len(fibers_matched),
                 query_intent=stimulus.intent.value,
             )
-        except (AttributeError, Exception):
+        except Exception:
             # AttributeError: storage doesn't have calibration mixin (e.g. InMemoryStorage)
             logger.debug("Calibration record save failed (non-critical)", exc_info=True)
 
@@ -604,9 +604,9 @@ class ReflexPipeline:
                 if _rnd.random() < 0.01:  # ~1% chance per save → prunes ~every 100 saves
                     try:
                         await self._storage.prune_retriever_calibration()  # type: ignore[attr-defined]
-                    except (AttributeError, Exception):
+                    except Exception:
                         pass
-            except (AttributeError, Exception):
+            except Exception:
                 logger.debug("Retriever outcome save failed (non-critical)", exc_info=True)
 
         # Record adaptive depth outcome (non-critical)
@@ -631,7 +631,7 @@ class ReflexPipeline:
                         fibers_matched=len(fibers_matched),
                         agent_used_result=_agent_signal,
                     )
-                except (NotImplementedError, Exception):
+                except Exception:
                     logger.debug("Depth prior update failed (non-critical)", exc_info=True)
 
         # Optionally attach workflow suggestions (non-critical)
@@ -699,7 +699,7 @@ class ReflexPipeline:
                             ended_at=utcnow().isoformat(),
                         )
                         session.mark_persisted()
-                    except (AttributeError, Exception):
+                    except Exception:
                         logger.debug("Session summary persist failed (non-critical)", exc_info=True)
             except Exception:
                 logger.debug("Session recording failed (non-critical)", exc_info=True)
@@ -715,7 +715,7 @@ class ReflexPipeline:
         """
         try:
             density = await self._storage.get_graph_density()  # type: ignore[attr-defined]
-        except (AttributeError, NotImplementedError, Exception):
+        except Exception:
             return "classic"  # Fallback if storage doesn't support it
 
         if density < 3.0:

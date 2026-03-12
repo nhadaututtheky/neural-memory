@@ -331,7 +331,7 @@ async def prime_from_co_activations(
         co_counts = await storage.get_co_activation_counts(
             min_count=CO_ACTIVATION_MIN_COUNT,
         )
-    except (AttributeError, NotImplementedError, Exception):
+    except Exception:
         return {}
 
     if not co_counts:
