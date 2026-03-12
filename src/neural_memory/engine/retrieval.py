@@ -138,7 +138,7 @@ class ReflexPipeline:
 
         # PPR activator (lazy: only create if strategy requires it)
         self._ppr_activator: PPRActivation | None = None
-        if config.activation_strategy in ("ppr", "hybrid"):
+        if config.activation_strategy in ("ppr", "hybrid", "auto"):
             from neural_memory.engine.ppr_activation import PPRActivation
 
             self._ppr_activator = PPRActivation(storage, config)
@@ -149,6 +149,10 @@ class ReflexPipeline:
         self._write_queue = DeferredWriteQueue()
         self._query_router = QueryRouter()
         self._cached_encryptor: Any = _UNSET
+
+        # Predictive priming caches (per-session, keyed by session_id)
+        self._activation_caches: dict[str, Any] = {}  # session_id → ActivationCache
+        self._priming_metrics: dict[str, Any] = {}  # session_id → PrimingMetrics
 
         # Adaptive depth selection (Bayesian priors)
         self._adaptive_selector: AdaptiveDepthSelector | None = None
@@ -221,6 +225,15 @@ class ReflexPipeline:
 
         # 2. Auto-detect depth if not specified
         _depth_decision: DepthDecision | None = None
+        _session_state = None
+        if session_id:
+            try:
+                from neural_memory.engine.session_state import SessionManager
+
+                _session_state = SessionManager.get_instance().get(session_id)
+            except Exception:
+                logger.debug("Failed to load session state for %s", session_id, exc_info=True)
+
         if depth is None:
             rule_depth = self._detect_depth(stimulus)
             if self._adaptive_selector is not None:
@@ -228,6 +241,7 @@ class ReflexPipeline:
                     _depth_decision = await self._adaptive_selector.select_depth(
                         stimulus,
                         rule_depth,
+                        session_state=_session_state,
                     )
                     depth = _depth_decision.depth
                 except NotImplementedError:
@@ -250,14 +264,73 @@ class ReflexPipeline:
         anchor_sets, ranked_lists = await self._find_anchors_ranked(stimulus)
 
         # 3.5 RRF score fusion: compute initial activation levels from multi-retriever ranks
+        # Use dynamic per-brain retriever weights when available
+        _rrf_weights: dict[str, float] | None = None
+        try:
+            _rrf_weights = await self._storage.get_retriever_weights()  # type: ignore[attr-defined]
+        except Exception:
+            pass  # Storage doesn't support retriever calibration — use defaults
+
         anchor_activations: dict[str, float] | None = None
         if ranked_lists and any(ranked_lists):
-            fused_scores = rrf_fuse(ranked_lists, k=self._config.rrf_k)
+            fused_scores = rrf_fuse(
+                ranked_lists,
+                k=self._config.rrf_k,
+                retriever_weights=_rrf_weights,
+            )
             if fused_scores:
                 anchor_activations = rrf_to_activation_levels(fused_scores)
 
-        # Choose activation method based on strategy
+        # 3.7 Predictive priming: merge session-aware activation boosts
+        _priming_result = None
+        _primed_neuron_ids: set[str] = set()
+        if session_id and _session_state is not None:
+            try:
+                from neural_memory.engine.priming import (
+                    ActivationCache,
+                    PrimingMetrics,
+                    compute_priming,
+                    merge_priming_into_activations,
+                )
+
+                # Get or create per-session cache and metrics
+                if session_id not in self._activation_caches:
+                    self._activation_caches[session_id] = ActivationCache()
+                if session_id not in self._priming_metrics:
+                    self._priming_metrics[session_id] = PrimingMetrics()
+
+                _act_cache = self._activation_caches[session_id]
+                _prim_metrics = self._priming_metrics[session_id]
+
+                # Get recent result neuron IDs from cache for co-activation priming
+                _recent_nids = list(_act_cache.get_priming_activations().keys())[:50]
+
+                _priming_result = await compute_priming(
+                    storage=self._storage,
+                    session_state=_session_state,
+                    activation_cache=_act_cache,
+                    recent_neuron_ids=_recent_nids,
+                    metrics=_prim_metrics,
+                )
+
+                if _priming_result.total_primed > 0:
+                    _primed_neuron_ids = set(_priming_result.activation_boosts.keys())
+                    anchor_activations = merge_priming_into_activations(
+                        anchor_activations, _priming_result
+                    )
+                    logger.debug(
+                        "Priming: %d neurons from %s",
+                        _priming_result.total_primed,
+                        _priming_result.source_counts,
+                    )
+            except Exception:
+                logger.debug("Predictive priming failed (non-critical)", exc_info=True)
+
+        # Choose activation method based on strategy (auto-select from graph density)
         strategy = self._config.activation_strategy
+        if strategy == "auto":
+            strategy = await self._auto_select_strategy()
+
         if strategy == "ppr" and self._ppr_activator is not None:
             # Personalized PageRank activation
             activations, intersections = await self._ppr_activator.activate_from_multiple(
@@ -334,7 +407,7 @@ class ReflexPipeline:
                 )
                 for gate, stats in _raw_cal.items()
             }
-        except (AttributeError, Exception):
+        except Exception:
             logger.debug("Gate calibration fetch failed (non-critical)", exc_info=True)
 
         _sufficiency = check_sufficiency(
@@ -468,6 +541,34 @@ class ReflexPipeline:
             },
         )
 
+        # Update priming cache and metrics (non-critical)
+        if session_id and _priming_result is not None:
+            try:
+                from neural_memory.engine.priming import record_priming_outcome
+
+                _act_cache = self._activation_caches.get(session_id)
+                _prim_metrics = self._priming_metrics.get(session_id)
+
+                # Update activation cache with this query's results
+                if _act_cache is not None:
+                    activation_levels = {
+                        nid: ar.activation_level for nid, ar in activations.items()
+                    }
+                    _act_cache.update_from_result(activation_levels)
+
+                # Record priming outcome (hit/miss)
+                if _prim_metrics is not None and _primed_neuron_ids:
+                    _result_nids = set(activations.keys())
+                    record_priming_outcome(_prim_metrics, _primed_neuron_ids, _result_nids)
+                    result.metadata["priming"] = {
+                        "neurons_primed": _priming_result.total_primed,
+                        "sources": _priming_result.source_counts,
+                        "hit_rate": round(_prim_metrics.hit_rate, 4),
+                        "aggressiveness": round(_prim_metrics.aggressiveness_multiplier, 2),
+                    }
+            except Exception:
+                logger.debug("Priming cache update failed (non-critical)", exc_info=True)
+
         # Record calibration feedback (non-critical)
         try:
             await self._storage.save_calibration_record(  # type: ignore[attr-defined]
@@ -477,9 +578,36 @@ class ReflexPipeline:
                 actual_fibers=len(fibers_matched),
                 query_intent=stimulus.intent.value,
             )
-        except (AttributeError, Exception):
+        except Exception:
             # AttributeError: storage doesn't have calibration mixin (e.g. InMemoryStorage)
             logger.debug("Calibration record save failed (non-critical)", exc_info=True)
+
+        # Record retriever contribution outcomes for dynamic RRF weights (non-critical)
+        if ranked_lists and fibers_matched:
+            try:
+                # Which neurons ended up in final results?
+                result_neuron_ids = {
+                    next(iter(f.neuron_ids)) for f in fibers_matched if f.neuron_ids
+                }
+                for ranked_list in ranked_lists:
+                    if not ranked_list:
+                        continue
+                    rtype = ranked_list[0].retriever
+                    contributed = any(ra.neuron_id in result_neuron_ids for ra in ranked_list)
+                    await self._storage.save_retriever_outcome(  # type: ignore[attr-defined]
+                        retriever_type=rtype,
+                        contributed=contributed,
+                    )
+                # Periodic pruning: cap retriever_calibration per type (every ~100 saves)
+                import random as _rnd
+
+                if _rnd.random() < 0.01:  # ~1% chance per save → prunes ~every 100 saves
+                    try:
+                        await self._storage.prune_retriever_calibration()  # type: ignore[attr-defined]
+                    except Exception:
+                        pass
+            except Exception:
+                logger.debug("Retriever outcome save failed (non-critical)", exc_info=True)
 
         # Record adaptive depth outcome (non-critical)
         if _depth_decision is not None:
@@ -490,13 +618,20 @@ class ReflexPipeline:
             }
             if self._adaptive_selector is not None:
                 try:
+                    # Infer agent_used_result from priming hit rate:
+                    # If primed neurons appeared in result → agent is using the recall
+                    _agent_signal: bool | None = None
+                    if _primed_neuron_ids and activations:
+                        _result_nids = set(activations.keys())
+                        _agent_signal = bool(_primed_neuron_ids & _result_nids)
                     await self._adaptive_selector.record_outcome(
                         stimulus=stimulus,
                         depth_used=depth,
                         confidence=reconstruction.confidence,
                         fibers_matched=len(fibers_matched),
+                        agent_used_result=_agent_signal,
                     )
-                except (NotImplementedError, Exception):
+                except Exception:
                     logger.debug("Depth prior update failed (non-critical)", exc_info=True)
 
         # Optionally attach workflow suggestions (non-critical)
@@ -564,12 +699,35 @@ class ReflexPipeline:
                             ended_at=utcnow().isoformat(),
                         )
                         session.mark_persisted()
-                    except (AttributeError, Exception):
+                    except Exception:
                         logger.debug("Session summary persist failed (non-critical)", exc_info=True)
             except Exception:
                 logger.debug("Session recording failed (non-critical)", exc_info=True)
 
         return result
+
+    async def _auto_select_strategy(self) -> str:
+        """Auto-select activation strategy based on graph density.
+
+        Sparse graph (avg <3 synapses/neuron) → classic BFS reaches more.
+        Dense graph (avg >8 synapses/neuron) → PPR dampens hub noise.
+        Medium → hybrid.
+        """
+        try:
+            density = await self._storage.get_graph_density()  # type: ignore[attr-defined]
+        except Exception:
+            return "classic"  # Fallback if storage doesn't support it
+
+        if density < 3.0:
+            return "classic"
+        elif density > 8.0:
+            if self._ppr_activator is not None:
+                return "ppr"
+            return "classic"
+        else:
+            if self._ppr_activator is not None:
+                return "hybrid"
+            return "classic"
 
     def _detect_depth(self, stimulus: Stimulus) -> DepthLevel:
         """Auto-detect required depth from query intent."""

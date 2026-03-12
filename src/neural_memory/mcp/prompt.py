@@ -319,6 +319,9 @@ If no path exists, the concepts are disconnected — store memories that link th
 - `nmem_gaps(action="detect", topic="...", source="recall_miss")` — Track knowledge gaps
 - `nmem_schema(action="evolve", hypothesis_id="h-1", content="...", reason="...")` — Evolve hypothesis
 - `nmem_schema(action="history", hypothesis_id="h-1")` — Version chain
+- `nmem_drift(action="detect")` — Find tag synonyms/aliases via Jaccard similarity
+- `nmem_drift(action="list")` — Show existing drift clusters
+- `nmem_drift(action="merge", cluster_id="...")` — Merge synonym tags
 
 ## Telegram Backup (nmem_telegram_backup)
 
@@ -529,12 +532,12 @@ nmem_predict for falsifiable predictions, nmem_verify to check outcomes.
 Use nmem_schema(action="evolve") when a hypothesis needs updating.
 Use nmem_gaps(action="detect") when you notice the brain doesn't know something.
 
-ALL 38 TOOLS: nmem_remember, nmem_recall, nmem_context, nmem_todo, nmem_auto, nmem_suggest,
+ALL 39 TOOLS: nmem_remember, nmem_recall, nmem_context, nmem_todo, nmem_auto, nmem_suggest,
 nmem_session, nmem_eternal, nmem_recap, nmem_stats, nmem_health, nmem_evolution, nmem_habits,
 nmem_version, nmem_transplant, nmem_conflicts, nmem_alerts, nmem_index, nmem_train, nmem_train_db,
 nmem_pin, nmem_review, nmem_narrative, nmem_import, nmem_explain, nmem_hypothesize, nmem_evidence,
 nmem_predict, nmem_verify, nmem_cognitive, nmem_gaps, nmem_schema, nmem_edit, nmem_forget,
-nmem_sync, nmem_sync_status, nmem_sync_config, nmem_telegram_backup.
+nmem_sync, nmem_sync_status, nmem_sync_config, nmem_telegram_backup, nmem_drift.
 
 NEVER skip remembering after completing a feature, fixing a bug, or making a decision.
 Each session starts fresh — without explicit saves, ALL discoveries are lost forever.\

@@ -7,7 +7,7 @@
     "evolution": "Evolution",
     "mindmap": "Mindmap",
     "sync": "Cloud Sync",
-    "neurodungeon": "Neurodungeon",
+    "oracle": "Oracle",
     "settings": "Settings"
   },
   "common": {
@@ -236,5 +236,33 @@
     "conflictDesc": "How to resolve when the same memory is changed on multiple devices.",
     "strategyUpdated": "Conflict strategy updated",
     "updateFailed": "Failed to update config"
+  },
+  "oracle": {
+    "title": "Brain Oracle",
+    "loading": "Channeling your memories...",
+    "needMore": "Your brain needs more memories",
+    "needMoreDesc": "The Oracle requires at least 3 memories to unlock. Ask your AI agent to remember decisions, insights, and learnings — then return for your reading.",
+    "dailyHint": "Tap each card to reveal your reading",
+    "past": "Past",
+    "present": "Present",
+    "future": "Future",
+    "readingDate": "Reading for {{brain}} on {{date}}",
+    "whatifHint": "What if these memories collided?",
+    "reshuffle": "Reshuffle",
+    "memory": "Memory",
+    "wildcard": "Wildcard",
+    "matchupComplete": "Matchup Complete!",
+    "matchupScoreDesc": "Based on activation strength and connections of your chosen memories",
+    "playAgain": "Play Again",
+    "round": "Round {{current}} / {{total}}",
+    "choose": "Choose",
+    "chosen": "Chosen!",
+    "score": "Score",
+    "dailyReading": "Daily Reading",
+    "whatif": "What If",
+    "matchup": "Matchup",
+    "copyCard": "Copy Card",
+    "copied": "Copied!",
+    "downloadCard": "Download"
   }
 }

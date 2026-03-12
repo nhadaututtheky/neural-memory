@@ -439,10 +439,15 @@ def _apply_calibration(
     result: SufficiencyResult,
     calibration: dict[str, GateCalibration] | None,
 ) -> SufficiencyResult:
-    """Optionally downgrade a SUFFICIENT result based on historical calibration.
+    """Adjust gate decisions based on historical calibration.
 
-    Conservative: only downgrades when there is clear evidence of systematic
-    over-prediction (avg_confidence < 0.15 with >= 10 samples).
+    Three modes:
+    1. High-accuracy gate (>0.8, >=10 samples): boost confidence by 10%
+       (trust this gate more — it's been reliably correct).
+    2. Low-accuracy gate (<0.4, >=10 samples): reduce confidence by 30%
+       (this gate often gets it wrong — dampen its signal).
+    3. Very low avg_confidence (<0.15, >=10 samples): downgrade to INSUFFICIENT
+       (systematic over-prediction — conservative fallback).
 
     Does not upgrade INSUFFICIENT results (preserves conservative bias).
     """
@@ -463,6 +468,34 @@ def _apply_calibration(
                 f"{result.reason} [calibration downgrade: "
                 f"avg_conf={gate_cal.avg_confidence:.2f}, "
                 f"n={gate_cal.sample_count}]"
+            ),
+            metrics=result.metrics,
+        )
+
+    # Low accuracy: dampen confidence (gate often wrong)
+    if gate_cal.accuracy < 0.4 and gate_cal.sample_count >= 10:
+        dampened = max(0.0, min(1.0, result.confidence * 0.7))
+        return SufficiencyResult(
+            sufficient=True,
+            confidence=dampened,
+            gate=result.gate,
+            reason=(
+                f"{result.reason} [calibration dampen: "
+                f"accuracy={gate_cal.accuracy:.2f}, conf {result.confidence:.2f}→{dampened:.2f}]"
+            ),
+            metrics=result.metrics,
+        )
+
+    # High accuracy: boost confidence (gate reliably correct)
+    if gate_cal.accuracy > 0.8 and gate_cal.sample_count >= 10:
+        boosted = max(0.0, min(1.0, result.confidence * 1.1))
+        return SufficiencyResult(
+            sufficient=True,
+            confidence=boosted,
+            gate=result.gate,
+            reason=(
+                f"{result.reason} [calibration boost: "
+                f"accuracy={gate_cal.accuracy:.2f}, conf {result.confidence:.2f}→{boosted:.2f}]"
             ),
             metrics=result.metrics,
         )

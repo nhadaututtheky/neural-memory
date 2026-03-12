@@ -521,7 +521,7 @@ def consolidate(
                     )
                     typer.echo("  Run with --strategy mature to advance episodic memories.")
             except Exception:
-                pass  # Non-critical hint — don't fail consolidation
+                pass  # Non-critical UI hint — don't fail consolidation
 
     run_async(_consolidate())
 

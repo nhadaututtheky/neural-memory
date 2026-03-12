@@ -6,7 +6,8 @@
     "timeline": "Dòng thời gian",
     "evolution": "Tiến hóa",
     "mindmap": "Sơ đồ tư duy",
-    "neurodungeon": "Neurodungeon",
+    "oracle": "Tiên tri",
+    "sync": "Đồng bộ",
     "settings": "Cài đặt"
   },
   "common": {
@@ -198,5 +199,33 @@
     "backupSuccess": "Đã sao lưu! {{brain}} ({{size}}MB) đến {{count}} chat",
     "backupSendFailed": "Sao lưu gửi thất bại",
     "backupFailed": "Sao lưu thất bại"
+  },
+  "oracle": {
+    "title": "Tiên Tri",
+    "loading": "Đang kết nối ký ức...",
+    "needMore": "Não bạn cần thêm ký ức",
+    "needMoreDesc": "Tiên Tri cần ít nhất 3 ký ức để mở khóa. Hãy nhờ AI ghi nhớ các quyết định, hiểu biết, và bài học — rồi quay lại đây.",
+    "dailyHint": "Chạm vào từng lá bài để xem kết quả",
+    "past": "Quá khứ",
+    "present": "Hiện tại",
+    "future": "Tương lai",
+    "readingDate": "Bói cho {{brain}} ngày {{date}}",
+    "whatifHint": "Nếu những ký ức này va chạm thì sao?",
+    "reshuffle": "Xáo lại",
+    "memory": "Ký ức",
+    "wildcard": "Lá bất ngờ",
+    "matchupComplete": "Hoàn thành đấu trí!",
+    "matchupScoreDesc": "Dựa trên mức kích hoạt và kết nối của ký ức bạn chọn",
+    "playAgain": "Chơi lại",
+    "round": "Vòng {{current}} / {{total}}",
+    "choose": "Chọn",
+    "chosen": "Đã chọn!",
+    "score": "Điểm",
+    "dailyReading": "Bói hàng ngày",
+    "whatif": "Nếu Như",
+    "matchup": "Đấu Trí",
+    "copyCard": "Chép ảnh",
+    "copied": "Đã chép!",
+    "downloadCard": "Tải xuống"
   }
 }

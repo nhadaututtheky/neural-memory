@@ -1499,7 +1499,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "summarize (cluster topic neurons), mature (episodic→semantic), infer (co-activation synapses), "
         "enrich (metadata extraction), dream (synthetic bridges), learn_habits (workflow patterns), "
         "dedup (merge near-duplicates), semantic_link (cross-domain connections), compress (old fibers), "
-        "process_tool_events, all (run all in dependency order). "
+        "process_tool_events, detect_drift (find tag synonyms/aliases), all (run all in dependency order). "
         "Use dry_run=true to preview without applying changes.",
         "inputSchema": {
             "type": "object",
@@ -1519,6 +1519,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                         "semantic_link",
                         "compress",
                         "process_tool_events",
+                        "detect_drift",
                         "all",
                     ],
                     "description": "Consolidation strategy to run (default: all)",
@@ -1541,6 +1542,34 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 },
             },
             "required": [],
+        },
+    },
+    {
+        "name": "nmem_drift",
+        "description": "Semantic drift detection — find tag clusters that should be merged or aliased. "
+        "Detects when different tags refer to the same concept using Jaccard similarity. "
+        "Actions: detect (run analysis), list (show clusters), merge (apply canonical tag), "
+        "alias (mark as related), dismiss (ignore cluster).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["detect", "list", "merge", "alias", "dismiss"],
+                    "description": "detect=run drift analysis, list=show existing clusters, "
+                    "merge/alias/dismiss=resolve a specific cluster",
+                },
+                "cluster_id": {
+                    "type": "string",
+                    "description": "Cluster ID to resolve (required for merge/alias/dismiss)",
+                },
+                "status": {
+                    "type": "string",
+                    "enum": ["detected", "merged", "aliased", "dismissed"],
+                    "description": "Filter clusters by status (for list action)",
+                },
+            },
+            "required": ["action"],
         },
     },
 ]

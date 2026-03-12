@@ -11,7 +11,7 @@ const EvolutionPage = lazy(() => import("@/features/evolution/EvolutionPage"))
 const DiagramsPage = lazy(() => import("@/features/diagrams/DiagramsPage"))
 const SettingsPage = lazy(() => import("@/features/settings/SettingsPage"))
 const SyncPage = lazy(() => import("@/features/sync/SyncPage"))
-const NeurodungeonPage = lazy(() => import("@/features/neurodungeon/NeurodungeonPage"))
+const OraclePage = lazy(() => import("@/features/oracle/OraclePage"))
 
 export default function App() {
   return (
@@ -82,10 +82,10 @@ export default function App() {
           }
         />
         <Route
-          path="neurodungeon"
+          path="oracle"
           element={
             <Suspense fallback={<PageSkeleton />}>
-              <NeurodungeonPage />
+              <OraclePage />
             </Suspense>
           }
         />

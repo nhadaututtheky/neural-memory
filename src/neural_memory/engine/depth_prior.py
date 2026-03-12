@@ -11,7 +11,7 @@ import math
 import random
 from dataclasses import dataclass, field, replace
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from neural_memory.engine.retrieval_types import DepthLevel
 from neural_memory.extraction.parser import Stimulus
@@ -89,6 +89,11 @@ class AdaptiveDepthSelector:
     DECAY_FACTOR = 0.9
     MIN_QUERIES_FOR_BAYESIAN = 5
 
+    # Session-aware depth bias thresholds
+    SESSION_TOPIC_BOOST_EMA = 0.5  # Topic EMA above this → already primed
+    SESSION_PRIMED_BIAS = -1  # Bias toward shallower depth when primed
+    SESSION_NEW_TOPIC_BIAS = 1  # Bias toward deeper depth for new topics
+
     def __init__(self, storage: NeuralStorage, *, epsilon: float | None = None) -> None:
         self._storage = storage
         if epsilon is not None:
@@ -99,11 +104,27 @@ class AdaptiveDepthSelector:
         self,
         stimulus: Stimulus,
         fallback_depth: DepthLevel,
+        session_state: Any | None = None,
     ) -> DepthDecision:
-        """Select optimal depth based on Bayesian priors."""
+        """Select optimal depth based on Bayesian priors and session context.
+
+        Args:
+            stimulus: Parsed query stimulus with entities and keywords.
+            fallback_depth: Rule-based depth to use when priors insufficient.
+            session_state: Optional SessionState for session-aware biasing.
+        """
         entity_texts = [e.text for e in stimulus.entities] if stimulus.entities else []
 
         if not entity_texts:
+            # Even without entities, session context can bias depth
+            session_bias = self._compute_session_bias(stimulus, session_state)
+            if session_bias != 0:
+                biased = self._apply_depth_bias(fallback_depth, session_bias)
+                return DepthDecision(
+                    depth=biased,
+                    reason=f"No entities, session bias {session_bias:+d} → {biased.name}",
+                    method="session_biased",
+                )
             return DepthDecision(
                 depth=fallback_depth,
                 reason="No entities detected, using rule-based depth",
@@ -114,6 +135,14 @@ class AdaptiveDepthSelector:
         priors_by_entity = await self._storage.get_depth_priors_batch(entity_texts)
 
         if not any(priors_by_entity.values()):
+            session_bias = self._compute_session_bias(stimulus, session_state)
+            if session_bias != 0:
+                biased = self._apply_depth_bias(fallback_depth, session_bias)
+                return DepthDecision(
+                    depth=biased,
+                    reason=f"No prior data, session bias {session_bias:+d} → {biased.name}",
+                    method="session_biased",
+                )
             return DepthDecision(
                 depth=fallback_depth,
                 reason="No prior data for entities, using rule-based depth",
@@ -131,6 +160,14 @@ class AdaptiveDepthSelector:
 
         # Need enough data before Bayesian overrides rule-based
         if total_entity_queries < self.MIN_QUERIES_FOR_BAYESIAN:
+            session_bias = self._compute_session_bias(stimulus, session_state)
+            if session_bias != 0:
+                biased = self._apply_depth_bias(fallback_depth, session_bias)
+                return DepthDecision(
+                    depth=biased,
+                    reason=f"Insufficient data ({total_entity_queries}q), session bias {session_bias:+d} → {biased.name}",
+                    method="session_biased",
+                )
             return DepthDecision(
                 depth=fallback_depth,
                 reason=f"Insufficient data ({total_entity_queries} queries), using rule-based depth",
@@ -166,16 +203,31 @@ class AdaptiveDepthSelector:
                 exploration=True,
             )
 
+        # Apply session bias to Bayesian result
+        session_bias = self._compute_session_bias(stimulus, session_state)
+
         # Use Bayesian choice only if score is reasonable
         if best_score > 0.5:
+            final_depth = (
+                self._apply_depth_bias(best_depth, session_bias) if session_bias else best_depth
+            )
+            method = "bayesian+session" if session_bias else "bayesian"
             return DepthDecision(
-                depth=best_depth,
-                reason=f"Bayesian: {best_depth.name} has highest success rate ({best_score:.2f})",
-                method="bayesian",
+                depth=final_depth,
+                reason=f"Bayesian: {best_depth.name} (score={best_score:.2f}), session bias {session_bias:+d} → {final_depth.name}",
+                method=method,
                 entity_priors=dict.fromkeys(entity_texts, best_score),
             )
 
-        # Score too low, fall back
+        # Score too low, still apply session bias to fallback
+        if session_bias:
+            biased = self._apply_depth_bias(fallback_depth, session_bias)
+            return DepthDecision(
+                depth=biased,
+                reason=f"Bayesian score low ({best_score:.2f}), session bias {session_bias:+d} → {biased.name}",
+                method="session_biased",
+            )
+
         return DepthDecision(
             depth=fallback_depth,
             reason=f"Best Bayesian score too low ({best_score:.2f}), using rule-based depth",
@@ -188,13 +240,35 @@ class AdaptiveDepthSelector:
         depth_used: DepthLevel,
         confidence: float,
         fibers_matched: int,
+        agent_used_result: bool | None = None,
     ) -> None:
-        """Update priors based on retrieval outcome."""
+        """Update priors based on retrieval outcome.
+
+        Args:
+            stimulus: The query stimulus.
+            depth_used: Depth level used for retrieval.
+            confidence: Result confidence.
+            fibers_matched: Number of fibers matched.
+            agent_used_result: If True, agent remembered something after recalling
+                (strong positive signal). If False, recall was unused (weak negative).
+                If None, no signal available (use default heuristic).
+        """
         entity_texts = [e.text for e in stimulus.entities] if stimulus.entities else []
         if not entity_texts:
             return
 
-        success = confidence >= self.SUCCESS_THRESHOLD and fibers_matched >= self.MIN_FIBERS_SUCCESS
+        # Enhanced success signal: combine confidence threshold with agent behavior
+        base_success = (
+            confidence >= self.SUCCESS_THRESHOLD and fibers_matched >= self.MIN_FIBERS_SUCCESS
+        )
+        if agent_used_result is True:
+            # Agent remembered after recall → strong positive signal
+            success = True
+        elif agent_used_result is False:
+            # Agent didn't use the result → weaker signal (but not necessarily failure)
+            success = base_success and confidence >= 0.5  # Raise bar
+        else:
+            success = base_success
 
         priors_by_entity = await self._storage.get_depth_priors_batch(entity_texts)
 
@@ -214,6 +288,52 @@ class AdaptiveDepthSelector:
 
             updated = found.update_success() if success else found.update_failure()
             await self._storage.upsert_depth_prior(updated)
+
+    def _compute_session_bias(self, stimulus: Stimulus, session_state: Any | None) -> int:
+        """Compute depth bias from session context.
+
+        Returns:
+            -1 (shallower) if query topic is already primed in session,
+            +1 (deeper) if topic is new to session but session is established,
+            0 (no bias) if no session or session too young.
+        """
+        if session_state is None:
+            return 0
+
+        topic_ema: dict[str, float] = getattr(session_state, "topic_ema", {})
+        query_count: int = getattr(session_state, "query_count", 0)
+
+        # Need at least 3 queries for session context to be meaningful
+        if query_count < 3 or not topic_ema:
+            return 0
+
+        # Extract query topics (entities + keywords)
+        query_topics: list[str] = []
+        if stimulus.entities:
+            query_topics.extend(e.text.lower().strip() for e in stimulus.entities)
+        if stimulus.keywords:
+            query_topics.extend(k.lower().strip() for k in stimulus.keywords)
+
+        if not query_topics:
+            return 0
+
+        # Check overlap with session topics
+        primed_count = sum(
+            1 for t in query_topics if topic_ema.get(t, 0.0) >= self.SESSION_TOPIC_BOOST_EMA
+        )
+
+        if primed_count > 0:
+            # Most query topics are already warm in session → go shallower
+            return self.SESSION_PRIMED_BIAS
+
+        # Topics are new but session is established → explore deeper
+        return self.SESSION_NEW_TOPIC_BIAS
+
+    @staticmethod
+    def _apply_depth_bias(depth: DepthLevel, bias: int) -> DepthLevel:
+        """Apply integer bias to a depth level, clamping to valid range."""
+        new_val = max(0, min(3, depth.value + bias))
+        return DepthLevel(new_val)
 
     async def decay_stale_priors(self) -> int:
         """Apply decay to priors older than DECAY_INTERVAL_DAYS. Returns count decayed."""

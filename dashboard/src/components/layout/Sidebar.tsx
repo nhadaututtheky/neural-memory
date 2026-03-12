@@ -9,7 +9,7 @@ import {
   Cloud,
   Settings,
   Brain,
-  Gamepad2,
+  Sparkles,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useLayoutStore } from "@/stores/useLayoutStore"
@@ -23,7 +23,7 @@ const navItems = [
   { to: "/evolution", icon: TrendingUp, labelKey: "nav.evolution" },
   { to: "/diagrams", icon: Share2, labelKey: "nav.mindmap" },
   { to: "/sync", icon: Cloud, labelKey: "nav.sync" },
-  { to: "/neurodungeon", icon: Gamepad2, labelKey: "nav.neurodungeon" },
+  { to: "/oracle", icon: Sparkles, labelKey: "nav.oracle" },
   { to: "/settings", icon: Settings, labelKey: "nav.settings" },
 ] as const
 

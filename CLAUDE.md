@@ -130,95 +130,37 @@ This checks: version consistency (6 files), ruff lint+format, mypy, import smoke
 
 Format: `<type>: <description>` — types: feat, fix, refactor, docs, test, chore, perf, ci
 
-## Neurodungeon (Dashboard Game Feature)
+## Brain Oracle (Dashboard Feature)
 
-Roguelike dungeon crawler inside the NM dashboard. Map generated from real brain data.
+Card-based memory fortune teller. Reads AI memories as tarot-style cards with 9 suits mapped from neuron types.
 
 ### Architecture
 
 ```
-dashboard/src/features/neurodungeon/
+dashboard/src/features/oracle/
   engine/
-    types.ts          — All game types (as const objects, NOT enums — TS 5.9 erasableSyntaxOnly)
-    dungeon-gen.ts    — Graph → dungeon map (rooms from neurons, corridors from synapses)
-    game-loop.ts      — Pure turn-based state machine: (state, action) → state
-    combat.ts         — Type advantages, damage formulas, crit/flee
-    items.ts          — Item generation per room type, useItem()
-    events.ts         — World events from health data (6 types)
-    achievements.ts   — 13 achievements, localStorage persistence
-  renderer/
-    GameCanvas.tsx    — Canvas 2D with fog of war, camera follow, effects
-    tiles.ts          — Dark theme color palette
-    minimap.tsx       — 160px minimap overlay
-    hud.tsx           — HP bar, floor info, score, turn log
-    effects.ts        — Particles, screen shake, flash (stateless)
-  ui/
-    StartScreen.tsx   — Brain stats, difficulty, high score, Enter to start
-    GameOverScreen.tsx— Score summary, achievements, share card buttons
-    DialogueModal.tsx — Per-room-type styled dialogue
-    CombatOverlay.tsx — Turn-based combat UI (A/D/F keys)
-    QuizModal.tsx     — Fill-the-blank memory recall challenge
-    AchievementToast.tsx — Gold toast popup on unlock
+    types.ts          — Card suits, OracleCard, OracleMode, reading types
+    card-generator.ts — neuronsToCards(): GraphNeuron[] → OracleCard[]
+  components/
+    CardBack.tsx      — CSS geometric mandala pattern (conic-gradient)
+    CardFace.tsx      — Suit-colored gradient, symbol, content, stats
+    FlipCard.tsx      — 3D CSS flip (perspective + rotateY, 600ms)
+    ModeSelector.tsx  — Daily/WhatIf/Matchup mode tabs
   hooks/
-    useGameState.ts   — Zustand store (startGame, dispatch, updateState)
-    useKeyboard.ts    — WASD/Arrow movement, E interact, 1-5 items
-    useDungeonData.ts — API graph → DungeonGenInput transformer
-  utils/
-    pathfinding.ts    — A* for corridor generation
-    noise.ts          — Mulberry32 seeded PRNG
-    share-card.ts     — Canvas PNG generation (600x340)
-  NeurodungeonPage.tsx — Main page composing all components
+    useOracleData.ts  — useGraph(500) → neuronsToCards(), memoized
+  OraclePage.tsx      — Main page: mode selector + card layouts
 ```
 
 ### Key Conventions
 
 - **TS 5.9 compat**: Use `as const` objects + derived types, NOT TypeScript enums
-- **Immutability**: `processTurn(state, action) → newState` — never mutate DungeonState
-- **0 new dependencies**: Pure Canvas 2D + React + Zustand (already in project)
-- **Data mapping**: neuron type → room type, synapse weight → corridor width, fiber → floor
-- **Combat stats from data**: `HP = content.length / 10`, `ATK = activation * 10`, `DEF = synapse_count`
-- **World events from health**: orphans → zombies, low connectivity → collapsed corridors
-- **Persistence**: High scores + achievements in localStorage
-- **API reuse**: Uses existing `/api/graph`, `/api/dashboard/health`, `/api/dashboard/fibers`
-
-### Item System Design
-
-Items create meaningful decisions — keep vs use vs recycle:
-
-| Item | Source Room | Effect | Strategy |
-|------|-----------|--------|----------|
-| Memory Essence | Treasure | Heal HP | Save for low HP moments |
-| Memory Barrier | Treasure (high activation) | Block 1 hit completely | Save for boss fights |
-| Scroll of Resolve | Fork (priority >= 6) | ATK +N for 10 turns | Time before combat |
-| Scroll of Caution | Fork (priority < 6) | DEF +N for 10 turns | Time before combat |
-| Scholar's Map | Library (25% chance) | Reveal all rooms on floor | Use early on new floor |
-| Tome of Restoration | Library (25% chance) | Large HP heal | Save for emergencies |
-| Treatise on War | Library (25% chance) | ATK buff 10 turns | Same as ATK scroll |
-| Manual of Defense | Library (25% chance) | DEF buff 10 turns | Same as DEF scroll |
-| Forgotten Ward | Secret room | Block 1 hit | Rare, save for bosses |
-
-- **Buff scrolls are temporary** (10 turns) — creates timing decisions
-- **Shield** blocks exactly 1 hit then shatters — clutch saves
-- **Drop = Recycle** gives +15 score — inventory management matters
-- **Max 5 items** — forces prioritization
-- **Library variety**: deterministic hash-based, not random — same room always gives same item type
-- **Keybinds**: `1-5` use, `Shift+1-5` drop/recycle
-
-### Engagement Systems (engine/engagement.ts)
-
-| System | Mechanic | Player Impact |
-|--------|----------|---------------|
-| Memory Chain | Visit synapse-connected rooms in sequence | Score multiplier x1.5, x2, x2.5... |
-| Danger Level | +1 every 15 turns on floor, max 10 | Enemies +10% stats/level, forces pacing |
-| Floor Rating | S/A/B/C/D from explore%, kills%, chain, speed | Score multiplied: S=3x, A=2x, B=1.5x |
-| Kill Streak | Consecutive kills without taking damage | +25 score per streak kill |
-
-- Chain uses REAL corridor/synapse data → each brain has unique optimal paths
-- Danger creates tension: explore everything (loot) vs speedrun (safety)
-- Rating drives replayability: "I got B, let me try for S"
-- FLOOR_COMPLETE phase pauses between floors to show rating overlay
+- **0 new dependencies**: Pure CSS animations + React
+- **9 card suits**: decision→Architect, error→Shadow, insight→Oracle, fact→Scholar, workflow→Engineer, preference→Heart, instruction→Sentinel, pattern→Weaver, other→Wanderer
+- **3 modes**: Daily Reading (Past/Present/Future), What If (collision), Matchup (compare 2)
+- **Data**: Uses existing `/api/graph?limit=500`, card stats from neuron activation/connections/age
+- **Flip animation**: CSS-only 3D with `backface-visibility: hidden`, `autoFlipDelay` for stagger
 
 ### Plan & Status
 
-Full plan with task breakdown: `.rune/neurodungeon-plan.md`
-Phases 1-3 complete, Phase 4 partial, Item Redesign + Engagement Systems done.
+Full plan: `.rune/plan-brain-oracle.md`
+Phase 1 (Foundation) complete. Phase 2 (Game Modes) + Phase 3 (Polish) pending.

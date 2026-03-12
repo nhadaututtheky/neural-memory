@@ -237,7 +237,7 @@ async def show_memory(
             "synapses": synapse_list,
         }
 
-    raise HTTPException(status_code=404, detail=f"Memory not found: {memory_id}")
+    raise HTTPException(status_code=404, detail="Memory not found")
 
 
 @router.get(
@@ -283,7 +283,7 @@ async def get_source(
     """Get detailed source info including linked neuron count."""
     source = await storage.get_source(source_id)
     if source is None:
-        raise HTTPException(status_code=404, detail=f"Source not found: {source_id}")
+        raise HTTPException(status_code=404, detail="Source not found")
     neuron_count = await storage.count_neurons_for_source(source_id)
     return {
         "source_id": source.id,

@@ -2233,7 +2233,7 @@ class ToolHandler:
                 "synapses": synapse_list,
             }
 
-        return {"error": f"Memory not found: {memory_id}"}
+        return {"error": "Memory not found"}
 
     async def _edit(self, args: dict[str, Any]) -> dict[str, Any]:
         """Edit an existing memory's type, content, or priority."""
@@ -2326,7 +2326,7 @@ class ToolHandler:
                 "changes": changes,
             }
 
-        return {"error": f"Memory not found: {memory_id}"}
+        return {"error": "Memory not found"}
 
     async def _forget(self, args: dict[str, Any]) -> dict[str, Any]:
         """Explicitly delete or close a specific memory."""
@@ -2351,7 +2351,7 @@ class ToolHandler:
             # Try as neuron_id — find its fiber
             neuron = await storage.get_neuron(memory_id)
             if not neuron:
-                return {"error": f"Memory not found: {memory_id}"}
+                return {"error": "Memory not found"}
             # For neuron-only delete in hard mode
             if hard:
                 await storage.delete_neuron(memory_id)
