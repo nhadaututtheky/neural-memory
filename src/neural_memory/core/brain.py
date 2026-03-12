@@ -78,7 +78,7 @@ class BrainConfig:
     graph_expansion_max: int = 10
     graph_expansion_min_weight: float = 0.3
     # Retrieval: Activation strategy
-    activation_strategy: str = "classic"  # "ppr" | "classic" | "reflex" | "hybrid"
+    activation_strategy: str = "classic"  # "ppr" | "classic" | "reflex" | "hybrid" | "auto"
     ppr_damping: float = 0.15
     ppr_iterations: int = 20
     ppr_epsilon: float = 1e-6

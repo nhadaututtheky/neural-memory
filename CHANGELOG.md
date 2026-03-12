@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.1] - 2026-03-12
+
+### Security
+
+- **Fix path traversal** in `index_handler.py` — adapter connection paths now validated with `is_relative_to()` against allowed directories (cwd, home, temp)
+- **Fix path traversal** in `pre_compact.py` hook — stdin transcript path now validated against `~/.claude` directory
+- **Update `cryptography>=46.0.5`** — fix CVE-2026-26007
+- **Add `python-multipart>=0.0.22`** floor constraint — fix CVE-2026-24486
+- **Remove internal info from error messages** — 9 locations no longer leak memory IDs, hypothesis IDs, or filesystem paths to clients
+- **CORS hardening** — replace `localhost:*` wildcard with explicit port list (3000, 3001, 5173, 5174, 8000, 8080, 8888)
+
+### Fixed
+
+- Fix 8 silent `except Exception: pass` blocks — all now log at DEBUG level with `exc_info=True`
+- Fix 14 redundant exception tuples (`except (AttributeError, Exception)` → `except Exception`)
+- Remove unused `python-dateutil` from core dependencies
+
+## [4.0.0] - 2026-03-12
+
+### Added
+
+- **Semantic Drift Detection** — Find tag synonyms/aliases via Jaccard similarity on co-occurrence data
+- **Tag Co-Occurrence Matrix** — Automatically recorded on every memory encode, tracks which tags appear together
+- **Union-Find Clustering** — Groups related tags with confidence thresholds: merge (>0.7), alias (>0.4), review (>0.3)
+- **Temporal Drift Detection** — Compares early vs recent session topics to detect terminology shifts
+- **`nmem_drift` MCP Tool** — detect/list/merge/alias/dismiss actions for managing drift clusters
+- **`detect_drift` Consolidation Strategy** — Runs drift analysis during periodic consolidation
+- **Schema v26** — New `tag_cooccurrence` and `drift_clusters` tables
+
+### Improved
+
+- **Brain Intelligence Complete** — v4.0 milestone: session intelligence, adaptive depth, predictive priming, and semantic drift detection work together as feedback loops
+- Consolidation engine now includes drift detection in the final tier alongside semantic_link
+
+### Tests
+
+- 51 new drift detection tests (Jaccard, clustering, storage, MCP handler, Union-Find)
+- Total: 3810 passing
+
+## [3.5.0] - 2026-03-12
+
+### Added
+
+- **Predictive Priming** — Brain anticipates next query from session context with 4-source priming engine
+- **Activation Cache** — Recent query results carry forward as soft activation with exponential decay (`0.7^n` per query)
+- **Topic Pre-Warming** — Session topics with EMA > 0.5 pre-warm related neurons before query parsing (truly predictive)
+- **Habit-Based Priming** — Query pattern co-occurrence (CONCEPT neurons + BEFORE synapses) predicts next topic, max 3 predicted topics
+- **Co-Activation Priming** — Hebbian binding data (strength >= 0.5, count >= 3) boosts associated neurons
+- **Priming Metrics** — Hit rate tracking with auto-adjusted aggressiveness (0.5x-1.5x) based on priming effectiveness
+- **Session priming fields** — `priming_hit_rate`, `priming_total` exposed in session summaries and result metadata
+
+### Tests
+
+- 57 new tests covering all priming sources, metrics, orchestration, merging, backward compat
+- Total: 3759 passing
+
+## [3.4.0] - 2026-03-12
+
+### Added
+
+- **Session-aware depth selection** — Primed topics go shallower (already in context), new topics go deeper (need exploration). Uses session EMA topic weights
+- **Calibration-driven gate tuning** — High-accuracy gates get confidence boost (+10%), low-accuracy gates get dampened (-30%), very low avg_confidence triggers downgrade to insufficient
+- **Agent feedback signal** — `agent_used_result` parameter: remember-after-recall = strong positive, unused recall = raised bar for success
+- **Dynamic RRF weights** — Per-brain retriever weights evolve from outcome history via `retriever_calibration` table and EMA
+- **Auto activation strategy** — `activation_strategy="auto"` selects classic/PPR/hybrid based on graph density (synapses/neuron ratio)
+- **Schema v25** — `retriever_calibration` table + `graph_density` column on brains
+
+### Tests
+
+- 30 new tests covering all 5 features + backward compatibility
+- Total: 3702 passing
+
 ## [3.3.0] - 2026-03-12
 
 ### Added

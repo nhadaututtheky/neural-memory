@@ -222,7 +222,7 @@ class TestPredictCreate:
             )
 
         assert "error" in result
-        assert "No hypothesis" in result["error"]
+        assert "Hypothesis not found" in result["error"]
 
     @pytest.mark.asyncio
     async def test_create_existing_prediction(self) -> None:

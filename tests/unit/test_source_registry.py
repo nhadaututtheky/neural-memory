@@ -99,10 +99,10 @@ class TestSourceOfSynapseType:
 class TestSchemaMigrationV23:
     """Verify schema version and migration SQL."""
 
-    def test_schema_version_is_24(self) -> None:
+    def test_schema_version_is_25(self) -> None:
         from neural_memory.storage.sqlite_schema import SCHEMA_VERSION
 
-        assert SCHEMA_VERSION == 24
+        assert SCHEMA_VERSION == 26
 
     def test_migration_22_23_exists(self) -> None:
         from neural_memory.storage.sqlite_schema import MIGRATIONS

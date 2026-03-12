@@ -8,13 +8,14 @@ Provides automated memory maintenance:
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from dataclasses import replace as dc_replace
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from neural_memory.core.fiber import Fiber
@@ -42,6 +43,7 @@ class ConsolidationStrategy(StrEnum):
     SEMANTIC_LINK = "semantic_link"
     COMPRESS = "compress"
     PROCESS_TOOL_EVENTS = "process_tool_events"
+    DETECT_DRIFT = "detect_drift"
     ALL = "all"
 
 
@@ -99,6 +101,7 @@ class ConsolidationReport:
     neurons_reactivated: int = 0
     merge_details: list[MergeDetail] = field(default_factory=list)
     dry_run: bool = False
+    extra: dict[str, Any] = field(default_factory=dict)
 
     def summary(self) -> str:
         """Generate human-readable summary."""
@@ -217,6 +220,7 @@ class ConsolidationEngine:
         frozenset(
             {
                 ConsolidationStrategy.SEMANTIC_LINK,
+                ConsolidationStrategy.DETECT_DRIFT,
             }
         ),
     )
@@ -256,6 +260,7 @@ class ConsolidationEngine:
             ConsolidationStrategy.PROCESS_TOOL_EVENTS: lambda: self._process_tool_events(
                 report, dry_run
             ),
+            ConsolidationStrategy.DETECT_DRIFT: lambda: self._detect_drift(report, dry_run),
         }
         handler = dispatch.get(strategy)
         if handler is not None:
@@ -997,6 +1002,9 @@ class ConsolidationEngine:
         try:
             all_states = await self._storage.get_all_neuron_states()
         except Exception:
+            logging.getLogger(__name__).debug(
+                "Failed to get neuron states for dream cycle", exc_info=True
+            )
             return
 
         dormant = [s for s in all_states if s.access_frequency == 0]
@@ -1288,3 +1296,28 @@ class ConsolidationEngine:
                 result.neurons_created,
                 result.synapses_created,
             )
+
+    async def _detect_drift(self, report: ConsolidationReport, dry_run: bool) -> None:
+        """Run semantic drift detection to find tag synonyms/aliases."""
+        _logger = logging.getLogger(__name__)
+        if dry_run:
+            _logger.debug("DETECT_DRIFT skipped: dry_run mode")
+            return
+
+        try:
+            from neural_memory.engine.drift_detection import run_drift_detection
+
+            result = await run_drift_detection(self._storage)
+            summary: dict[str, Any] = result.get("summary", {})  # type: ignore[assignment]
+            total = summary.get("total_clusters", 0)
+            if total > 0:
+                _logger.debug(
+                    "DETECT_DRIFT: found %d clusters (%d merge, %d alias, %d review)",
+                    total,
+                    summary.get("merge_suggestions", 0),
+                    summary.get("alias_suggestions", 0),
+                    summary.get("review_suggestions", 0),
+                )
+                report.extra["drift_clusters"] = total
+        except Exception:
+            _logger.debug("DETECT_DRIFT failed (non-critical)", exc_info=True)

@@ -84,6 +84,18 @@ class SessionState:
     last_active: float = field(default_factory=time.monotonic)
     _last_persist_count: int = 0
 
+    # Priming metrics (populated by retrieval pipeline)
+    priming_total: int = 0
+    priming_hits: int = 0
+    priming_misses: int = 0
+
+    @property
+    def priming_hit_rate(self) -> float:
+        """Fraction of primed neurons that appeared in final results."""
+        if self.priming_total == 0:
+            return 0.0
+        return self.priming_hits / self.priming_total
+
     def record_query(
         self,
         query: str,
@@ -206,6 +218,8 @@ class SessionState:
                 if self.recent_queries
                 else 0.0
             ),
+            "priming_hit_rate": round(self.priming_hit_rate, 4),
+            "priming_total": self.priming_total,
         }
 
 

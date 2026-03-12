@@ -34,6 +34,7 @@ from neural_memory.mcp.cognitive_handler import CognitiveHandler
 from neural_memory.mcp.conflict_handler import ConflictHandler
 from neural_memory.mcp.connection_handler import ConnectionHandler
 from neural_memory.mcp.db_train_handler import DBTrainHandler
+from neural_memory.mcp.drift_handler import DriftHandler
 from neural_memory.mcp.eternal_handler import EternalHandler
 from neural_memory.mcp.expiry_cleanup_handler import ExpiryCleanupHandler
 from neural_memory.mcp.index_handler import IndexHandler
@@ -97,6 +98,7 @@ class MCPServer(
     VersionCheckHandler,
     SyncToolHandler,
     TelegramHandler,
+    DriftHandler,
 ):
     """MCP server that exposes NeuralMemory tools.
 
@@ -124,6 +126,7 @@ class MCPServer(
         VersionCheckHandler  — background PyPI version check + update hints
         SyncToolHandler      — _sync, _sync_status, _sync_config (multi-device sync)
         TelegramHandler      — _telegram_backup (send brain to Telegram)
+        DriftHandler         — _drift (semantic drift detection + resolution)
     """
 
     def __init__(self) -> None:
@@ -220,6 +223,7 @@ class MCPServer(
             "nmem_edit": self._edit,
             "nmem_forget": self._forget,
             "nmem_consolidate": self._consolidate,
+            "nmem_drift": self._drift,
         }
         handler = dispatch.get(name)
         if handler:

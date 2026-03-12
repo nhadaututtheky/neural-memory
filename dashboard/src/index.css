@@ -77,37 +77,42 @@
 
 /* Dark mode override — class-based (.dark on <html>) */
 :root.dark {
-  --color-background: #0f0e0c;
+  --color-background: #0c0b09;
   --color-foreground: #f5f0ea;
-  --color-card: #1a1814;
-  --color-card-foreground: #f5f0ea;
+  --color-card: #16140f;
+  --color-card-foreground: #f0ebe4;
   --color-popover: #1a1814;
   --color-popover-foreground: #f5f0ea;
   --color-primary: #818cf8;
-  --color-primary-foreground: #0f0e0c;
-  --color-secondary: #2a2520;
+  --color-primary-foreground: #0c0b09;
+  --color-secondary: #1e1b16;
   --color-secondary-foreground: #f5f0ea;
-  --color-muted: #2a2520;
+  --color-muted: #1e1b16;
   --color-muted-foreground: #a8a29e;
-  --color-accent: #332e28;
+  --color-accent: #292520;
   --color-accent-foreground: #f5f0ea;
   --color-destructive: #ef4444;
   --color-destructive-foreground: #ffffff;
-  --color-border: #3d3630;
-  --color-input: #3d3630;
+  --color-border: #2e2a24;
+  --color-input: #342f28;
   --color-ring: #818cf8;
 
   --color-health-good: #34d399;
   --color-health-warn: #fbbf24;
   --color-health-bad: #f87171;
 
-  --color-sidebar: #161412;
+  /* Elevated shadows for depth */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.55), 0 4px 8px rgba(0, 0, 0, 0.4);
+
+  --color-sidebar: #0e0d0a;
   --color-sidebar-foreground: #f5f0ea;
-  --color-sidebar-border: #3d3630;
-  --color-sidebar-accent: #2a2520;
+  --color-sidebar-border: #2e2a24;
+  --color-sidebar-accent: #1e1b16;
   --color-sidebar-accent-foreground: #f5f0ea;
   --color-sidebar-primary: #818cf8;
-  --color-sidebar-primary-foreground: #0f0e0c;
+  --color-sidebar-primary-foreground: #0c0b09;
   --color-sidebar-ring: #818cf8;
 }
 
@@ -142,6 +147,30 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-muted-foreground);
+}
+
+/* Dark mode depth — card elevation & subtle gradients */
+.dark .border {
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.dark .rounded-xl {
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.025) 0%,
+    transparent 50%
+  );
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.dark aside {
+  box-shadow: 1px 0 12px rgba(0, 0, 0, 0.5);
+}
+
+.dark header {
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
 }
 
 /* Focus ring */

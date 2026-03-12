@@ -780,3 +780,120 @@ async def telegram_backup_api(
         return result
     except TelegramError:
         raise HTTPException(status_code=500, detail="Telegram backup failed")
+
+
+# ---------------------------------------------------------------------------
+# Cloud Sync
+# ---------------------------------------------------------------------------
+
+
+@router.get("/sync-status", tags=["dashboard"], summary="Cloud sync status for dashboard")
+async def get_sync_status(
+    storage: Annotated[NeuralStorage, Depends(get_storage)],
+) -> dict[str, Any]:
+    """Return sync configuration and status for the dashboard UI."""
+    from neural_memory.unified_config import get_config
+
+    config = get_config()
+    sync = config.sync
+
+    # Mask API key
+    api_key_display = "(not set)"
+    if sync.api_key and len(sync.api_key) >= 12:
+        api_key_display = f"{sync.api_key[:12]}****"
+
+    result: dict[str, Any] = {
+        "enabled": sync.enabled,
+        "hub_url": sync.hub_url or "(not set)",
+        "api_key": api_key_display,
+        "auto_sync": sync.auto_sync,
+        "conflict_strategy": sync.conflict_strategy,
+        "device_id": config.device_id,
+    }
+
+    # Get device list and change log stats if sync is configured
+    if sync.enabled:
+        try:
+            change_stats = await storage.get_change_log_stats()
+            devices_raw = await storage.list_devices()
+            result["change_log"] = change_stats
+            result["devices"] = [
+                {
+                    "device_id": d.device_id,
+                    "device_name": d.device_name,
+                    "last_sync_at": d.last_sync_at.isoformat() if d.last_sync_at else None,
+                    "last_sync_sequence": d.last_sync_sequence,
+                    "registered_at": d.registered_at.isoformat(),
+                }
+                for d in devices_raw
+            ]
+            result["device_count"] = len(devices_raw)
+        except Exception:
+            logger.debug("Could not fetch sync stats", exc_info=True)
+            result["devices"] = []
+            result["device_count"] = 0
+    else:
+        result["devices"] = []
+        result["device_count"] = 0
+
+    return result
+
+
+@router.post("/sync-config", tags=["dashboard"], summary="Update sync configuration")
+async def update_sync_config(
+    body: dict[str, Any],
+) -> dict[str, Any]:
+    """Update sync configuration from the dashboard UI."""
+    from dataclasses import replace as dc_replace
+
+    from neural_memory.unified_config import get_config
+
+    config = get_config()
+    new_sync = config.sync
+
+    hub_url = body.get("hub_url")
+    if hub_url is not None:
+        url = str(hub_url).strip()
+        if url and not url.startswith(("http://", "https://")):
+            raise HTTPException(
+                status_code=422, detail="hub_url must start with http:// or https://"
+            )
+        new_sync = dc_replace(new_sync, hub_url=url[:256])
+
+    api_key = body.get("api_key")
+    if api_key is not None:
+        key = str(api_key).strip()
+        if key and not key.startswith("nmk_"):
+            raise HTTPException(status_code=422, detail="API key must start with 'nmk_'")
+        new_sync = dc_replace(new_sync, api_key=key)
+
+    if "enabled" in body:
+        new_sync = dc_replace(new_sync, enabled=bool(body["enabled"]))
+
+    if "conflict_strategy" in body:
+        valid = {"prefer_recent", "prefer_local", "prefer_remote", "prefer_stronger"}
+        strategy = str(body["conflict_strategy"])
+        if strategy not in valid:
+            raise HTTPException(
+                status_code=422, detail=f"Invalid strategy. Use: {', '.join(sorted(valid))}"
+            )
+        new_sync = dc_replace(new_sync, conflict_strategy=strategy)
+
+    # Auto-enable when both hub_url and api_key are set
+    if new_sync.hub_url and new_sync.api_key and not new_sync.enabled:
+        new_sync = dc_replace(new_sync, enabled=True)
+
+    updated = dc_replace(config, sync=new_sync)
+    updated.save()
+
+    api_key_display = "(not set)"
+    if new_sync.api_key and len(new_sync.api_key) >= 12:
+        api_key_display = f"{new_sync.api_key[:12]}****"
+
+    return {
+        "status": "updated",
+        "enabled": new_sync.enabled,
+        "hub_url": new_sync.hub_url or "(not set)",
+        "api_key": api_key_display,
+        "conflict_strategy": new_sync.conflict_strategy,
+    }

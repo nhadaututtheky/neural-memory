@@ -86,7 +86,7 @@ def _auto_detect_provider() -> tuple[str, str]:
             if models:
                 return ("ollama", "bge-m3")
     except Exception:
-        pass
+        logger.debug("Ollama embedding probe failed", exc_info=True)
 
     # 2. Check sentence-transformers (local)
     try:
@@ -181,7 +181,7 @@ async def discover_semantic_synapses(
     # Try to create embedding provider
     try:
         provider = _create_provider(config, task_type="RETRIEVAL_DOCUMENT")
-    except (ImportError, Exception):
+    except Exception:
         logger.debug("Embedding provider unavailable — skipping semantic discovery")
         return SemanticDiscoveryResult()
 

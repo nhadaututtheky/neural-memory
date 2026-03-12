@@ -140,7 +140,7 @@ def _is_editable_install() -> bool:
         if direct_url and '"editable"' in direct_url:
             return True
     except Exception:
-        pass
+        logger.debug("Failed to check editable install via metadata", exc_info=True)
 
     try:
         import neural_memory
@@ -152,7 +152,7 @@ def _is_editable_install() -> bool:
             if parent == parent.parent:
                 break
     except Exception:
-        pass
+        logger.debug("Failed to check editable install via filesystem", exc_info=True)
 
     return False
 

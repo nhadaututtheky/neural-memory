@@ -217,6 +217,41 @@ export interface BrainFilesResponse {
   total_size_bytes: number
 }
 
+// GET /api/dashboard/sync-status
+export interface SyncStatusResponse {
+  enabled: boolean
+  hub_url: string
+  api_key: string
+  auto_sync: boolean
+  conflict_strategy: string
+  device_id: string
+  change_log?: {
+    total_changes: number
+    synced_changes: number
+    unsynced_changes: number
+    latest_sequence: number
+  }
+  devices: SyncDevice[]
+  device_count: number
+}
+
+export interface SyncDevice {
+  device_id: string
+  device_name: string
+  last_sync_at: string | null
+  last_sync_sequence: number
+  registered_at: string
+}
+
+// POST /api/dashboard/sync-config
+export interface SyncConfigUpdateResponse {
+  status: string
+  enabled: boolean
+  hub_url: string
+  api_key: string
+  conflict_strategy: string
+}
+
 // GET /health
 export interface HealthCheckResponse {
   status: string

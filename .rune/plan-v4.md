@@ -7,9 +7,9 @@ Vision: Brain that learns from its own usage. Adaptive depth, session priming, d
 | # | Name | Status | Plan File | Summary |
 |---|------|--------|-----------|---------|
 | 1 | Session Intelligence | ✅ Done | plan-v4-phase1.md | Session state tracking across MCP calls |
-| 2 | Adaptive Depth v2 | ⬚ Pending | plan-v4-phase2.md | Calibration → depth tuning, session-aware |
-| 3 | Predictive Priming | ⬚ Pending | plan-v4-phase3.md | Pre-warm memories from session context |
-| 4 | Semantic Drift Detection | ⬚ Pending | plan-v4-phase4.md | Tag co-occurrence, cluster merge suggestions |
+| 2 | Adaptive Depth v2 | ✅ Done | plan-v4-phase2.md | Calibration → depth tuning, session-aware |
+| 3 | Predictive Priming | ✅ Done | plan-v4-phase3.md | Pre-warm memories from session context |
+| 4 | Semantic Drift Detection | ✅ Done | plan-v4-phase4.md | Tag co-occurrence, cluster merge suggestions |
 | 5 | Diminishing Returns Gate | ⬚ Pending | plan-v4-phase5.md | Stop traversal when new hops add no signal |
 
 ## Key Decisions

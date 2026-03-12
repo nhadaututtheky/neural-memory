@@ -212,7 +212,7 @@ class CognitiveHandler:
         try:
             state = await storage.get_cognitive_state(hypothesis_id)
             if not state:
-                return {"error": f"No hypothesis found with id: {hypothesis_id}"}
+                return {"error": "Hypothesis not found"}
 
             neuron = await storage.get_neuron(hypothesis_id)
             content = neuron.content if neuron else "(deleted)"
@@ -295,7 +295,7 @@ class CognitiveHandler:
         # Verify hypothesis exists
         state = await storage.get_cognitive_state(hypothesis_id)
         if not state:
-            return {"error": f"No hypothesis found with id: {hypothesis_id}"}
+            return {"error": "Hypothesis not found"}
 
         if state["status"] not in ("active", "pending"):
             return {
@@ -494,7 +494,7 @@ class CognitiveHandler:
         if hypothesis_id:
             hyp_state = await storage.get_cognitive_state(hypothesis_id)
             if not hyp_state:
-                return {"error": f"No hypothesis found with id: {hypothesis_id}"}
+                return {"error": "Hypothesis not found"}
 
         encoder = MemoryEncoder(storage, brain.config)
 
