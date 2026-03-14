@@ -4,12 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from neural_memory.cli.ide_rules import (
     IDE_TARGETS,
-    generate_rules_file,
     _get_rules_content,
+    generate_rules_file,
 )
 
 
@@ -119,4 +117,4 @@ class TestGenerateRulesFile:
 
         original = copy.deepcopy(IDE_TARGETS)
         generate_rules_file(Path("/tmp"), "cursor")
-        assert IDE_TARGETS == original
+        assert original == IDE_TARGETS

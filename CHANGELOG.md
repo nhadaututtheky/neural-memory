@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.6.0] - 2026-03-14
+
+### Added
+
+- **`nmem setup rules`** — IDE rules file generator for multi-agent adoption. Generates `.cursorrules`, `.windsurfrules`, `.clinerules`, `GEMINI.md`, and `AGENTS.md` with NM usage instructions. Supports `--all`, `--ide <name>`, `--force`, and interactive selection
+- **17 new tests** for IDE rules generator
+
 ## [4.5.0] - 2026-03-14
 
 ### Added
