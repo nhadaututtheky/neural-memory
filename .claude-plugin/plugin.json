@@ -20,7 +20,7 @@
     "persistence",
     "associative"
   ],
-  "skills": "./SKILL.md",
+  "skills": "./skills",
   "hooks": "./hooks/hooks.json",
   "mcpServers": {
     "neural-memory": {
