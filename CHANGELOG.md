@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.5.0] - 2026-03-14
+
+### Added
+
+- **Context merger (Phase A)** — `nmem_remember` accepts optional `context` dict (e.g. `{reason, alternatives, cause, fix, steps}`) that gets merged into content server-side using type-specific templates. Works with any agent — no need to craft perfect prose
+- **Quality scorer (Phase B)** — Every `nmem_remember` response now includes `quality` ("low"/"medium"/"high"), `score` (0-10), and `hints` (actionable improvement suggestions). Soft gate: always stores, never rejects
+- **36 new tests** for quality scorer (20) and context merger (16)
+
+### Fixed
+
+- **Tool memory config default** — test assertion updated to match `enabled=True` default
+
 ## [4.4.1] - 2026-03-14
 
 ### Improved
