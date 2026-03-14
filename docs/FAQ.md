@@ -299,7 +299,7 @@ nmem_sync(action="push")   # Push to cloud
 nmem_sync(action="pull")   # Pull on another device
 ```
 
-See the full [Cloud Sync Guide](../guides/cloud-sync.md) for details.
+See the full [Cloud Sync Guide](guides/cloud-sync.md) for details.
 
 ### Q: Is cloud sync free?
 

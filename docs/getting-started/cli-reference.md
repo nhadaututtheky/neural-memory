@@ -509,6 +509,9 @@ nmem setup [OPTIONS]
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
 | `component` | text | No | `` | (positional argument) |
+| `--ide` | text | No | `` | Target IDE for rules: cursor, windsurf, cline, gemini, agents |
+| `--all` | boolean | No | `False` | Generate rules for all supported IDEs |
+| `--force / -f` | boolean | No | `False` | Overwrite existing files |
 
 ### `nmem mcp-config`
 
