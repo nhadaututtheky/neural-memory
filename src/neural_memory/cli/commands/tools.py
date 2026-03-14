@@ -871,26 +871,50 @@ def doctor(
 def setup(
     component: Annotated[
         str,
-        typer.Argument(help="Component to set up: embeddings"),
+        typer.Argument(help="Component to set up: embeddings, rules"),
     ] = "",
+    ide: Annotated[
+        str,
+        typer.Option("--ide", help="Target IDE for rules: cursor, windsurf, cline, gemini, agents"),
+    ] = "",
+    all_ides: Annotated[
+        bool,
+        typer.Option("--all", help="Generate rules for all supported IDEs"),
+    ] = False,
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="Overwrite existing files"),
+    ] = False,
 ) -> None:
     """Set up optional components.
 
     Examples:
-        nmem setup embeddings   # Configure embedding provider
+        nmem setup embeddings        # Configure embedding provider
+        nmem setup rules             # Interactive IDE rules setup
+        nmem setup rules --all       # Generate for all IDEs
+        nmem setup rules --ide cursor  # Cursor only
     """
     if component == "embeddings":
         from neural_memory.cli.embedding_setup import run_embedding_setup
 
         run_embedding_setup()
+    elif component == "rules":
+        from neural_memory.cli.ide_rules import run_ide_rules_setup
+
+        run_ide_rules_setup(
+            ide=ide if ide else None,
+            all_ides=all_ides,
+            force=force,
+        )
     elif not component:
         typer.echo("Available components:")
         typer.echo("  embeddings  — Configure embedding provider for semantic search")
+        typer.echo("  rules       — Generate IDE rules files (.cursorrules, AGENTS.md, etc.)")
         typer.echo()
         typer.echo("Usage: nmem setup <component>")
     else:
         typer.secho(
-            f"Unknown component: {component}. Available: embeddings",
+            f"Unknown component: {component}. Available: embeddings, rules",
             fg=typer.colors.RED,
             err=True,
         )
