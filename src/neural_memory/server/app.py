@@ -221,7 +221,7 @@ def create_app(
         storage: NeuralStorage | None = getattr(app.state, "storage", None)
         if storage is None:
             return cast(
-                ReadyResponse,
+                "ReadyResponse",
                 JSONResponse(
                     status_code=503,
                     content=ReadyResponse(
