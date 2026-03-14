@@ -14,6 +14,7 @@ import type {
   GraphResponse,
   BrainFilesResponse,
   ToolStatsResponse,
+  ConfigStatusResponse,
 } from "@/api/types"
 
 // Keys
@@ -31,6 +32,7 @@ const keys = {
   fiberDiagram: (id: string) => ["dashboard", "fiber", id, "diagram"] as const,
   graph: (limit: number) => ["graph", limit] as const,
   brainFiles: ["dashboard", "brain-files"] as const,
+  configStatus: ["dashboard", "config-status"] as const,
 }
 
 // Stats
@@ -166,5 +168,14 @@ export function useBrainFiles() {
   return useQuery({
     queryKey: keys.brainFiles,
     queryFn: () => api.get<BrainFilesResponse>("/api/dashboard/brain-files"),
+  })
+}
+
+// Config status
+export function useConfigStatus() {
+  return useQuery({
+    queryKey: keys.configStatus,
+    queryFn: () => api.get<ConfigStatusResponse>("/api/dashboard/config-status"),
+    staleTime: 60_000,
   })
 }

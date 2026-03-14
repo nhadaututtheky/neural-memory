@@ -899,6 +899,237 @@ async def update_sync_config(
     }
 
 
+# ── Config Status API ────────────────────────────────────
+
+
+class ConfigStatusItem(BaseModel):
+    """A single configuration status item."""
+
+    key: str
+    label: str
+    status: str  # "configured" | "not_configured" | "warning" | "info"
+    description: str
+    command: str = ""
+    value: str = ""
+
+
+class ConfigStatusResponse(BaseModel):
+    """Configuration status response."""
+
+    items: list[ConfigStatusItem] = Field(default_factory=list)
+
+
+@router.get(
+    "/config-status",
+    response_model=ConfigStatusResponse,
+    summary="Get configuration status and actionable items",
+)
+async def get_config_status(
+    storage: Annotated[NeuralStorage, Depends(get_storage)],
+) -> ConfigStatusResponse:
+    """Return per-feature configuration status with actionable commands."""
+    from neural_memory.unified_config import get_config
+
+    items: list[ConfigStatusItem] = []
+
+    try:
+        cfg = get_config()
+    except Exception:
+        logger.warning("Could not load config for config-status endpoint", exc_info=True)
+        return ConfigStatusResponse(items=[])
+
+    # ── 1. Tool Memory ──────────────────────────────────
+    try:
+        tm = cfg.tool_memory
+        if tm.enabled:
+            items.append(
+                ConfigStatusItem(
+                    key="tool_memory",
+                    label="Tool Memory",
+                    status="configured",
+                    description="Tracks MCP tool usage patterns for analytics",
+                    command="",
+                    value="enabled",
+                )
+            )
+        else:
+            items.append(
+                ConfigStatusItem(
+                    key="tool_memory",
+                    label="Tool Memory",
+                    status="not_configured",
+                    description="Tracks MCP tool usage patterns for analytics",
+                    command="Set [tool_memory] enabled = true in config.toml",
+                    value="",
+                )
+            )
+    except Exception:
+        logger.debug("Could not check tool_memory config", exc_info=True)
+
+    # ── 2. Cloud Sync ───────────────────────────────────
+    try:
+        sync = cfg.sync
+        if sync.hub_url:
+            items.append(
+                ConfigStatusItem(
+                    key="cloud_sync",
+                    label="Cloud Sync",
+                    status="configured",
+                    description="Sync memories across devices via your own Cloudflare Worker",
+                    command="",
+                    value=sync.hub_url,
+                )
+            )
+        else:
+            items.append(
+                ConfigStatusItem(
+                    key="cloud_sync",
+                    label="Cloud Sync",
+                    status="not_configured",
+                    description="Sync memories across devices via your own Cloudflare Worker",
+                    command='nmem_sync_config(action="setup")',
+                    value="",
+                )
+            )
+    except Exception:
+        logger.debug("Could not check sync config", exc_info=True)
+
+    # ── 3. Embedding Provider ───────────────────────────
+    try:
+        emb = cfg.embedding
+        if emb.enabled and emb.provider:
+            items.append(
+                ConfigStatusItem(
+                    key="embedding",
+                    label="Embedding Provider",
+                    status="configured",
+                    description="Enables semantic similarity for better recall quality",
+                    command="",
+                    value=emb.provider,
+                )
+            )
+        else:
+            items.append(
+                ConfigStatusItem(
+                    key="embedding",
+                    label="Embedding Provider",
+                    status="not_configured",
+                    description="Enables semantic similarity for better recall quality",
+                    command="pip install neural-memory[embeddings]",
+                    value="",
+                )
+            )
+    except Exception:
+        logger.debug("Could not check embedding config", exc_info=True)
+
+    # ── 4. Memory Consolidation ─────────────────────────
+    try:
+        from neural_memory.engine.memory_stages import MemoryStage
+
+        brain_name = cfg.current_brain
+        stats = await storage.get_stats(brain_name)
+        total_neurons = stats.get("neuron_count", 0)
+
+        semantic_records = await storage.find_maturations(
+            stage=MemoryStage.SEMANTIC,
+        )
+        semantic_count = len(semantic_records)
+
+        if total_neurons > 100 and semantic_count == 0:
+            items.append(
+                ConfigStatusItem(
+                    key="consolidation",
+                    label="Memory Consolidation",
+                    status="warning",
+                    description=(
+                        f"{total_neurons} neurons, 0 semantic — memories need consolidation"
+                    ),
+                    command="nmem consolidate",
+                    value=f"0 semantic / {total_neurons} total",
+                )
+            )
+        else:
+            items.append(
+                ConfigStatusItem(
+                    key="consolidation",
+                    label="Memory Consolidation",
+                    status="configured",
+                    description="Memory consolidation is active",
+                    command="",
+                    value=f"{semantic_count} semantic / {total_neurons} total",
+                )
+            )
+    except Exception:
+        logger.debug("Could not check consolidation status", exc_info=True)
+
+    # ── 5. Review Queue ─────────────────────────────────
+    try:
+        due_reviews = await storage.get_due_reviews(limit=100)
+        due_count = len(due_reviews)
+        if due_count > 0:
+            items.append(
+                ConfigStatusItem(
+                    key="review_queue",
+                    label="Review Queue",
+                    status="info",
+                    description=f"{due_count} memories due for spaced repetition review",
+                    command='nmem_review(action="queue")',
+                    value=f"{due_count} pending",
+                )
+            )
+        else:
+            items.append(
+                ConfigStatusItem(
+                    key="review_queue",
+                    label="Review Queue",
+                    status="configured",
+                    description="No memories pending review",
+                    command="",
+                    value="0 pending",
+                )
+            )
+    except Exception:
+        logger.debug("Could not check review queue", exc_info=True)
+
+    # ── 6. Orphan Rate ──────────────────────────────────
+    try:
+        from neural_memory.engine.diagnostics import DiagnosticsEngine
+
+        brain_name = cfg.current_brain
+        diag = DiagnosticsEngine(storage)
+        report = await diag.analyze(brain_name)
+        orphan_pct = round(report.orphan_rate * 100, 1)
+
+        if report.orphan_rate > 0.20:
+            items.append(
+                ConfigStatusItem(
+                    key="orphan_rate",
+                    label="Orphan Neurons",
+                    status="warning",
+                    description=(
+                        f"{orphan_pct}% orphan rate — prune disconnected neurons"
+                    ),
+                    command="nmem consolidate --strategy prune",
+                    value=f"{orphan_pct}%",
+                )
+            )
+        else:
+            items.append(
+                ConfigStatusItem(
+                    key="orphan_rate",
+                    label="Orphan Neurons",
+                    status="configured",
+                    description=f"{orphan_pct}% orphan rate — within healthy range",
+                    command="",
+                    value=f"{orphan_pct}%",
+                )
+            )
+    except Exception:
+        logger.debug("Could not check orphan rate", exc_info=True)
+
+    return ConfigStatusResponse(items=items)
+
+
 @router.get("/tool-stats")
 async def tool_stats(
     storage: Annotated[NeuralStorage, Depends(get_storage)],

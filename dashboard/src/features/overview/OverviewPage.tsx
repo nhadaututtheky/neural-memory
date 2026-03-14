@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Brain, Zap, Link2, Layers, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
+import QuickActionsCard from "./QuickActionsCard"
 
 function KpiCard({
   label,
@@ -101,6 +102,9 @@ export default function OverviewPage() {
           loading={statsLoading}
         />
       </div>
+
+      {/* Quick Actions */}
+      <QuickActionsCard />
 
       {/* Brain List */}
       <Card>

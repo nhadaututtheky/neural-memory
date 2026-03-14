@@ -309,3 +309,17 @@ export interface ToolStatsResponse {
   summary: ToolStatsSummary
   daily: ToolDailyEntry[]
 }
+
+// GET /api/dashboard/config-status
+export interface ConfigStatusItem {
+  key: string
+  label: string
+  status: "configured" | "not_configured" | "warning" | "info"
+  description: string
+  command: string
+  value: string
+}
+
+export interface ConfigStatusResponse {
+  items: ConfigStatusItem[]
+}
