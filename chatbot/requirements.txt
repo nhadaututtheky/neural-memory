@@ -1,2 +1,2 @@
 gradio>=4.0.0
-neural-memory>=4.1.0
+neural-memory>=4.6.0
