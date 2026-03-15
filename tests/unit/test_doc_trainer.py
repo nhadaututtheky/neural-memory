@@ -394,6 +394,46 @@ class TestDocTrainer:
             assert call_kwargs.get("salience_ceiling") == 0.5
 
     @pytest.mark.asyncio
+    async def test_frontmatter_tags_and_labels_applied_to_training(
+        self, mock_storage: AsyncMock, mock_config: MagicMock, tmp_path: Path
+    ) -> None:
+        """Generated nm_tags and nm_labels flow into encoder tags and metadata."""
+        md = (
+            "---\n"
+            "title: Cache Guide\n"
+            "nm_tags: cache, parser, sync-worker\n"
+            "nm_labels: concepts, procedures, trainer-ready\n"
+            "---\n\n"
+            "# Cache Guide\n\n"
+            + " ".join(["cache parser worker guide content word"] * 8)
+        )
+        (tmp_path / "test.md").write_text(md, encoding="utf-8")
+
+        trainer = DocTrainer(mock_storage, mock_config)
+        encode_calls: list[dict[str, object]] = []
+        original_encode = trainer._encoder.encode
+
+        async def capture_encode(*args: object, **kwargs: object) -> object:
+            encode_calls.append(dict(kwargs))
+            return await original_encode(*args, **kwargs)
+
+        with (
+            patch.object(trainer._encoder, "encode", side_effect=capture_encode),
+            patch.object(trainer, "_run_enrichment", return_value=0),
+        ):
+            await trainer.train_file(tmp_path / "test.md")
+
+        assert len(encode_calls) >= 1
+        first_call = encode_calls[0]
+        tags = first_call.get("tags")
+        metadata = first_call.get("metadata")
+        assert isinstance(tags, set)
+        assert {"cache", "parser", "sync-worker"} <= tags
+        assert {"label:concepts", "label:procedures", "label:trainer-ready"} <= tags
+        assert isinstance(metadata, dict)
+        assert metadata.get("doc_labels") == ["concepts", "procedures", "trainer-ready"]
+
+    @pytest.mark.asyncio
     async def test_custom_extensions(
         self, mock_storage: AsyncMock, mock_config: MagicMock, tmp_path: Path
     ) -> None:
