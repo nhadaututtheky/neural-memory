@@ -30,14 +30,15 @@ class PostgresNeuronMixin(PostgresBaseMixin):
         if existing:
             raise ValueError(f"Neuron {neuron.id} already exists")
 
+        embedding = neuron.metadata.get("_embedding")
         meta = {k: v for k, v in neuron.metadata.items() if k != "_embedding"}
         meta_json = json.dumps(meta)
         created = neuron.created_at
 
         await self._query(
             """INSERT INTO neurons
-               (id, brain_id, type, content, metadata, content_hash, created_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)""",
+               (id, brain_id, type, content, metadata, content_hash, created_at, embedding)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)""",
             neuron.id,
             brain_id,
             neuron.type.value,
@@ -45,6 +46,7 @@ class PostgresNeuronMixin(PostgresBaseMixin):
             meta_json,
             neuron.content_hash,
             created,
+            embedding,
         )
 
         # Init neuron state
@@ -169,14 +171,17 @@ class PostgresNeuronMixin(PostgresBaseMixin):
 
     async def update_neuron(self, neuron: Neuron) -> None:
         brain_id = self._get_brain_id()
+        embedding = neuron.metadata.get("_embedding")
         meta = {k: v for k, v in neuron.metadata.items() if k != "_embedding"}
         r = await self._query(
-            """UPDATE neurons SET type = $1, content = $2, metadata = $3, content_hash = $4
-               WHERE brain_id = $5 AND id = $6""",
+            """UPDATE neurons SET type = $1, content = $2, metadata = $3, content_hash = $4,
+               embedding = $5
+               WHERE brain_id = $6 AND id = $7""",
             neuron.type.value,
             neuron.content,
             json.dumps(meta),
             neuron.content_hash,
+            embedding,
             brain_id,
             neuron.id,
         )

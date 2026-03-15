@@ -28,6 +28,20 @@ class PostgreSQLStorage(
 ):
     """PostgreSQL-backed storage with pgvector for embeddings and tsvector for FTS.
 
+    Supported operations:
+        Core CRUD — neurons, synapses, fibers, brains, typed memories
+        Vector search — pgvector cosine similarity via find_neurons_by_embedding()
+        Full-text search — tsvector via find_neurons(content_contains=...)
+        Graph traversal — get_neighbors(), get_path()
+        Import/export — export_brain(), import_brain()
+
+    Not yet implemented (requires SQLite backend):
+        Cognitive tools (nmem_hypothesize, nmem_schema, nmem_reflect)
+        Sync engine (nmem_sync, incremental merge)
+        Review & source registry (nmem_review, nmem_source)
+        Hooks (pre_compact, post_tool_use)
+        Calibration, drift detection, priming
+
     Usage:
         storage = PostgreSQLStorage(
             host="localhost", port=5432, database="neuralmemory",
