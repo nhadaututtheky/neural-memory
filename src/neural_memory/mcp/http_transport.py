@@ -78,12 +78,14 @@ async def run_http_server(port: int = 8765, host: str = "127.0.0.1") -> None:
         """Handle MCP JSON-RPC requests over HTTP POST."""
         if request.method == "GET":
             # Health check / info
-            return JSONResponse({
-                "status": "ok",
-                "server": "neural-memory-mcp",
-                "transport": "streamable-http",
-                "hint": "POST JSON-RPC messages to this endpoint",
-            })
+            return JSONResponse(
+                {
+                    "status": "ok",
+                    "server": "neural-memory-mcp",
+                    "transport": "streamable-http",
+                    "hint": "POST JSON-RPC messages to this endpoint",
+                }
+            )
 
         # POST — JSON-RPC message
         body = await request.body()
