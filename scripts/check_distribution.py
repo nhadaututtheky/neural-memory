@@ -79,7 +79,10 @@ class ChannelResult:
 
 
 def _run(cmd: list[str], timeout: int = 15) -> tuple[int, str, str]:
-    """Run a subprocess, return (returncode, stdout, stderr)."""
+    """Run a subprocess, return (returncode, stdout, stderr).
+
+    Uses shell=True on Windows so that npm/clawdhub/.cmd executables are found.
+    """
     try:
         result = subprocess.run(
             cmd,
@@ -87,6 +90,7 @@ def _run(cmd: list[str], timeout: int = 15) -> tuple[int, str, str]:
             text=True,
             timeout=timeout,
             cwd=str(ROOT),
+            shell=(sys.platform == "win32"),
         )
         return result.returncode, result.stdout.strip(), result.stderr.strip()
     except subprocess.TimeoutExpired:
@@ -274,7 +278,12 @@ def check_clawhub() -> ChannelResult:
     if code == 0 and stdout:
         try:
             data = json.loads(stdout)
-            version = data.get("version") or data.get("info", {}).get("version")
+            version = (
+                data.get("version")
+                or data.get("latestVersion", {}).get("version")
+                or data.get("skill", {}).get("tags", {}).get("latest")
+                or data.get("info", {}).get("version")
+            )
             if version:
                 return ChannelResult("ClawHub", str(version), STATUS_OK)
             return ChannelResult("ClawHub", None, STATUS_WARN, "version key missing in response")
@@ -436,11 +445,17 @@ def main() -> int:
     all_results.append(check_clawhub())
     all_results.append(check_github_release())
 
+    # Channels with independent versioning — don't compare against canonical
+    _INDEPENDENT_VERSION_CHANNELS = {"npm", "VS Code Marketplace", "Open VSX"}
+
     # Step 3: Classify each result against canonical version
     for r in all_results:
         if r.status == STATUS_WARN:
             continue  # already marked as warn (check failed)
-        if r.version == local_version:
+        if r.name in _INDEPENDENT_VERSION_CHANNELS:
+            r.status = STATUS_OK  # own versioning, not compared to Python package
+            r.detail = "independent version"
+        elif r.version == local_version:
             r.status = STATUS_OK
         else:
             r.status = STATUS_MISMATCH
