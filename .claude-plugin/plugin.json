@@ -1,7 +1,7 @@
 {
   "name": "neural-memory",
   "version": "4.6.0",
-  "description": "Reflex-based memory system for AI agents — stores experiences as interconnected neurons and recalls them through spreading activation, mimicking how the human brain works.",
+  "description": "Reflex-based memory system for AI agents \u2014 stores experiences as interconnected neurons and recalls them through spreading activation, mimicking how the human brain works.",
   "author": {
     "name": "NeuralMemory Contributors"
   },
@@ -20,12 +20,16 @@
     "persistence",
     "associative"
   ],
-  "skills": "../skills",
+  "skills": "./skills",
   "hooks": "./hooks/hooks.json",
   "mcpServers": {
     "neural-memory": {
       "command": "uvx",
-      "args": ["--from", "neural-memory", "nmem-mcp"]
+      "args": [
+        "--from",
+        "neural-memory",
+        "nmem-mcp"
+      ]
     }
   }
 }
