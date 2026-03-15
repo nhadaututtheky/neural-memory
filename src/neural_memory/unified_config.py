@@ -590,7 +590,7 @@ def _sanitize_sync_id(value: str) -> str:
     return cleaned
 
 
-_VALID_STORAGE_BACKENDS = {"sqlite", "falkordb"}
+_VALID_STORAGE_BACKENDS = {"sqlite", "falkordb", "postgres"}
 
 
 def _validate_storage_backend(value: str) -> str:
@@ -644,6 +644,62 @@ class FalkorDBConfig:
             username=username,
             password=password,
         )
+
+
+@dataclass(frozen=True)
+class PostgresConfig:
+    """PostgreSQL + pgvector storage backend configuration."""
+
+    host: str = "localhost"
+    port: int = 5432
+    database: str = "neuralmemory"
+    user: str = "postgres"
+    password: str = ""
+    embedding_dim: int = 384
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "host": self.host,
+            "port": self.port,
+            "database": self.database,
+            "user": self.user,
+            "password": "***" if self.password else "",
+            "embedding_dim": self.embedding_dim,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> PostgresConfig:
+        host = str(
+            os.environ.get("NEURAL_MEMORY_POSTGRES_HOST")
+            or data.get("host", "localhost")
+        )[:256]
+        try:
+            port_raw = (
+                os.environ.get("NEURAL_MEMORY_POSTGRES_PORT") or data.get("port", 5432)
+            )
+            port = max(1, min(int(port_raw), 65535))
+        except (ValueError, TypeError):
+            port = 5432
+        database = str(
+            os.environ.get("NEURAL_MEMORY_POSTGRES_DATABASE")
+            or data.get("database", "neuralmemory")
+        )[:128]
+        user = str(
+            os.environ.get("NEURAL_MEMORY_POSTGRES_USER")
+            or data.get("user", "postgres")
+        )[:128]
+        password_env = os.environ.get("NEURAL_MEMORY_POSTGRES_PASSWORD")
+        password_file = data.get("password", "")
+        if not password_env and password_file:
+            logger.warning(
+                "PostgreSQL password read from config.toml — prefer NEURAL_MEMORY_POSTGRES_PASSWORD env var"
+            )
+        password = str(password_env or password_file)[:256]
+        try:
+            embedding_dim = max(1, int(data.get("embedding_dim", 384)))
+        except (ValueError, TypeError):
+            embedding_dim = 384
+        return cls(host=host, port=port, database=database, user=user, password=password, embedding_dim=embedding_dim)
 
 
 @dataclass(frozen=True)
@@ -823,6 +879,9 @@ class UnifiedConfig:
     # FalkorDB config (used when storage_backend == "falkordb")
     falkordb: FalkorDBConfig = field(default_factory=FalkorDBConfig)
 
+    # PostgreSQL config (used when storage_backend == "postgres")
+    postgres: PostgresConfig = field(default_factory=PostgresConfig)
+
     # CLI preferences
     json_output: bool = False
     default_depth: int | None = None
@@ -894,6 +953,7 @@ class UnifiedConfig:
             sync=SyncConfig.from_dict(sync_data),
             storage_backend=_validate_storage_backend(str(data.get("storage_backend", "sqlite"))),
             falkordb=FalkorDBConfig.from_dict(data.get("falkordb", {})),
+            postgres=PostgresConfig.from_dict(data.get("postgres", {})),
             json_output=data.get("cli", {}).get("json_output", False),
             default_depth=data.get("cli", {}).get("default_depth"),
             default_max_tokens=data.get("cli", {}).get("default_max_tokens", 500),
@@ -1046,6 +1106,14 @@ class UnifiedConfig:
             f'username = "{_sanitize_toml_str(self.falkordb.username)}"',
             "# Password omitted for security — use env NEURAL_MEMORY_FALKORDB_PASSWORD",
             'password = ""',
+            "",
+            '# PostgreSQL settings (when storage_backend = "postgres")',
+            "[postgres]",
+            f'host = "{_sanitize_toml_str(self.postgres.host)}"',
+            f"port = {self.postgres.port}",
+            f'database = "{_sanitize_toml_str(self.postgres.database)}"',
+            f'user = "{_sanitize_toml_str(self.postgres.user)}"',
+            'password = ""  # Use env NEURAL_MEMORY_POSTGRES_PASSWORD',
             "",
             "# Telegram backup integration",
             "# Bot token: set NMEM_TELEGRAM_BOT_TOKEN env var (never stored here)",
@@ -1321,6 +1389,10 @@ async def get_shared_storage(brain_name: str | None = None) -> NeuralStorage:
     if config.storage_backend == "falkordb":
         return await _get_falkordb_storage(config, name)
 
+    # PostgreSQL backend
+    if config.storage_backend == "postgres":
+        return await _get_postgres_storage(config, name)
+
     # Default: SQLite backend
     return await _get_sqlite_storage(config, name, brain_name)
 
@@ -1445,4 +1517,92 @@ async def _get_falkordb_storage(config: UnifiedConfig, name: str) -> NeuralStora
 
     storage.set_brain(brain.id)
     _falkordb_storage = storage
+    return storage
+
+
+# Cached PostgreSQL storage (single pool, multi-brain)
+_postgres_storage: NeuralStorage | None = None
+
+
+async def _get_postgres_storage(config: UnifiedConfig, name: str) -> NeuralStorage:
+    """Create or return cached PostgreSQLStorage."""
+    global _postgres_storage
+
+    from neural_memory.core.brain import Brain
+    from neural_memory.storage.postgres.postgres_store import PostgreSQLStorage
+
+    if _postgres_storage is not None:
+        # Verify the pool is still alive before reusing
+        pool = getattr(_postgres_storage, "_pool", None)
+        if pool is None or pool.is_closing():
+            logger.warning("PostgreSQL connection pool closed, reconnecting")
+            _postgres_storage = None
+        else:
+            try:
+                async with pool.acquire() as conn:
+                    await conn.execute("SELECT 1")
+            except Exception:
+                logger.warning("PostgreSQL connection lost, reconnecting")
+                _postgres_storage = None
+
+    if _postgres_storage is not None:
+        brain = await _postgres_storage.get_brain(name)
+        if brain is None:
+            brain = await _postgres_storage.find_brain_by_name(name)
+        if brain is None:
+            from neural_memory.core.brain import BrainConfig
+
+            brain_config = BrainConfig(
+                decay_rate=config.brain.decay_rate,
+                reinforcement_delta=config.brain.reinforcement_delta,
+                activation_threshold=config.brain.activation_threshold,
+                max_spread_hops=config.brain.max_spread_hops,
+                max_context_tokens=config.brain.max_context_tokens,
+                freshness_weight=config.brain.freshness_weight,
+                embedding_enabled=config.embedding.enabled,
+                embedding_provider=config.embedding.provider,
+                embedding_model=config.embedding.model,
+                embedding_similarity_threshold=config.embedding.similarity_threshold,
+            )
+            brain = Brain.create(name=name, config=brain_config, brain_id=name)
+            await _postgres_storage.save_brain(brain)
+        _postgres_storage.set_brain(brain.id)
+        return _postgres_storage
+
+    pg = config.postgres
+    storage = PostgreSQLStorage(
+        host=pg.host,
+        port=pg.port,
+        database=pg.database,
+        user=pg.user,
+        password=pg.password,
+        embedding_dim=pg.embedding_dim,
+    )
+    await storage.initialize()
+
+    storage.set_brain(name)
+    brain = await storage.get_brain(name)
+    if brain is None:
+        brain = await storage.find_brain_by_name(name)
+
+    if brain is None:
+        from neural_memory.core.brain import BrainConfig
+
+        brain_config = BrainConfig(
+            decay_rate=config.brain.decay_rate,
+            reinforcement_delta=config.brain.reinforcement_delta,
+            activation_threshold=config.brain.activation_threshold,
+            max_spread_hops=config.brain.max_spread_hops,
+            max_context_tokens=config.brain.max_context_tokens,
+            freshness_weight=config.brain.freshness_weight,
+            embedding_enabled=config.embedding.enabled,
+            embedding_provider=config.embedding.provider,
+            embedding_model=config.embedding.model,
+            embedding_similarity_threshold=config.embedding.similarity_threshold,
+        )
+        brain = Brain.create(name=name, config=brain_config, brain_id=name)
+        await storage.save_brain(brain)
+
+    storage.set_brain(brain.id)
+    _postgres_storage = storage
     return storage

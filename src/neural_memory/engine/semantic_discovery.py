@@ -19,7 +19,7 @@ import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from neural_memory.core.neuron import NeuronType
+from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
 
 if TYPE_CHECKING:
@@ -185,13 +185,22 @@ async def discover_semantic_synapses(
         logger.debug("Embedding provider unavailable — skipping semantic discovery")
         return SemanticDiscoveryResult()
 
-    # Fetch CONCEPT and ENTITY neurons
-    all_neurons = await storage.find_neurons(limit=100000)
-    eligible = [
-        n
-        for n in all_neurons
-        if n.type in (NeuronType.CONCEPT, NeuronType.ENTITY) and n.content.strip()
-    ]
+    # Paginate through all neurons to collect CONCEPT+ENTITY (avoid OOM)
+    batch_size = 5000
+    offset = 0
+    eligible: list[Neuron] = []
+    while True:
+        batch = await storage.find_neurons(limit=batch_size, offset=offset)
+        if not batch:
+            break
+        eligible.extend(
+            n
+            for n in batch
+            if n.type in (NeuronType.CONCEPT, NeuronType.ENTITY) and n.content.strip()
+        )
+        offset += len(batch)
+        if len(batch) < batch_size:
+            break
 
     if len(eligible) < 2:
         return SemanticDiscoveryResult()

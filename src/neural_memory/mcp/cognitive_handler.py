@@ -957,7 +957,6 @@ class CognitiveHandler:
 
     async def _cognitive_refresh(self, storage: NeuralStorage) -> dict[str, Any]:
         """Recompute the hot index from current cognitive state."""
-        import asyncio
         from datetime import datetime
 
         from neural_memory.engine.cognitive import (
@@ -978,13 +977,12 @@ class CognitiveHandler:
             all_neuron_ids = [h["neuron_id"] for h in hypotheses] + [
                 p["neuron_id"] for p in predictions
             ]
-            neurons = await asyncio.gather(*(storage.get_neuron(nid) for nid in all_neuron_ids))
-            neuron_map = dict(zip(all_neuron_ids, neurons, strict=True))
+            neurons_map = await storage.get_neurons_batch(all_neuron_ids)
 
             scored_items: list[dict[str, Any]] = []
 
             for hyp in hypotheses:
-                neuron = neuron_map.get(hyp["neuron_id"])
+                neuron = neurons_map.get(hyp["neuron_id"])
                 content = neuron.content if neuron else ""
 
                 try:
@@ -1006,7 +1004,7 @@ class CognitiveHandler:
                 )
 
             for pred in predictions:
-                neuron = neuron_map.get(pred["neuron_id"])
+                neuron = neurons_map.get(pred["neuron_id"])
                 content = neuron.content if neuron else ""
 
                 try:

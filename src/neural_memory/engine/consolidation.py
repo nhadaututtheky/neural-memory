@@ -447,12 +447,21 @@ class ConsolidationEngine:
         for fiber in fibers:
             fiber_neuron_ids.update(fiber.neuron_ids)
 
-        all_neurons = await self._storage.find_neurons(limit=100000)
+        # Paginate through all neurons to avoid OOM (batch 5k)
+        batch_size = 5000
+        offset = 0
         orphan_ids: list[str] = []
-        for neuron in all_neurons:
-            if neuron.id not in connected_neuron_ids and neuron.id not in fiber_neuron_ids:
-                report.neurons_pruned += 1
-                orphan_ids.append(neuron.id)
+        while True:
+            batch = await self._storage.find_neurons(limit=batch_size, offset=offset)
+            if not batch:
+                break
+            for neuron in batch:
+                if neuron.id not in connected_neuron_ids and neuron.id not in fiber_neuron_ids:
+                    report.neurons_pruned += 1
+                    orphan_ids.append(neuron.id)
+            offset += len(batch)
+            if len(batch) < batch_size:
+                break
 
         if not dry_run and orphan_ids:
             # Use batch delete if available, else fall back to individual deletes
@@ -1119,9 +1128,18 @@ class ConsolidationEngine:
         if not brain_id:
             return
 
-        # Fetch all anchor neurons
-        all_neurons = await self._storage.find_neurons(limit=100000)
-        anchors = [n for n in all_neurons if n.metadata.get("is_anchor", False)]
+        # Paginate through all neurons to collect anchors (avoid OOM)
+        batch_size = 5000
+        offset = 0
+        anchors: list[Neuron] = []
+        while True:
+            batch = await self._storage.find_neurons(limit=batch_size, offset=offset)
+            if not batch:
+                break
+            anchors.extend(n for n in batch if n.metadata.get("is_anchor", False))
+            offset += len(batch)
+            if len(batch) < batch_size:
+                break
 
         if len(anchors) < 2:
             return

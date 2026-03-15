@@ -131,6 +131,7 @@ class NeuralStorage(ABC):
         content_exact: str | None = None,
         time_range: tuple[datetime, datetime] | None = None,
         limit: int = 100,
+        offset: int = 0,
     ) -> list[Neuron]:
         """
         Find neurons matching criteria.
@@ -141,6 +142,7 @@ class NeuralStorage(ABC):
             content_exact: Filter by exact content match
             time_range: Filter by created_at within range
             limit: Maximum results to return
+            offset: Number of rows to skip (for pagination)
 
         Returns:
             List of matching neurons
@@ -211,6 +213,18 @@ class NeuralStorage(ABC):
             state: The state to save
         """
         ...
+
+    async def update_neuron_states_batch(self, states: list[NeuronState]) -> None:
+        """Update multiple neuron states in one batch operation.
+
+        Default implementation falls back to sequential update_neuron_state.
+        Backends should override for batch efficiency.
+
+        Args:
+            states: List of neuron states to update
+        """
+        for s in states:
+            await self.update_neuron_state(s)
 
     async def get_all_neuron_states(self) -> list[NeuronState]:
         """Get all neuron states for the current brain.
@@ -304,6 +318,18 @@ class NeuralStorage(ABC):
             ValueError: If synapse doesn't exist
         """
         ...
+
+    async def update_synapses_batch(self, synapses: list[Synapse]) -> None:
+        """Update multiple synapses in one batch operation.
+
+        Default implementation falls back to sequential update_synapse.
+        Backends should override for batch efficiency.
+
+        Args:
+            synapses: List of synapses to update
+        """
+        for syn in synapses:
+            await self.update_synapse(syn)
 
     @abstractmethod
     async def delete_synapse(self, synapse_id: str) -> bool:

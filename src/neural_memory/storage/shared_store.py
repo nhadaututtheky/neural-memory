@@ -194,9 +194,10 @@ class SharedStorage(SharedFiberBrainMixin, NeuralStorage):
         content_exact: str | None = None,
         time_range: tuple[datetime, datetime] | None = None,
         limit: int = 100,
+        offset: int = 0,
     ) -> list[Neuron]:
         """Find neurons matching criteria."""
-        params: dict[str, Any] = {"limit": limit}
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
         if type:
             params["type"] = type.value
         if content_contains:

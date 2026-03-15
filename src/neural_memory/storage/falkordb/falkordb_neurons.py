@@ -121,8 +121,10 @@ class FalkorDBNeuronMixin(FalkorDBBaseMixin):
         content_exact: str | None = None,
         time_range: tuple[datetime, datetime] | None = None,
         limit: int = 100,
+        offset: int = 0,
     ) -> list[Neuron]:
-        limit = min(limit, 1000)
+        full_scan = content_contains is None and content_exact is None
+        limit = min(limit, 10000 if full_scan else 1000)
 
         # FTS path for content_contains
         if content_contains and not content_exact:
@@ -157,10 +159,11 @@ class FalkorDBNeuronMixin(FalkorDBBaseMixin):
             WHERE {where}
             RETURN n.id, n.type, n.content, n.metadata,
                    n.content_hash, n.created_at
-            ORDER BY n.created_at DESC
+            ORDER BY n.id
+            SKIP $offset
             LIMIT $limit
             """,
-            {**params, "limit": limit},
+            {**params, "limit": limit, "offset": offset},
         )
         return [self._row_to_neuron(r) for r in rows]
 
