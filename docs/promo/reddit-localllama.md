@@ -29,8 +29,8 @@ This gives you multi-hop reasoning for free. "Why did the outage happen?" traces
 - **Retrieval**: Spreading activation with configurable decay, threshold, and max hops
 - **Consolidation**: Memory lifecycle — decay, reinforcement, pruning of orphan nodes
 - **Extraction**: Entity/keyword/temporal extraction, Vietnamese NLP support
-- **MCP server**: 39 tools (incl. cognitive reasoning), stdio transport, works with Claude Code, Cursor, etc.
-- **Tests**: 3,500+, 67% coverage, CI with mypy + ruff + pytest
+- **MCP server**: 45 tools (incl. cognitive reasoning), stdio + HTTP transport, works with Claude Code, Cursor, etc.
+- **Tests**: 3,976+, 67% coverage, CI with mypy + ruff + pytest
 
 ## What makes it interesting for local LLM users
 

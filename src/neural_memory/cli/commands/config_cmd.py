@@ -101,7 +101,7 @@ def tier_cmd(
     Tiers control which tools are exposed in tools/list:
       minimal  — 4 core tools (~84% token savings)
       standard — 8 tools (~69% savings)
-      full     — all 23 tools (default)
+      full     — all 45 tools (default)
 
     Hidden tools remain callable — only schema exposure changes.
 

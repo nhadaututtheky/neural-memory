@@ -107,7 +107,7 @@ ReflexPipeline (spreading activation → ranked results)
 Context Output (injectable into any LLM)
 ```
 
-Everything is async Python. Storage is pluggable (SQLite default, in-memory for testing). The MCP server exposes 20 tools that any AI assistant can call.
+Everything is async Python. Storage is pluggable (SQLite default, in-memory for testing). The MCP server exposes 45 tools that any AI assistant can call.
 
 ### Numbers
 

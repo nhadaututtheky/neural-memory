@@ -12,7 +12,7 @@
 
 NeuralMemory stores experiences as interconnected neurons and recalls them through spreading activation, mimicking how the human brain works. Instead of searching a database, memories surface through associative recall — activating related concepts until the relevant memory emerges.
 
-**44 MCP tools** · **14 memory types** · **24 synapse types** · **Schema v26** · **3810+ tests** · **Cognitive reasoning layer**
+**45 MCP tools** · **14 memory types** · **24 synapse types** · **Schema v27** · **3976+ tests** · **Cognitive reasoning layer**
 
 ## Why Not RAG / Vector Search?
 
@@ -188,9 +188,9 @@ asyncio.run(main())
 
 ### MCP Tools (Claude Code / Cursor)
 
-**3 tools you need. 41 the agent handles automatically.**
+**3 tools you need. 42 the agent handles automatically.**
 
-Once configured, 44 tools are available — but you only need to know three:
+Once configured, 45 tools are available — but you only need to know three:
 
 | Tool | What You Do |
 |------|-------------|
@@ -198,10 +198,10 @@ Once configured, 44 tools are available — but you only need to know three:
 | `nmem_recall` | Ask the agent to recall — spreading activation surfaces related memories |
 | `nmem_health` | Check brain health — purity score, grade (A-F), actionable fix suggestions |
 
-Everything else works transparently. The agent auto-manages sessions, context loading, habit tracking, and memory maintenance through the remaining 41 tools.
+Everything else works transparently. The agent auto-manages sessions, context loading, habit tracking, and memory maintenance through the remaining 42 tools.
 
 <details>
-<summary><b>All 44 tools</b> (click to expand)</summary>
+<summary><b>All 45 tools</b> (click to expand)</summary>
 
 **Core Memory** — Remember, recall, edit, forget
 
