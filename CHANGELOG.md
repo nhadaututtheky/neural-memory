@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.7.0] - 2026-03-16
+
 ### Added
 
 - **PostgreSQL + pgvector backend** — Full async storage backend via `asyncpg` with vector similarity search. Supports neurons, synapses, fibers, brains, typed queries. Docker Compose included. Contributed by @zsecducna (#56)
