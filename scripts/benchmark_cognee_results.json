@@ -1,0 +1,82 @@
+{
+  "benchmark": "NeuralMemory vs Cognee",
+  "cognee_version": "0.5.5",
+  "nm_version": "4.7.0",
+  "cognee_available": true,
+  "nm_total_api_calls": 0,
+  "cognee_total_api_calls": 149,
+  "results": [
+    {
+      "operation": "Write Speed (50 memories)",
+      "nm_time_s": 3.6221930000465363,
+      "cognee_time_s": 290.6273254000116,
+      "nm_error": null,
+      "cognee_error": null,
+      "nm_api_calls": 0,
+      "cognee_api_calls": 100,
+      "nm_accuracy": null,
+      "cognee_accuracy": null,
+      "notes": ""
+    },
+    {
+      "operation": "Read Speed (20 queries)",
+      "nm_time_s": 1.878847100015264,
+      "cognee_time_s": 34.562854400021024,
+      "nm_error": null,
+      "cognee_error": null,
+      "nm_api_calls": 0,
+      "cognee_api_calls": 20,
+      "nm_accuracy": null,
+      "cognee_accuracy": null,
+      "notes": ""
+    },
+    {
+      "operation": "Accuracy (Jaccard vs expected)",
+      "nm_time_s": null,
+      "cognee_time_s": null,
+      "nm_error": null,
+      "cognee_error": null,
+      "nm_api_calls": 0,
+      "cognee_api_calls": 0,
+      "nm_accuracy": 0.14145828608096409,
+      "cognee_accuracy": 0.18004246991398692,
+      "notes": ""
+    },
+    {
+      "operation": "Multi-hop Reasoning (5 queries)",
+      "nm_time_s": null,
+      "cognee_time_s": null,
+      "nm_error": null,
+      "cognee_error": null,
+      "nm_api_calls": 0,
+      "cognee_api_calls": 0,
+      "nm_accuracy": 0.41666666666666663,
+      "cognee_accuracy": 0.6333333333333333,
+      "notes": ""
+    },
+    {
+      "operation": "Memory Cost (API calls)",
+      "nm_time_s": null,
+      "cognee_time_s": null,
+      "nm_error": null,
+      "cognee_error": null,
+      "nm_api_calls": 0,
+      "cognee_api_calls": 120,
+      "nm_accuracy": null,
+      "cognee_accuracy": null,
+      "notes": "Cognee calls LLM for cognify() + search(). NM uses zero LLM calls."
+    },
+    {
+      "operation": "Conversation Context (10 turns + 5 recalls)",
+      "nm_time_s": 1.8460293999523856,
+      "cognee_time_s": 88.77916369994637,
+      "nm_error": null,
+      "cognee_error": null,
+      "nm_api_calls": 0,
+      "cognee_api_calls": 0,
+      "nm_accuracy": 0.17406593406593407,
+      "cognee_accuracy": 0.24800221708116443,
+      "notes": ""
+    }
+  ]
+}

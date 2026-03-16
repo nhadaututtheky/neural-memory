@@ -1,7 +1,7 @@
 # Benchmarks
 
 
-Last updated: **2026-03-15**
+Last updated: **2026-03-16**
 
 
 ## NeuralMemory vs Mem0 — Competitive Benchmark
@@ -61,6 +61,67 @@ The tradeoff: Mem0 can leverage LLM intelligence for memory extraction (useful w
 ```bash
 pip install mem0ai sentence-transformers
 DASHSCOPE_API_KEY=your-key python scripts/benchmark_mem0_vs_nm.py
+```
+
+---
+
+## NeuralMemory vs Cognee — Competitive Benchmark
+
+Head-to-head comparison using the same test suite: 50 diverse memories, 20 recall queries, multi-hop reasoning, and conversation context.
+
+!!! info "Test Setup"
+    - **NeuralMemory v4.7.0**: SQLiteStorage, spreading activation, zero external APIs
+    - **Cognee v0.5.5**: KuzuDB graph + LanceDB vectors + fastembed embeddings, Qwen LLM via DashScope for cognify/search
+    - **Platform**: Windows 11, Python 3.12, single-threaded async
+    - **Script**: `scripts/benchmark_cognee_vs_nm.py`
+
+### Speed
+
+| Operation | NeuralMemory | Cognee | Speedup |
+|-----------|:------------:|:------:|:-------:|
+| **Write 50 memories** | **3.62s** | 290.63s | **80x faster** |
+| **Read 20 queries** | **1.88s** | 34.56s | **18x faster** |
+| **Conversation (10 turns + 5 recalls)** | **1.85s** | 88.78s | **48x faster** |
+
+Cognee's write bottleneck: every `add()` + `cognify()` cycle triggers multiple LLM calls for entity extraction, relationship mining, and knowledge graph construction. NeuralMemory encodes directly into neural structures — no LLM needed.
+
+### Accuracy
+
+| Metric | NeuralMemory | Cognee | Winner |
+|--------|:------------:|:------:|:------:|
+| **Semantic accuracy** (Jaccard) | 0.141 | 0.180 | Cognee |
+| **Multi-hop reasoning** (keyword coverage) | 0.417 | 0.633 | Cognee |
+| **Conversation context** | 0.174 | 0.248 | Cognee |
+
+Cognee's LLM-powered knowledge graph produces richer semantic connections — entity extraction creates explicit relationships that improve multi-hop reasoning. The accuracy gap comes at significant cost in speed and API usage.
+
+### Cost
+
+| Metric | NeuralMemory | Cognee |
+|--------|:------------:|:------:|
+| **External API calls** | **0** | **149** |
+| **LLM calls per add()+cognify()** | 0 | ~2 |
+| **LLM calls per search()** | 0 | 1 |
+| **Estimated cost at 10K ops/day** | **$0.00** | ~$5-15/day |
+
+Cognee requires LLM calls for both ingestion (entity extraction via `cognify()`) and retrieval (query parsing via `search()`). At scale, the cost compounds rapidly.
+
+### Verdict
+
+```
+NeuralMemory wins : 3 / 6 categories (speed × 3)
+Cognee wins       : 3 / 6 categories (accuracy × 3)
+```
+
+**The tradeoff is clear**: NeuralMemory dominates speed (80x write, 18x read, 48x conversation) and cost ($0 vs 149 API calls). Cognee wins on accuracy through LLM-powered knowledge graph construction — but at 80x the latency and significant per-operation cost.
+
+For real-time AI agent workflows where sub-second response matters, NeuralMemory is the clear choice. For offline knowledge base construction where accuracy is paramount and cost/latency are acceptable, Cognee's approach has merit.
+
+### Reproduce
+
+```bash
+pip install cognee neural-memory
+DASHSCOPE_API_KEY=your-key python scripts/benchmark_cognee_vs_nm.py
 ```
 
 ---

@@ -33,9 +33,11 @@ NeuralMemory stores experiences as interconnected neurons and recalls them throu
 - **RAG**: Returns "JWT caused outage" (missing *why* we used JWT)
 - **NeuralMemory**: Traces `outage ← CAUSED_BY ← JWT ← SUGGESTED_BY ← Alice` → full causal chain
 
-### Benchmarks: NeuralMemory vs Mem0
+### Benchmarks
 
-Real-world benchmark on 50 AI agent memories (decisions, errors, workflows, preferences):
+Real-world benchmarks on 50 AI agent memories (decisions, errors, workflows, preferences):
+
+**NeuralMemory vs Mem0 v1.0.3**
 
 | Metric | NeuralMemory | Mem0 | |
 |--------|:---:|:---:|---|
@@ -45,7 +47,17 @@ Real-world benchmark on 50 AI agent memories (decisions, errors, workflows, pref
 | **Accuracy** | 0.14 | 0.14 | Tie |
 | **API calls** | **0** | **70** | **$0 cost** |
 
-> NeuralMemory: zero LLM calls, zero API cost, 121x faster writes. [Full benchmarks →](docs/benchmarks.md)
+**NeuralMemory vs Cognee v0.5.5**
+
+| Metric | NeuralMemory | Cognee | |
+|--------|:---:|:---:|---|
+| **Write 50 memories** | 3.6s | 290.6s | **80x faster** |
+| **Read 20 queries** | 1.9s | 34.6s | **18x faster** |
+| **Multi-hop reasoning** | 0.42 | 0.63 | Cognee wins |
+| **Accuracy** | 0.14 | 0.18 | Cognee wins |
+| **API calls** | **0** | **149** | **$0 cost** |
+
+> NeuralMemory: zero LLM calls, zero API cost, up to 121x faster writes. Cognee trades speed for LLM-powered semantic richness. [Full benchmarks →](docs/benchmarks.md)
 
 ---
 
