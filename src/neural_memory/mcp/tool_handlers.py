@@ -743,7 +743,7 @@ class ToolHandler:
                 from neural_memory.engine.activation import SpreadingActivation
 
                 activator = SpreadingActivation(storage, brain.config)
-                activations = await activator.activate(
+                activations, _trace = await activator.activate(
                     anchor_neurons=[anchor_id],
                     max_hops=2,
                     min_activation=0.05,

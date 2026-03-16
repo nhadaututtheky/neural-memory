@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from neural_memory.engine.activation import ActivationTrace
 from neural_memory.mcp.server import MCPServer
 
 
@@ -132,15 +133,18 @@ class TestRelatedMemoryDiscovery:
             mock_encoder.return_value.encode = AsyncMock(return_value=encode_result)
             mock_activator = AsyncMock()
             mock_activator.activate = AsyncMock(
-                return_value={
-                    "anchor-new": _FakeActivationResult(
-                        neuron_id="anchor-new",
-                        activation_level=1.0,
-                        hop_distance=0,
-                        path=["anchor-new"],
-                        source_anchor="anchor-new",
-                    ),
-                }
+                return_value=(
+                    {
+                        "anchor-new": _FakeActivationResult(
+                            neuron_id="anchor-new",
+                            activation_level=1.0,
+                            hop_distance=0,
+                            path=["anchor-new"],
+                            source_anchor="anchor-new",
+                        ),
+                    },
+                    ActivationTrace(),
+                )
             )
             mock_activation.return_value = mock_activator
 
@@ -198,29 +202,32 @@ class TestRelatedMemoryDiscovery:
             mock_encoder.return_value.encode = AsyncMock(return_value=encode_result)
             mock_activator = AsyncMock()
             mock_activator.activate = AsyncMock(
-                return_value={
-                    "anchor-new": _FakeActivationResult(
-                        neuron_id="anchor-new",
-                        activation_level=1.0,
-                        hop_distance=0,
-                        path=["anchor-new"],
-                        source_anchor="anchor-new",
-                    ),
-                    "shared-entity": _FakeActivationResult(
-                        neuron_id="shared-entity",
-                        activation_level=0.5,
-                        hop_distance=1,
-                        path=["anchor-new", "shared-entity"],
-                        source_anchor="anchor-new",
-                    ),
-                    "anchor-related": _FakeActivationResult(
-                        neuron_id="anchor-related",
-                        activation_level=0.25,
-                        hop_distance=2,
-                        path=["anchor-new", "shared-entity", "anchor-related"],
-                        source_anchor="anchor-new",
-                    ),
-                }
+                return_value=(
+                    {
+                        "anchor-new": _FakeActivationResult(
+                            neuron_id="anchor-new",
+                            activation_level=1.0,
+                            hop_distance=0,
+                            path=["anchor-new"],
+                            source_anchor="anchor-new",
+                        ),
+                        "shared-entity": _FakeActivationResult(
+                            neuron_id="shared-entity",
+                            activation_level=0.5,
+                            hop_distance=1,
+                            path=["anchor-new", "shared-entity"],
+                            source_anchor="anchor-new",
+                        ),
+                        "anchor-related": _FakeActivationResult(
+                            neuron_id="anchor-related",
+                            activation_level=0.25,
+                            hop_distance=2,
+                            path=["anchor-new", "shared-entity", "anchor-related"],
+                            source_anchor="anchor-new",
+                        ),
+                    },
+                    ActivationTrace(),
+                )
             )
             mock_activation.return_value = mock_activator
 
@@ -337,7 +344,7 @@ class TestRelatedMemoryDiscovery:
         ):
             mock_encoder.return_value.encode = AsyncMock(return_value=encode_result)
             mock_activator = AsyncMock()
-            mock_activator.activate = AsyncMock(return_value=activations)
+            mock_activator.activate = AsyncMock(return_value=(activations, ActivationTrace()))
             mock_activation.return_value = mock_activator
 
             response = await server._remember({"content": "content"})

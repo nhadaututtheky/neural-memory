@@ -83,7 +83,7 @@ async def dream(
     activated_ids: set[str] = set()
     for neuron in seed_neurons:
         try:
-            results = await activation_engine.activate(
+            results, _trace = await activation_engine.activate(
                 anchor_neurons=[neuron.id],
                 max_hops=2,
             )

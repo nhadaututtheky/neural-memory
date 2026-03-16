@@ -72,7 +72,7 @@ class TestSpreadingActivation:
         """Test activation from a single anchor."""
         activator = SpreadingActivation(storage_with_graph, config)
 
-        results = await activator.activate(["a"])
+        results, _trace = await activator.activate(["a"])
 
         # Anchor should have full activation
         assert "a" in results
@@ -91,7 +91,7 @@ class TestSpreadingActivation:
         """Test that activation decays with distance."""
         activator = SpreadingActivation(storage_with_graph, config)
 
-        results = await activator.activate(["a"], max_hops=4)
+        results, _trace = await activator.activate(["a"], max_hops=4)
 
         # Each hop should have lower activation
         if "b" in results and "c" in results:
@@ -107,7 +107,7 @@ class TestSpreadingActivation:
         """Test that activation respects max_hops."""
         activator = SpreadingActivation(storage_with_graph, config)
 
-        results = await activator.activate(["a"], max_hops=1)
+        results, _trace = await activator.activate(["a"], max_hops=1)
 
         # Should only reach 1-hop neighbors
         assert "a" in results
@@ -126,7 +126,7 @@ class TestSpreadingActivation:
         """Test activation from multiple anchors."""
         activator = SpreadingActivation(storage_with_graph, config)
 
-        results = await activator.activate(["a", "d"])
+        results, _trace = await activator.activate(["a", "d"])
 
         # Both anchors should be activated
         assert "a" in results
@@ -154,7 +154,7 @@ class TestSpreadingActivation:
         """Test extracting subgraph from activations."""
         activator = SpreadingActivation(storage_with_graph, config)
 
-        activations = await activator.activate(["a"])
+        activations, _trace = await activator.activate(["a"])
         neuron_ids, synapse_ids = await activator.get_activated_subgraph(
             activations, min_activation=0.1
         )
@@ -169,7 +169,7 @@ class TestSpreadingActivation:
         """Test activation with empty anchor list."""
         activator = SpreadingActivation(storage_with_graph, config)
 
-        results = await activator.activate([])
+        results, _trace = await activator.activate([])
 
         assert results == {}
 
@@ -180,7 +180,7 @@ class TestSpreadingActivation:
         """Test activation with nonexistent anchor."""
         activator = SpreadingActivation(storage_with_graph, config)
 
-        results = await activator.activate(["nonexistent"])
+        results, _trace = await activator.activate(["nonexistent"])
 
         assert results == {}
 
@@ -255,7 +255,7 @@ class TestReflexActivation:
         fibers = await storage_with_fibers.find_fibers()
         reflex = ReflexActivation(storage_with_fibers, config)
 
-        results = await reflex.activate_trail(
+        results, _trace = await reflex.activate_trail(
             anchor_neurons=["time1"],
             fibers=fibers,
         )
@@ -284,7 +284,7 @@ class TestReflexActivation:
         reflex = ReflexActivation(storage_with_fibers, config)
         updated_fibers = await storage_with_fibers.find_fibers()
 
-        results = await reflex.activate_trail(
+        results, _trace = await reflex.activate_trail(
             anchor_neurons=["time1"],
             fibers=updated_fibers,
         )
@@ -308,7 +308,7 @@ class TestReflexActivation:
         recent_fibers = await storage_with_fibers.find_fibers()
 
         # Activate with recent fiber
-        recent_results = await reflex.activate_trail(
+        recent_results, _trace = await reflex.activate_trail(
             anchor_neurons=["time1"],
             fibers=recent_fibers,
             reference_time=utcnow(),
@@ -320,7 +320,7 @@ class TestReflexActivation:
         old_fibers = await storage_with_fibers.find_fibers()
 
         # Activate with old fiber
-        old_results = await reflex.activate_trail(
+        old_results, _trace = await reflex.activate_trail(
             anchor_neurons=["time1"],
             fibers=old_fibers,
             reference_time=utcnow(),

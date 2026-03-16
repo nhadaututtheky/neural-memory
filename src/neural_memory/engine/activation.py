@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import heapq
+import logging
 import math
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -15,8 +16,90 @@ if TYPE_CHECKING:
     from neural_memory.core.synapse import Synapse
     from neural_memory.storage.base import NeuralStorage
 
+logger = logging.getLogger(__name__)
+
 # Safety cap: maximum queue entries to prevent memory exhaustion on dense graphs
 _MAX_QUEUE_SIZE = 50_000
+
+
+@dataclass
+class ActivationTrace:
+    """Per-hop metrics for diminishing returns detection.
+
+    Tracks how many new neurons and how much activation gain each
+    hop produces, enabling early termination when spreading adds
+    diminishing signal.
+
+    Attributes:
+        new_neurons_per_hop: Count of newly discovered neurons at each hop level
+        activation_gain_per_hop: Sum of activation added at each hop level
+        max_hop_used: Highest hop level that actually produced results
+        max_hop_allowed: Maximum hops that were permitted
+        stopped_early: Whether activation was terminated early
+        stop_reason: Human-readable reason for early stop
+    """
+
+    new_neurons_per_hop: dict[int, int] = field(default_factory=lambda: defaultdict(int))
+    activation_gain_per_hop: dict[int, float] = field(default_factory=lambda: defaultdict(float))
+    max_hop_used: int = 0
+    max_hop_allowed: int = 0
+    stopped_early: bool = False
+    stop_reason: str = ""
+
+    @property
+    def total_neurons_activated(self) -> int:
+        """Total neurons discovered across all hops."""
+        return sum(self.new_neurons_per_hop.values())
+
+
+def should_stop_spreading(
+    trace: ActivationTrace,
+    current_hop: int,
+    threshold: float = 0.15,
+    min_new_neurons: int = 2,
+    grace_hops: int = 1,
+) -> tuple[bool, str]:
+    """Check if spreading activation should stop due to diminishing returns.
+
+    Evaluates whether the most recently completed hop produced enough
+    new signal to justify continuing. Two criteria:
+    1. Absolute: if a hop added fewer than min_new_neurons, stop.
+    2. Relative: if gain_ratio (hop[i] / hop[i-1]) < threshold, stop.
+
+    Grace hops are always allowed regardless of signal.
+
+    Args:
+        trace: Current activation trace with per-hop metrics.
+        current_hop: The hop level we're about to explore.
+        threshold: Minimum gain ratio to continue (default 0.15).
+        min_new_neurons: Minimum new neurons per hop (default 2).
+        grace_hops: Number of initial hops exempt from gating (default 1).
+
+    Returns:
+        Tuple of (should_stop, reason_string).
+    """
+    if current_hop <= grace_hops:
+        return False, ""
+
+    prev_hop = current_hop - 1
+    prev_new = trace.new_neurons_per_hop.get(prev_hop, 0)
+
+    # Absolute check: too few new neurons from previous hop
+    if prev_new < min_new_neurons:
+        return True, f"hop {prev_hop} added only {prev_new} neurons (min={min_new_neurons})"
+
+    # Relative check: gain ratio vs the hop before
+    if current_hop >= 2:
+        prev_prev_new = trace.new_neurons_per_hop.get(prev_hop - 1, 0)
+        if prev_prev_new > 0:
+            gain_ratio = prev_new / prev_prev_new
+            if gain_ratio < threshold:
+                return True, (
+                    f"gain ratio {gain_ratio:.2f} < {threshold} "
+                    f"(hop {prev_hop}: {prev_new}, hop {prev_hop - 1}: {prev_prev_new})"
+                )
+
+    return False, ""
 
 
 @dataclass
@@ -85,13 +168,16 @@ class SpreadingActivation:
         decay_factor: float = 0.5,
         min_activation: float | None = None,
         anchor_activations: dict[str, float] | None = None,
-    ) -> dict[str, ActivationResult]:
+    ) -> tuple[dict[str, ActivationResult], ActivationTrace]:
         """
         Spread activation from anchor neurons through the graph.
 
         The activation spreads through synapses, with the level
         decaying at each hop:
             activation(hop) = initial * decay_factor^hop * synapse_weight
+
+        Includes a diminishing returns gate that stops spreading early
+        when new hops produce insufficient new signal.
 
         Args:
             anchor_neurons: Starting neurons (initial level from anchor_activations or 1.0)
@@ -102,13 +188,22 @@ class SpreadingActivation:
                                If None, all anchors start at 1.0.
 
         Returns:
-            Dict mapping neuron_id to ActivationResult
+            Tuple of (dict mapping neuron_id to ActivationResult, ActivationTrace)
         """
         if max_hops is None:
             max_hops = self._config.max_spread_hops
 
         if min_activation is None:
             min_activation = self._config.activation_threshold
+
+        # Diminishing returns config
+        dr_enabled = self._config.diminishing_returns_enabled
+        dr_threshold = self._config.diminishing_returns_threshold
+        dr_min_neurons = self._config.diminishing_returns_min_neurons
+        dr_grace_hops = self._config.diminishing_returns_grace_hops
+
+        # Activation trace for metrics
+        trace = ActivationTrace(max_hop_allowed=max_hops)
 
         # Track best activation for each neuron
         results: dict[str, ActivationResult] = {}
@@ -149,9 +244,14 @@ class SpreadingActivation:
                 path=[anchor_id],
                 source_anchor=anchor_id,
             )
+            trace.new_neurons_per_hop[0] += 1
+            trace.activation_gain_per_hop[0] += initial_level
 
         # Visited tracking (neuron_id, source) to allow multiple paths
         visited: set[tuple[str, str]] = set()
+
+        # Track which hop levels have been checked for diminishing returns
+        dr_checked_hops: set[int] = set()
 
         # Spread activation (capped to prevent memory exhaustion)
         while queue:
@@ -168,6 +268,21 @@ class SpreadingActivation:
             # Skip if we've exceeded max hops
             if current.hops >= max_hops:
                 continue
+
+            # Diminishing returns gate: check at hop transitions
+            next_hop = current.hops + 1
+            if dr_enabled and next_hop not in dr_checked_hops and next_hop >= 2:
+                dr_checked_hops.add(next_hop)
+                stop, reason = should_stop_spreading(
+                    trace, next_hop, dr_threshold, dr_min_neurons, dr_grace_hops
+                )
+                if stop:
+                    trace.stopped_early = True
+                    trace.stop_reason = reason
+                    logger.debug(
+                        "Diminishing returns gate: stopping at hop %d — %s", next_hop, reason
+                    )
+                    break
 
             # Get neighbors (with cache to avoid N+1 re-fetching)
             if current.neuron_id in neighbor_cache:
@@ -213,29 +328,36 @@ class SpreadingActivation:
                     continue
 
                 new_path = [*current.path, neighbor_neuron.id]
+                hop = current.hops + 1
 
                 # Update result if this is better activation
                 existing = results.get(neighbor_neuron.id)
                 if existing is None or new_level > existing.activation_level:
+                    # Track new neuron discovery for diminishing returns
+                    if existing is None:
+                        trace.new_neurons_per_hop[hop] += 1
+                    trace.activation_gain_per_hop[hop] += new_level
+
                     results[neighbor_neuron.id] = ActivationResult(
                         neuron_id=neighbor_neuron.id,
                         activation_level=new_level,
-                        hop_distance=current.hops + 1,
+                        hop_distance=hop,
                         path=new_path,
                         source_anchor=current.source,
                     )
+                    trace.max_hop_used = max(trace.max_hop_used, hop)
 
                 # Add to queue for further spreading
                 new_state = ActivationState(
                     neuron_id=neighbor_neuron.id,
                     level=new_level,
-                    hops=current.hops + 1,
+                    hops=hop,
                     path=new_path,
                     source=current.source,
                 )
                 heapq.heappush(queue, new_state)
 
-        return results
+        return results, trace
 
     async def activate_from_multiple(
         self,
@@ -267,10 +389,13 @@ class SpreadingActivation:
             for anchors in anchor_sets
             if anchors
         ]
-        activation_results = list(await asyncio.gather(*tasks)) if tasks else []
+        raw_results = list(await asyncio.gather(*tasks)) if tasks else []
 
-        if not activation_results:
+        if not raw_results:
             return {}, []
+
+        # Unpack (results, trace) tuples — traces logged but not returned
+        activation_results = [r[0] for r in raw_results]
 
         if len(activation_results) == 1:
             return activation_results[0], list(activation_results[0].keys())

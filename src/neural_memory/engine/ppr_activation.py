@@ -20,7 +20,7 @@ import logging
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
-from neural_memory.engine.activation import ActivationResult
+from neural_memory.engine.activation import ActivationResult, ActivationTrace
 
 if TYPE_CHECKING:
     from neural_memory.core.brain import BrainConfig
@@ -57,7 +57,7 @@ class PPRActivation:
         damping: float | None = None,
         max_iterations: int | None = None,
         epsilon: float | None = None,
-    ) -> dict[str, ActivationResult]:
+    ) -> tuple[dict[str, ActivationResult], ActivationTrace]:
         """Run Personalized PageRank from anchor seed set.
 
         Algorithm (push-based power iteration):
@@ -81,7 +81,7 @@ class PPRActivation:
             Dict mapping neuron_id to ActivationResult.
         """
         if not anchor_neurons:
-            return {}
+            return {}, ActivationTrace()
 
         if damping is None:
             damping = self._config.ppr_damping
@@ -113,6 +113,15 @@ class PPRActivation:
         source_anchor: dict[str, str] = {nid: nid for nid in anchor_neurons}
 
         min_activation = self._config.activation_threshold
+
+        # Diminishing returns config
+        dr_enabled = self._config.diminishing_returns_enabled
+        dr_min_neurons = self._config.diminishing_returns_min_neurons
+
+        # Activation trace
+        trace = ActivationTrace(max_hop_allowed=max_iterations)
+        # Track nodes that crossed threshold at each iteration
+        above_threshold: set[str] = set()
 
         for iteration in range(max_iterations):
             # Find active nodes (residual above epsilon)
@@ -176,6 +185,29 @@ class PPRActivation:
             for nid, new_res in new_residual.items():
                 residual[nid] += new_res
 
+            # Track new nodes that crossed activation threshold this iteration
+            new_this_iteration = 0
+            for nid, score in rank.items():
+                max_rank_so_far = max(rank.values()) if rank else 1.0
+                if max_rank_so_far < 1e-12:
+                    max_rank_so_far = 1.0
+                normalized = score / max_rank_so_far
+                if normalized >= min_activation and nid not in above_threshold:
+                    above_threshold.add(nid)
+                    new_this_iteration += 1
+            trace.new_neurons_per_hop[iteration] = new_this_iteration
+            trace.max_hop_used = iteration
+
+            # Diminishing returns: stop if iteration added too few new nodes
+            if dr_enabled and iteration >= 2 and new_this_iteration < dr_min_neurons:
+                trace.stopped_early = True
+                trace.stop_reason = (
+                    f"PPR iteration {iteration} added only {new_this_iteration} "
+                    f"new nodes (min={dr_min_neurons})"
+                )
+                logger.debug("Diminishing returns gate: %s", trace.stop_reason)
+                break
+
             # Check convergence
             total_residual = sum(abs(v) for v in residual.values())
             if total_residual < epsilon * len(seed_weights):
@@ -205,7 +237,7 @@ class PPRActivation:
                 source_anchor=source_anchor.get(nid, nid),
             )
 
-        return results
+        return results, trace
 
     async def activate_from_multiple(
         self,
@@ -234,7 +266,7 @@ class PPRActivation:
             return {}, []
 
         # Run single PPR with all anchors
-        results = await self.activate(
+        results, _trace = await self.activate(
             anchor_neurons=all_anchors,
             anchor_activations=anchor_activations,
         )

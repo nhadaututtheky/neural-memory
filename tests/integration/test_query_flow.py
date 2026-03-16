@@ -267,14 +267,14 @@ class TestHybridFallback:
         fibers = await storage_with_partial_fibers.find_fibers(contains_neuron="nA")
 
         # Pure reflex: only fiber pathway neurons
-        reflex_results = await reflex.activate_trail(
+        reflex_results, _trace = await reflex.activate_trail(
             anchor_neurons=["nA"],
             fibers=fibers,
         )
         reflex_ids = set(reflex_results.keys())
 
         # Classic BFS: discovers all connected neurons
-        classic_results = await classic.activate(["nA"], max_hops=4)
+        classic_results, _trace = await classic.activate(["nA"], max_hops=4)
         classic_ids = set(classic_results.keys())
 
         # Reflex should find fiber neurons

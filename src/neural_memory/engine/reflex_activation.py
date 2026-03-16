@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from neural_memory.engine.activation import ActivationResult
+from neural_memory.engine.activation import ActivationResult, ActivationTrace
 from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
@@ -76,7 +76,7 @@ class ReflexActivation:
         reference_time: datetime | None = None,
         decay_rate: float = 0.15,
         anchor_activations: dict[str, float] | None = None,
-    ) -> dict[str, ActivationResult]:
+    ) -> tuple[dict[str, ActivationResult], ActivationTrace]:
         """
         Spread activation along fiber pathways with trail decay.
 
@@ -97,6 +97,7 @@ class ReflexActivation:
             reference_time = utcnow()
 
         results: dict[str, ActivationResult] = {}
+        trace = ActivationTrace(max_hop_allowed=len(fibers))
 
         # Initialize anchor neurons
         for anchor_id in anchor_neurons:
@@ -110,6 +111,7 @@ class ReflexActivation:
                 path=[anchor_id],
                 source_anchor=anchor_id,
             )
+            trace.new_neurons_per_hop[0] += 1
 
         # Conduct through each fiber that contains anchor neurons
         for fiber in fibers:
@@ -136,6 +138,7 @@ class ReflexActivation:
                     anchor_id=anchor_id,
                     decay_rate=decay_rate,
                     time_factor=time_factor,
+                    trace=trace,
                 )
 
                 # Spread backward in pathway
@@ -147,9 +150,10 @@ class ReflexActivation:
                     anchor_id=anchor_id,
                     decay_rate=decay_rate,
                     time_factor=time_factor,
+                    trace=trace,
                 )
 
-        return results
+        return results, trace
 
     def _conduct_along_pathway(
         self,
@@ -160,6 +164,7 @@ class ReflexActivation:
         anchor_id: str,
         decay_rate: float,
         time_factor: float,
+        trace: ActivationTrace | None = None,
     ) -> None:
         """
         Conduct activation along a fiber pathway in one direction.
@@ -195,6 +200,11 @@ class ReflexActivation:
             # Update if better than existing
             existing = results.get(neuron_id)
             if existing is None or current_level > existing.activation_level:
+                if trace is not None:
+                    if existing is None:
+                        trace.new_neurons_per_hop[hops] += 1
+                    trace.activation_gain_per_hop[hops] += current_level
+                    trace.max_hop_used = max(trace.max_hop_used, hops)
                 results[neuron_id] = ActivationResult(
                     neuron_id=neuron_id,
                     activation_level=current_level,
@@ -335,10 +345,13 @@ class ReflexActivation:
             for anchors in anchor_sets
             if anchors
         ]
-        activation_results = list(await asyncio.gather(*tasks)) if tasks else []
+        raw_results = list(await asyncio.gather(*tasks)) if tasks else []
 
-        if not activation_results:
+        if not raw_results:
             return {}, []
+
+        # Unpack (results, trace) tuples
+        activation_results = [r[0] for r in raw_results]
 
         # Find co-activations
         co_activations = self.find_co_activated(activation_results)

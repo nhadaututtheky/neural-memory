@@ -44,7 +44,7 @@ class TestPPRActivation:
         storage = AsyncMock()
         config = BrainConfig(activation_strategy="ppr")
         ppr = PPRActivation(storage, config)
-        results = await ppr.activate([])
+        results, _trace = await ppr.activate([])
         assert results == {}
 
     async def test_single_node_no_edges(self) -> None:
@@ -53,7 +53,7 @@ class TestPPRActivation:
         config = BrainConfig(activation_strategy="ppr", activation_threshold=0.01)
         ppr = PPRActivation(storage, config)
 
-        results = await ppr.activate(["a"])
+        results, _trace = await ppr.activate(["a"])
         assert "a" in results
         assert results["a"].activation_level == 1.0
         assert results["a"].hop_distance == 0
@@ -75,7 +75,7 @@ class TestPPRActivation:
         )
         ppr = PPRActivation(storage, config)
 
-        results = await ppr.activate(["a"])
+        results, _trace = await ppr.activate(["a"])
         assert "a" in results
         assert "b" in results
         assert "c" in results
@@ -104,7 +104,7 @@ class TestPPRActivation:
         )
         ppr = PPRActivation(storage, config)
 
-        results = await ppr.activate(["seed"])
+        results, _trace = await ppr.activate(["seed"])
 
         # Each spoke should get roughly equal share (hub distributes evenly)
         spoke_levels = [
@@ -131,7 +131,7 @@ class TestPPRActivation:
         )
         ppr = PPRActivation(storage, config)
 
-        results = await ppr.activate(
+        results, _trace = await ppr.activate(
             ["high", "low"],
             anchor_activations={"high": 0.9, "low": 0.1},
         )
@@ -156,7 +156,7 @@ class TestPPRActivation:
         )
         ppr = PPRActivation(storage, config)
 
-        results = await ppr.activate(["a"])
+        results, _trace = await ppr.activate(["a"])
         # Both should be activated due to cycle
         assert "a" in results
         assert "b" in results
@@ -176,7 +176,7 @@ class TestPPRActivation:
         )
         ppr = PPRActivation(storage, config)
 
-        results = await ppr.activate(["a"])
+        results, _trace = await ppr.activate(["a"])
         assert "a" in results
         # b should be filtered due to weak edge + high threshold
         # (depends on exact convergence, but likely filtered)

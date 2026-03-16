@@ -89,6 +89,11 @@ class BrainConfig:
     lazy_entity_enabled: bool = True
     lazy_entity_promotion_threshold: int = 2
     lazy_entity_prune_days: int = 90
+    # Diminishing returns gate: stop spreading when new hops add little signal
+    diminishing_returns_enabled: bool = True
+    diminishing_returns_threshold: float = 0.15
+    diminishing_returns_min_neurons: int = 2
+    diminishing_returns_grace_hops: int = 1
 
     def with_updates(self, **kwargs: Any) -> BrainConfig:
         """Create a new config with updated values."""
