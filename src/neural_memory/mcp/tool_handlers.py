@@ -2403,6 +2403,10 @@ class ToolHandler:
                 if new_type is not None:
                     updated_tm = dc_replace(updated_tm, memory_type=MemoryType(new_type))
                     changes.append(f"type: {typed_mem.memory_type.value} → {new_type}")
+                    # Sync type into fiber.metadata to keep both stores consistent
+                    updated_meta = {**fiber.metadata, "type": new_type}
+                    fiber = dc_replace(fiber, metadata=updated_meta)
+                    await storage.update_fiber(fiber)
                 if new_priority is not None:
                     updated_tm = dc_replace(updated_tm, priority=Priority.from_int(new_priority))
                     changes.append(f"priority: {typed_mem.priority.value} → {new_priority}")
