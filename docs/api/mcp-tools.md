@@ -85,6 +85,8 @@ Store a memory. Auto-detects type if not specified. Error resolution: when a new
 | `trust_score` | number | No | — | Trust level 0.0-1.0. Capped by source ceiling (user_input max 0.9, ai_inference max 0.7). NULL = unscored. |
 | `source_id` | string | No | — | Link this memory to a registered source. Creates a SOURCE_OF synapse for provenance tracking. |
 | `context` | object | No | — | Structured context dict merged into content server-side using type-specific templates. Keys like 'reason', 'alternati... |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_remember_batch`
 
@@ -93,6 +95,8 @@ Store multiple memories in a single call. Max 20 items, 500K total chars. Each i
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `memories` | array[object] | Yes | — | Array of memories to store (max 20) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_recall`
 
@@ -112,6 +116,8 @@ Query memories by semantic search with confidence ranking.
 | `tags` | array[string] | No | — | Filter by tags (AND — all must match). Checks tags, auto_tags, and agent_tags columns. |
 | `mode` | string (`associative`, `exact`) | No | — | Recall mode: 'associative' (default) returns formatted context, 'exact' returns raw neuron contents verbatim without ... |
 | `include_citations` | boolean | No | default: true | Include citation and audit trail in exact recall results (default: true). |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_show`
 
@@ -120,6 +126,8 @@ Get full verbatim content + metadata + synapses for a specific memory by ID. Use
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `memory_id` | string | Yes | — | The fiber_id or neuron_id of the memory to retrieve |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_context`
 
@@ -130,6 +138,8 @@ Get recent memories as context.
 | `limit` | integer | No | default: 10 | Number of recent memories (default: 10) |
 | `fresh_only` | boolean | No | — | Only include memories < 30 days old |
 | `warn_expiry_days` | integer | No | — | If set, warn about memories expiring within this many days. Adds expiry_warnings to response. |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_todo`
 
@@ -139,6 +149,8 @@ Add a TODO memory (30-day expiry).
 |-----------|------|----------|---------|-------------|
 | `task` | string | Yes | — | The task to remember |
 | `priority` | integer | No | default: 5 | Priority 0-10 (default: 5) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_auto`
 
@@ -149,6 +161,8 @@ Auto-capture memories from text. 'process' analyzes+saves, 'flush' for emergency
 | `action` | string (`status`, `enable`, `disable`, `analyze`, `process`, `flush`) | Yes | — | Action: 'process' analyzes and saves, 'analyze' only detects, 'flush' emergency capture before compaction (skips dedu... |
 | `text` | string | No | — | Text to analyze (required for 'analyze' and 'process') |
 | `save` | boolean | No | — | Force save even if auto-capture disabled (for 'analyze') |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_suggest`
 
@@ -159,6 +173,8 @@ Autocomplete suggestions from brain neurons. When called with no prefix, returns
 | `prefix` | string | No | — | The prefix text to autocomplete |
 | `limit` | integer | No | default: 5 | Max suggestions (default: 5) |
 | `type_filter` | string (`time`, `spatial`, `entity`, `action`, `state`, `concept`, `sensory`, `intent`) | No | — | Filter by neuron type |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ## Session & Context {#session}
 
@@ -173,6 +189,8 @@ Track session state: task, feature, progress.
 | `task` | string | No | — | Current specific task |
 | `progress` | number | No | — | Progress 0.0 to 1.0 |
 | `notes` | string | No | — | Additional context notes |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_eternal`
 
@@ -186,6 +204,8 @@ Save project context, decisions, instructions for cross-session persistence.
 | `decision` | string | No | — | Add a key decision (saved as DECISION) |
 | `reason` | string | No | — | Reason for the decision |
 | `instruction` | string | No | — | Add a persistent instruction (saved as INSTRUCTION) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_recap`
 
@@ -195,6 +215,8 @@ Load saved project context, decisions, and progress.
 |-----------|------|----------|---------|-------------|
 | `level` | integer | No | — | Detail level: 1=quick (~500 tokens), 2=detailed (~1300 tokens), 3=full (~3300 tokens). Default: 1 |
 | `topic` | string | No | — | Search for a specific topic in context (e.g., 'auth', 'database') |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ## Provenance & Sources {#provenance}
 
@@ -207,6 +229,8 @@ Trace provenance, verify, or approve a memory neuron. Use 'trace' to see full pr
 | `action` | string (`trace`, `verify`, `approve`) | Yes | — | Action: trace (view chain), verify (mark verified), approve (mark approved). |
 | `neuron_id` | string | Yes | — | Neuron ID to trace/verify/approve. |
 | `actor` | string | No | default: mcp_agent | Who is performing the verification/approval (default: mcp_agent). |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_source`
 
@@ -222,6 +246,8 @@ Manage memory sources (provenance). Register external documents, laws, APIs, or 
 | `status` | string (`active`, `superseded`, `repealed`, `draft`) | No | — | Source lifecycle status. |
 | `file_hash` | string | No | — | File hash for integrity checking. |
 | `metadata` | object | No | — | Additional metadata. |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ## Analytics & Health {#analytics}
 
@@ -229,19 +255,28 @@ Manage memory sources (provenance). Register external documents, laws, APIs, or 
 
 Brain stats: memory counts and freshness.
 
-*No parameters.*
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_health`
 
 Brain health: purity score, grade, warnings.
 
-*No parameters.*
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_evolution`
 
 Brain evolution: maturation, plasticity, coherence.
 
-*No parameters.*
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_habits`
 
@@ -251,6 +286,8 @@ Workflow habits: suggest, list, or clear.
 |-----------|------|----------|---------|-------------|
 | `action` | string (`suggest`, `list`, `clear`) | Yes | — | suggest=get next action suggestions, list=show learned habits, clear=remove all habits |
 | `current_action` | string | No | — | Current action type for suggestions (required for suggest action) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_narrative`
 
@@ -264,6 +301,8 @@ Generate narratives: timeline, topic, or causal chain.
 | `end_date` | string | No | — | End date in ISO format (required for timeline, e.g., '2026-02-18') |
 | `max_fibers` | integer | No | default: 20 | Max fibers in narrative (default: 20) |
 | `max_depth` | integer | No | default: 5, for causal action only | Max causal chain depth (default: 5, for causal action only) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ## Cognitive Reasoning {#cognitive}
 
@@ -281,6 +320,8 @@ Create, list, or inspect hypotheses — evolving beliefs with Bayesian confidenc
 | `hypothesis_id` | string | No | — | Hypothesis neuron ID (required for get) |
 | `status` | string (`active`, `confirmed`, `refuted`, `superseded`, `pending`, `expired`) | No | — | Filter by status (for list action) |
 | `limit` | integer | No | default: 20 | Max results for list (default: 20) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_evidence`
 
@@ -294,6 +335,8 @@ Add evidence for or against a hypothesis. Updates confidence via Bayesian update
 | `weight` | number | No | default: 0.5 | Evidence strength (default: 0.5). Higher = stronger evidence |
 | `tags` | array[string] | No | — | Tags for the evidence memory |
 | `priority` | integer | No | default: 5 | Priority 0-10 (default: 5) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_predict`
 
@@ -311,6 +354,8 @@ Create, list, or inspect predictions — falsifiable claims about future observa
 | `prediction_id` | string | No | — | Prediction neuron ID (required for get) |
 | `status` | string (`active`, `confirmed`, `refuted`, `superseded`, `pending`, `expired`) | No | — | Filter by status (for list action) |
 | `limit` | integer | No | default: 20 | Max results for list (default: 20) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_verify`
 
@@ -323,6 +368,8 @@ Verify a prediction as correct or wrong. Optionally records an observation, crea
 | `content` | string | No | — | Observation content — what actually happened (optional) |
 | `tags` | array[string] | No | — | Tags for the observation memory |
 | `priority` | integer | No | default: 5 | Priority 0-10 (default: 5) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_cognitive`
 
@@ -332,6 +379,8 @@ Cognitive overview — O(1) summary of active hypotheses, pending predictions, c
 |-----------|------|----------|---------|-------------|
 | `action` | string (`summary`, `refresh`) | Yes | — | summary=get current hot index, refresh=recompute scores |
 | `limit` | integer | No | default: 10, for summary | Max hot items to return (default: 10, for summary) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_gaps`
 
@@ -348,6 +397,8 @@ Metacognition — track what the brain doesn't know. Detect knowledge gaps from 
 | `resolved_by_neuron_id` | string | No | — | Neuron that resolved the gap (optional for resolve) |
 | `include_resolved` | boolean | No | default: false | Include resolved gaps in list (default: false) |
 | `limit` | integer | No | default: 20 | Max results for list (default: 20) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_schema`
 
@@ -362,6 +413,8 @@ Schema evolution — evolve hypotheses into new versions. Creates a version chai
 | `reason` | string | No | — | Why the hypothesis is being evolved (stored as synapse metadata) |
 | `other_id` | string | No | — | Second hypothesis ID for compare action |
 | `tags` | array[string] | No | — | Tags for the new version |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_explain`
 
@@ -372,6 +425,8 @@ Find and explain the shortest path between two entities in the neural graph. Ret
 | `from_entity` | string | Yes | — | Source entity name to start from (e.g. 'React', 'authentication') |
 | `to_entity` | string | Yes | — | Target entity name to reach (e.g. 'performance', 'JWT') |
 | `max_hops` | integer | No | default: 6 | Maximum path length (default: 6) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ## Training & Import {#training}
 
@@ -388,6 +443,8 @@ Train brain from documentation files. Supports PDF, DOCX, PPTX, HTML, JSON, XLSX
 | `extensions` | array[string] | No | default: ['.md'] | File extensions to include (default: ['.md']). Rich formats (PDF, DOCX, PPTX, HTML, XLSX) require: pip install neural... |
 | `consolidate` | boolean | No | default: true | Run ENRICH consolidation after encoding (default: true) |
 | `pinned` | boolean | No | default: true | Pin trained memories as permanent KB — skip decay/prune/compress (default: true) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_train_db`
 
@@ -401,6 +458,8 @@ Train brain from database schema.
 | `brain_name` | string | No | default: current brain | Target brain name (default: current brain) |
 | `consolidate` | boolean | No | default: true | Run ENRICH consolidation after encoding (default: true) |
 | `max_tables` | integer | No | default: 100 | Maximum tables to process (default: 100) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_index`
 
@@ -411,6 +470,8 @@ Index codebase for code-aware recall.
 | `action` | string (`scan`, `status`) | Yes | — | scan=index codebase, status=show what's indexed |
 | `path` | string | No | default: current working directory | Directory to index (default: current working directory) |
 | `extensions` | array[string] | No | default: [".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".rs", ".java", ".kt", ".c", ".h", ".cpp", ".hpp", ".cc"] | File extensions to index (default: [".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".rs", ".java", ".kt", ".c", ".h", ".... |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_import`
 
@@ -423,6 +484,8 @@ Import from external systems (ChromaDB, Mem0, Cognee, etc.).
 | `collection` | string | No | — | Collection/namespace to import from |
 | `limit` | integer | No | — | Maximum records to import |
 | `user_id` | string | No | — | User ID filter (for Mem0) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ## Memory Management {#management}
 
@@ -436,6 +499,8 @@ Edit an existing memory's type, content, or priority. Use when a memory was auto
 | `type` | string (`fact`, `decision`, `preference`, `todo`, `insight`, `context`, `instruction`, `error`, `workflow`, `reference`) | No | — | New memory type |
 | `content` | string | No | — | New content for the anchor neuron |
 | `priority` | integer | No | — | New priority (0-10) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_forget`
 
@@ -446,6 +511,8 @@ Explicitly delete or close a specific memory. Soft delete by default (marks as e
 | `memory_id` | string | Yes | — | The fiber ID of the memory to forget |
 | `hard` | boolean | No | default: false = soft delete | Permanent deletion with cascade cleanup (default: false = soft delete) |
 | `reason` | string | No | — | Why this memory is being forgotten (stored in logs) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_pin`
 
@@ -456,6 +523,8 @@ Pin, unpin, or list pinned memories. Pinned memories skip decay, pruning, and co
 | `action` | string (`pin`, `unpin`, `list`) | No | — | Action: pin (default), unpin, or list pinned memories |
 | `fiber_ids` | array[string] | No | — | Fiber IDs to pin or unpin (required for pin/unpin, ignored for list) |
 | `limit` | integer | No | default: 50, max: 200 | Max results for list action (default: 50, max: 200) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_consolidate`
 
@@ -468,6 +537,8 @@ Run memory consolidation on the current brain. Strategies: prune (remove weak sy
 | `prune_weight_threshold` | number | No | default: 0.05 | Synapse weight threshold for pruning (default: 0.05) |
 | `merge_overlap_threshold` | number | No | default: 0.5 | Jaccard overlap threshold for merging fibers (default: 0.5) |
 | `prune_min_inactive_days` | number | No | default: 7.0 | Grace period in days before pruning inactive synapses (default: 7.0) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_drift`
 
@@ -478,6 +549,8 @@ Semantic drift detection — find tag clusters that should be merged or aliased.
 | `action` | string (`detect`, `list`, `merge`, `alias`, `dismiss`) | Yes | — | detect=run drift analysis, list=show existing clusters, merge/alias/dismiss=resolve a specific cluster |
 | `cluster_id` | string | No | — | Cluster ID to resolve (required for merge/alias/dismiss) |
 | `status` | string (`detected`, `merged`, `aliased`, `dismissed`) | No | — | Filter clusters by status (for list action) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_review`
 
@@ -489,6 +562,8 @@ Spaced repetition reviews (Leitner box system).
 | `fiber_id` | string | No | — | Fiber ID (required for mark and schedule actions) |
 | `success` | boolean | No | — | Whether recall was successful (for mark action, default: true) |
 | `limit` | integer | No | default: 20 | Max items in queue (default: 20) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_alerts`
 
@@ -499,6 +574,8 @@ Brain health alerts: list or acknowledge.
 | `action` | string (`list`, `acknowledge`) | Yes | — | list=view active/seen alerts, acknowledge=mark alert as handled |
 | `alert_id` | string | No | — | Alert ID to acknowledge (required for acknowledge action) |
 | `limit` | integer | No | default: 50 | Max alerts to list (default: 50) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ## Cloud Sync & Backup {#sync}
 
@@ -512,12 +589,17 @@ Trigger manual sync with hub server.
 | `hub_url` | string | No | — | Hub server URL (overrides config). Must be http:// or https:// |
 | `strategy` | string (`prefer_recent`, `prefer_local`, `prefer_remote`, `prefer_stronger`) | No | default: from config | Conflict resolution strategy (default: from config) |
 | `api_key` | string | No | default: from config | API key override (default: from config) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_sync_status`
 
 Show sync status: pending changes, devices, last sync.
 
-*No parameters.*
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_sync_config`
 
@@ -532,6 +614,8 @@ View or update sync configuration. Use action='setup' for guided onboarding.
 | `auto_sync` | boolean | No | — | Enable/disable auto-sync |
 | `sync_interval_seconds` | integer | No | — | Sync interval in seconds |
 | `conflict_strategy` | string (`prefer_recent`, `prefer_local`, `prefer_remote`, `prefer_stronger`) | No | — | Default conflict strategy |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_telegram_backup`
 
@@ -540,6 +624,8 @@ Send brain database file as backup to Telegram.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `brain_name` | string | No | default: active brain | Brain name to backup (default: active brain) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ## Versioning & Transfer {#meta}
 
@@ -556,6 +642,8 @@ Brain version control: snapshot, list, rollback, diff.
 | `from_version` | string | No | — | Source version ID (required for diff) |
 | `to_version` | string | No | — | Target version ID (required for diff) |
 | `limit` | integer | No | default: 20 | Max versions to list (default: 20) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_transplant`
 
@@ -567,6 +655,8 @@ Transplant memories between brains by tags/types.
 | `tags` | array[string] | No | — | Tags to filter — fibers matching ANY tag will be included |
 | `memory_types` | array[string] | No | — | Memory types to filter (fact, decision, etc.) |
 | `strategy` | string (`prefer_local`, `prefer_remote`, `prefer_recent`, `prefer_stronger`) | No | default: prefer_local | Conflict resolution strategy (default: prefer_local) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_conflicts`
 
@@ -580,6 +670,8 @@ Memory conflicts: list, resolve, or pre-check.
 | `content` | string | No | — | Content to pre-check for conflicts (required for check) |
 | `tags` | array[string] | No | — | Optional tags for more accurate conflict checking |
 | `limit` | integer | No | default: 50 | Max conflicts to list (default: 50) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ## Other {#other}
 
@@ -592,6 +684,7 @@ Knowledge Surface management — generate or inspect the .nm surface file. The s
 | `action` | string (`generate`, `show`) | No | — | generate=rebuild surface from brain.db, show=display current surface info |
 | `token_budget` | integer | No | default: 1200 | Token budget for surface (default: 1200). Only used with generate action. |
 | `max_graph_nodes` | integer | No | default: 30 | Max graph nodes to include (default: 30). Only used with generate action. |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
 
 ### `nmem_tool_stats`
 
@@ -602,6 +695,8 @@ Tool usage analytics: which tools agents use, frequency, success rates, and dail
 | `action` | string (`summary`, `daily`) | Yes | — | summary=top tools with success rates, daily=usage breakdown by day |
 | `days` | integer | No | default: 30 | Time window in days (default: 30) |
 | `limit` | integer | No | default: 20 | Max tools to return (default: 20) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ---
 

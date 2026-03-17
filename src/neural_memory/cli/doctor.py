@@ -488,7 +488,7 @@ def _try_fix(check: dict[str, Any]) -> dict[str, Any] | None:
         return None
     if name == "Embedding provider" and "disabled" not in check.get("detail", ""):
         return None
-    result = handler()
+    result: dict[str, Any] | None = handler()
     if result:
         result["_fixed"] = True
     return result
