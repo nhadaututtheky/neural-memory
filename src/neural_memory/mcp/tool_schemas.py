@@ -32,16 +32,45 @@ TOOL_TIERS: dict[str, frozenset[str]] = {
 }
 
 
+_COMPACT_PROPERTY: dict[str, Any] = {
+    "type": "boolean",
+    "description": "Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens.",
+}
+
+_TOKEN_BUDGET_PROPERTY: dict[str, Any] = {
+    "type": "integer",
+    "minimum": 50,
+    "description": "Max tokens for response. Progressively strips content to fit budget.",
+}
+
+# Parameters injected into every tool schema.
+_INJECTED_PARAMS: dict[str, dict[str, Any]] = {
+    "compact": _COMPACT_PROPERTY,
+    "token_budget": _TOKEN_BUDGET_PROPERTY,
+}
+
+
 def _with_parameters_alias(schemas: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Add ``parameters`` as an alias for ``inputSchema`` on each tool.
 
     MCP clients read ``inputSchema``, but OpenAI-compatible bridges
     (Cursor, LiteLLM, etc.) read ``parameters``.  Including both keys
     prevents HTTP 400 errors when tools are forwarded to OpenAI API.
+
+    Also injects ``compact`` and ``token_budget`` parameters into every tool schema.
     """
     out: list[dict[str, Any]] = []
     for tool in schemas:
         t = {**tool}
+        # Inject compact + token_budget parameters into inputSchema
+        if "inputSchema" in t:
+            schema = {**t["inputSchema"]}
+            props = {**schema.get("properties", {})}
+            for param_name, param_schema in _INJECTED_PARAMS.items():
+                if param_name not in props:
+                    props[param_name] = param_schema
+            schema["properties"] = props
+            t["inputSchema"] = schema
         if "inputSchema" in t and "parameters" not in t:
             t["parameters"] = t["inputSchema"]
         out.append(t)

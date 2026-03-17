@@ -17,11 +17,14 @@ class TestMCPServer:
     @pytest.fixture
     def server(self) -> MCPServer:
         """Create an MCP server instance."""
+        from neural_memory.unified_config import ResponseConfig
+
         with patch("neural_memory.mcp.server.get_config") as mock_get_config:
             mock_get_config.return_value = MagicMock(
                 current_brain="test-brain",
                 get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
                 tool_tier=ToolTierConfig(tier="full"),
+                response=ResponseConfig(),
             )
             return MCPServer()
 
@@ -152,7 +155,8 @@ class TestMCPServer:
         stats_tool = next(t for t in tools if t["name"] == "nmem_stats")
 
         schema = stats_tool["inputSchema"]
-        assert schema["properties"] == {}
+        # Only the injected params (no tool-specific params)
+        assert set(schema["properties"].keys()) == {"compact", "token_budget"}
 
     def test_suggest_tool_schema(self, server: MCPServer) -> None:
         """Test nmem_suggest tool schema."""
@@ -196,11 +200,14 @@ class TestMCPToolCalls:
     @pytest.fixture
     def server(self) -> MCPServer:
         """Create an MCP server instance with mocked storage."""
+        from neural_memory.unified_config import ResponseConfig
+
         with patch("neural_memory.mcp.server.get_config") as mock_get_config:
             mock_get_config.return_value = MagicMock(
                 current_brain="test-brain",
                 get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
                 tool_tier=ToolTierConfig(tier="full"),
+                response=ResponseConfig(),
             )
             return MCPServer()
 
@@ -971,11 +978,14 @@ class TestMCPProtocol:
     @pytest.fixture
     def server(self) -> MCPServer:
         """Create an MCP server instance."""
+        from neural_memory.unified_config import ResponseConfig
+
         with patch("neural_memory.mcp.server.get_config") as mock_get_config:
             mock_get_config.return_value = MagicMock(
                 current_brain="test-brain",
                 get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
                 tool_tier=ToolTierConfig(tier="full"),
+                response=ResponseConfig(),
             )
             return MCPServer()
 
@@ -1128,11 +1138,14 @@ class TestMCPResources:
     @pytest.fixture
     def server(self) -> MCPServer:
         """Create an MCP server instance."""
+        from neural_memory.unified_config import ResponseConfig
+
         with patch("neural_memory.mcp.server.get_config") as mock_get_config:
             mock_get_config.return_value = MagicMock(
                 current_brain="test-brain",
                 get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
                 tool_tier=ToolTierConfig(tier="full"),
+                response=ResponseConfig(),
             )
             return MCPServer()
 
@@ -1852,11 +1865,14 @@ class TestMCPImport:
 
     def _make_server(self) -> MCPServer:
         """Create a server with mocked config."""
+        from neural_memory.unified_config import ResponseConfig
+
         with patch("neural_memory.mcp.server.get_config") as mock_get_config:
             mock_get_config.return_value = MagicMock(
                 current_brain="test-brain",
                 get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
                 tool_tier=ToolTierConfig(tier="full"),
+                response=ResponseConfig(),
             )
             return MCPServer()
 
@@ -2135,11 +2151,14 @@ class TestMCPContextExtended:
 
     @pytest.fixture
     def server(self) -> MCPServer:
+        from neural_memory.unified_config import ResponseConfig
+
         with patch("neural_memory.mcp.server.get_config") as mock_get_config:
             mock_get_config.return_value = MagicMock(
                 current_brain="test-brain",
                 get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
                 tool_tier=ToolTierConfig(tier="full"),
+                response=ResponseConfig(),
             )
             return MCPServer()
 

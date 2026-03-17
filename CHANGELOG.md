@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Compact response mode** — Reduce MCP tool response tokens by 60-80%
+  - `compact=true` param on all 46 MCP tools to strip metadata hints and truncate lists
+  - `token_budget=N` param for progressive response size enforcement
+  - Auto-compact: responses with >20 list items are compacted automatically
+  - Content preview: list items show truncated content with `_content_truncated` flag
+  - Count-replace: `fibers_matched`, `conflicts`, `expiry_warnings` → count only
+  - Long string truncation: `markdown` field capped at 500 chars
+  - `ResponseConfig` in config.toml: `compact_mode`, `max_list_items`, `strip_hints`, `content_preview_length`, `auto_compact_threshold`
+  - 47 new tests (`test_response_compactor.py`)
+
+### Fixed
+
+- **fiber.metadata type sync** — `nmem_edit` now syncs type changes into `fiber.metadata` (cherry-picked from PR #85)
+- **Compression size guard** — Skip compression when summary is not smaller than original (#92)
+
 ## [4.11.0] - 2026-03-17
 
 ### Added

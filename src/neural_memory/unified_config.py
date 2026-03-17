@@ -816,6 +816,43 @@ class TelegramConfig:
 
 
 @dataclass
+class ResponseConfig:
+    """MCP response compaction settings.
+
+    Controls how verbose MCP tool responses are. Compact mode strips
+    metadata hints, truncates lists, and shortens content previews
+    to reduce token waste in agent context windows.
+    """
+
+    # Enable compact mode globally (agents can also set per-call via compact=true)
+    compact_mode: bool = False
+
+    # Max items in list fields before truncation (compact mode only)
+    max_list_items: int = 10
+
+    # Strip DX hint fields (maintenance_hint, update_hint, onboarding, etc.)
+    strip_hints: bool = True
+
+    # Max chars for content preview in list responses
+    content_preview_length: int = 120
+
+    # Auto-compact threshold: if any list in response has more items than this,
+    # compact mode is applied automatically (0 = disabled)
+    auto_compact_threshold: int = 20
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ResponseConfig:
+        """Create from TOML dict."""
+        return cls(
+            compact_mode=bool(data.get("compact_mode", False)),
+            max_list_items=int(data.get("max_list_items", 10)),
+            strip_hints=bool(data.get("strip_hints", True)),
+            content_preview_length=int(data.get("content_preview_length", 120)),
+            auto_compact_threshold=int(data.get("auto_compact_threshold", 20)),
+        )
+
+
+@dataclass
 class UnifiedConfig:
     """Unified configuration for NeuralMemory.
 
@@ -887,6 +924,9 @@ class UnifiedConfig:
 
     # PostgreSQL config (used when storage_backend == "postgres")
     postgres: PostgresConfig = field(default_factory=PostgresConfig)
+
+    # MCP response compaction
+    response: ResponseConfig = field(default_factory=ResponseConfig)
 
     # CLI preferences
     json_output: bool = False
@@ -960,6 +1000,7 @@ class UnifiedConfig:
             storage_backend=_validate_storage_backend(str(data.get("storage_backend", "sqlite"))),
             falkordb=FalkorDBConfig.from_dict(data.get("falkordb", {})),
             postgres=PostgresConfig.from_dict(data.get("postgres", {})),
+            response=ResponseConfig.from_dict(data.get("response", {})),
             json_output=data.get("cli", {}).get("json_output", False),
             default_depth=data.get("cli", {}).get("default_depth"),
             default_max_tokens=data.get("cli", {}).get("default_max_tokens", 500),
@@ -1132,6 +1173,14 @@ class UnifiedConfig:
             "# MCP tool tier (minimal/standard/full)",
             "[tool_tier]",
             f'tier = "{self.tool_tier.tier}"',
+            "",
+            "# MCP response compaction",
+            "[response]",
+            f"compact_mode = {'true' if self.response.compact_mode else 'false'}",
+            f"max_list_items = {self.response.max_list_items}",
+            f"strip_hints = {'true' if self.response.strip_hints else 'false'}",
+            f"content_preview_length = {self.response.content_preview_length}",
+            f"auto_compact_threshold = {self.response.auto_compact_threshold}",
             "",
             "# CLI preferences",
             "[cli]",

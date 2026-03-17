@@ -520,7 +520,14 @@ Priority scale: 9-10 critical (security, data loss), 7-8 important (decisions, p
 
 ## SESSION END
 
-Call nmem_auto(action="process", text="<brief session summary>") to capture remaining context.\
+Call nmem_auto(action="process", text="<brief session summary>") to capture remaining context.
+
+## COMPACT MODE
+
+All tools support `compact=true` to reduce response tokens by 60-80%. Use it for list queries \
+when you don't need full details. Use `token_budget=N` to cap response size. \
+Full details always available via nmem_show(memory_id). Responses with >20 list items are \
+auto-compacted.\
 """
 
 

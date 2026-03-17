@@ -335,11 +335,36 @@ async def handle_message(server: MCPServer, message: dict[str, Any]) -> dict[str
                 raw_args = {"content": raw_args}
         tool_args = _sanitize_surrogates(raw_args)
 
+        # Check compact mode before passing args to tool (pops 'compact' key)
+        from neural_memory.mcp.response_compactor import (
+            apply_token_budget,
+            compact_response,
+            needs_auto_compact,
+            should_compact,
+        )
+
+        use_compact = should_compact(tool_args=tool_args, config=server.config.response)
+        token_budget = tool_args.pop("token_budget", None)
+
         try:
             result = await asyncio.wait_for(
                 server.call_tool(tool_name, tool_args),
                 timeout=_TOOL_CALL_TIMEOUT,
             )
+
+            # Apply compact mode: explicit, global config, or auto-detect
+            resp_config = server.config.response
+            if isinstance(result, dict):
+                if use_compact:
+                    result = compact_response(result, resp_config)
+                elif needs_auto_compact(result, resp_config.auto_compact_threshold):
+                    logger.debug("Auto-compact: %s exceeded threshold", tool_name)
+                    result = compact_response(result, resp_config)
+
+                # Apply token budget if requested
+                if token_budget is not None:
+                    result = apply_token_budget(result, int(token_budget))
+
             result_text = json.dumps(result)
 
             # Post-tool passive capture (fire-and-forget, never blocks response)

@@ -177,7 +177,7 @@ All 3 phases complete: Foundation, Game Modes, Polish (share PNG, daily persiste
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **Neural Memory** (11365 symbols, 36175 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **Neural Memory** (11427 symbols, 36322 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -252,3 +252,53 @@ Before completing any code modification task, verify:
 - Generate docs: `npx gitnexus wiki`
 
 <!-- gitnexus:end -->
+
+---
+
+## XLabs — Autonomous Agent Platform
+
+This project is managed by XLabs. You have access to XLabs tools via the `xlabs-remote` MCP server.
+
+### Before Writing Code (MUST)
+
+Call these tools FIRST to understand context and avoid known issues:
+
+1. `xlabs_get_project_context` — tech stack, conventions, danger zones, health score
+   ```json
+   { "slug": "neural-memory" }
+   ```
+2. `xlabs_get_open_incidents` — known bugs to avoid
+3. `xlabs_get_previous_feedback` — learn from past agent sessions
+4. `xlabs_get_relevant_research` — research findings that may apply
+
+### During Work
+
+5. `xlabs_report_progress` — update dashboard (call at 25%, 50%, 75%, 100%)
+   ```json
+   { "task_id": "<id>", "percentage": 50, "status_text": "Implementing feature X" }
+   ```
+6. `xlabs_log_decision` — log significant architectural decisions
+   ```json
+   { "type": "prioritize", "subject": "Auth library", "chosen": "lucia-auth", "reasoning": "Better integration", "confidence": 0.8 }
+   ```
+
+### After Completing Work
+
+7. `xlabs_submit_feedback` — report blockers, suggestions, bugs
+   ```json
+   { "project_slug": "neural-memory", "type": "suggestion", "content": "Description", "severity": "info" }
+   ```
+8. `xlabs_create_task` — create follow-up tasks for out-of-scope work
+
+### Fleet Awareness
+
+9. `xlabs_get_fleet_overview` — all projects health + active tasks
+10. `xlabs_get_task_history` — recent completed tasks with summaries
+
+### Rules
+
+- **Always check context first** before writing code
+- **Report progress** at milestones
+- **Log decisions** for non-trivial architectural choices
+- **Submit feedback** at end of session with blockers/suggestions found
+
