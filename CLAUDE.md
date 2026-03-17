@@ -113,6 +113,16 @@ ALL files must be updated when bumping version:
 5. `tests/unit/test_health_fixes.py` → `assert neural_memory.__version__ == "x.y.z"`
 6. `tests/unit/test_markdown_export.py` → `"version": "x.y.z"` in fixture
 
+### OpenClaw Plugin Version Bump
+
+When bumping the OpenClaw plugin version (`integrations/neuralmemory/`):
+
+1. `integrations/neuralmemory/package.json` → `"version": "x.y.z"`
+2. `integrations/neuralmemory/openclaw.plugin.json` → `"version": "x.y.z"`
+3. `integrations/neuralmemory/src/index.ts` → `version: "x.y.z"` (line ~183, hardcoded in plugin definition)
+
+**CRITICAL**: `src/index.ts` has a hardcoded version string. If you only bump `package.json`, `openclaw plugins info` will show the OLD version.
+
 ## Pre-Ship Verification (MANDATORY)
 
 Before EVERY release, run:
