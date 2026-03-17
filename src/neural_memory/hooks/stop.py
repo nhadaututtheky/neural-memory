@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -50,8 +51,78 @@ def read_hook_input() -> dict[str, Any]:
         return {}
 
 
+def _get_entry_role(entry: dict[str, Any]) -> str:
+    """Extract the role from a JSONL transcript entry.
+
+    Claude Code transcript entries may nest role in different places:
+    - Top-level: {"role": "user", "content": ...}
+    - Nested: {"message": {"role": "assistant", ...}}
+    - Tool results: {"type": "tool_result", ...} or role == "tool"
+
+    Returns:
+        One of "user", "assistant", or "tool".
+    """
+    # Direct role field
+    role: str = str(entry.get("role", ""))
+    if role in ("user", "assistant", "tool"):
+        return role
+
+    # Nested message object
+    message = entry.get("message")
+    if isinstance(message, dict):
+        role = str(message.get("role", ""))
+        if role in ("user", "assistant", "tool"):
+            return role
+
+    # Tool result heuristic: type field or tool_use_id present
+    if entry.get("type") in ("tool_result", "tool_use"):
+        return "tool"
+    if "tool_use_id" in entry:
+        return "tool"
+
+    # Content list with tool_use blocks → assistant (but tool-heavy, skip)
+    content = entry.get("content")
+    if isinstance(content, list):
+        for item in content:
+            if isinstance(item, dict) and item.get("type") in ("tool_use", "tool_result"):
+                return "tool"
+
+    # Default: treat as user (will go through text extraction + length filter)
+    return "user"
+
+
+# Patterns that indicate memory-worthy assistant output.
+# These match the same signals auto_capture.py detects, plus common
+# session-end patterns like summaries and status updates.
+_MEMORY_MARKER_RE = re.compile(
+    r"(?i)"
+    r"(?:decided|chose|selected|opted|switched|migrated)"
+    r"|(?:root cause|bug|fixed|resolved|solved|workaround)"
+    r"|(?:lesson learned|takeaway|key insight|turns out|realized|discovered)"
+    r"|(?:TODO|FIXME|need to|should|must|remember to)"
+    r"|(?:prefer|always use|never use|don't use|avoid)"
+    r"|(?:quyết định|chọn|lỗi|sửa|bài học|hóa ra|cần phải)"
+    r"|(?:saved|committed|pushed|deployed|released|shipped)"
+    r"|(?:v\d+\.\d+)"
+)
+
+
+def _has_memory_markers(text: str) -> bool:
+    """Check if assistant text contains explicit memory-worthy markers.
+
+    Returns True if the text mentions decisions, errors, insights,
+    preferences, TODOs, or session-end signals worth capturing.
+    """
+    return bool(_MEMORY_MARKER_RE.search(text))
+
+
 def read_transcript_tail(transcript_path: str, max_lines: int = MAX_TRANSCRIPT_LINES) -> str:
-    """Read the last N entries from a JSONL transcript and extract text content."""
+    """Read the last N entries from a JSONL transcript and extract text content.
+
+    Applies role-based filtering: user messages get full capture,
+    assistant messages are only included if they contain explicit
+    memory markers. Tool results are skipped entirely.
+    """
     path = Path(transcript_path)
     if not path.exists() or not path.is_file():
         return ""
@@ -68,9 +139,22 @@ def read_transcript_tail(transcript_path: str, max_lines: int = MAX_TRANSCRIPT_L
                 continue
             try:
                 entry = json.loads(raw_line)
+                role = _get_entry_role(entry)
+
+                # Skip tool results entirely — data, not decisions
+                if role == "tool":
+                    continue
+
                 text = _extract_text(entry)
-                if text and len(text) > 20:
-                    lines.append(text)
+                if not text or len(text) <= 20:
+                    continue
+
+                # Assistant messages: only include if they contain
+                # explicit memory markers (decisions, root causes, etc.)
+                if role == "assistant" and not _has_memory_markers(text):
+                    continue
+
+                lines.append(text)
             except json.JSONDecodeError:
                 continue
     except OSError:
@@ -134,6 +218,88 @@ def _extract_session_summary(text: str) -> str:
     return f"Session activity: {summary}"
 
 
+async def _embedding_dedup(
+    items: list[dict[str, Any]],
+    similarity_threshold: float = 0.85,
+) -> list[dict[str, Any]]:
+    """Remove semantic near-duplicates using embedding cosine similarity.
+
+    Effective for Vietnamese text where different word forms produce
+    different simhashes but carry the same meaning.
+
+    Falls back gracefully (returns original list) if no embedding
+    provider is available.
+
+    Args:
+        items: Detected memory candidates from analyze_text_for_memories().
+        similarity_threshold: Pairs above this similarity are considered duplicates.
+
+    Returns:
+        Filtered list with semantic duplicates removed (keeps higher-confidence item).
+    """
+    if len(items) <= 1:
+        return items
+
+    try:
+        from neural_memory.engine.semantic_discovery import _auto_detect_provider
+
+        provider_name, model_name = _auto_detect_provider()
+    except (RuntimeError, Exception):
+        logger.debug("No embedding provider available, skipping semantic dedup")
+        return items
+
+    try:
+        from neural_memory.engine.embedding.provider import EmbeddingProvider
+
+        embed_provider: EmbeddingProvider
+        if provider_name == "sentence_transformer":
+            from neural_memory.engine.embedding.sentence_transformer import (
+                SentenceTransformerEmbedding,
+            )
+
+            embed_provider = SentenceTransformerEmbedding(model_name=model_name)
+        elif provider_name == "ollama":
+            from neural_memory.engine.embedding.ollama_embedding import OllamaEmbedding
+
+            embed_provider = OllamaEmbedding(model=model_name)
+        else:
+            # Skip API-based providers in stop hook (rate limits, latency)
+            logger.debug("Skipping API-based embedding provider %s in stop hook", provider_name)
+            return items
+
+        contents = [item["content"] for item in items]
+        embeddings = await embed_provider.embed_batch(contents)
+
+        # Mark indices to remove (keep higher-confidence item in each duplicate pair)
+        remove: set[int] = set()
+        for i in range(len(embeddings)):
+            if i in remove:
+                continue
+            for j in range(i + 1, len(embeddings)):
+                if j in remove:
+                    continue
+                sim = await embed_provider.similarity(embeddings[i], embeddings[j])
+                if sim >= similarity_threshold:
+                    # Remove the lower-confidence candidate
+                    if items[i]["confidence"] >= items[j]["confidence"]:
+                        remove.add(j)
+                    else:
+                        remove.add(i)
+                        break  # i is removed, stop comparing
+
+        filtered = [item for idx, item in enumerate(items) if idx not in remove]
+        if len(filtered) < len(items):
+            logger.debug(
+                "Embedding dedup removed %d/%d candidates",
+                len(items) - len(filtered),
+                len(items),
+            )
+        return filtered
+    except Exception:
+        logger.debug("Embedding dedup failed, using original list", exc_info=True)
+        return items
+
+
 async def capture_text(text: str) -> dict[str, Any]:
     """Detect and save memorable content from session transcript.
 
@@ -169,6 +335,10 @@ async def capture_text(text: str) -> dict[str, Any]:
         eligible = (
             [item for item in detected if item["confidence"] >= threshold] if detected else []
         )
+
+        # Embedding-based semantic dedup (graceful fallback if unavailable)
+        if len(eligible) > 1:
+            eligible = await _embedding_dedup(eligible)
 
         brain = await storage.get_brain(config.current_brain)
         if not brain:
