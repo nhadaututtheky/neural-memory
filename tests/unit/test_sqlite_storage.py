@@ -734,16 +734,19 @@ class TestFTS:
 
     @pytest.mark.asyncio
     async def test_fts_unicode_vietnamese(self, storage: SQLiteStorage) -> None:
-        """Test that Vietnamese diacritics are preserved (remove_diacritics=0)."""
+        """Test that Vietnamese diacritics removal matches both accented and unaccented forms."""
         n1 = Neuron.create(type=NeuronType.CONCEPT, content="Tôi thích uống cà phê buổi sáng")
         n2 = Neuron.create(type=NeuronType.CONCEPT, content="Ca phe is coffee in Vietnamese")
         await storage.add_neuron(n1)
         await storage.add_neuron(n2)
 
-        # Exact diacritics should match
+        # With remove_diacritics=2, "cà phê" matches both accented and unaccented forms
         results = await storage.find_neurons(content_contains="cà phê")
-        assert len(results) == 1
-        assert "cà phê" in results[0].content
+        assert len(results) == 2
+
+        # Unaccented query also matches the accented content
+        results = await storage.find_neurons(content_contains="ca phe")
+        assert len(results) == 2
 
     @pytest.mark.asyncio
     async def test_fts_sync_on_update(self, storage: SQLiteStorage) -> None:
