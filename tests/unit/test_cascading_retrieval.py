@@ -214,7 +214,7 @@ class TestSchemaV27:
         """Schema version bumped to 27."""
         from neural_memory.storage.sqlite_schema import SCHEMA_VERSION
 
-        assert SCHEMA_VERSION == 30
+        assert SCHEMA_VERSION == 31
 
     @pytest.mark.asyncio
     async def test_fiber_fts_table_exists(self, storage: SQLiteStorage) -> None:

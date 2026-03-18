@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 30
+SCHEMA_VERSION = 31
 
 # â”€â”€ Migrations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Each entry maps (from_version -> to_version) with a list of SQL statements.
@@ -29,7 +29,7 @@ FTS_SETUP_STATEMENTS: list[str] = [
         brain_id UNINDEXED,
         content='neurons',
         content_rowid='rowid',
-        tokenize='porter unicode61 remove_diacritics 0'
+        tokenize='porter unicode61 remove_diacritics 2'
     )""",
     # Auto-sync: insert
     """CREATE TRIGGER IF NOT EXISTS neurons_ai AFTER INSERT ON neurons BEGIN
@@ -57,7 +57,7 @@ FIBER_FTS_SETUP_STATEMENTS: list[str] = [
         brain_id UNINDEXED,
         content='fibers',
         content_rowid='rowid',
-        tokenize='porter unicode61 remove_diacritics 0'
+        tokenize='porter unicode61 remove_diacritics 2'
     )""",
     # Auto-sync: insert
     """CREATE TRIGGER IF NOT EXISTS fibers_ai AFTER INSERT ON fibers
@@ -566,6 +566,22 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
         # Performance: index on neurons(brain_id, content) for exact-match lookups
         "CREATE INDEX IF NOT EXISTS idx_neurons_content ON neurons(brain_id, content)",
     ],
+    (30, 31): [
+        # FTS5: enable diacritics removal for Vietnamese/multilingual recall.
+        # remove_diacritics=2 strips ALL diacritics (Vietnamese, Chinese pinyin, etc.)
+        # so "Tài khoản" matches queries "tai khoan" or "Tài khoản".
+        #
+        # Rebuild neurons_fts: drop triggers → drop table → recreate → reindex
+        "DROP TRIGGER IF EXISTS neurons_au",
+        "DROP TRIGGER IF EXISTS neurons_ad",
+        "DROP TRIGGER IF EXISTS neurons_ai",
+        "DROP TABLE IF EXISTS neurons_fts",
+        # Rebuild fibers_fts
+        "DROP TRIGGER IF EXISTS fibers_fts_au",
+        "DROP TRIGGER IF EXISTS fibers_fts_ad",
+        "DROP TRIGGER IF EXISTS fibers_fts_ai",
+        "DROP TABLE IF EXISTS fibers_fts",
+    ],
 }
 
 
@@ -605,6 +621,31 @@ async def run_migrations(conn: aiosqlite.Connection, current_version: int) -> in
         # Fiber FTS tables must exist before the v26->v27 backfill INSERT runs
         if key == (26, 27):
             await ensure_fiber_fts_tables(conn)
+
+        # v30->v31 drops FTS tables; recreate with new tokenizer + reindex
+        if key == (30, 31):
+            # Statements drop the tables first, then we recreate + backfill
+            statements_31 = MIGRATIONS.get(key, [])
+            for sql in statements_31:
+                try:
+                    await conn.execute(sql)
+                except Exception:
+                    pass  # triggers/tables may not exist
+            await ensure_fts_tables(conn)
+            await ensure_fiber_fts_tables(conn)
+            # Backfill neurons_fts from existing data
+            await conn.execute(
+                "INSERT OR IGNORE INTO neurons_fts(rowid, content, brain_id) "
+                "SELECT rowid, content, brain_id FROM neurons"
+            )
+            # Backfill fibers_fts from existing data
+            await conn.execute(
+                "INSERT OR IGNORE INTO fibers_fts(rowid, summary, brain_id) "
+                "SELECT rowid, summary, brain_id FROM fibers WHERE summary IS NOT NULL"
+            )
+            await conn.commit()
+            version = next_version
+            continue
 
         statements = MIGRATIONS.get(key, [])
 

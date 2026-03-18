@@ -519,3 +519,55 @@ class TestExportImport:
         assert import_response.status_code == 200
         data = import_response.json()
         assert data["neuron_count"] > 0
+
+
+class TestFTS5DiacriticsRemoval:
+    """FTS5 remove_diacritics=2 — Vietnamese text matches queries without dấu."""
+
+    @pytest.fixture
+    def brain_id(self, client: TestClient) -> str:
+        response = client.post("/brain/create", json={"name": "fts_diacritics_test"})
+        return response.json()["id"]
+
+    def test_vietnamese_query_without_diacritics(self, client: TestClient, brain_id: str) -> None:
+        """Encode Vietnamese text with diacritics, query without → should match."""
+        headers = {"X-Brain-ID": brain_id}
+
+        # Encode content with Vietnamese diacritics
+        client.post(
+            "/memory/encode",
+            json={"content": "Tài khoản 131 - Phải thu của khách hàng theo Thông tư 200"},
+            headers=headers,
+        )
+
+        # Query WITHOUT diacritics
+        response = client.post(
+            "/memory/query",
+            json={"query": "tai khoan 131 phai thu khach hang", "depth": 1},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["neurons_activated"] > 0, (
+            "FTS5 should match Vietnamese text when queried without diacritics "
+            "(remove_diacritics=2)"
+        )
+
+    def test_diacritics_query_also_works(self, client: TestClient, brain_id: str) -> None:
+        """Query with diacritics should still match content with diacritics."""
+        headers = {"X-Brain-ID": brain_id}
+
+        client.post(
+            "/memory/encode",
+            json={"content": "Thuế suất GTGT phổ thông là 10% theo Điều 7 Luật Thuế GTGT"},
+            headers=headers,
+        )
+
+        response = client.post(
+            "/memory/query",
+            json={"query": "Thuế GTGT Điều 7", "depth": 1},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["neurons_activated"] > 0
