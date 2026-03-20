@@ -535,7 +535,10 @@ class ToolHandler:
 
             encode_content = encrypted_content if encrypted_content is not None else content
             result = await encoder.encode(
-                content=encode_content, timestamp=event_timestamp, tags=tags if tags else None
+                content=encode_content,
+                timestamp=event_timestamp,
+                tags=tags if tags else None,
+                metadata={"type": mem_type.value},
             )
 
             # Attach encryption metadata to fiber
@@ -997,6 +1000,81 @@ class ToolHandler:
 
         self._fire_eternal_trigger(query)
 
+        # Budget-aware context re-formatting (opt-in via recall_token_budget param)
+        budget_stats: dict[str, Any] | None = None
+        raw_recall_budget = args.get("recall_token_budget")
+        if raw_recall_budget is not None and result.fibers_matched:
+            try:
+                recall_budget = min(int(raw_recall_budget), 100_000)
+                from neural_memory.engine.retrieval_context import format_context_budgeted
+                from neural_memory.engine.token_budget import BudgetConfig
+
+                budget_cfg = BudgetConfig(
+                    system_overhead_tokens=self.config.budget.system_overhead,
+                    per_fiber_overhead=self.config.budget.per_fiber_overhead,
+                )
+
+                # Fetch fiber objects for matched fibers
+                candidate_fibers = []
+                for fid in result.fibers_matched:
+                    f = await storage.get_fiber(fid)
+                    if f:
+                        candidate_fibers.append(f)
+
+                # Build a minimal activations map from co_activations and neurons
+                from neural_memory.engine.activation import ActivationResult
+
+                dummy_activations: dict[str, ActivationResult] = {}
+                for co in result.co_activations:
+                    for nid in co.neuron_ids:
+                        if nid not in dummy_activations:
+                            dummy_activations[nid] = ActivationResult(
+                                neuron_id=nid,
+                                activation_level=co.binding_strength,
+                                hop_distance=0,
+                                path=[nid],
+                                source_anchor=nid,
+                            )
+
+                if candidate_fibers:
+                    # Get encryptor if encryption is enabled
+                    encryptor_obj = None
+                    try:
+                        if self.config.encryption.enabled:
+                            from pathlib import Path as _Path
+
+                            from neural_memory.safety.encryption import MemoryEncryptor
+
+                            keys_dir_str = getattr(self.config.encryption, "keys_dir", "")
+                            keys_dir = (
+                                _Path(keys_dir_str)
+                                if keys_dir_str
+                                else (self.config.data_dir / "keys")
+                            )
+                            encryptor_obj = MemoryEncryptor(keys_dir=keys_dir)
+                    except Exception:
+                        pass
+
+                    budgeted_ctx, _, allocation = await format_context_budgeted(
+                        storage=storage,
+                        activations=dummy_activations,
+                        fibers=candidate_fibers,
+                        max_tokens=recall_budget,
+                        encryptor=encryptor_obj,
+                        brain_id=brain_id,
+                        budget_config=budget_cfg,
+                    )
+
+                    from dataclasses import replace as _dc_replace
+
+                    from neural_memory.engine.token_budget import format_budget_report
+
+                    budget_stats = format_budget_report(allocation)
+                    # Replace the pipeline-generated context with budget-aware context
+                    result = _dc_replace(result, context=budgeted_ctx)
+            except Exception:
+                logger.debug("Budget-aware recall failed (non-critical), using standard context", exc_info=True)
+
         if result.confidence < min_confidence:
             return {
                 "answer": None,
@@ -1092,6 +1170,9 @@ class ToolHandler:
                 "depth_used": result.depth_used.value,
                 "tokens_used": result.tokens_used,
             }
+
+        if budget_stats is not None:
+            response["budget_stats"] = budget_stats
 
         if result.score_breakdown is not None:
             response["score_breakdown"] = {
@@ -2620,3 +2701,476 @@ class ToolHandler:
             return {"daily": daily, "days": days}
         else:
             return {"error": f"Unknown action: {action}"}
+
+    async def _lifecycle(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Memory lifecycle management: status, recover, freeze, thaw."""
+        storage = await self.get_storage()
+        brain, err = await _get_brain_or_error(storage)
+        if err:
+            return err
+
+        action = args.get("action", "status")
+        neuron_id: str | None = args.get("id") or args.get("neuron_id")
+
+        if action == "status":
+            try:
+                distribution = await storage.get_lifecycle_distribution()
+            except Exception:
+                logger.error("nmem_lifecycle status failed", exc_info=True)
+                return {"error": "Failed to retrieve lifecycle distribution"}
+            total = sum(distribution.values())
+            return {
+                "brain": brain.id,
+                "distribution": distribution,
+                "total_neurons": total,
+            }
+
+        if action in ("recover", "freeze", "thaw"):
+            if not neuron_id:
+                return {"error": f"action='{action}' requires 'id' (neuron_id)"}
+
+            if action == "recover":
+                # Find which fiber contains this neuron, then recover.
+                from neural_memory.engine.compression import CompressionEngine
+
+                fibers = await storage.find_fibers(contains_neuron=neuron_id)
+                if not fibers:
+                    # Try decompress by fiber_id directly (caller may pass fiber_id as id)
+                    engine = CompressionEngine(storage)
+                    success = await engine.recover_fiber(neuron_id)
+                    if success:
+                        return {"recovered": True, "fiber_id": neuron_id}
+                    return {
+                        "recovered": False,
+                        "reason": "No fiber found for neuron and direct recovery failed",
+                    }
+
+                fiber = fibers[0]
+                engine = CompressionEngine(storage)
+                success = await engine.recover_fiber(fiber.id)
+                return {
+                    "recovered": success,
+                    "fiber_id": fiber.id,
+                    "neuron_id": neuron_id,
+                }
+
+            elif action == "freeze":
+                try:
+                    await storage.update_neuron_frozen(neuron_id, frozen=True)
+                except Exception:
+                    logger.error("nmem_lifecycle freeze failed for %s", neuron_id, exc_info=True)
+                    return {"error": "Failed to freeze neuron"}
+                return {"frozen": True, "neuron_id": neuron_id}
+
+            elif action == "thaw":
+                try:
+                    await storage.update_neuron_frozen(neuron_id, frozen=False)
+                except Exception:
+                    logger.error("nmem_lifecycle thaw failed for %s", neuron_id, exc_info=True)
+                    return {"error": "Failed to thaw neuron"}
+                return {"frozen": False, "neuron_id": neuron_id}
+
+        return {"error": f"Unknown action: {action}. Valid: status, recover, freeze, thaw"}
+
+    # ──────────────────── Adaptive Instructions ────────────────────
+
+    def _ensure_instruction_meta(self, meta: dict[str, Any]) -> dict[str, Any]:
+        """Backfill missing instruction metadata fields (non-destructive).
+
+        Returns a new dict with all required instruction fields present.
+        Existing keys in *meta* are preserved unchanged.
+        """
+        defaults: dict[str, Any] = {
+            "version": 1,
+            "execution_count": 0,
+            "success_count": 0,
+            "failure_count": 0,
+            "success_rate": None,
+            "last_executed_at": None,
+            "failure_modes": [],
+            "trigger_patterns": [],
+            "refinement_history": [],
+        }
+        return {**defaults, **meta}
+
+    async def _refine(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Refine an instruction or workflow memory.
+
+        Increments the version counter, stores a snapshot in refinement_history,
+        appends failure modes / trigger patterns, and persists the updated metadata.
+        """
+        neuron_id = args.get("neuron_id")
+        if not neuron_id or not isinstance(neuron_id, str):
+            return {"error": "neuron_id is required"}
+
+        new_content = args.get("new_content")
+        reason = args.get("reason", "")
+        add_failure_mode = args.get("add_failure_mode")
+        add_trigger = args.get("add_trigger")
+
+        if new_content is None and not add_failure_mode and not add_trigger:
+            return {
+                "error": "At least one of new_content, add_failure_mode, or add_trigger is required"
+            }
+
+        storage = await self.get_storage()
+        try:
+            _require_brain_id(storage)
+        except ValueError:
+            logger.error("No brain configured for refine")
+            return {"error": "No brain configured"}
+
+        # Resolve fiber by ID
+        typed_mem = await storage.get_typed_memory(neuron_id)
+        fiber = await storage.get_fiber(neuron_id) if typed_mem else None
+
+        if not typed_mem or not fiber:
+            return {"error": "Memory not found"}
+
+        # Validate instruction/workflow type
+        mem_type_val = typed_mem.memory_type.value
+        if mem_type_val not in ("instruction", "workflow"):
+            return {
+                "error": f"nmem_refine only supports instruction/workflow memories, got '{mem_type_val}'"
+            }
+
+        # Backfill metadata if old neuron lacks instruction fields
+        meta = self._ensure_instruction_meta(dict(fiber.metadata))
+
+        changes: list[str] = []
+
+        if new_content is not None:
+            if len(new_content) > MAX_CONTENT_LENGTH:
+                return {
+                    "error": f"Content too long ({len(new_content)} chars). Max: {MAX_CONTENT_LENGTH}."
+                }
+            # Fetch anchor to snapshot old content
+            anchor = await storage.get_neuron(fiber.anchor_neuron_id)
+            old_content = anchor.content if anchor else ""
+
+            # Increment version and record history
+            old_version = meta["version"]
+            new_version = old_version + 1
+            history_entry: dict[str, Any] = {
+                "version": old_version,
+                "changed_at": utcnow().isoformat(),
+                "reason": reason,
+                "old_content": old_content[:100],
+            }
+            refinement_history: list[dict[str, Any]] = list(meta["refinement_history"])
+            if len(refinement_history) >= 10:
+                refinement_history = refinement_history[-9:]
+            refinement_history.append(history_entry)
+
+            meta = {
+                **meta,
+                "version": new_version,
+                "refinement_history": refinement_history,
+            }
+
+            # Update anchor neuron content
+            if anchor:
+                from dataclasses import replace as dc_replace
+
+                updated_neuron = dc_replace(anchor, content=new_content)
+                await storage.update_neuron(updated_neuron)
+                changes.append(f"content updated (v{old_version}→v{new_version})")
+
+        if add_failure_mode:
+            failure_modes: list[str] = list(meta["failure_modes"])
+            if add_failure_mode not in failure_modes:
+                failure_modes = [*failure_modes, add_failure_mode]
+            if len(failure_modes) > 20:
+                failure_modes = failure_modes[-20:]
+            meta = {**meta, "failure_modes": failure_modes}
+            changes.append(f"failure_mode added: {add_failure_mode[:60]}")
+
+        if add_trigger:
+            trigger_patterns: list[str] = list(meta["trigger_patterns"])
+            normalized_trigger = add_trigger.lower().strip()
+            if normalized_trigger and normalized_trigger not in trigger_patterns:
+                trigger_patterns = [*trigger_patterns, normalized_trigger]
+            if len(trigger_patterns) > 10:
+                trigger_patterns = trigger_patterns[-10:]
+            meta = {**meta, "trigger_patterns": trigger_patterns}
+            changes.append(f"trigger added: {normalized_trigger}")
+
+        # Persist updated fiber metadata
+        await storage.update_fiber_metadata(fiber.id, meta)
+
+        return {
+            "status": "refined",
+            "memory_id": neuron_id,
+            "changes": changes,
+            "metadata": {
+                "version": meta["version"],
+                "execution_count": meta["execution_count"],
+                "success_count": meta["success_count"],
+                "failure_count": meta["failure_count"],
+                "success_rate": meta["success_rate"],
+                "last_executed_at": meta["last_executed_at"],
+                "failure_modes": meta["failure_modes"],
+                "trigger_patterns": meta["trigger_patterns"],
+                "refinement_history": meta["refinement_history"],
+            },
+        }
+
+    async def _report_outcome(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Report execution outcome for an instruction or workflow memory.
+
+        Increments execution_count, success_count or failure_count, recomputes
+        success_rate, updates last_executed_at, and optionally records failure modes.
+        """
+        neuron_id = args.get("neuron_id")
+        if not neuron_id or not isinstance(neuron_id, str):
+            return {"error": "neuron_id is required"}
+
+        raw_success = args.get("success")
+        if raw_success is None:
+            return {"error": "success (bool) is required"}
+        success = bool(raw_success)
+
+        failure_description = args.get("failure_description")
+        # context arg accepted but used only for logging / future linking
+        _context = args.get("context")
+
+        storage = await self.get_storage()
+        try:
+            _require_brain_id(storage)
+        except ValueError:
+            logger.error("No brain configured for report_outcome")
+            return {"error": "No brain configured"}
+
+        typed_mem = await storage.get_typed_memory(neuron_id)
+        fiber = await storage.get_fiber(neuron_id) if typed_mem else None
+
+        if not typed_mem or not fiber:
+            return {"error": "Memory not found"}
+
+        mem_type_val = typed_mem.memory_type.value
+        if mem_type_val not in ("instruction", "workflow"):
+            return {
+                "error": f"nmem_report_outcome only supports instruction/workflow memories, got '{mem_type_val}'"
+            }
+
+        meta = self._ensure_instruction_meta(dict(fiber.metadata))
+
+        # Increment counters
+        new_exec_count = meta["execution_count"] + 1
+        new_success_count = meta["success_count"] + (1 if success else 0)
+        new_failure_count = meta["failure_count"] + (0 if success else 1)
+        new_success_rate = new_success_count / new_exec_count
+        new_last_executed = utcnow().isoformat()
+
+        # Append failure mode if provided
+        failure_modes: list[str] = list(meta["failure_modes"])
+        if not success and failure_description:
+            if failure_description not in failure_modes:
+                failure_modes = [*failure_modes, failure_description]
+            if len(failure_modes) > 20:
+                failure_modes = failure_modes[-20:]
+
+        updated_meta = {
+            **meta,
+            "execution_count": new_exec_count,
+            "success_count": new_success_count,
+            "failure_count": new_failure_count,
+            "success_rate": round(new_success_rate, 4),
+            "last_executed_at": new_last_executed,
+            "failure_modes": failure_modes,
+        }
+
+        await storage.update_fiber_metadata(fiber.id, updated_meta)
+
+        return {
+            "status": "recorded",
+            "memory_id": neuron_id,
+            "success": success,
+            "execution_count": new_exec_count,
+            "success_count": new_success_count,
+            "failure_count": new_failure_count,
+            "success_rate": round(new_success_rate, 4),
+            "last_executed_at": new_last_executed,
+            "failure_modes": failure_modes,
+        }
+
+    async def _budget(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Token budget analysis for recall context allocation."""
+        action = args.get("action", "")
+        if action not in ("estimate", "analyze", "optimize"):
+            return {"error": f"Invalid action: {action!r}. Must be 'estimate', 'analyze', or 'optimize'."}
+
+        storage = await self.get_storage()
+        try:
+            brain_id = _require_brain_id(storage)
+        except ValueError:
+            logger.error("No brain configured for budget analysis")
+            return {"error": "No brain configured"}
+
+        brain = await storage.get_brain(brain_id)
+        if not brain:
+            return {"error": "No brain configured"}
+
+        max_tokens = min(int(args.get("max_tokens", self.config.budget.default_tokens)), 100_000)
+
+        from neural_memory.engine.token_budget import (
+            BudgetConfig,
+            allocate_budget,
+            compute_token_costs,
+            format_budget_report,
+        )
+
+        budget_cfg = BudgetConfig(
+            system_overhead_tokens=self.config.budget.system_overhead,
+            per_fiber_overhead=self.config.budget.per_fiber_overhead,
+        )
+
+        if action == "estimate":
+            query = args.get("query", "")
+            if not query or not isinstance(query, str):
+                return {"error": "query is required for action='estimate'"}
+
+            try:
+                pipeline = ReflexPipeline(storage, brain.config)
+                result = await pipeline.query(
+                    query=query,
+                    depth=DepthLevel(0),  # Shallow — just activation, no heavy traversal
+                    max_tokens=max_tokens,
+                    reference_time=utcnow(),
+                )
+            except Exception:
+                logger.error("Budget estimate pipeline failed", exc_info=True)
+                return {"error": "Failed to run retrieval pipeline for estimate"}
+
+            # Fetch fiber objects for the matched fibers
+            fibers: list[Any] = []
+            for fid in (result.fibers_matched or []):
+                fiber = await storage.get_fiber(fid)
+                if fiber:
+                    fibers.append(fiber)
+
+            # Build activations map from co_activations (RetrievalResult has no .activations field)
+            from neural_memory.engine.activation import ActivationResult
+
+            estimate_activations: dict[str, ActivationResult] = {}
+            for co in result.co_activations:
+                for nid in co.neuron_ids:
+                    if nid not in estimate_activations:
+                        estimate_activations[nid] = ActivationResult(
+                            neuron_id=nid,
+                            activation_level=co.binding_strength,
+                            hop_distance=0,
+                            path=[nid],
+                            source_anchor=nid,
+                        )
+
+            costs = compute_token_costs(fibers, estimate_activations, budget_cfg)
+            allocation = allocate_budget(costs, max_tokens, budget_cfg)
+            report = format_budget_report(allocation)
+
+            return {
+                "action": "estimate",
+                "query": query,
+                "max_tokens": max_tokens,
+                "neurons_activated": result.neurons_activated,
+                "fibers_found": len(fibers),
+                "budget": report,
+                "would_drop": allocation.fibers_dropped,
+                "confidence": result.confidence,
+            }
+
+        elif action == "analyze":
+            # Profile the brain's token cost distribution by memory type
+            try:
+                fibers_list = await storage.get_fibers(limit=min(200, 1000))
+            except Exception:
+                logger.error("Budget analyze: get_fibers failed", exc_info=True)
+                return {"error": "Failed to list fibers for analysis"}
+
+            if not fibers_list:
+                return {
+                    "action": "analyze",
+                    "brain": brain_id,
+                    "total_fibers": 0,
+                    "message": "No fibers found in brain",
+                }
+
+            # Compute costs with uniform activation score (no query context)
+            dummy_activations: dict[str, Any] = {}
+            costs = compute_token_costs(fibers_list, dummy_activations, budget_cfg)
+
+            if not costs:
+                return {
+                    "action": "analyze",
+                    "brain": brain_id,
+                    "total_fibers": len(fibers_list),
+                    "message": "No cost data computed",
+                }
+
+            total_tokens = sum(c.total_tokens for c in costs)
+            avg_tokens = total_tokens / len(costs) if costs else 0
+            max_cost = max(c.total_tokens for c in costs)
+            min_cost = min(c.total_tokens for c in costs)
+
+            # Top 5 most expensive fibers
+            top_expensive = sorted(costs, key=lambda c: c.total_tokens, reverse=True)[:5]
+
+            return {
+                "action": "analyze",
+                "brain": brain_id,
+                "total_fibers": len(fibers_list),
+                "total_tokens_all_fibers": total_tokens,
+                "avg_tokens_per_fiber": round(avg_tokens, 1),
+                "max_fiber_tokens": max_cost,
+                "min_fiber_tokens": min_cost,
+                "estimated_full_recall_tokens": total_tokens + budget_cfg.system_overhead_tokens,
+                "would_fit_in_4k": sum(1 for c in costs if c.total_tokens <= 4000),
+                "top_expensive_fibers": [
+                    {"fiber_id": c.fiber_id, "total_tokens": c.total_tokens}
+                    for c in top_expensive
+                ],
+            }
+
+        else:  # optimize
+            # Find low-value-per-token fibers that are compression candidates
+            try:
+                fibers_list = await storage.get_fibers(limit=min(200, 1000))
+            except Exception:
+                logger.error("Budget optimize: get_fibers failed", exc_info=True)
+                return {"error": "Failed to list fibers for optimization"}
+
+            if not fibers_list:
+                return {
+                    "action": "optimize",
+                    "recommendations": [],
+                    "message": "No fibers found",
+                }
+
+            dummy_activations = {}
+            costs = compute_token_costs(fibers_list, dummy_activations, budget_cfg)
+
+            # Fibers with zero or very low value_per_token and high cost are candidates
+            candidates = [
+                c for c in costs
+                if c.total_tokens > 100  # Only fibers large enough to matter
+            ]
+            # Sort by worst efficiency (high cost, low value) — cost > 100, no activation context
+            candidates_sorted = sorted(candidates, key=lambda c: c.total_tokens, reverse=True)[:10]
+
+            recommendations = []
+            for c in candidates_sorted:
+                savings_estimate = max(0, c.total_tokens - budget_cfg.per_fiber_overhead - 20)
+                recommendations.append({
+                    "fiber_id": c.fiber_id,
+                    "current_tokens": c.total_tokens,
+                    "estimated_savings_if_compressed": savings_estimate,
+                    "suggestion": "Consider running nmem_consolidate to compress this fiber's content into a summary.",
+                })
+
+            return {
+                "action": "optimize",
+                "fibers_analyzed": len(costs),
+                "compression_candidates": len(recommendations),
+                "recommendations": recommendations,
+                "tip": "Run nmem_consolidate with strategy='mature' to auto-summarize old fibers.",
+            }

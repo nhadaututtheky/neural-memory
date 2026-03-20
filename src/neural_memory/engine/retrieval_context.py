@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -92,10 +93,241 @@ def _estimate_tokens(text: str) -> int:
     return int(len(text.split()) * _TOKEN_RATIO)
 
 
+# Default token cost assumed for fibers that have no estimated_tokens in metadata.
+_DEFAULT_FIBER_TOKENS = 50
+
+
+@dataclass(frozen=True)
+class BudgetResult:
+    """Result of budget-aware fiber selection (greedy knapsack).
+
+    Attributes:
+        fibers_selected: Number of fibers selected within budget.
+        fibers_skipped: Number of fibers excluded due to budget exhaustion.
+        tokens_budget: The total token budget given.
+        tokens_used: Estimated tokens used by selected fibers.
+        tokens_remaining: Budget remaining after selection.
+        selection_strategy: "optimal" (knapsack) or "sequential".
+        skipped_summary: Up to 5 skipped fibers with cost/activation info.
+    """
+
+    fibers_selected: int
+    fibers_skipped: int
+    tokens_budget: int
+    tokens_used: int
+    tokens_remaining: int
+    selection_strategy: str
+    skipped_summary: list[dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a plain dict for MCP response inclusion."""
+        return {
+            "fibers_selected": self.fibers_selected,
+            "fibers_skipped": self.fibers_skipped,
+            "tokens_budget": self.tokens_budget,
+            "tokens_used": self.tokens_used,
+            "tokens_remaining": self.tokens_remaining,
+            "selection_strategy": self.selection_strategy,
+            "skipped_summary": list(self.skipped_summary),
+        }
+
+
+def select_within_budget(
+    fibers: list[Any],  # list[Fiber]
+    activations: dict[str, ActivationResult],
+    budget: int,
+) -> tuple[list[Any], BudgetResult]:
+    """Select fibers using greedy knapsack (value-density ranking) within budget.
+
+    Each fiber's value-density = activation_score / estimated_tokens_cost.
+    Fibers are sorted by value-density descending; greedily selected while
+    they fit within the remaining budget.
+
+    Args:
+        fibers: Candidate fibers (Fiber instances).
+        activations: Map of neuron_id → ActivationResult (for scoring).
+        budget: Total token budget available.
+
+    Returns:
+        Tuple of (selected_fibers, BudgetResult).
+    """
+    if not fibers or budget <= 0:
+        return [], BudgetResult(
+            fibers_selected=0,
+            fibers_skipped=len(fibers),
+            tokens_budget=budget,
+            tokens_used=0,
+            tokens_remaining=budget,
+            selection_strategy="optimal",
+            skipped_summary=[],
+        )
+
+    # Compute cost and activation score for each fiber.
+    fiber_costs: list[tuple[Any, int, float]] = []  # (fiber, cost, activation)
+    for fiber in fibers:
+        cost = int(fiber.metadata.get("estimated_tokens", _DEFAULT_FIBER_TOKENS))
+        cost = max(cost, 1)  # Guard against zero-cost fibers
+        # Activation score: use anchor neuron if available, else max over neuron_ids
+        activation: float = 0.0
+        if fiber.anchor_neuron_id in activations:
+            activation = activations[fiber.anchor_neuron_id].activation_level
+        elif fiber.neuron_ids:
+            for nid in fiber.neuron_ids:
+                ar = activations.get(nid)
+                if ar is not None:
+                    activation = max(activation, ar.activation_level)
+        fiber_costs.append((fiber, cost, activation))
+
+    # Sort by value-density descending: higher activation per token wins.
+    ranked = sorted(
+        fiber_costs,
+        key=lambda t: t[2] / t[1],  # activation / cost
+        reverse=True,
+    )
+
+    selected: list[Any] = []
+    skipped: list[Any] = []
+    tokens_used = 0
+
+    for fiber, cost, activation in ranked:
+        if tokens_used + cost <= budget:
+            selected.append(fiber)
+            tokens_used += cost
+        else:
+            skipped.append((fiber, cost, activation))
+
+    # Build skipped summary (top 5 skipped by activation)
+    skipped_by_activation = sorted(skipped, key=lambda t: t[2], reverse=True)[:5]
+    skipped_summary = [
+        {
+            "fiber_id": f.id,
+            "estimated_tokens": c,
+            "activation": round(a, 4),
+        }
+        for f, c, a in skipped_by_activation
+    ]
+
+    result = BudgetResult(
+        fibers_selected=len(selected),
+        fibers_skipped=len(skipped),
+        tokens_budget=budget,
+        tokens_used=tokens_used,
+        tokens_remaining=budget - tokens_used,
+        selection_strategy="optimal",
+        skipped_summary=skipped_summary,
+    )
+    return selected, result
+
+
 if TYPE_CHECKING:
     from neural_memory.core.fiber import Fiber
+    from neural_memory.engine.token_budget import BudgetAllocation, BudgetConfig
     from neural_memory.safety.encryption import MemoryEncryptor
     from neural_memory.storage.base import NeuralStorage
+
+
+async def format_context_budgeted(
+    storage: NeuralStorage,
+    activations: dict[str, ActivationResult],
+    fibers: list[Fiber],
+    max_tokens: int,
+    encryptor: MemoryEncryptor | None = None,
+    brain_id: str = "",
+    budget_config: BudgetConfig | None = None,
+) -> tuple[str, int, BudgetAllocation]:
+    """Format memories with budget-aware fiber selection.
+
+    Unlike format_context() which processes fibers in order and truncates,
+    this function selects the highest value-per-token fibers first, ensuring
+    the most valuable memories fit within the token budget.
+
+    Args:
+        storage: Neural storage backend.
+        activations: Map of neuron_id -> ActivationResult for scoring.
+        fibers: Candidate fibers from retrieval pipeline.
+        max_tokens: Maximum tokens allowed in the formatted output.
+        encryptor: Optional memory encryptor for decryption.
+        brain_id: Active brain ID (for decryption).
+        budget_config: Optional budget configuration overrides.
+
+    Returns:
+        Tuple of (formatted_context, token_estimate, budget_allocation).
+    """
+    from neural_memory.engine.token_budget import (
+        BudgetConfig,
+        allocate_budget,
+    )
+
+    cfg = budget_config or BudgetConfig()
+
+    # Pre-fetch anchor neurons to get real content for cost estimation
+    anchor_ids = list({f.anchor_neuron_id for f in fibers if not f.summary})
+    anchor_map = await storage.get_neurons_batch(anchor_ids) if anchor_ids else {}
+
+    # Build costs using actual content (summary or anchor text)
+    from neural_memory.engine.token_budget import TokenCost
+
+    costs: list[TokenCost] = []
+    for fiber in fibers[: cfg.max_fibers_considered]:
+        if fiber.summary:
+            content_text = fiber.summary
+        else:
+            anchor = anchor_map.get(fiber.anchor_neuron_id)
+            content_text = anchor.content if anchor else ""
+
+        from neural_memory.engine.token_budget import estimate_fiber_tokens
+
+        content_tokens = estimate_fiber_tokens(content_text)
+        metadata_tokens = cfg.per_fiber_overhead
+        total_tokens = max(cfg.min_fiber_tokens, content_tokens + metadata_tokens)
+
+        value_score: float = 0.0
+        if fiber.anchor_neuron_id in activations:
+            value_score = activations[fiber.anchor_neuron_id].activation_level
+        elif fiber.neuron_ids:
+            for nid in fiber.neuron_ids:
+                ar = activations.get(nid)
+                if ar is not None:
+                    value_score = max(value_score, ar.activation_level)
+        value_score = value_score + fiber.salience * 0.1 + fiber.conductivity * 0.05
+        value_per_token = value_score / total_tokens if total_tokens > 0 else 0.0
+
+        costs.append(
+            TokenCost(
+                fiber_id=fiber.id,
+                content_tokens=content_tokens,
+                metadata_tokens=metadata_tokens,
+                total_tokens=total_tokens,
+                value_score=value_score,
+                value_per_token=value_per_token,
+            )
+        )
+
+    allocation = allocate_budget(costs, max_tokens, cfg)
+
+    # Build set of selected fiber IDs for fast lookup
+    selected_ids = {c.fiber_id for c in allocation.selected}
+
+    # Filter fibers to only the budget-selected ones, preserving value order
+    # Sort selected fibers by value_score so highest-value appear first
+    cost_by_id = {c.fiber_id: c for c in allocation.selected}
+    selected_fibers = sorted(
+        [f for f in fibers if f.id in selected_ids],
+        key=lambda f: cost_by_id[f.id].value_score,
+        reverse=True,
+    )
+
+    # Reuse existing format_context logic on the budget-selected subset
+    formatted, token_estimate = await format_context(
+        storage=storage,
+        activations=activations,
+        fibers=selected_fibers,
+        max_tokens=max_tokens,
+        encryptor=encryptor,
+        brain_id=brain_id,
+    )
+
+    return formatted, token_estimate, allocation
 
 
 async def format_context(

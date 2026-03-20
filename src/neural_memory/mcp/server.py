@@ -262,6 +262,10 @@ class MCPServer(
             "nmem_drift": self._drift,
             "nmem_surface": self._surface,
             "nmem_tool_stats": self._tool_stats,
+            "nmem_lifecycle": self._lifecycle,
+            "nmem_refine": self._refine,
+            "nmem_report_outcome": self._report_outcome,
+            "nmem_budget": self._budget,
         }
         handler = dispatch.get(name)
         if handler:

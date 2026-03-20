@@ -299,6 +299,26 @@ class SQLiteFiberMixin:
 
         await conn.commit()
 
+    async def update_fiber_metadata(self, fiber_id: str, metadata: dict[str, Any]) -> None:
+        """Update only the metadata JSON column for a fiber (lightweight patch).
+
+        Fetches the current fiber, merges the provided metadata on top, then
+        persists via update_fiber.  No-op if the fiber does not exist.
+
+        Args:
+            fiber_id: The fiber to update.
+            metadata: New metadata values to merge (existing keys are overwritten).
+        """
+        fiber = await self.get_fiber(fiber_id)
+        if fiber is None:
+            return
+
+        import dataclasses
+
+        updated_meta = {**fiber.metadata, **metadata}
+        updated_fiber = dataclasses.replace(fiber, metadata=updated_meta)
+        await self.update_fiber(updated_fiber)
+
     async def delete_fiber(self, fiber_id: str) -> bool:
         conn = self._ensure_conn()
         brain_id = self._get_brain_id()

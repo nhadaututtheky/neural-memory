@@ -1346,6 +1346,13 @@ class BuildFiberStep:
 
         # Copy metadata to avoid leaking non-serializable objects into the fiber
         fiber_metadata = {k: v for k, v in ctx.effective_metadata.items() if k != "_pipeline_fiber"}
+
+        # Encode-time token estimation: stored in metadata for budget-aware retrieval.
+        # Uses word-count * 1.3 heuristic (same as retrieval_context._TOKEN_RATIO).
+        if "estimated_tokens" not in fiber_metadata:
+            token_estimate = int(len(ctx.content.split()) * 1.3)
+            fiber_metadata = {**fiber_metadata, "estimated_tokens": token_estimate}
+
         fiber = Fiber.create(
             neuron_ids=neuron_ids,
             synapse_ids=synapse_ids,

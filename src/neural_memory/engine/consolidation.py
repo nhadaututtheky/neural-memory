@@ -42,6 +42,7 @@ class ConsolidationStrategy(StrEnum):
     DEDUP = "dedup"
     SEMANTIC_LINK = "semantic_link"
     COMPRESS = "compress"
+    LIFECYCLE = "lifecycle"
     PROCESS_TOOL_EVENTS = "process_tool_events"
     DETECT_DRIFT = "detect_drift"
     ALL = "all"
@@ -203,6 +204,7 @@ class ConsolidationEngine:
                 ConsolidationStrategy.MERGE,
                 ConsolidationStrategy.MATURE,
                 ConsolidationStrategy.COMPRESS,
+                ConsolidationStrategy.LIFECYCLE,
             }
         ),
         frozenset(
@@ -257,6 +259,9 @@ class ConsolidationEngine:
             ConsolidationStrategy.DEDUP: lambda: self._dedup(report, dry_run),
             ConsolidationStrategy.SEMANTIC_LINK: lambda: self._semantic_link(report, dry_run),
             ConsolidationStrategy.COMPRESS: lambda: self._compress(report, reference_time, dry_run),
+            ConsolidationStrategy.LIFECYCLE: lambda: self._lifecycle(
+                report, reference_time, dry_run
+            ),
             ConsolidationStrategy.PROCESS_TOOL_EVENTS: lambda: self._process_tool_events(
                 report, dry_run
             ),
@@ -1262,6 +1267,99 @@ class ConsolidationEngine:
 
         report.fibers_compressed += compression_report.fibers_compressed
         report.tokens_saved += compression_report.tokens_saved
+
+    async def _lifecycle(
+        self,
+        report: ConsolidationReport,
+        reference_time: datetime,
+        dry_run: bool,
+    ) -> None:
+        """Calculate heat scores and update lifecycle_state for all neurons.
+
+        Fetches all neurons in the current brain, computes heat scores from
+        access frequency and recency, then updates the lifecycle_state column.
+        Each state maps to a compression tier range:
+          ACTIVE → < 7d or hot (heat > threshold)
+          WARM   → 7-30d or accessed in last 14d
+          COOL   → 30-90d
+          COMPRESSED → 90-180d
+          ARCHIVED → 180d+
+
+        Args:
+            report: ConsolidationReport to update.
+            reference_time: UTC reference time for age/recency calculations.
+            dry_run: If True, calculate but do not apply changes.
+        """
+        import logging as _logging
+
+        from neural_memory.engine.compression import (
+            CompressionConfig,
+            calculate_heat_score,
+            determine_lifecycle_state,
+        )
+
+        _logger = _logging.getLogger(__name__)
+
+        brain_id = self._storage.current_brain_id
+        if not brain_id:
+            _logger.debug("LIFECYCLE skipped: no brain context")
+            return
+
+        # Fetch neurons in batches via find_neurons (full scan)
+        try:
+            neurons = await self._storage.find_neurons(limit=10000)
+        except Exception:
+            _logger.error("LIFECYCLE failed to fetch neurons", exc_info=True)
+            return
+
+        config = CompressionConfig()
+        states_updated = 0
+
+        for neuron in neurons:
+            # Retrieve last_accessed_at and access_frequency from neuron metadata
+            # (access_frequency is stored in neuron_states, not neurons directly)
+            last_accessed_raw: str | None = neuron.metadata.get("last_accessed_at")
+            last_accessed_at: datetime | None = None
+            if last_accessed_raw:
+                try:
+                    last_accessed_at = datetime.fromisoformat(last_accessed_raw)
+                except ValueError:
+                    pass
+
+            access_count: int = int(neuron.metadata.get("access_frequency", 0))
+            priority: int = int(neuron.metadata.get("priority", 5))
+
+            heat = calculate_heat_score(
+                last_accessed_at=last_accessed_at,
+                access_count=access_count,
+                priority=priority,
+                reference_time=reference_time,
+                config=config,
+            )
+
+            age_days = (reference_time - neuron.created_at).total_seconds() / 86400.0
+            new_state = determine_lifecycle_state(age_days, heat, config)
+
+            current_state: str = neuron.metadata.get("lifecycle_state", "active")
+            if current_state == str(new_state):
+                continue
+
+            if not dry_run:
+                try:
+                    await self._storage.update_neuron_lifecycle(neuron.id, str(new_state))
+                    states_updated += 1
+                except Exception:
+                    _logger.error(
+                        "Failed to update lifecycle_state for neuron %s", neuron.id, exc_info=True
+                    )
+            else:
+                states_updated += 1
+
+        if states_updated:
+            report.extra["lifecycle_states_updated"] = (
+                report.extra.get("lifecycle_states_updated", 0) + states_updated
+            )
+        _logger.info("LIFECYCLE: updated %d neuron lifecycle states", states_updated)
 
     async def _process_tool_events(
         self,

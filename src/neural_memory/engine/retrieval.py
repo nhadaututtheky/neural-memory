@@ -472,7 +472,10 @@ class ReflexPipeline:
             return _early_result
 
         # 5. Find matching fibers
-        fibers_matched = await self._find_matching_fibers(activations, valid_at=valid_at, tags=tags)
+        query_tokens = set(query.lower().split())
+        fibers_matched = await self._find_matching_fibers(
+            activations, valid_at=valid_at, tags=tags, query_tokens=query_tokens
+        )
 
         # 6. Extract subgraph
         neuron_ids, synapse_ids = await self._activator.get_activated_subgraph(
@@ -530,6 +533,13 @@ class ReflexPipeline:
                 await self._reinforcer.reinforce(self._storage, top_neuron_ids, top_synapse_ids)
             except Exception:
                 logger.debug("Reinforcement failed (non-critical)", exc_info=True)
+
+        # 9. Track access time for lifecycle heat scoring (batch update, non-critical)
+        if activations:
+            try:
+                await self._storage.batch_update_last_accessed(list(activations.keys()))
+            except Exception:
+                logger.debug("batch_update_last_accessed failed (non-critical)", exc_info=True)
 
         result = RetrievalResult(
             answer=reconstruction.answer,
@@ -1497,6 +1507,7 @@ class ReflexPipeline:
         activations: dict[str, ActivationResult],
         valid_at: datetime | None = None,
         tags: set[str] | None = None,
+        query_tokens: set[str] | None = None,
     ) -> list[Fiber]:
         """Find fibers that contain activated neurons (batch query)."""
         # Get highly activated neurons
@@ -1553,7 +1564,31 @@ class ReflexPipeline:
             stage = getattr(fiber, "stage", None)
             stage_multiplier = 1.1 if stage == "semantic" else 1.0
 
-            return base_score * activation_signal * stage_multiplier
+            score = base_score * activation_signal * stage_multiplier
+
+            # --- Adaptive instruction boost ---
+            fiber_meta = fiber.metadata or {}
+            if fiber_meta.get("memory_type") == "instruction" or fiber_meta.get("type") in (
+                "instruction",
+                "workflow",
+            ):
+                exec_count = fiber_meta.get("execution_count", 0)
+                success_rate = fiber_meta.get("success_rate")
+                if exec_count > 0 and success_rate is not None:
+                    confidence = min(1.0, exec_count / 10.0)
+                    # boost is signed: positive for high success, negative for low
+                    instruction_boost = (float(success_rate) - 0.5) * confidence * 0.3
+                    score = max(0.0, score + instruction_boost)
+
+                # Trigger pattern matching boost
+                if query_tokens:
+                    triggers = set(fiber_meta.get("trigger_patterns", []))
+                    if triggers:
+                        overlap = len(query_tokens & triggers) / max(len(triggers), 1)
+                        if overlap > 0.3:
+                            score += overlap * 0.2
+
+            return score
 
         fibers.sort(key=_fiber_score, reverse=True)
 

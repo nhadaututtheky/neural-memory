@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 31
+SCHEMA_VERSION = 32
 
 # â”€â”€ Migrations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Each entry maps (from_version -> to_version) with a list of SQL statements.
@@ -582,6 +582,25 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
         "DROP TRIGGER IF EXISTS fibers_fts_ai",
         "DROP TABLE IF EXISTS fibers_fts",
     ],
+    (31, 32): [
+        # Memory Lifecycle Engine: access tracking, lifecycle states, freeze, and snapshots.
+        "ALTER TABLE neurons ADD COLUMN last_accessed_at TEXT",
+        "ALTER TABLE neurons ADD COLUMN lifecycle_state TEXT DEFAULT 'active'",
+        "ALTER TABLE neurons ADD COLUMN frozen INTEGER DEFAULT 0",
+        # neuron_snapshots: stores original content before destructive Tier 3/4 compression
+        """CREATE TABLE IF NOT EXISTS neuron_snapshots (
+            neuron_id TEXT NOT NULL,
+            brain_id TEXT NOT NULL,
+            original_content TEXT NOT NULL,
+            compressed_at TEXT NOT NULL,
+            tier INTEGER NOT NULL,
+            PRIMARY KEY (brain_id, neuron_id),
+            FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+        )""",
+        # Indexes for lifecycle queries
+        "CREATE INDEX IF NOT EXISTS idx_neurons_lifecycle ON neurons(brain_id, lifecycle_state)",
+        "CREATE INDEX IF NOT EXISTS idx_neurons_last_accessed ON neurons(brain_id, last_accessed_at)",
+    ],
 }
 
 
@@ -711,6 +730,9 @@ CREATE TABLE IF NOT EXISTS neurons (
     device_origin TEXT DEFAULT '',  -- Device that originally created this neuron
     updated_at TEXT DEFAULT '',  -- Last modification timestamp
     created_at TEXT NOT NULL,
+    last_accessed_at TEXT,  -- Updated on every recall hit (batch)
+    lifecycle_state TEXT DEFAULT 'active',  -- ACTIVE | WARM | COOL | COMPRESSED | ARCHIVED
+    frozen INTEGER DEFAULT 0,  -- 1 = never compress
     PRIMARY KEY (brain_id, id),
     FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
 );
@@ -719,6 +741,8 @@ CREATE INDEX IF NOT EXISTS idx_neurons_created ON neurons(brain_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_neurons_hash ON neurons(brain_id, content_hash);
 CREATE INDEX IF NOT EXISTS idx_neurons_updated ON neurons(brain_id, updated_at);
 CREATE INDEX IF NOT EXISTS idx_neurons_content ON neurons(brain_id, content);
+CREATE INDEX IF NOT EXISTS idx_neurons_lifecycle ON neurons(brain_id, lifecycle_state);
+CREATE INDEX IF NOT EXISTS idx_neurons_last_accessed ON neurons(brain_id, last_accessed_at);
 
 -- Neuron states table
 CREATE TABLE IF NOT EXISTS neuron_states (
@@ -994,6 +1018,17 @@ CREATE TABLE IF NOT EXISTS compression_backups (
     FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_compression_tier ON compression_backups(brain_id, compression_tier);
+
+-- Neuron snapshots for recovery of Tier 3/4 (destructive) compression
+CREATE TABLE IF NOT EXISTS neuron_snapshots (
+    neuron_id TEXT NOT NULL,
+    brain_id TEXT NOT NULL,
+    original_content TEXT NOT NULL,
+    compressed_at TEXT NOT NULL,
+    tier INTEGER NOT NULL,
+    PRIMARY KEY (brain_id, neuron_id),
+    FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+);
 
 -- Change log (append-only journal for incremental sync)
 CREATE TABLE IF NOT EXISTS change_log (

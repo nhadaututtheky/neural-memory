@@ -509,3 +509,155 @@ class SQLiteNeuronMixin:
                 }
                 for row in rows
             ]
+
+    # ========== Access Tracking ==========
+
+    async def batch_update_last_accessed(self, neuron_ids: list[str]) -> None:
+        """Update last_accessed_at for neurons in batch using a single SQL UPDATE.
+
+        Uses placeholders to build ``UPDATE ... WHERE id IN (...)`` safely.
+
+        Args:
+            neuron_ids: List of neuron IDs to update.
+        """
+        if not neuron_ids:
+            return
+
+        conn = self._ensure_conn()
+        brain_id = self._get_brain_id()
+        now_iso = utcnow().isoformat()
+
+        placeholders = ",".join("?" for _ in neuron_ids)
+        params: list[Any] = [now_iso, brain_id, *neuron_ids]
+        await conn.execute(
+            f"UPDATE neurons SET last_accessed_at = ? WHERE brain_id = ? AND id IN ({placeholders})",
+            params,
+        )
+        await conn.commit()
+
+    # ========== Lifecycle State ==========
+
+    async def update_neuron_lifecycle(self, neuron_id: str, lifecycle_state: str) -> None:
+        """Update the lifecycle_state column for a neuron.
+
+        Args:
+            neuron_id: The neuron ID to update.
+            lifecycle_state: New lifecycle state string.
+        """
+        conn = self._ensure_conn()
+        brain_id = self._get_brain_id()
+        await conn.execute(
+            "UPDATE neurons SET lifecycle_state = ? WHERE id = ? AND brain_id = ?",
+            (lifecycle_state, neuron_id, brain_id),
+        )
+        await conn.commit()
+
+    async def update_neuron_frozen(self, neuron_id: str, frozen: bool) -> None:
+        """Set or clear the frozen flag for a neuron.
+
+        Args:
+            neuron_id: The neuron ID to update.
+            frozen: True to prevent compression, False to resume normal lifecycle.
+        """
+        conn = self._ensure_conn()
+        brain_id = self._get_brain_id()
+        await conn.execute(
+            "UPDATE neurons SET frozen = ? WHERE id = ? AND brain_id = ?",
+            (1 if frozen else 0, neuron_id, brain_id),
+        )
+        await conn.commit()
+
+    async def get_lifecycle_distribution(self) -> dict[str, int]:
+        """Return count of neurons by lifecycle_state for the current brain.
+
+        Returns:
+            Dict mapping state name to count.
+        """
+        conn = self._ensure_read_conn()
+        brain_id = self._get_brain_id()
+
+        async with conn.execute(
+            "SELECT COALESCE(lifecycle_state, 'active'), COUNT(*) "
+            "FROM neurons WHERE brain_id = ? "
+            "GROUP BY lifecycle_state",
+            (brain_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return {str(row[0]): int(row[1]) for row in rows}
+
+    # ========== Neuron Snapshots (Tier 3-4 recovery) ==========
+
+    async def save_neuron_snapshot(
+        self,
+        neuron_id: str,
+        brain_id: str,
+        original_content: str,
+        compressed_at: str,
+        tier: int,
+    ) -> None:
+        """Save (upsert) a pre-compression content snapshot for a neuron.
+
+        Args:
+            neuron_id: The neuron whose content is being snapshotted.
+            brain_id: Brain that owns the neuron.
+            original_content: Full original text before compression.
+            compressed_at: ISO timestamp of when compression occurred.
+            tier: The compression tier being applied (3 or 4).
+        """
+        conn = self._ensure_conn()
+        await conn.execute(
+            """INSERT INTO neuron_snapshots (neuron_id, brain_id, original_content, compressed_at, tier)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(brain_id, neuron_id) DO UPDATE SET
+                   original_content = excluded.original_content,
+                   compressed_at = excluded.compressed_at,
+                   tier = excluded.tier""",
+            (neuron_id, brain_id, original_content, compressed_at, tier),
+        )
+        await conn.commit()
+
+    async def get_neuron_snapshot(self, neuron_id: str) -> dict[str, Any] | None:
+        """Retrieve the snapshot for a neuron, if any.
+
+        Args:
+            neuron_id: The neuron ID to look up.
+
+        Returns:
+            Dict with snapshot fields or None if not found.
+        """
+        conn = self._ensure_read_conn()
+        brain_id = self._get_brain_id()
+
+        async with conn.execute(
+            "SELECT neuron_id, brain_id, original_content, compressed_at, tier "
+            "FROM neuron_snapshots WHERE neuron_id = ? AND brain_id = ?",
+            (neuron_id, brain_id),
+        ) as cursor:
+            row = await cursor.fetchone()
+            if row is None:
+                return None
+            return {
+                "neuron_id": row[0],
+                "brain_id": row[1],
+                "original_content": row[2],
+                "compressed_at": row[3],
+                "tier": row[4],
+            }
+
+    async def delete_neuron_snapshot(self, neuron_id: str) -> bool:
+        """Delete the snapshot for a neuron.
+
+        Args:
+            neuron_id: The neuron ID whose snapshot should be removed.
+
+        Returns:
+            True if a row was deleted, False if no snapshot existed.
+        """
+        conn = self._ensure_conn()
+        brain_id = self._get_brain_id()
+        cursor = await conn.execute(
+            "DELETE FROM neuron_snapshots WHERE neuron_id = ? AND brain_id = ?",
+            (neuron_id, brain_id),
+        )
+        await conn.commit()
+        return cursor.rowcount > 0

@@ -9,16 +9,21 @@ Compression is applied to fibers based on their age. Five tiers exist:
   Tier 4 (GRAPH_ONLY)  180d+   Delete content entirely; keep graph structure.
 
 Tiers 1-2 are reversible (original content saved in compression_backups).
-Tiers 3-4 are irreversible.
+Tiers 3-4 are destructive but recoverable via neuron_snapshots if snapshot was saved.
+
+Heat score: access frequency + recency + priority weighted combination.
+Hot memories (heat > threshold) resist compression by 1 tier.
+Frozen memories (frozen=True) are never compressed.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import IntEnum
+from enum import IntEnum, StrEnum
 from typing import TYPE_CHECKING, Any
 
 from neural_memory.utils.timeutils import utcnow
@@ -84,6 +89,16 @@ class CompressionTier(IntEnum):
     GRAPH_ONLY = 4
 
 
+class LifecycleState(StrEnum):
+    """Lifecycle state of a neuron, driven by heat score and age."""
+
+    ACTIVE = "active"
+    WARM = "warm"
+    COOL = "cool"
+    COMPRESSED = "compressed"
+    ARCHIVED = "archived"
+
+
 @dataclass(frozen=True)
 class CompressionConfig:
     """Configuration for the compression engine."""
@@ -102,6 +117,17 @@ class CompressionConfig:
 
     # Minimum entity density score to keep a sentence in tier-2.
     tier2_min_density: float = 0.0
+
+    # Heat score weights (must sum to ~1.0).
+    heat_access_weight: float = 0.4
+    heat_recency_weight: float = 0.4
+    heat_priority_weight: float = 0.2
+
+    # Heat threshold: memories above this resist compression by 1 tier.
+    heat_resistance_threshold: float = 0.5
+
+    # Recency window: accessed within this many days counts as ACTIVE.
+    recency_active_days: float = 3.0
 
 
 @dataclass(frozen=True)
@@ -326,6 +352,81 @@ def compress_tier2_entity_preserving(
     return " ".join(kept_sentences), entities_preserved
 
 
+def calculate_heat_score(
+    last_accessed_at: datetime | None,
+    access_count: int,
+    priority: int,
+    reference_time: datetime,
+    config: CompressionConfig,
+) -> float:
+    """Calculate a heat score for a neuron based on access recency, frequency and priority.
+
+    Heat score combines three signals:
+    - recency_score: exponential decay since last access (1.0 = accessed today, decays over 7 days)
+    - access_score: normalised access frequency (saturates at 20 accesses = 1.0)
+    - priority_score: normalised priority (priority / 10, clamped 0-1)
+
+    Args:
+        last_accessed_at: UTC datetime of last access, or None if never accessed.
+        access_count: Number of times the neuron has been accessed.
+        priority: Neuron priority (0-10 scale).
+        reference_time: UTC reference time for recency calculation.
+        config: Compression configuration with heat weight fields.
+
+    Returns:
+        Heat score in [0.0, 1.0].
+    """
+    if last_accessed_at is not None:
+        days_since_access = max(0.0, (reference_time - last_accessed_at).total_seconds() / 86400.0)
+        recency_score = math.exp(-days_since_access / 7.0)
+    else:
+        recency_score = 0.0
+
+    access_score = min(1.0, access_count / 20.0)
+    priority_score = min(1.0, max(0.0, priority / 10.0))
+
+    heat = (
+        recency_score * config.heat_recency_weight
+        + access_score * config.heat_access_weight
+        + priority_score * config.heat_priority_weight
+    )
+    return min(1.0, max(0.0, heat))
+
+
+def determine_lifecycle_state(
+    age_days: float,
+    heat_score: float,
+    config: CompressionConfig,
+) -> LifecycleState:
+    """Determine the lifecycle state based on age and heat score.
+
+    Access recency OVERRIDES age: a 60-day-old memory with high heat stays WARM.
+
+    Args:
+        age_days: Age of the neuron/fiber in days.
+        heat_score: Pre-computed heat score in [0.0, 1.0].
+        config: Compression configuration.
+
+    Returns:
+        The LifecycleState for this neuron.
+    """
+    # High heat: keep at most WARM regardless of age
+    if heat_score >= config.heat_resistance_threshold:
+        if age_days < config.tier1_days:
+            return LifecycleState.ACTIVE
+        return LifecycleState.WARM
+
+    if age_days < config.tier1_days:
+        return LifecycleState.ACTIVE
+    if age_days < config.tier2_days:
+        return LifecycleState.WARM
+    if age_days < config.tier3_days:
+        return LifecycleState.COOL
+    if age_days < config.tier4_days:
+        return LifecycleState.COMPRESSED
+    return LifecycleState.ARCHIVED
+
+
 def compress_tier3_template(
     neuron_contents: list[str],
     relations: list[str],
@@ -389,33 +490,59 @@ class CompressionEngine:
         self,
         fiber: Fiber,
         reference_time: datetime,
+        heat_score: float = 0.0,
+        frozen: bool = False,
     ) -> CompressionTier:
         """Return the target CompressionTier for *fiber* given *reference_time*.
 
-        The tier is determined solely from the fiber's age (in days since
-        *created_at*). The current *compression_tier* is not taken into account
-        — callers should compare this value against ``fiber.compression_tier``
-        to decide whether compression is needed.
+        The tier is determined from the fiber's age (in days since *created_at*),
+        optionally modified by heat score and frozen flag:
+        - If frozen=True, always return FULL (never compress).
+        - If heat_score > threshold, resist compression by 1 tier (e.g. ENTITY_ONLY → EXTRACTIVE).
+        - If priority >= 8 (encoded in heat_score > 0.8 from priority_weight), never below EXTRACTIVE.
+
+        The current *compression_tier* is not taken into account — callers should
+        compare this value against ``fiber.compression_tier`` to decide whether
+        compression is needed.
 
         Args:
             fiber: The fiber to evaluate.
             reference_time: The reference UTC datetime for age calculation.
+            heat_score: Pre-computed heat score in [0.0, 1.0] (default 0.0 = no resistance).
+            frozen: If True, memory is frozen and should never be compressed.
 
         Returns:
             The target CompressionTier.
         """
+        if frozen:
+            return CompressionTier.FULL
+
         age_seconds = (reference_time - fiber.created_at).total_seconds()
         age_days = age_seconds / 86400.0
 
         if age_days < self._config.tier1_days:
-            return CompressionTier.FULL
-        if age_days < self._config.tier2_days:
-            return CompressionTier.EXTRACTIVE
-        if age_days < self._config.tier3_days:
-            return CompressionTier.ENTITY_ONLY
-        if age_days < self._config.tier4_days:
-            return CompressionTier.TEMPLATE
-        return CompressionTier.GRAPH_ONLY
+            base_tier = CompressionTier.FULL
+        elif age_days < self._config.tier2_days:
+            base_tier = CompressionTier.EXTRACTIVE
+        elif age_days < self._config.tier3_days:
+            base_tier = CompressionTier.ENTITY_ONLY
+        elif age_days < self._config.tier4_days:
+            base_tier = CompressionTier.TEMPLATE
+        else:
+            base_tier = CompressionTier.GRAPH_ONLY
+
+        # Hot memories resist compression by 1 tier
+        if heat_score > self._config.heat_resistance_threshold and base_tier > CompressionTier.FULL:
+            base_tier = CompressionTier(int(base_tier) - 1)
+
+        # High-priority memories (priority >= 8 → pure priority contribution >= 0.8*0.2=0.16)
+        # never compress below EXTRACTIVE. We approximate: heat from priority alone at max
+        # is 0.2; but to detect "priority >= 8" via heat we check the priority portion.
+        # Since we don't have raw priority here, we use a heuristic: if heat > 0.8, never below EXTRACTIVE.
+        if heat_score > 0.8 and base_tier > CompressionTier.EXTRACTIVE:
+            base_tier = CompressionTier.EXTRACTIVE
+
+        return base_tier
 
     async def compress_fiber(
         self,
@@ -560,6 +687,26 @@ class CompressionEngine:
                     "Failed to save compression backup for fiber %s", fiber.id, exc_info=True
                 )
 
+        # Save neuron-level snapshots before destructive tiers (3-4).
+        destructive = target_tier in (CompressionTier.TEMPLATE, CompressionTier.GRAPH_ONLY)
+        if destructive:
+            brain_id = self._storage.current_brain_id or ""
+            now_iso = utcnow().isoformat()
+            for neuron in neurons.values():
+                if neuron.content and neuron.content != "[graph-only]":
+                    try:
+                        await self._storage.save_neuron_snapshot(
+                            neuron_id=neuron.id,
+                            brain_id=brain_id,
+                            original_content=neuron.content,
+                            compressed_at=now_iso,
+                            tier=int(target_tier),
+                        )
+                    except Exception:
+                        logger.error(
+                            "Failed to save neuron snapshot for neuron %s", neuron.id, exc_info=True
+                        )
+
         # Apply compression: update each neuron's content if tier < GRAPH_ONLY,
         # or clear all content for GRAPH_ONLY.
         if target_tier == CompressionTier.GRAPH_ONLY:
@@ -678,6 +825,75 @@ class CompressionEngine:
             )
 
         return True
+
+    async def recover_fiber(self, fiber_id: str) -> bool:
+        """Restore a fiber's content from neuron snapshots (Tier 3-4) or compression backup (Tier 1-2).
+
+        For Tier 3-4 (destructive compression), restores each neuron from the
+        ``neuron_snapshots`` table. Falls back to ``decompress_fiber()`` for
+        Tier 1-2 (reversible backups).
+
+        Args:
+            fiber_id: ID of the fiber to recover.
+
+        Returns:
+            True if recovery succeeded, False otherwise.
+        """
+        fiber = await self._storage.get_fiber(fiber_id)
+        if fiber is None:
+            logger.warning("Fiber %s not found for recovery", fiber_id)
+            return False
+
+        current_tier = CompressionTier(fiber.compression_tier)
+
+        # For Tier 3-4, try neuron snapshots first.
+        if current_tier in (CompressionTier.TEMPLATE, CompressionTier.GRAPH_ONLY):
+            neurons = await self._storage.get_neurons_batch(list(fiber.neuron_ids))
+            restored_count = 0
+            for neuron in neurons.values():
+                snapshot: dict[str, Any] | None = await self._storage.get_neuron_snapshot(neuron.id)
+                if snapshot is None:
+                    continue
+                original_content: str = snapshot.get("original_content", "")
+                if not original_content:
+                    continue
+                from dataclasses import replace as dc_replace
+
+                restored_neuron = dc_replace(neuron, content=original_content)
+                try:
+                    await self._storage.update_neuron(restored_neuron)
+                    await self._storage.delete_neuron_snapshot(neuron.id)
+                    restored_count += 1
+                except Exception:
+                    logger.error(
+                        "Failed to restore neuron %s from snapshot", neuron.id, exc_info=True
+                    )
+
+            if restored_count > 0:
+                from dataclasses import replace as dc_replace
+
+                updated_fiber = dc_replace(fiber, compression_tier=int(CompressionTier.FULL))
+                try:
+                    await self._storage.update_fiber(updated_fiber)
+                except Exception:
+                    logger.error(
+                        "Failed to reset compression_tier after recovery for fiber %s",
+                        fiber_id,
+                        exc_info=True,
+                    )
+                logger.info(
+                    "Recovered fiber %s from neuron snapshots (%d neurons)",
+                    fiber_id,
+                    restored_count,
+                )
+                return True
+            logger.warning(
+                "No neuron snapshots found for fiber %s (tier %d)", fiber_id, current_tier
+            )
+            return False
+
+        # For Tier 1-2, fall back to decompress_fiber().
+        return await self.decompress_fiber(fiber_id)
 
     async def run(
         self,

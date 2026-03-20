@@ -249,6 +249,10 @@ class MaintenanceConfig:
     scheduled_consolidation_strategies: tuple[str, ...] = ("prune", "merge", "enrich")
     version_check_enabled: bool = True
     version_check_interval_hours: int = 24
+    # Lifecycle engine configuration
+    lifecycle_enabled: bool = True
+    lifecycle_heat_threshold: float = 0.5
+    lifecycle_recency_active_days: float = 3.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -274,6 +278,9 @@ class MaintenanceConfig:
             "scheduled_consolidation_strategies": list(self.scheduled_consolidation_strategies),
             "version_check_enabled": self.version_check_enabled,
             "version_check_interval_hours": self.version_check_interval_hours,
+            "lifecycle_enabled": self.lifecycle_enabled,
+            "lifecycle_heat_threshold": self.lifecycle_heat_threshold,
+            "lifecycle_recency_active_days": self.lifecycle_recency_active_days,
         }
 
     @classmethod
@@ -311,6 +318,9 @@ class MaintenanceConfig:
             scheduled_consolidation_strategies=sched_strategies,
             version_check_enabled=data.get("version_check_enabled", True),
             version_check_interval_hours=data.get("version_check_interval_hours", 24),
+            lifecycle_enabled=data.get("lifecycle_enabled", True),
+            lifecycle_heat_threshold=data.get("lifecycle_heat_threshold", 0.5),
+            lifecycle_recency_active_days=data.get("lifecycle_recency_active_days", 3.0),
         )
 
 
@@ -816,6 +826,49 @@ class TelegramConfig:
 
 
 @dataclass
+class BudgetRetrievalConfig:
+    """Token budget configuration for retrieval context allocation.
+
+    Controls how budget-aware retrieval allocates the context window
+    across candidate fibers using value-per-token ranking.
+    """
+
+    enabled: bool = True
+    default_tokens: int = 4000
+    system_overhead: int = 50
+    per_fiber_overhead: int = 15
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "default_tokens": self.default_tokens,
+            "system_overhead": self.system_overhead,
+            "per_fiber_overhead": self.per_fiber_overhead,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> BudgetRetrievalConfig:
+        try:
+            default_tokens = max(50, min(int(data.get("default_tokens", 4000)), 100_000))
+        except (ValueError, TypeError):
+            default_tokens = 4000
+        try:
+            system_overhead = max(0, min(int(data.get("system_overhead", 50)), 500))
+        except (ValueError, TypeError):
+            system_overhead = 50
+        try:
+            per_fiber_overhead = max(0, min(int(data.get("per_fiber_overhead", 15)), 200))
+        except (ValueError, TypeError):
+            per_fiber_overhead = 15
+        return cls(
+            enabled=bool(data.get("enabled", True)),
+            default_tokens=default_tokens,
+            system_overhead=system_overhead,
+            per_fiber_overhead=per_fiber_overhead,
+        )
+
+
+@dataclass
 class ResponseConfig:
     """MCP response compaction settings.
 
@@ -928,6 +981,9 @@ class UnifiedConfig:
     # MCP response compaction
     response: ResponseConfig = field(default_factory=ResponseConfig)
 
+    # Token budget retrieval
+    budget: BudgetRetrievalConfig = field(default_factory=BudgetRetrievalConfig)
+
     # CLI preferences
     json_output: bool = False
     default_depth: int | None = None
@@ -1001,6 +1057,7 @@ class UnifiedConfig:
             falkordb=FalkorDBConfig.from_dict(data.get("falkordb", {})),
             postgres=PostgresConfig.from_dict(data.get("postgres", {})),
             response=ResponseConfig.from_dict(data.get("response", {})),
+            budget=BudgetRetrievalConfig.from_dict(data.get("budget", {})),
             json_output=data.get("cli", {}).get("json_output", False),
             default_depth=data.get("cli", {}).get("default_depth"),
             default_max_tokens=data.get("cli", {}).get("default_max_tokens", 500),

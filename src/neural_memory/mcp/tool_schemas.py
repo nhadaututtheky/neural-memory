@@ -320,6 +320,14 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "type": "boolean",
                     "description": "Include citation and audit trail in exact recall results (default: true).",
                 },
+                "recall_token_budget": {
+                    "type": "integer",
+                    "minimum": 50,
+                    "maximum": 100000,
+                    "description": "When set, activates budget-aware fiber selection: ranks fibers by value-per-token "
+                    "and selects the most efficient ones to fit within this budget. "
+                    "Adds budget_stats to the response. Default: not set (uses standard sequential truncation).",
+                },
             },
             "required": ["query"],
         },
@@ -1667,6 +1675,125 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "minimum": 1,
                     "maximum": 50,
                     "description": "Max tools to return (default: 20)",
+                },
+            },
+            "required": ["action"],
+        },
+    },
+    {
+        "name": "nmem_lifecycle",
+        "description": "Memory lifecycle management — view lifecycle states and manage compression resistance. "
+        "Hot memories (accessed recently or high priority) resist compression automatically. "
+        "Actions: status (distribution of lifecycle states), recover (rehydrate a compressed memory), "
+        "freeze (prevent a memory from compressing), thaw (resume normal lifecycle).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["status", "recover", "freeze", "thaw"],
+                    "description": "status=show lifecycle distribution, recover=rehydrate compressed memory, "
+                    "freeze=prevent compression, thaw=resume normal lifecycle",
+                },
+                "id": {
+                    "type": "string",
+                    "description": "Neuron ID (required for recover/freeze/thaw). "
+                    "For recover, fiber_id is also accepted.",
+                },
+            },
+            "required": ["action"],
+        },
+    },
+    {
+        "name": "nmem_refine",
+        "description": "Refine an instruction or workflow memory — update its content, "
+        "record a failure mode, or add a trigger pattern. "
+        "Each refinement increments the version counter and stores a snapshot in refinement_history. "
+        "Use this to improve instructions based on real-world usage: update text when the instruction "
+        "needs correction, add failure_mode when something went wrong, add trigger to improve recall.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "neuron_id": {
+                    "type": "string",
+                    "description": "ID of the instruction or workflow memory to refine "
+                    "(use the fiber_id returned by nmem_remember or nmem_recall).",
+                },
+                "new_content": {
+                    "type": "string",
+                    "description": "Updated instruction text. Replaces current content and increments version.",
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Why this refinement was made (stored in refinement_history for auditability).",
+                },
+                "add_failure_mode": {
+                    "type": "string",
+                    "description": "Description of a failure mode to append to the failure_modes list "
+                    "(deduped, capped at 20).",
+                },
+                "add_trigger": {
+                    "type": "string",
+                    "description": "Keyword or phrase to append to trigger_patterns "
+                    "(boosts recall when query overlaps, deduped, capped at 10).",
+                },
+            },
+            "required": ["neuron_id"],
+        },
+    },
+    {
+        "name": "nmem_report_outcome",
+        "description": "Report execution outcome for an instruction or workflow memory. "
+        "Increments execution_count, updates success_rate, and optionally records failure modes. "
+        "Instructions with high success_rate + many executions are boosted during recall. "
+        "Call this after executing an instruction to build up its track record.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "neuron_id": {
+                    "type": "string",
+                    "description": "ID of the instruction or workflow memory that was executed.",
+                },
+                "success": {
+                    "type": "boolean",
+                    "description": "Whether execution succeeded.",
+                },
+                "failure_description": {
+                    "type": "string",
+                    "description": "If failed, brief description of what went wrong "
+                    "(appended to failure_modes, deduped, capped at 20).",
+                },
+                "context": {
+                    "type": "string",
+                    "description": "Optional context about the execution (stored for auditability).",
+                },
+            },
+            "required": ["neuron_id", "success"],
+        },
+    },
+    {
+        "name": "nmem_budget",
+        "description": "Token budget analysis for recall — estimate, analyze, or optimize context window usage. "
+        "Use 'estimate' to dry-run a query and see token cost breakdown. "
+        "Use 'analyze' to profile the brain's average fiber token costs by memory type. "
+        "Use 'optimize' to find low-value-per-token fibers that are candidates for compression.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["estimate", "analyze", "optimize"],
+                    "description": "Action: 'estimate' (dry-run recall cost), 'analyze' (brain token profile), 'optimize' (find compression candidates).",
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Query to estimate recall cost for (used with action='estimate').",
+                },
+                "max_tokens": {
+                    "type": "integer",
+                    "minimum": 50,
+                    "maximum": 100000,
+                    "description": "Token budget to estimate against (default: 4000).",
                 },
             },
             "required": ["action"],

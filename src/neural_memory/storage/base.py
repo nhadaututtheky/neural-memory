@@ -503,6 +503,25 @@ class NeuralStorage(ABC):
         """
         ...
 
+    async def update_fiber_metadata(self, fiber_id: str, metadata: dict[str, Any]) -> None:
+        """Merge metadata into a fiber's existing metadata JSON.
+
+        Default implementation fetches the fiber, merges metadata, then calls
+        update_fiber.  Backends may override for efficiency.
+
+        Args:
+            fiber_id: The fiber to update.
+            metadata: New metadata values to merge (existing keys are overwritten).
+        """
+        from dataclasses import replace as dc_replace
+
+        fiber = await self.get_fiber(fiber_id)
+        if fiber is None:
+            return
+        updated_meta = {**fiber.metadata, **metadata}
+        updated_fiber = dc_replace(fiber, metadata=updated_meta)
+        await self.update_fiber(updated_fiber)
+
     @abstractmethod
     async def delete_fiber(self, fiber_id: str) -> bool:
         """
@@ -1275,6 +1294,97 @@ class NeuralStorage(ABC):
 
         Returns:
             Dict with keys: ``total_backups``, ``by_tier``, ``total_tokens_saved``.
+        """
+        raise NotImplementedError
+
+    # ========== Neuron Snapshot Operations (Tier 3-4 recovery) ==========
+
+    async def save_neuron_snapshot(
+        self,
+        neuron_id: str,
+        brain_id: str,
+        original_content: str,
+        compressed_at: str,
+        tier: int,
+    ) -> None:
+        """Save (upsert) a pre-compression content snapshot for a neuron.
+
+        Called before destructive Tier 3-4 compression so content can be
+        recovered later via ``get_neuron_snapshot``.
+
+        Args:
+            neuron_id: The neuron whose content is being snapshotted.
+            brain_id: Brain that owns the neuron.
+            original_content: Full original text before compression.
+            compressed_at: ISO timestamp of when compression occurred.
+            tier: The compression tier being applied (3 or 4).
+        """
+        raise NotImplementedError
+
+    async def get_neuron_snapshot(self, neuron_id: str) -> dict[str, Any] | None:
+        """Retrieve the snapshot for a neuron, if any.
+
+        Args:
+            neuron_id: The neuron ID to look up.
+
+        Returns:
+            Dict with snapshot fields (neuron_id, original_content, compressed_at, tier),
+            or None if no snapshot exists.
+        """
+        raise NotImplementedError
+
+    async def delete_neuron_snapshot(self, neuron_id: str) -> bool:
+        """Delete the snapshot for a neuron.
+
+        Args:
+            neuron_id: The neuron ID whose snapshot should be removed.
+
+        Returns:
+            True if a row was deleted, False if no snapshot existed.
+        """
+        raise NotImplementedError
+
+    # ========== Access Tracking Operations ==========
+
+    async def batch_update_last_accessed(self, neuron_ids: list[str]) -> None:
+        """Update last_accessed_at for neurons in batch (single SQL UPDATE).
+
+        Called after successful recall to track which neurons were activated.
+        Default is a no-op; SQLite backend overrides for efficiency.
+
+        Args:
+            neuron_ids: List of neuron IDs whose last_accessed_at should be updated.
+        """
+
+    # ========== Lifecycle State Operations ==========
+
+    async def update_neuron_lifecycle(
+        self,
+        neuron_id: str,
+        lifecycle_state: str,
+    ) -> None:
+        """Update the lifecycle_state for a neuron.
+
+        Args:
+            neuron_id: The neuron ID to update.
+            lifecycle_state: New lifecycle state string.
+        """
+        raise NotImplementedError
+
+    async def update_neuron_frozen(self, neuron_id: str, frozen: bool) -> None:
+        """Set or clear the frozen flag for a neuron.
+
+        Args:
+            neuron_id: The neuron ID to update.
+            frozen: True to prevent compression, False to resume normal lifecycle.
+        """
+        raise NotImplementedError
+
+    async def get_lifecycle_distribution(self) -> dict[str, int]:
+        """Return count of neurons by lifecycle_state for the current brain.
+
+        Returns:
+            Dict mapping state name to count, e.g. {"active": 100, "warm": 20, ...}.
         """
         raise NotImplementedError
 

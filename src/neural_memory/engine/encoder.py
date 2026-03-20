@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -116,6 +117,179 @@ def build_default_pipeline(
     )
 
 
+_INSTRUCTION_STOP_WORDS: frozenset[str] = frozenset(
+    {
+        "a",
+        "an",
+        "the",
+        "and",
+        "or",
+        "but",
+        "if",
+        "in",
+        "on",
+        "at",
+        "to",
+        "for",
+        "of",
+        "with",
+        "by",
+        "from",
+        "as",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "must",
+        "shall",
+        "can",
+        "need",
+        "dare",
+        "ought",
+        "it",
+        "its",
+        "this",
+        "that",
+        "these",
+        "those",
+        "i",
+        "we",
+        "you",
+        "they",
+        "he",
+        "she",
+        "my",
+        "our",
+        "your",
+        "their",
+        "not",
+        "no",
+        "nor",
+        "so",
+        "yet",
+        "both",
+        "either",
+        "neither",
+        "each",
+        "every",
+        "all",
+        "any",
+        "few",
+        "more",
+        "most",
+        "such",
+        "just",
+        "than",
+        "then",
+        "when",
+        "where",
+        "which",
+        "who",
+        "what",
+        "how",
+        "why",
+        "also",
+        "very",
+        "too",
+        "up",
+        "out",
+        "about",
+        "into",
+        "through",
+        "during",
+        "before",
+        "after",
+        "above",
+        "below",
+        "between",
+        "only",
+        "own",
+        "same",
+        "other",
+        "there",
+        "here",
+        "new",
+        "now",
+        "always",
+        "never",
+    }
+)
+
+
+def _extract_trigger_patterns(content: str, max_patterns: int = 5) -> list[str]:
+    """Extract significant keywords from instruction content as trigger patterns.
+
+    Takes the top N significant keywords (filtered against stop words) from
+    the instruction text. These words will be used to boost the instruction
+    during recall when the query overlaps with them.
+
+    Args:
+        content: The instruction text.
+        max_patterns: Maximum number of trigger patterns to return.
+
+    Returns:
+        List of lowercase keyword strings.
+    """
+    # Normalize: lowercase, remove punctuation except apostrophes
+    normalized = re.sub(r"[^\w\s']", " ", content.lower())
+    words = normalized.split()
+    seen: dict[str, int] = {}
+    for word in words:
+        word = word.strip("'")
+        if len(word) >= 4 and word not in _INSTRUCTION_STOP_WORDS:
+            seen[word] = seen.get(word, 0) + 1
+    # Sort by frequency descending, then alphabetically for stability
+    ranked = sorted(seen.items(), key=lambda kv: (-kv[1], kv[0]))
+    return [kw for kw, _ in ranked[:max_patterns]]
+
+
+def _inject_instruction_metadata(
+    content: str,
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge instruction tracking fields into metadata (non-destructive).
+
+    Only adds keys that are not already present — preserves any existing
+    instruction metadata set by the caller.
+
+    Args:
+        content: Instruction text (used for trigger extraction).
+        metadata: Existing metadata dict.
+
+    Returns:
+        New metadata dict with instruction fields merged in.
+    """
+    defaults: dict[str, Any] = {
+        "version": 1,
+        "execution_count": 0,
+        "success_count": 0,
+        "failure_count": 0,
+        "success_rate": None,
+        "last_executed_at": None,
+        "failure_modes": [],
+        "trigger_patterns": _extract_trigger_patterns(content),
+        "refinement_history": [],
+    }
+    # Merge: existing keys win; only add missing ones
+    merged = {**defaults, **metadata}
+    return merged
+
+
 class MemoryEncoder:
     """
     Encoder for converting experiences into neural structures.
@@ -210,10 +384,16 @@ class MemoryEncoder:
         if timestamp is None:
             timestamp = utcnow()
 
+        # Auto-populate instruction metadata for instruction/workflow types
+        merged_metadata = dict(metadata or {})
+        mem_type = merged_metadata.get("type", "")
+        if mem_type in ("instruction", "workflow"):
+            merged_metadata = _inject_instruction_metadata(content, merged_metadata)
+
         ctx = PipelineContext(
             content=content,
             timestamp=timestamp,
-            metadata=dict(metadata or {}),
+            metadata=merged_metadata,
             tags=tags or set(),
             language=language,
             skip_conflicts=skip_conflicts,
