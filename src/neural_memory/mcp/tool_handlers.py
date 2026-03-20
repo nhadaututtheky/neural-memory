@@ -1073,7 +1073,10 @@ class ToolHandler:
                     # Replace the pipeline-generated context with budget-aware context
                     result = _dc_replace(result, context=budgeted_ctx)
             except Exception:
-                logger.debug("Budget-aware recall failed (non-critical), using standard context", exc_info=True)
+                logger.debug(
+                    "Budget-aware recall failed (non-critical), using standard context",
+                    exc_info=True,
+                )
 
         if result.confidence < min_confidence:
             return {
@@ -2998,7 +3001,9 @@ class ToolHandler:
         """Token budget analysis for recall context allocation."""
         action = args.get("action", "")
         if action not in ("estimate", "analyze", "optimize"):
-            return {"error": f"Invalid action: {action!r}. Must be 'estimate', 'analyze', or 'optimize'."}
+            return {
+                "error": f"Invalid action: {action!r}. Must be 'estimate', 'analyze', or 'optimize'."
+            }
 
         storage = await self.get_storage()
         try:
@@ -3044,7 +3049,7 @@ class ToolHandler:
 
             # Fetch fiber objects for the matched fibers
             fibers: list[Any] = []
-            for fid in (result.fibers_matched or []):
+            for fid in result.fibers_matched or []:
                 fiber = await storage.get_fiber(fid)
                 if fiber:
                     fibers.append(fiber)
@@ -3126,8 +3131,7 @@ class ToolHandler:
                 "estimated_full_recall_tokens": total_tokens + budget_cfg.system_overhead_tokens,
                 "would_fit_in_4k": sum(1 for c in costs if c.total_tokens <= 4000),
                 "top_expensive_fibers": [
-                    {"fiber_id": c.fiber_id, "total_tokens": c.total_tokens}
-                    for c in top_expensive
+                    {"fiber_id": c.fiber_id, "total_tokens": c.total_tokens} for c in top_expensive
                 ],
             }
 
@@ -3151,7 +3155,8 @@ class ToolHandler:
 
             # Fibers with zero or very low value_per_token and high cost are candidates
             candidates = [
-                c for c in costs
+                c
+                for c in costs
                 if c.total_tokens > 100  # Only fibers large enough to matter
             ]
             # Sort by worst efficiency (high cost, low value) — cost > 100, no activation context
@@ -3160,12 +3165,14 @@ class ToolHandler:
             recommendations = []
             for c in candidates_sorted:
                 savings_estimate = max(0, c.total_tokens - budget_cfg.per_fiber_overhead - 20)
-                recommendations.append({
-                    "fiber_id": c.fiber_id,
-                    "current_tokens": c.total_tokens,
-                    "estimated_savings_if_compressed": savings_estimate,
-                    "suggestion": "Consider running nmem_consolidate to compress this fiber's content into a summary.",
-                })
+                recommendations.append(
+                    {
+                        "fiber_id": c.fiber_id,
+                        "current_tokens": c.total_tokens,
+                        "estimated_savings_if_compressed": savings_estimate,
+                        "suggestion": "Consider running nmem_consolidate to compress this fiber's content into a summary.",
+                    }
+                )
 
             return {
                 "action": "optimize",

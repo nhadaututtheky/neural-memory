@@ -22,7 +22,6 @@ from neural_memory.engine.encoder import (
 )
 from neural_memory.mcp.server import MCPServer
 
-
 # ──────────────────── Shared helpers ────────────────────
 
 
@@ -114,9 +113,7 @@ class TestExtractTriggerPatterns:
 
     def test_frequency_ranking(self) -> None:
         # "deploy" repeated 3x should rank first
-        result = _extract_trigger_patterns(
-            "deploy deploy deploy server database", max_patterns=5
-        )
+        result = _extract_trigger_patterns("deploy deploy deploy server database", max_patterns=5)
         assert result[0] == "deploy"
 
 
@@ -308,9 +305,7 @@ class TestNmemRefine:
         storage.current_brain_id = "brain-1"
 
         existing_modes = ["Fails on Windows paths"]
-        fiber = _make_fiber(
-            metadata={"type": "instruction", "failure_modes": existing_modes}
-        )
+        fiber = _make_fiber(metadata={"type": "instruction", "failure_modes": existing_modes})
         storage.get_typed_memory = AsyncMock(return_value=_make_typed_mem())
         storage.get_fiber = AsyncMock(return_value=fiber)
         storage.update_fiber_metadata = AsyncMock()
@@ -331,9 +326,7 @@ class TestNmemRefine:
         storage.current_brain_id = "brain-1"
 
         existing_modes = [f"failure-{i}" for i in range(20)]
-        fiber = _make_fiber(
-            metadata={"type": "instruction", "failure_modes": existing_modes}
-        )
+        fiber = _make_fiber(metadata={"type": "instruction", "failure_modes": existing_modes})
         storage.get_typed_memory = AsyncMock(return_value=_make_typed_mem())
         storage.get_fiber = AsyncMock(return_value=fiber)
         storage.update_fiber_metadata = AsyncMock()
@@ -372,9 +365,7 @@ class TestNmemRefine:
         storage.current_brain_id = "brain-1"
 
         existing_triggers = [f"trigger-{i}" for i in range(10)]
-        fiber = _make_fiber(
-            metadata={"type": "instruction", "trigger_patterns": existing_triggers}
-        )
+        fiber = _make_fiber(metadata={"type": "instruction", "trigger_patterns": existing_triggers})
         storage.get_typed_memory = AsyncMock(return_value=_make_typed_mem())
         storage.get_fiber = AsyncMock(return_value=fiber)
         storage.update_fiber_metadata = AsyncMock()
@@ -506,7 +497,12 @@ class TestNmemReportOutcome:
         storage.current_brain_id = "brain-1"
 
         fiber = _make_fiber(
-            metadata={"type": "instruction", "execution_count": 5, "success_count": 4, "failure_count": 1}
+            metadata={
+                "type": "instruction",
+                "execution_count": 5,
+                "success_count": 4,
+                "failure_count": 1,
+            }
         )
         storage.get_typed_memory = AsyncMock(return_value=_make_typed_mem())
         storage.get_fiber = AsyncMock(return_value=fiber)
@@ -530,7 +526,12 @@ class TestNmemReportOutcome:
         storage.current_brain_id = "brain-1"
 
         fiber = _make_fiber(
-            metadata={"type": "instruction", "execution_count": 3, "success_count": 3, "failure_count": 0}
+            metadata={
+                "type": "instruction",
+                "execution_count": 3,
+                "success_count": 3,
+                "failure_count": 0,
+            }
         )
         storage.get_typed_memory = AsyncMock(return_value=_make_typed_mem())
         storage.get_fiber = AsyncMock(return_value=fiber)
@@ -693,7 +694,6 @@ class TestInstructionRecallBoost:
 
     def test_high_success_instruction_scores_higher_than_unproven(self) -> None:
         """A proven instruction (exec=10, rate=1.0) should beat an unproven one."""
-        from neural_memory.engine.retrieval import ReflexPipeline
 
         # Build a minimal pipeline just to access _find_matching_fibers indirectly
         # by testing the _fiber_score closure logic directly.

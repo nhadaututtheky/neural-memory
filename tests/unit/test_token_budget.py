@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -20,8 +18,8 @@ from neural_memory.engine.token_budget import (
     format_budget_report,
 )
 
-
 # ─────────────────────── Helpers ───────────────────────
+
 
 def _make_fiber(
     fiber_id: str,
@@ -55,6 +53,7 @@ def _make_activation(neuron_id: str, level: float) -> ActivationResult:
 
 
 # ─────────────────────── TestEstimateFiberTokens ───────────────────────
+
 
 class TestEstimateFiberTokens:
     """Tests for estimate_fiber_tokens()."""
@@ -102,6 +101,7 @@ class TestEstimateFiberTokens:
 
 
 # ─────────────────────── TestComputeTokenCosts ───────────────────────
+
 
 class TestComputeTokenCosts:
     """Tests for compute_token_costs()."""
@@ -174,12 +174,11 @@ class TestComputeTokenCosts:
 
 # ─────────────────────── TestAllocateBudget ───────────────────────
 
+
 class TestAllocateBudget:
     """Tests for allocate_budget()."""
 
-    def _make_cost(
-        self, fiber_id: str, total_tokens: int, value_score: float
-    ) -> TokenCost:
+    def _make_cost(self, fiber_id: str, total_tokens: int, value_score: float) -> TokenCost:
         vpt = value_score / total_tokens if total_tokens > 0 else 0.0
         return TokenCost(
             fiber_id=fiber_id,
@@ -256,6 +255,7 @@ class TestAllocateBudget:
 
 # ─────────────────────── TestBudgetAllocation ───────────────────────
 
+
 class TestBudgetAllocation:
     """Tests for BudgetAllocation dataclass."""
 
@@ -303,6 +303,7 @@ class TestBudgetAllocation:
 
 
 # ─────────────────────── TestFormatBudgetReport ───────────────────────
+
 
 class TestFormatBudgetReport:
     """Tests for format_budget_report()."""
@@ -378,6 +379,7 @@ class TestFormatBudgetReport:
 
 # ─────────────────────── TestFormatContextBudgeted ───────────────────────
 
+
 class TestFormatContextBudgeted:
     """Integration tests for format_context_budgeted()."""
 
@@ -440,6 +442,7 @@ class TestFormatContextBudgeted:
 
 # ─────────────────────── TestNmemBudget ───────────────────────
 
+
 class TestNmemBudget:
     """Tests for the nmem_budget MCP tool handler."""
 
@@ -471,10 +474,12 @@ class TestNmemBudget:
     async def test_estimate_requires_query(self, server: Any) -> None:
         storage_mock = AsyncMock()
         storage_mock.brain_id = "brain-1"
-        storage_mock.get_brain = AsyncMock(return_value=MagicMock(
-            id="brain-1",
-            config=MagicMock(),
-        ))
+        storage_mock.get_brain = AsyncMock(
+            return_value=MagicMock(
+                id="brain-1",
+                config=MagicMock(),
+            )
+        )
         with patch.object(server, "get_storage", return_value=storage_mock):
             result = await server._budget({"action": "estimate"})
         assert "error" in result
@@ -483,10 +488,12 @@ class TestNmemBudget:
     async def test_analyze_action_no_fibers(self, server: Any) -> None:
         storage_mock = AsyncMock()
         storage_mock.brain_id = "brain-1"
-        storage_mock.get_brain = AsyncMock(return_value=MagicMock(
-            id="brain-1",
-            config=MagicMock(),
-        ))
+        storage_mock.get_brain = AsyncMock(
+            return_value=MagicMock(
+                id="brain-1",
+                config=MagicMock(),
+            )
+        )
         storage_mock.list_fibers = AsyncMock(return_value=[])
         with patch.object(server, "get_storage", return_value=storage_mock):
             result = await server._budget({"action": "analyze"})
@@ -496,10 +503,12 @@ class TestNmemBudget:
     async def test_optimize_action_no_fibers(self, server: Any) -> None:
         storage_mock = AsyncMock()
         storage_mock.brain_id = "brain-1"
-        storage_mock.get_brain = AsyncMock(return_value=MagicMock(
-            id="brain-1",
-            config=MagicMock(),
-        ))
+        storage_mock.get_brain = AsyncMock(
+            return_value=MagicMock(
+                id="brain-1",
+                config=MagicMock(),
+            )
+        )
         storage_mock.list_fibers = AsyncMock(return_value=[])
         with patch.object(server, "get_storage", return_value=storage_mock):
             result = await server._budget({"action": "optimize"})
@@ -507,6 +516,7 @@ class TestNmemBudget:
 
 
 # ─────────────────────── TestNmemRecallWithBudget ───────────────────────
+
 
 class TestNmemRecallWithBudget:
     """Tests for nmem_recall with recall_token_budget parameter."""
@@ -534,17 +544,19 @@ class TestNmemRecallWithBudget:
     @pytest.mark.asyncio
     async def test_recall_without_budget_param(self, server: Any) -> None:
         """Standard recall with no recall_token_budget should work normally."""
-        from neural_memory.engine.retrieval_types import DepthLevel, RetrievalResult, Subgraph
+        from neural_memory.engine.retrieval_types import DepthLevel
 
         storage_mock = AsyncMock()
         storage_mock.brain_id = "brain-1"
-        storage_mock.get_brain = AsyncMock(return_value=MagicMock(
-            id="brain-1",
-            config=MagicMock(
-                activation_threshold=0.2,
-                max_spread_hops=4,
-            ),
-        ))
+        storage_mock.get_brain = AsyncMock(
+            return_value=MagicMock(
+                id="brain-1",
+                config=MagicMock(
+                    activation_threshold=0.2,
+                    max_spread_hops=4,
+                ),
+            )
+        )
 
         mock_result = MagicMock()
         mock_result.confidence = 0.8
@@ -583,6 +595,7 @@ class TestNmemRecallWithBudget:
 
 
 # ─────────────────────── TestBudgetConfig ───────────────────────
+
 
 class TestBudgetConfig:
     """Tests for BudgetConfig defaults and frozen behavior."""

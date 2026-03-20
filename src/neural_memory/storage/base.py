@@ -1355,6 +1355,7 @@ class NeuralStorage(ABC):
         Args:
             neuron_ids: List of neuron IDs whose last_accessed_at should be updated.
         """
+        return  # No-op default; SQLite backend overrides.
 
     # ========== Lifecycle State Operations ==========
 

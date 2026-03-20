@@ -550,6 +550,7 @@ async def test_recover_fiber_from_snapshot(storage: SQLiteStorage) -> None:
 
     # Compress neuron content (simulate Tier 3 effect)
     from dataclasses import replace as dc_replace
+
     compressed = dc_replace(neuron, content="entity1 related_to entity2")
     await storage.update_neuron(compressed)
 
