@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.19.0] — 2026-03-22
+
+### Added
+
+- **Fidelity layers** — memories decay through 4 levels (FULL → SUMMARY → ESSENCE → GHOST) based on activation, importance, and time. Budget pressure shifts thresholds upward, automatically compressing aged memories to save tokens
+- **Extractive essence engine** — sentence-level scoring using entity density and position bias. No LLM required, generates single-sentence distillations (max 150 chars)
+- **LLM essence generator** — optional abstractive essence via configured provider with cost guard (skips LLM for priority < 3). Factory pattern with `extractive` (default) and `llm` strategies
+- **Ghost recall** — faded memories render as `[~] tags | age | links | recall:fiber:{id}`. Users can restore full content via the recall key
+- **Ghost visibility boost** — fibers shown as ghosts within 24h get +0.1 fidelity score, preventing repeated ghost cycling
+- **Budget-aware context assembly** — `optimize_context()` now scores each fiber's fidelity, renders at appropriate level, and tracks fidelity stats (full/summary/essence/ghost counts)
+- **`include_ghosts` parameter** on `nmem_context` — controls ghost section visibility in context output
+- **Schema v33→35** — `essence` column on fibers (v34), `last_ghost_shown_at` column (v35)
+- **BrainConfig fidelity fields** — `fidelity_enabled`, `fidelity_full_threshold`, `fidelity_summary_threshold`, `fidelity_essence_threshold`, `decay_floor`, `essence_generator`
+- **Consolidation essence backfill** — cursor-based pagination for existing fibers without essence
+
+### Fixed
+
+- **13 pre-existing mypy errors** — Anthropic SDK union type narrowing in `llm_judge.py`, tags `set`/`list` type mismatch in recall handler
+- **Doctor check count** — updated assertions for `_check_config_freshness` addition (11→12 checks)
+
+### Tests
+
+- 73 new fidelity tests across 4 phases (essence extraction, fidelity scoring, ghost rendering, generators)
+
 ## [4.18.1] — 2026-03-21
 
 ### Added
