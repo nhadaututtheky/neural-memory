@@ -529,7 +529,7 @@ NeuralMemory is designed for **AI agent memory** — not as a general-purpose da
 
 | Aspect | Status |
 |--------|--------|
-| **Test suite** | 3810+ tests, 67%+ coverage enforced by CI |
+| **Test suite** | 4700+ tests, 67%+ coverage enforced by CI |
 | **Security** | Input validation, ReDoS protection, activation queue caps, sensitive content detection |
 | **Stability** | 51+ releases, used daily by the maintainers in production AI workflows |
 | **Scalability** | Tested up to 5,000 neurons with sub-ms latency; designed for agent-scale data, not big data |

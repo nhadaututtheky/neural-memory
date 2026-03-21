@@ -11,6 +11,7 @@ Runs all automated checks before a release to catch common issues:
 - Auto-type classifier smoke test
 - Cognitive layer integration test
 - Documentation freshness (auto-generated docs up-to-date)
+- Scattered reference sync (tool count, test count, schema version)
 
 Usage:
     python scripts/pre_ship.py          # Run all checks
@@ -36,9 +37,7 @@ warnings: list[str] = []
 
 
 def run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        cmd, capture_output=True, text=True, cwd=str(ROOT), **kwargs
-    )
+    return subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT), **kwargs)
 
 
 def check(name: str, passed: bool, detail: str = "") -> None:
@@ -95,8 +94,12 @@ def check_versions() -> None:
     # marketplace.json (2 occurrences)
     text = (ROOT / ".claude-plugin/marketplace.json").read_text()
     versions = re.findall(r'"version"\s*:\s*"([^"]+)"', text)
-    version_files[".claude-plugin/marketplace.json (metadata)"] = versions[0] if len(versions) > 0 else "NOT_FOUND"
-    version_files[".claude-plugin/marketplace.json (plugins)"] = versions[1] if len(versions) > 1 else "NOT_FOUND"
+    version_files[".claude-plugin/marketplace.json (metadata)"] = (
+        versions[0] if len(versions) > 0 else "NOT_FOUND"
+    )
+    version_files[".claude-plugin/marketplace.json (plugins)"] = (
+        versions[1] if len(versions) > 1 else "NOT_FOUND"
+    )
 
     # test_health_fixes.py
     text = (ROOT / "tests/unit/test_health_fixes.py").read_text()
@@ -133,10 +136,18 @@ def check_ruff(fix: bool = False) -> None:
         run(["ruff", "format", "src/", "tests/"])
 
     result = run(["ruff", "check", "src/", "tests/"])
-    check("ruff check", result.returncode == 0, result.stdout.strip()[:200] if result.returncode != 0 else "")
+    check(
+        "ruff check",
+        result.returncode == 0,
+        result.stdout.strip()[:200] if result.returncode != 0 else "",
+    )
 
     result = run(["ruff", "format", "--check", "src/", "tests/"])
-    check("ruff format", result.returncode == 0, "Run: ruff format src/ tests/" if result.returncode != 0 else "")
+    check(
+        "ruff format",
+        result.returncode == 0,
+        "Run: ruff format src/ tests/" if result.returncode != 0 else "",
+    )
 
 
 # ── 3. Mypy ─────────────────────────────────────────────────────
@@ -151,7 +162,11 @@ def check_mypy() -> None:
     if not passed:
         lines = result.stdout.strip().split("\n")
         error_lines = [l for l in lines if "error:" in l]
-        detail = f"{len(error_lines)} errors. First: {error_lines[0]}" if error_lines else result.stdout[:200]
+        detail = (
+            f"{len(error_lines)} errors. First: {error_lines[0]}"
+            if error_lines
+            else result.stdout[:200]
+        )
     check("mypy src/", passed, detail)
 
 
@@ -161,11 +176,14 @@ def check_mypy() -> None:
 def check_imports() -> None:
     print("\n4. Import Smoke Test")
 
-    result = run([
-        sys.executable, "-c",
-        "import neural_memory; print(f'v{neural_memory.__version__}')"
-    ])
-    check("import neural_memory", result.returncode == 0, result.stderr.strip()[:200] if result.returncode != 0 else "")
+    result = run(
+        [sys.executable, "-c", "import neural_memory; print(f'v{neural_memory.__version__}')"]
+    )
+    check(
+        "import neural_memory",
+        result.returncode == 0,
+        result.stderr.strip()[:200] if result.returncode != 0 else "",
+    )
 
 
 # ── 5. Fast Tests ───────────────────────────────────────────────
@@ -174,11 +192,21 @@ def check_imports() -> None:
 def check_tests() -> None:
     print("\n5. Fast Unit Tests")
 
-    result = run([
-        sys.executable, "-m", "pytest", "tests/unit/", "-x", "-q",
-        "--timeout=30", "--ignore=tests/unit/test_consolidation.py",
-        "-m", "not stress",
-    ], timeout=120)
+    result = run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/unit/",
+            "-x",
+            "-q",
+            "--timeout=30",
+            "--ignore=tests/unit/test_consolidation.py",
+            "-m",
+            "not stress",
+        ],
+        timeout=120,
+    )
     passed = result.returncode == 0
     # Extract summary line
     lines = result.stdout.strip().split("\n")
@@ -211,16 +239,19 @@ def check_classifier() -> None:
         ("API endpoint is /v2/users", "fact"),
     ]
 
-    result = run([
-        sys.executable, "-c",
-        "from neural_memory.core.memory_types import suggest_memory_type; "
-        "import json, sys; "
-        "cases = json.loads(sys.argv[1]); "
-        "results = [(c, e, suggest_memory_type(c).value) for c, e in cases]; "
-        "failures = [(c, e, a) for c, e, a in results if e != a]; "
-        "print(json.dumps(failures))",
-        json.dumps(test_cases),
-    ])
+    result = run(
+        [
+            sys.executable,
+            "-c",
+            "from neural_memory.core.memory_types import suggest_memory_type; "
+            "import json, sys; "
+            "cases = json.loads(sys.argv[1]); "
+            "results = [(c, e, suggest_memory_type(c).value) for c, e in cases]; "
+            "failures = [(c, e, a) for c, e, a in results if e != a]; "
+            "print(json.dumps(failures))",
+            json.dumps(test_cases),
+        ]
+    )
 
     if result.returncode != 0:
         check("classifier import", False, result.stderr.strip()[:200])
@@ -230,8 +261,7 @@ def check_classifier() -> None:
 
     if classifier_failures:
         details = "; ".join(
-            f"'{c[:40]}...' expected={e} got={a}"
-            for c, e, a in classifier_failures[:3]
+            f"'{c[:40]}...' expected={e} got={a}" for c, e, a in classifier_failures[:3]
         )
         check(f"classifier ({len(test_cases)} cases)", False, details)
     else:
@@ -245,18 +275,21 @@ def check_cognitive() -> None:
     print("\n7. Cognitive Layer Integration")
 
     # Verify cognitive engine functions are importable and produce sane outputs
-    result = run([
-        sys.executable, "-c",
-        "from neural_memory.engine.cognitive import update_confidence, detect_auto_resolution; "
-        "c = update_confidence(0.5, 'for', 0.7, 0, 0); "
-        "assert 0.5 < c < 0.8, f'confidence {c} out of range'; "
-        "c2 = update_confidence(0.5, 'against', 0.7, 0, 0); "
-        "assert 0.2 < c2 < 0.5, f'confidence {c2} out of range'; "
-        "assert detect_auto_resolution(0.95, 3, 0) == 'confirmed'; "
-        "assert detect_auto_resolution(0.05, 0, 3) == 'refuted'; "
-        "assert detect_auto_resolution(0.5, 1, 1) is None; "
-        "print('ok')",
-    ])
+    result = run(
+        [
+            sys.executable,
+            "-c",
+            "from neural_memory.engine.cognitive import update_confidence, detect_auto_resolution; "
+            "c = update_confidence(0.5, 'for', 0.7, 0, 0); "
+            "assert 0.5 < c < 0.8, f'confidence {c} out of range'; "
+            "c2 = update_confidence(0.5, 'against', 0.7, 0, 0); "
+            "assert 0.2 < c2 < 0.5, f'confidence {c2} out of range'; "
+            "assert detect_auto_resolution(0.95, 3, 0) == 'confirmed'; "
+            "assert detect_auto_resolution(0.05, 0, 3) == 'refuted'; "
+            "assert detect_auto_resolution(0.5, 1, 1) is None; "
+            "print('ok')",
+        ]
+    )
     check(
         "cognitive engine (confidence + auto-resolution)",
         result.returncode == 0 and "ok" in result.stdout,
@@ -289,7 +322,7 @@ def check_plugin() -> None:
         check(
             "Plugin name matches manifest id",
             pkg_name.group(1) == manifest_id.group(1),
-            f"package.json name={pkg_name.group(1)}, manifest id={manifest_id.group(1)}"
+            f"package.json name={pkg_name.group(1)}, manifest id={manifest_id.group(1)}",
         )
 
     # Check versions match between package.json and manifest
@@ -299,7 +332,7 @@ def check_plugin() -> None:
         check(
             "Plugin versions consistent",
             pkg_ver.group(1) == manifest_ver.group(1),
-            f"package.json={pkg_ver.group(1)}, manifest={manifest_ver.group(1)}"
+            f"package.json={pkg_ver.group(1)}, manifest={manifest_ver.group(1)}",
         )
 
 
@@ -331,6 +364,53 @@ def check_docs() -> None:
         )
 
 
+# ── 10. Scattered Reference Sync ──────────────────────────────
+
+
+def check_refs(fix: bool = False) -> None:
+    print("\n10. Scattered Reference Sync")
+
+    script = ROOT / "scripts" / "sync_refs.py"
+    if not script.exists():
+        warn("scripts/sync_refs.py not found")
+        return
+
+    cmd = [sys.executable, str(script)]
+    if fix:
+        cmd.append("--fix")
+    else:
+        cmd.append("--json")
+
+    result = run(cmd)
+
+    if fix:
+        check(
+            "sync_refs --fix",
+            result.returncode == 0,
+            result.stdout.strip()[-200:] if result.returncode != 0 else "",
+        )
+        return
+
+    if result.returncode != 0 and result.stdout.strip():
+        try:
+            data = json.loads(result.stdout.strip())
+            stale = data.get("stale_count", 0)
+            findings = data.get("findings", [])
+            if stale > 0:
+                samples = "; ".join(f"{f['file']}:{f['line']} {f['old']!r}" for f in findings[:3])
+                check(
+                    f"references up-to-date ({stale} stale)",
+                    False,
+                    f"{samples}... Run: python scripts/sync_refs.py --fix",
+                )
+            else:
+                check("references up-to-date", True)
+        except json.JSONDecodeError:
+            check("sync_refs", False, result.stderr.strip()[:200])
+    else:
+        check("references up-to-date", result.returncode == 0)
+
+
 # ── Main ────────────────────────────────────────────────────────
 
 
@@ -350,6 +430,7 @@ def main() -> int:
     check_cognitive()
     check_plugin()
     check_docs()
+    check_refs(fix=fix)
 
     print("\n" + "=" * 60)
     if failures:

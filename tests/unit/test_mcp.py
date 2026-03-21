@@ -345,10 +345,36 @@ class TestMCPToolCalls:
         """Test nmem_context tool execution."""
         mock_storage = AsyncMock()
         mock_fibers = [
-            MagicMock(summary="Memory 1", anchor_neuron_id=None),
-            MagicMock(summary="Memory 2", anchor_neuron_id=None),
+            MagicMock(
+                summary="Memory 1",
+                anchor_neuron_id=None,
+                id="f1",
+                tags=[],
+                created_at=None,
+                conducted_at=None,
+                importance=0.5,
+                activation=0.5,
+                essence=None,
+                last_ghost_shown_at=None,
+                fiber_id="f1",
+            ),
+            MagicMock(
+                summary="Memory 2",
+                anchor_neuron_id=None,
+                id="f2",
+                tags=[],
+                created_at=None,
+                conducted_at=None,
+                importance=0.5,
+                activation=0.5,
+                essence=None,
+                last_ghost_shown_at=None,
+                fiber_id="f2",
+            ),
         ]
         mock_storage.get_fibers = AsyncMock(return_value=mock_fibers)
+        mock_storage.brain_id = "test-brain"
+        mock_storage.get_brain = AsyncMock(return_value=None)
 
         with patch.object(server, "get_storage", return_value=mock_storage):
             result = await server.call_tool("nmem_context", {"limit": 5})
@@ -364,6 +390,8 @@ class TestMCPToolCalls:
         """Test nmem_context with no memories."""
         mock_storage = AsyncMock()
         mock_storage.get_fibers = AsyncMock(return_value=[])
+        mock_storage.brain_id = "test-brain"
+        mock_storage.get_brain = AsyncMock(return_value=None)
 
         with patch.object(server, "get_storage", return_value=mock_storage):
             result = await server.call_tool("nmem_context", {})

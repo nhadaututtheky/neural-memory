@@ -215,6 +215,7 @@ ignore = [
 "src/neural_memory/engine/db_introspector.py" = ["S608"]  # identifier-validated SQL
 "src/neural_memory/git_context.py" = ["S603", "S607"]     # git subprocess calls
 "src/neural_memory/server/app.py" = ["B008"]              # FastAPI Depends() in defaults
+"scripts/**" = ["T201", "S603", "S105", "ERA001", "E741", "SIM110", "SIM212", "B905", "F541", "N806", "C401"]  # CLI scripts: print, subprocess, ANSI codes, style
 
 [tool.ruff.lint.isort]
 known-first-party = ["neural_memory"]
