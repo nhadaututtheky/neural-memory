@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.18.0] — 2026-03-21
+
+### Added
+
+- **Write gate** — hard quality filter before storage with configurable thresholds (`min_length`, `min_quality_score`, `reject_generic_filler`, `max_content_length`). Rejects low-quality and generic filler content before it reaches the brain
+- **Agent identity capture** — MCP `clientInfo.name` auto-injected as `agent:` tag on every memory, enabling per-agent filtering in multi-agent setups
+- **Consolidation lock** — atomic file-based lock (`O_CREAT|O_EXCL`) with per-brain isolation and cross-platform PID check (Windows + Unix), prevents concurrent consolidation corruption
+- **Sync dedup** — content hash check on neuron import (skip duplicates), fiber anchor match with tag union merge on sync
+- **Dead neuron pruning** — auto-prune neurons with `access_frequency=0` older than configurable `prune_dead_neuron_days` (default 14) during consolidation
+
+### Improved
+
+- **Dedup tuning** — simhash threshold 10→7 and max_candidates 10→30 for tighter duplicate detection
+- **Recall quality** — configurable recency sigmoid halflife (`recency_halflife_hours`, default 168h), tag-aware scoring with additive boost for matching tags
+- **BrainConfig** — 3 new fields: `recency_halflife_hours`, `tag_match_boost`, `prune_dead_neuron_days`
+- **Session-end consolidation** — now includes DEDUP strategy alongside MATURE/INFER/ENRICH
+
+### Fixed
+
+- **CRITICAL: TOCTOU race** in consolidation lock — replaced check-then-write with atomic file creation
+- **HIGH: Windows PID check** — `os.kill(pid, 0)` doesn't work on Windows; now uses `kernel32.OpenProcess`
+- **HIGH: `_auto_capture` bypass** — parameter now popped from args so users cannot override auto-capture quality threshold
+- **HIGH: Sync dedup abstraction** — replaced raw `_read_pool` SQL with `has_neuron_by_content_hash()` storage method
+
+### Tests
+
+- 95 new tests across 6 files (test_write_gate, test_dedup_improvements, test_recall_quality, test_multi_agent, test_sync_safety, test_dedup_config updates)
+- Total: 4480 passed
+
 ## [4.17.0] — 2026-03-21
 
 ### Fixed
