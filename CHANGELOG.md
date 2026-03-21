@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.15.0] — 2026-03-21
+
+### Added
+
+- **Ephemeral memories** (#91) — session-scoped scratch notes that auto-expire
+  - `nmem_remember(content="temp", ephemeral=true)` — stores with 24h TTL, excluded from consolidation and cloud sync
+  - `nmem_recall(query="temp", permanent_only=true)` — filter out ephemeral memories from results
+  - `nmem_remember_batch` supports `ephemeral` per item
+  - Auto-cleanup of expired ephemeral neurons at session end (`nmem_auto(action="process")`)
+  - Schema migration v32→v33: `ephemeral` column + index on neurons table
+
+### Tests
+
+- 14 new tests for ephemeral memories (`test_ephemeral.py`)
+
 ## [4.14.0] — 2026-03-21
 
 ### Fixed
