@@ -20,7 +20,7 @@
     "persistence",
     "associative"
   ],
-  "instructions": "Neural Memory: persistent memory for AI agents. RECALL at session start (nmem_recall), SAVE after each task (nmem_remember with type+priority+tags), flush at session end (nmem_auto). Use causal language in memories ('chose X over Y because Z'). Do not save ephemeral/derivable content.",
+  "instructions": "Neural Memory: persistent memory for AI agents. RECALL at session start (nmem_recall), SAVE after each task (nmem_remember with type+priority+tags), flush at session end (nmem_auto). Use causal language ('chose X over Y because Z'). For scratch notes use ephemeral=true. All tools support compact=true to save tokens.",
   "skills": "./skills",
   "hooks": "./hooks/hooks.json",
   "mcpServers": {

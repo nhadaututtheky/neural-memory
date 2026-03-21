@@ -11,7 +11,7 @@ You have access to `nmem_*` MCP tools. Use them **proactively** — do not wait 
 
 ```
 nmem_recap()                          # Resume context from last session
-nmem_context(limit=20, fresh_only=true)  # Load recent memories
+nmem_context(limit=20)                # Load recent memories
 nmem_session(action="get")            # Check current task/feature/progress
 ```
 
@@ -129,6 +129,25 @@ nmem_sync_config(action="set", hub_url="https://hub:8080", enabled=true)
 ```
 nmem_import(source="chromadb", connection="/path/to/chroma")
 nmem_import(source="mem0", user_id="user123")
+```
+
+### Ephemeral Memories
+
+For scratch notes, debugging context, or temporary reasoning:
+```
+nmem_remember(content="Debugging: token expires at step 3", ephemeral=true)
+```
+
+Auto-expires after 24h, never synced to cloud, excluded from consolidation.
+Filter them out: `nmem_recall(query="...", permanent_only=true)`
+
+### Compact Mode
+
+All tools support `compact=true` to reduce response tokens by 60-80%.
+Use `token_budget=N` to cap response size.
+```
+nmem_recall(query="auth decisions", compact=true)
+nmem_stats(token_budget=200)
 ```
 
 ### Edit & Forget — Correct Mistakes

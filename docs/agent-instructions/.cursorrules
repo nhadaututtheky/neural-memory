@@ -6,7 +6,7 @@ You have access to nmem_* MCP tools. Use them PROACTIVELY.
 ### Session Start (ALWAYS)
 
 1. `nmem_recap()` — Resume context from last session
-2. `nmem_context(limit=20, fresh_only=true)` — Load recent memories
+2. `nmem_context(limit=20)` — Load recent memories
 3. `nmem_session(action="get")` — Check current task/feature/progress
 
 If `gap_detected` is true, run `nmem_auto(action="flush", text="<recent context>")` to recover.
@@ -55,12 +55,25 @@ After indexing, nmem_recall finds related code through the neural graph.
   nmem_eternal(action="save", project_name="MyApp", tech_stack=["React", "Node.js"])
   nmem_eternal(action="save", decision="Use Redis", reason="Low latency caching")
 
+### Ephemeral Memories
+
+For scratch notes, debugging context, or temporary reasoning:
+  nmem_remember(content="...", ephemeral=true)
+
+Auto-expires after 24h, never synced, excluded from consolidation.
+Filter them out: nmem_recall(query="...", permanent_only=true)
+
 ### Edit & Forget
 
 Wrong type? → nmem_edit(memory_id="...", type="insight")
 Wrong content? → nmem_edit(memory_id="...", content="corrected text")
 Outdated? → nmem_forget(memory_id="...", reason="outdated")
 Sensitive/garbage? → nmem_forget(memory_id="...", hard=true)
+
+### Compact Mode
+
+All tools support `compact=true` (saves 60-80% tokens) and `token_budget=N`.
+Use for list queries when you don't need full details.
 
 ### Cognitive Reasoning
 

@@ -107,27 +107,27 @@ Leave depth unset for auto-detection (recommended).
 ```
 # User mentions a preference
 User: "I always use 4-space indentation"
--> nmem_remember(content="User prefers 4-space indentation", type="preference", priority=6)
+-> nmem_remember(content="User prefers 4-space indentation", type="preference", priority=6, tags=["coding-style"])
 
 # Starting work on existing project
--> nmem_context(limit=10, fresh_only=true)
+-> nmem_context(limit=10)
 -> nmem_recall(query="project setup and decisions")
 
 # Made an important decision
 "Let's use Redis for caching"
--> nmem_remember(content="Decision: Use Redis for caching", type="decision", priority=7)
+-> nmem_remember(content="Chose Redis for caching — low latency, team familiarity", type="decision", priority=7, tags=["myapp", "infrastructure"])
 
 # Found a bug fix
 "The issue was missing await - fixed by adding await before fetch()"
--> nmem_remember(content="Bug fix: Missing await before fetch() caused race condition", type="error", priority=7)
+-> nmem_remember(content="Bug fix: Missing await before fetch() caused race condition", type="error", priority=7, tags=["myapp", "async"])
 
-# Error Resolution: when you fix a previously stored error, store the fix normally.
-# The system auto-detects contradiction (>50% tag overlap + factual pattern mismatch),
-# creates a RESOLVED_BY synapse, and demotes the error activation by >=50%.
-# This prevents the agent from stubbornly recalling outdated errors.
+# Temporary scratch note (auto-expires, never synced)
+-> nmem_remember(content="Debugging: auth token expires at step 3", ephemeral=true)
+
+# Error Resolution: store the fix normally. System auto-detects contradiction,
+# creates RESOLVED_BY synapse, demotes error activation by >=50%.
 "Actually the race condition was in the websocket handler, not fetch()"
--> nmem_remember(content="Fix: Race condition was in websocket handler, not fetch(). Use asyncio.Lock().", type="insight", priority=7)
-# Result: old error gets RESOLVED_BY synapse, activation drops >=50%, _conflict_resolved=true
+-> nmem_remember(content="Fix: Race condition was in websocket handler, not fetch(). Use asyncio.Lock().", type="insight", priority=7, tags=["myapp", "async"])
 ```
 
 ## Codebase Indexing (nmem_index)
@@ -311,21 +311,35 @@ If no path exists, the concepts are disconnected — store memories that link th
 
 ## Cognitive Reasoning
 
-- `nmem_hypothesize(action="create", content="...", confidence=0.6)` — Create hypothesis
-- `nmem_evidence(hypothesis_id="h-1", evidence_type="for", content="...")` — Submit evidence
-- `nmem_predict(action="create", content="...", hypothesis_id="h-1", deadline="...")` — Predict
-- `nmem_verify(prediction_id="p-1", outcome="correct")` — Verify prediction
-- `nmem_cognitive(action="summary")` — Hot index of active hypotheses + predictions
-- `nmem_gaps(action="detect", topic="...", source="recall_miss")` — Track knowledge gaps
-- `nmem_schema(action="evolve", hypothesis_id="h-1", content="...", reason="...")` — Evolve hypothesis
-- `nmem_schema(action="history", hypothesis_id="h-1")` — Version chain
-- `nmem_drift(action="detect")` — Find tag synonyms/aliases via Jaccard similarity
-- `nmem_drift(action="list")` — Show existing drift clusters
-- `nmem_drift(action="merge", cluster_id="...")` — Merge synonym tags
+The cognitive layer lets the brain reason about what it knows and doesn't know:
+
+```
+# Hypothesize + Evidence (Bayesian confidence tracking)
+nmem_hypothesize(action="create", content="Redis is the bottleneck", confidence=0.6)
+nmem_evidence(hypothesis_id="h-1", evidence_type="for", content="Redis latency 200ms")
+# Auto-resolution: confidence ≥0.9 + 3 for → confirmed. ≤0.1 + 3 against → refuted.
+
+# Predict + Verify (propagates to linked hypothesis)
+nmem_predict(action="create", content="Fix will drop latency 50%", hypothesis_id="h-1", deadline="2026-04-01")
+nmem_verify(prediction_id="p-1", outcome="correct")  # or "wrong"
+
+# Schema Evolution (SUPERSEDES chain)
+nmem_schema(action="evolve", hypothesis_id="h-1", content="Network config was root cause", reason="New evidence")
+nmem_schema(action="history", hypothesis_id="h-1")
+
+# Knowledge Gaps
+nmem_gaps(action="detect", topic="Why 3am latency spike?", source="recall_miss")
+nmem_gaps(action="resolve", gap_id="g-1", resolved_by_neuron_id="n-42")
+
+# Cognitive Dashboard
+nmem_cognitive(action="summary")   # Hot index: ranked active hypotheses + predictions
+
+# Tag Drift Detection
+nmem_drift(action="detect")   # Find tag synonyms/aliases
+nmem_drift(action="merge", cluster_id="...")   # Merge synonym tags
+```
 
 ## Telegram Backup (nmem_telegram_backup)
-
-Send brain .db file as backup to Telegram chats:
 
 ```
 nmem_telegram_backup()                        # Backup current brain
@@ -336,62 +350,10 @@ Requires: `NMEM_TELEGRAM_BOT_TOKEN` env var + `[telegram] chat_ids` in config.to
 
 ## Import External Data (nmem_import)
 
-Import memories from other systems:
 ```
 nmem_import(source="chromadb", connection="/path/to/chroma")
 nmem_import(source="mem0", user_id="user123")
 nmem_import(source="llamaindex", connection="/path/to/index")
-```
-
-## Cognitive Reasoning (hypothesis, evidence, prediction, verify, schema, gaps)
-
-The cognitive layer lets the brain reason about what it knows and doesn't know:
-
-### Hypothesize + Evidence
-```
-# Create a hypothesis
-nmem_hypothesize(action="create", content="Redis is the bottleneck", confidence=0.6)
-
-# Submit evidence (auto-updates confidence via Bayesian model)
-nmem_evidence(hypothesis_id="h-1", evidence_type="for", content="Redis latency 200ms")
-nmem_evidence(hypothesis_id="h-1", evidence_type="against", content="CPU at 10%")
-```
-
-Auto-resolution: confidence ≥0.9 + 3 evidence-for → confirmed. ≤0.1 + 3 against → refuted.
-
-### Predict + Verify
-```
-# Make a falsifiable prediction linked to hypothesis
-nmem_predict(action="create", content="Fixing Redis will drop latency by 50%",
-             hypothesis_id="h-1", deadline="2026-04-01")
-
-# Verify outcome — propagates to linked hypothesis
-nmem_verify(prediction_id="p-1", outcome="correct")  # or "wrong"
-```
-
-### Schema Evolution
-```
-# Evolve hypothesis when understanding changes (SUPERSEDES chain)
-nmem_schema(action="evolve", hypothesis_id="h-1",
-            content="Network config was root cause", reason="New evidence")
-
-# View version history
-nmem_schema(action="history", hypothesis_id="h-2")
-nmem_schema(action="compare", hypothesis_id="h-1", other_id="h-2")
-```
-
-### Knowledge Gaps
-```
-# Track what the brain doesn't know
-nmem_gaps(action="detect", topic="Why 3am latency spike?", source="recall_miss")
-nmem_gaps(action="list")
-nmem_gaps(action="resolve", gap_id="g-1", resolved_by_neuron_id="n-42")
-```
-
-### Cognitive Dashboard
-```
-nmem_cognitive(action="summary")   # Hot index: ranked active hypotheses + predictions
-nmem_cognitive(action="refresh")   # Recompute hot index scores
 ```
 
 ## Sync Engine vs Git Backup
@@ -505,11 +467,17 @@ After each task, check: did I just...
 Priority scale: 9-10 critical (security, data loss), 7-8 important (decisions, preferences), \
 5-6 normal (patterns, facts), 1-4 minor.
 
-## DO NOT SAVE
+## EPHEMERAL MEMORIES
 
-- Routine file reads/writes (ephemeral, no lasting value)
+For scratch notes, debugging context, or temporary reasoning that should NOT persist:
+`nmem_remember(content="...", ephemeral=true)` — auto-expires after 24h, never synced, \
+excluded from consolidation. Use `nmem_recall(permanent_only=true)` to filter them out.
+
+## DO NOT SAVE (as permanent)
+
+- Routine file reads/writes — use `ephemeral=true` or skip entirely
 - Things already in code or git history (derivable)
-- Temporary debugging steps (transient)
+- Temporary debugging steps — use `ephemeral=true`
 - Content already stored (check with nmem_recall first)
 
 ## CONTENT QUALITY

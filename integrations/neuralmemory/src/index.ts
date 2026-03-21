@@ -54,15 +54,35 @@ function buildToolInstructions(tools: ToolDefinition[]): string {
     .map((t) => `- ${t.name}: ${t.description.slice(0, 100)}`)
     .join("\n");
 
-  return `You have NeuralMemory tools for persistent memory across sessions. Call these as TOOL CALLS (not CLI commands):
+  return `Neural Memory gives you persistent memory across sessions. Use it proactively — each session starts fresh, so without explicit saves ALL discoveries are lost.
 
+These are TOOL CALLS, not CLI commands. Do NOT run "nmem remember" in terminal.
+
+## Available Tools
 ${toolList}
 
-NeuralMemory (nmem_*) is your primary memory system. memory_search and memory_get are legacy aliases that redirect to nmem_recall — prefer nmem_* tools directly for full functionality.
+nmem_* is your primary memory system. memory_search/memory_get are legacy aliases for nmem_recall.
 
-These are tool calls, NOT shell commands. Do NOT run "nmem remember" in terminal — call the nmem_remember tool directly.
+## WHEN TO RECALL
+- New session starts → nmem_recall("current project context")
+- User references past event → nmem_recall("<that topic>")
+- Prefix queries with project name for precision
 
-PROACTIVE MEMORY: Use nmem_remember after decisions, errors, and insights. Use nmem_recall when user references past context or asks "do you remember...". Use nmem_remember_batch to store multiple memories at once.`;
+## WHEN TO SAVE
+After each task: did you make a decision (type="decision", priority=7), fix a bug (type="error", priority=7), learn a preference (type="preference", priority=8), or discover an insight (type="insight", priority=6)?
+
+Save with: nmem_remember(content="Chose X over Y because Z", type="decision", priority=7, tags=["project", "topic"])
+
+## CONTENT QUALITY
+- Max 1-3 sentences. Use causal language: "Chose X because Y", "Root cause was X, fixed by Y".
+- Always include project name + topic in tags (lowercase).
+- For temporary scratch notes: nmem_remember(content="...", ephemeral=true) — auto-expires, never synced.
+
+## SESSION END
+nmem_auto(action="process", text="<brief session summary>")
+
+## COMPACT MODE
+All tools support compact=true (saves 60-80% tokens) and token_budget=N.`;
 }
 
 // ── Config ─────────────────────────────────────────────────
