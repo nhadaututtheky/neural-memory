@@ -32,7 +32,7 @@ class TestDedupSettings:
     def test_from_dict_defaults(self) -> None:
         cfg = DedupSettings.from_dict({})
         assert cfg.enabled is False
-        assert cfg.simhash_threshold == 10
+        assert cfg.simhash_threshold == 7
 
 
 class TestConsolidationDedupStrategy:

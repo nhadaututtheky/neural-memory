@@ -95,6 +95,7 @@ class TestPassiveCaptureFailure:
         server.config = MagicMock()
         server.config.maintenance.enabled = False
         server.config.auto.enabled = False
+        server.config.write_gate.enabled = False
 
         mock_storage = AsyncMock()
         mock_storage._current_brain_id = "test-brain"

@@ -25,7 +25,7 @@ class TestDedupConfig:
 
     def test_simhash_threshold_default(self) -> None:
         config = DedupConfig()
-        assert config.simhash_threshold == 10
+        assert config.simhash_threshold == 7
 
 
 class TestSimHashBasics:

@@ -280,13 +280,28 @@ class MaintenanceHandler:
         if not cfg.enabled or not cfg.auto_consolidate:
             return
 
+        from neural_memory.utils.consolidation_lock import (
+            acquire_consolidation_lock,
+            release_consolidation_lock,
+        )
+
+        try:
+            storage = await self.get_storage()  # type: ignore[attr-defined]
+            brain_id = _require_brain_id(storage)
+        except Exception:
+            logger.error("Session-end consolidation: cannot get brain context", exc_info=True)
+            return
+
+        if not acquire_consolidation_lock(brain_id):
+            logger.info("Session-end consolidation skipped: another agent is consolidating")
+            return
+
         try:
             from neural_memory.engine.consolidation import ConsolidationStrategy
             from neural_memory.engine.consolidation_delta import run_with_delta
 
-            storage = await self.get_storage()  # type: ignore[attr-defined]
-            brain_id = _require_brain_id(storage)
             strategies = [
+                ConsolidationStrategy.DEDUP,
                 ConsolidationStrategy.MATURE,
                 ConsolidationStrategy.INFER,
                 ConsolidationStrategy.ENRICH,
@@ -299,6 +314,8 @@ class MaintenanceHandler:
             )
         except Exception:
             logger.error("Session-end consolidation failed", exc_info=True)
+        finally:
+            release_consolidation_lock(brain_id)
 
     async def _run_auto_consolidation_dynamic(self, strategy_names: tuple[str, ...]) -> None:
         """Background task: run dynamically selected consolidation strategies."""

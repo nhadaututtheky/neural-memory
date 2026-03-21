@@ -220,6 +220,45 @@ class EternalConfig:
 
 
 @dataclass(frozen=True)
+class WriteGateConfig:
+    """Write-gate configuration for memory quality enforcement.
+
+    When enabled, memories that fail quality checks are rejected before storage.
+    This prevents low-quality content from degrading brain purity.
+
+    Addresses GitHub Issue #95: write-gate to improve brain purity.
+    """
+
+    enabled: bool = False  # opt-in, backward compat
+    min_length: int = 30  # reject content shorter than this
+    min_quality_score: int = 3  # reject score below this (0-10 scale)
+    auto_capture_min_score: int = 5  # stricter threshold for passive captures
+    max_content_length: int = 2000  # reject wall-of-text above this
+    reject_generic_filler: bool = True  # reject "done", "ok", "completed" etc.
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "min_length": self.min_length,
+            "min_quality_score": self.min_quality_score,
+            "auto_capture_min_score": self.auto_capture_min_score,
+            "max_content_length": self.max_content_length,
+            "reject_generic_filler": self.reject_generic_filler,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> WriteGateConfig:
+        return cls(
+            enabled=bool(data.get("enabled", False)),
+            min_length=int(data.get("min_length", 30)),
+            min_quality_score=int(data.get("min_quality_score", 3)),
+            auto_capture_min_score=int(data.get("auto_capture_min_score", 5)),
+            max_content_length=int(data.get("max_content_length", 2000)),
+            reject_generic_filler=bool(data.get("reject_generic_filler", True)),
+        )
+
+
+@dataclass(frozen=True)
 class MaintenanceConfig:
     """Proactive brain maintenance configuration.
 
@@ -484,7 +523,7 @@ class DedupSettings:
     """
 
     enabled: bool = False
-    simhash_threshold: int = 10
+    simhash_threshold: int = 7  # tighter: ~89% similarity (was 10 / ~85%)
     embedding_threshold: float = 0.85
     embedding_ambiguous_low: float = 0.75
     llm_enabled: bool = False
@@ -492,6 +531,7 @@ class DedupSettings:
     llm_model: str = ""
     llm_max_pairs_per_encode: int = 3
     merge_strategy: str = "keep_newer"
+    max_candidates: int = 30  # wider search (was 10)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -504,13 +544,14 @@ class DedupSettings:
             "llm_model": self.llm_model,
             "llm_max_pairs_per_encode": self.llm_max_pairs_per_encode,
             "merge_strategy": self.merge_strategy,
+            "max_candidates": self.max_candidates,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> DedupSettings:
         return cls(
             enabled=bool(data.get("enabled", False)),
-            simhash_threshold=int(data.get("simhash_threshold", 10)),
+            simhash_threshold=int(data.get("simhash_threshold", 7)),
             embedding_threshold=float(data.get("embedding_threshold", 0.85)),
             embedding_ambiguous_low=float(data.get("embedding_ambiguous_low", 0.75)),
             llm_enabled=bool(data.get("llm_enabled", False)),
@@ -518,6 +559,7 @@ class DedupSettings:
             llm_model=str(data.get("llm_model", "")),
             llm_max_pairs_per_encode=int(data.get("llm_max_pairs_per_encode", 3)),
             merge_strategy=str(data.get("merge_strategy", "keep_newer")),
+            max_candidates=int(data.get("max_candidates", 30)),
         )
 
 
@@ -948,6 +990,9 @@ class UnifiedConfig:
     # Encryption settings
     encryption: EncryptionConfig = field(default_factory=EncryptionConfig)
 
+    # Write gate (quality enforcement before storage)
+    write_gate: WriteGateConfig = field(default_factory=WriteGateConfig)
+
     # Dedup settings
     dedup: DedupSettings = field(default_factory=DedupSettings)
 
@@ -1046,6 +1091,7 @@ class UnifiedConfig:
             conflict=ConflictConfig.from_dict(data.get("conflict", {})),
             safety=SafetyConfig.from_dict(data.get("safety", {})),
             encryption=EncryptionConfig.from_dict(data.get("encryption", {})),
+            write_gate=WriteGateConfig.from_dict(data.get("write_gate", {})),
             dedup=DedupSettings.from_dict(data.get("dedup", {})),
             tool_memory=ToolMemoryConfig.from_dict(data.get("tool_memory", {})),
             telegram=TelegramConfig.from_dict(data.get("telegram", {})),
@@ -1155,6 +1201,15 @@ class UnifiedConfig:
             f"auto_encrypt_sensitive = {'true' if self.encryption.auto_encrypt_sensitive else 'false'}",
             f'keys_dir = "{_sanitize_toml_str(self.encryption.keys_dir)}"',
             "",
+            "# Write gate (quality enforcement before storage)",
+            "[write_gate]",
+            f"enabled = {'true' if self.write_gate.enabled else 'false'}",
+            f"min_length = {self.write_gate.min_length}",
+            f"min_quality_score = {self.write_gate.min_quality_score}",
+            f"auto_capture_min_score = {self.write_gate.auto_capture_min_score}",
+            f"max_content_length = {self.write_gate.max_content_length}",
+            f"reject_generic_filler = {'true' if self.write_gate.reject_generic_filler else 'false'}",
+            "",
             "# Dedup settings",
             "[dedup]",
             f"enabled = {'true' if self.dedup.enabled else 'false'}",
@@ -1166,6 +1221,7 @@ class UnifiedConfig:
             f'llm_model = "{_sanitize_toml_str(self.dedup.llm_model)}"',
             f"llm_max_pairs_per_encode = {self.dedup.llm_max_pairs_per_encode}",
             f'merge_strategy = "{_sanitize_toml_str(self.dedup.merge_strategy)}"',
+            f"max_candidates = {self.dedup.max_candidates}",
             "",
             "# Tool memory auto-capture",
             "[tool_memory]",

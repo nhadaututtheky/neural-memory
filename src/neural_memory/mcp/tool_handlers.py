@@ -341,6 +341,9 @@ class ToolHandler:
 
     async def _remember(self, args: dict[str, Any]) -> dict[str, Any]:
         """Store a memory in the neural graph."""
+        # Extract internal-only flags (not user-settable via MCP args)
+        is_auto_capture = bool(args.pop("_auto_capture", False))
+
         storage = await self.get_storage()
         brain, err = await _get_brain_or_error(storage)
         if err:
@@ -443,6 +446,31 @@ class ToolHandler:
                     logger.error("Encryption failed, refusing to store plaintext", exc_info=True)
                     return {"error": "Encryption failed — memory not stored. Check encryption key."}
 
+        # Write gate: reject low-quality content before encoding
+        write_gate_cfg = self.config.write_gate
+        if write_gate_cfg.enabled is True:
+            from neural_memory.engine.quality_scorer import check_write_gate
+
+            gate_result = check_write_gate(
+                content,
+                gate_config=write_gate_cfg,
+                is_auto_capture=is_auto_capture,
+                memory_type=args.get("type"),
+                tags=args.get("tags"),
+                context=args.get("context") if isinstance(args.get("context"), dict) else None,
+            )
+            if gate_result.rejected:
+                logger.debug(
+                    "Write gate rejected: %s (score=%d)",
+                    gate_result.rejection_reason,
+                    gate_result.score,
+                )
+                return {
+                    "error": "Write gate rejected",
+                    "rejection_reason": gate_result.rejection_reason,
+                    **gate_result.to_dict(),
+                }
+
         # Determine memory type
         if "type" in args:
             try:
@@ -487,6 +515,7 @@ class ToolHandler:
                     llm_model=str(dedup_settings.llm_model),
                     llm_max_pairs_per_encode=int(dedup_settings.llm_max_pairs_per_encode),
                     merge_strategy=str(dedup_settings.merge_strategy),
+                    max_candidates=int(dedup_settings.max_candidates),
                 )
 
                 # Create LLM judge if enabled
@@ -517,6 +546,10 @@ class ToolHandler:
             for t in raw_tags:
                 if isinstance(t, str) and len(t) <= 100:
                     tags.add(t)
+            # Auto-inject agent identity tag
+            agent_id = getattr(self, "_agent_id", "")
+            if agent_id:
+                tags.add(f"agent:{agent_id}")
             # Parse event_at for original event timestamp
             event_timestamp = utcnow()
             raw_event_at = args.get("event_at")

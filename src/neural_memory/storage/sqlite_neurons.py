@@ -136,6 +136,16 @@ class SQLiteNeuronMixin:
             rows = await cursor.fetchall()
             return {row["id"]: row_to_neuron(row) for row in rows}
 
+    async def has_neuron_by_content_hash(self, content_hash: int) -> bool:
+        """Check if a neuron with this content hash exists (fast indexed lookup)."""
+        async with self._read_pool.acquire() as db:  # type: ignore[attr-defined]
+            cursor = await db.execute(
+                "SELECT 1 FROM neurons WHERE content_hash = ? LIMIT 1",
+                (content_hash,),
+            )
+            row = await cursor.fetchone()
+            return row is not None
+
     async def find_neurons_exact_batch(
         self,
         contents: list[str],

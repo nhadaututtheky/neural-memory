@@ -207,12 +207,14 @@ class TestMCPToolCalls:
         from neural_memory.unified_config import ResponseConfig
 
         with patch("neural_memory.mcp.server.get_config") as mock_get_config:
-            mock_get_config.return_value = MagicMock(
+            cfg = MagicMock(
                 current_brain="test-brain",
                 get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
                 tool_tier=ToolTierConfig(tier="full"),
                 response=ResponseConfig(),
             )
+            cfg.write_gate.enabled = False
+            mock_get_config.return_value = cfg
             return MCPServer()
 
     @pytest.mark.asyncio

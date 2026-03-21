@@ -139,6 +139,7 @@ class MCPServer(
         self.hooks: HookRegistry = HookRegistry()
         self._surface_text: str = ""
         self._surface_brain: str = ""
+        self._agent_id: str = ""
 
     async def get_storage(self) -> NeuralStorage:
         """Get or create shared storage instance.
@@ -344,6 +345,10 @@ async def handle_message(server: MCPServer, message: dict[str, Any]) -> dict[str
     params = message.get("params", {})
 
     if method == "initialize":
+        # Capture agent identity from MCP clientInfo
+        client_info = params.get("clientInfo", {})
+        server._agent_id = str(client_info.get("name", "")) or ""
+
         instructions = get_mcp_instructions()
 
         # Inject Knowledge Surface if available

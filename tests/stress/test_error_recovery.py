@@ -93,6 +93,7 @@ class TestRelatedMemoryFailureGraceful:
         server.config = MagicMock()
         server.config.maintenance.enabled = False
         server.config.auto.enabled = False
+        server.config.write_gate.enabled = False
 
         # Create mock storage
         mock_storage = AsyncMock()

@@ -26,7 +26,7 @@ class DedupConfig:
     """
 
     enabled: bool = True
-    simhash_threshold: int = 10
+    simhash_threshold: int = 7  # tighter: ~89% similarity (was 10 / ~85%)
     embedding_threshold: float = 0.85
     embedding_ambiguous_low: float = 0.75
     llm_enabled: bool = False
@@ -34,7 +34,7 @@ class DedupConfig:
     llm_model: str = ""
     llm_max_pairs_per_encode: int = 3
     merge_strategy: str = "keep_newer"
-    max_candidates: int = 10
+    max_candidates: int = 30  # wider search (was 10)
 
     _VALID_PROVIDERS: tuple[str, ...] = ("none", "openai", "anthropic")
     _VALID_STRATEGIES: tuple[str, ...] = ("keep_newer", "keep_older", "merge_metadata")
@@ -90,7 +90,7 @@ class DedupConfig:
         try:
             return cls(
                 enabled=bool(data.get("enabled", True)),
-                simhash_threshold=int(data.get("simhash_threshold", 10)),
+                simhash_threshold=int(data.get("simhash_threshold", 7)),
                 embedding_threshold=float(data.get("embedding_threshold", 0.85)),
                 embedding_ambiguous_low=float(data.get("embedding_ambiguous_low", 0.75)),
                 llm_enabled=bool(data.get("llm_enabled", False)),
@@ -98,7 +98,7 @@ class DedupConfig:
                 llm_model=str(data.get("llm_model", "")),
                 llm_max_pairs_per_encode=int(data.get("llm_max_pairs_per_encode", 3)),
                 merge_strategy=str(data.get("merge_strategy", "keep_newer")),
-                max_candidates=int(data.get("max_candidates", 10)),
+                max_candidates=int(data.get("max_candidates", 30)),
             )
         except (ValueError, TypeError):
             return cls()  # Fall back to safe defaults

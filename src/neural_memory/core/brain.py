@@ -89,6 +89,12 @@ class BrainConfig:
     lazy_entity_enabled: bool = True
     lazy_entity_promotion_threshold: int = 2
     lazy_entity_prune_days: int = 90
+    # Recall quality: recency sigmoid halflife (hours)
+    recency_halflife_hours: float = 168.0  # 7 days (was hardcoded 72h)
+    # Recall quality: tag-aware scoring boost
+    tag_match_boost: float = 0.15
+    # Prune: dead neuron minimum age (days) before auto-prune
+    prune_dead_neuron_days: float = 14.0
     # Diminishing returns gate: stop spreading when new hops add little signal
     diminishing_returns_enabled: bool = True
     diminishing_returns_threshold: float = 0.15

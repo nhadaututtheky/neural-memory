@@ -213,6 +213,10 @@ class SyncEngine:
         if entity_type == "neuron":
             neuron = self._neuron_from_payload(payload)
             if operation == "insert":
+                # Dedup check: skip if content_hash matches existing neuron
+                if neuron.content_hash and await self._has_neuron_content_hash(neuron.content_hash):
+                    logger.info("Sync dedup: skipping neuron %s (content hash match)", neuron.id)
+                    return
                 try:
                     await self._storage.add_neuron(neuron)
                 except ValueError:
@@ -239,6 +243,11 @@ class SyncEngine:
         elif entity_type == "fiber":
             fiber = self._fiber_from_payload(payload)
             if operation == "insert":
+                # Dedup check: if a fiber with same anchor neuron exists, merge tags
+                merged = await self._try_merge_fiber(fiber)
+                if merged:
+                    logger.info("Sync dedup: merged fiber %s into existing", fiber.id)
+                    return
                 try:
                     await self._storage.add_fiber(fiber)
                 except ValueError:
@@ -260,6 +269,54 @@ class SyncEngine:
             change.entity_id,
             change.device_id,
         )
+
+    # ── Sync dedup helpers ──────────────────────────────────────────────
+
+    async def _has_neuron_content_hash(self, content_hash: int) -> bool:
+        """Check if a neuron with this content hash already exists locally."""
+        try:
+            return await self._storage.has_neuron_by_content_hash(content_hash)
+        except Exception:
+            return False
+
+    async def _try_merge_fiber(self, incoming: Fiber) -> bool:
+        """Try to merge incoming fiber into an existing one with same anchor.
+
+        Returns True if merged (caller should skip insert), False if no match.
+        """
+        if not incoming.anchor_neuron_id:
+            return False
+
+        try:
+            from dataclasses import replace as dc_replace
+
+            existing_fibers = await self._storage.find_fibers_batch(
+                [incoming.anchor_neuron_id], limit_per_neuron=1
+            )
+            if not existing_fibers:
+                return False
+
+            existing = existing_fibers[0]
+            if existing.id == incoming.id:
+                return False  # Same fiber ID — let normal update handle it
+
+            # Merge tags from incoming into existing
+            merged_auto_tags = existing.auto_tags | incoming.auto_tags
+            merged_agent_tags = existing.agent_tags | incoming.agent_tags
+            merged_meta = {**(existing.metadata or {}), **(incoming.metadata or {})}
+
+            updated = dc_replace(
+                existing,
+                auto_tags=merged_auto_tags,
+                agent_tags=merged_agent_tags,
+                metadata=merged_meta,
+                frequency=existing.frequency + 1,
+            )
+            await self._storage.update_fiber(updated)
+            return True
+        except Exception:
+            logger.debug("Fiber merge check failed (non-critical)", exc_info=True)
+            return False
 
     # ── Payload-to-entity reconstruction ─────────────────────────────────
 

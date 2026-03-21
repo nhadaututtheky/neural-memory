@@ -460,30 +460,65 @@ class ConsolidationEngine:
         for fiber in fibers:
             fiber_neuron_ids.update(fiber.neuron_ids)
 
+        # Dead neuron pruning: never-accessed + old enough + not pinned
+        dead_neuron_days = getattr(self._config, "prune_dead_neuron_days", 14.0)
+
         # Paginate through all neurons to avoid OOM (batch 5k)
         batch_size = 5000
         offset = 0
         orphan_ids: list[str] = []
+        dead_ids: list[str] = []
         while True:
             batch = await self._storage.find_neurons(
                 limit=batch_size, offset=offset, ephemeral=False
             )
             if not batch:
                 break
+
+            # Check for dead neurons (never accessed, old enough)
+            batch_ids = [n.id for n in batch]
+            states = await self._storage.get_neuron_states_batch(batch_ids)
+
             for neuron in batch:
-                if neuron.id not in connected_neuron_ids and neuron.id not in fiber_neuron_ids:
+                is_orphan = (
+                    neuron.id not in connected_neuron_ids and neuron.id not in fiber_neuron_ids
+                )
+                if is_orphan:
                     report.neurons_pruned += 1
                     orphan_ids.append(neuron.id)
+                    continue
+
+                # Dead neuron: has connections but never accessed, old enough, not pinned
+                if neuron.id in pinned_neuron_ids:
+                    continue
+                state = states.get(neuron.id)
+                freq = state.access_frequency if state else 0
+                if freq > 0:
+                    continue
+                age_days = (reference_time - neuron.created_at).total_seconds() / 86400
+                if age_days >= dead_neuron_days:
+                    report.neurons_pruned += 1
+                    dead_ids.append(neuron.id)
+
             offset += len(batch)
             if len(batch) < batch_size:
                 break
 
-        if not dry_run and orphan_ids:
+        all_prune_ids = orphan_ids + dead_ids
+        if dead_ids:
+            logger.info(
+                "Dead neuron prune: %d orphans + %d dead (never accessed, >%gd old)",
+                len(orphan_ids),
+                len(dead_ids),
+                dead_neuron_days,
+            )
+
+        if not dry_run and all_prune_ids:
             # Use batch delete if available, else fall back to individual deletes
             if hasattr(self._storage, "delete_neurons_batch"):
-                await self._storage.delete_neurons_batch(orphan_ids)
+                await self._storage.delete_neurons_batch(all_prune_ids)
             else:
-                for nid in orphan_ids:
+                for nid in all_prune_ids:
                     await self._storage.delete_neuron(nid)
 
         # Prune old unpromoted entity refs (lazy entity promotion cleanup)

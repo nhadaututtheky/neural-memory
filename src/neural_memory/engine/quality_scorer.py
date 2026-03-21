@@ -1,13 +1,19 @@
-"""Quality scorer — scores memory content richness and returns improvement hints.
+"""Quality scorer — scores memory content richness and enforces write gate.
 
-Soft gate: always allows storage, never rejects. Returns a 0-10 score
-and actionable hints so agents/users can improve memory quality.
+When write gate is enabled, memories below quality thresholds are rejected
+before storage. When disabled, behaves as a soft gate (hints only, never rejects).
+
+Addresses GitHub Issue #95: write-gate to improve brain purity.
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from neural_memory.unified_config import WriteGateConfig
 
 # -- Cognitive richness word lists ------------------------------------------
 
@@ -29,6 +35,38 @@ _COMPARATIVE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Generic filler patterns — content that is ONLY these words (no substance)
+_GENERIC_FILLER = frozenset(
+    {
+        "done",
+        "ok",
+        "okay",
+        "completed",
+        "noted",
+        "got it",
+        "understood",
+        "xong",
+        "oke",
+        "roger",
+        "ack",
+        "acknowledged",
+        "yep",
+        "yes",
+        "no",
+        "nope",
+        "sure",
+        "fine",
+        "good",
+        "great",
+        "thanks",
+        "thank you",
+        "cam on",
+        "hieu roi",
+        "da",
+        "vang",
+    }
+)
+
 # -- Quality thresholds -----------------------------------------------------
 
 _MIN_CONTENT_LENGTH = 10
@@ -43,6 +81,8 @@ class QualityResult:
     score: int  # 0-10
     quality: str  # "low" | "medium" | "high"
     hints: tuple[str, ...] = field(default_factory=tuple)
+    rejected: bool = False
+    rejection_reason: str = ""
 
     def to_dict(self) -> dict[str, object]:
         result: dict[str, object] = {
@@ -51,7 +91,16 @@ class QualityResult:
         }
         if self.hints:
             result["hints"] = list(self.hints)
+        if self.rejected:
+            result["rejected"] = True
+            result["rejection_reason"] = self.rejection_reason
         return result
+
+
+def _is_generic_filler(content: str) -> bool:
+    """Check if content is purely generic filler with no substance."""
+    normalized = content.strip().lower().rstrip(".!?")
+    return normalized in _GENERIC_FILLER
 
 
 def score_memory(
@@ -149,3 +198,97 @@ def score_memory(
         quality=quality,
         hints=tuple(hints),
     )
+
+
+def check_write_gate(
+    content: str,
+    *,
+    gate_config: WriteGateConfig,
+    is_auto_capture: bool = False,
+    memory_type: str | None = None,
+    tags: list[str] | None = None,
+    context: dict[str, object] | None = None,
+) -> QualityResult:
+    """Check content against write gate thresholds.
+
+    Runs quality scoring + gate-specific checks (length, filler, wall-of-text).
+    Returns a QualityResult with ``rejected=True`` if content fails the gate.
+
+    Args:
+        content: The memory content text.
+        gate_config: WriteGateConfig with thresholds.
+        is_auto_capture: If True, uses stricter ``auto_capture_min_score``.
+        memory_type: Memory type string.
+        tags: List of tags.
+        context: Structured context dict.
+
+    Returns:
+        QualityResult — check ``rejected`` field.
+    """
+    stripped = content.strip()
+
+    # Gate 1: Generic filler check (before scoring)
+    if gate_config.reject_generic_filler and _is_generic_filler(stripped):
+        return QualityResult(
+            score=0,
+            quality="low",
+            hints=("Provide substantive content instead of generic filler",),
+            rejected=True,
+            rejection_reason=f"Generic filler rejected: '{stripped[:50]}'",
+        )
+
+    # Gate 2: Minimum length
+    if len(stripped) < gate_config.min_length:
+        return QualityResult(
+            score=0,
+            quality="low",
+            hints=(
+                f"Content too short ({len(stripped)} chars). "
+                f"Minimum: {gate_config.min_length} chars.",
+            ),
+            rejected=True,
+            rejection_reason=f"Content too short ({len(stripped)} < {gate_config.min_length} chars)",
+        )
+
+    # Gate 3: Wall-of-text cap
+    if len(stripped) > gate_config.max_content_length:
+        return QualityResult(
+            score=1,
+            quality="low",
+            hints=(
+                f"Content too long ({len(stripped)} chars). "
+                f"Max: {gate_config.max_content_length} chars. "
+                "Split into smaller, focused memories.",
+            ),
+            rejected=True,
+            rejection_reason=(
+                f"Content too long ({len(stripped)} > {gate_config.max_content_length} chars). "
+                "Split into smaller memories."
+            ),
+        )
+
+    # Gate 4: Quality score check
+    quality_result = score_memory(
+        content,
+        memory_type=memory_type,
+        tags=tags,
+        context=context,
+    )
+
+    min_score = (
+        gate_config.auto_capture_min_score if is_auto_capture else gate_config.min_quality_score
+    )
+
+    if quality_result.score < min_score:
+        return QualityResult(
+            score=quality_result.score,
+            quality=quality_result.quality,
+            hints=quality_result.hints,
+            rejected=True,
+            rejection_reason=(
+                f"Quality score {quality_result.score} below "
+                f"minimum {min_score}. Improve content and retry."
+            ),
+        )
+
+    return quality_result

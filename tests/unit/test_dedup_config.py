@@ -11,7 +11,8 @@ class TestDedupConfig:
     def test_defaults_enabled(self) -> None:
         cfg = DedupConfig()
         assert cfg.enabled is True
-        assert cfg.simhash_threshold == 10
+        assert cfg.simhash_threshold == 7
+        assert cfg.max_candidates == 30
         assert cfg.embedding_threshold == 0.85
         assert cfg.embedding_ambiguous_low == 0.75
         assert cfg.llm_enabled is False
@@ -49,7 +50,7 @@ class TestDedupConfig:
     def test_from_dict_defaults(self) -> None:
         cfg = DedupConfig.from_dict({})
         assert cfg.enabled is True
-        assert cfg.simhash_threshold == 10
+        assert cfg.simhash_threshold == 7
 
     def test_frozen(self) -> None:
         cfg = DedupConfig()

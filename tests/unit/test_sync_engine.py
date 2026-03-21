@@ -40,6 +40,7 @@ def _make_mock_storage(
     mock.update_device_sync = AsyncMock()
     mock.record_change = AsyncMock(return_value=1)
     mock.get_change_log_stats = AsyncMock(return_value={"last_sequence": last_sequence})
+    mock.has_neuron_by_content_hash = AsyncMock(return_value=False)
     return mock
 
 

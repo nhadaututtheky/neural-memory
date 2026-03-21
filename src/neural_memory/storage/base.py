@@ -127,6 +127,13 @@ class NeuralStorage(ABC):
                 results[content] = matches[0]
         return results
 
+    async def has_neuron_by_content_hash(self, content_hash: int) -> bool:
+        """Check if a neuron with this content hash exists.
+
+        Default returns False (no dedup). SQLite backend overrides with fast query.
+        """
+        return False
+
     @abstractmethod
     async def find_neurons(
         self,

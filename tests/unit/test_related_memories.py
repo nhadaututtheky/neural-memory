@@ -86,10 +86,13 @@ class _FakeBrain:
 
 def _make_server() -> MCPServer:
     """Create a MCPServer with mocked storage."""
+    from neural_memory.unified_config import WriteGateConfig
+
     server = MCPServer()
     server.config = MagicMock()
     server.config.maintenance.enabled = False
     server.config.auto.enabled = False
+    server.config.write_gate = WriteGateConfig()  # disabled by default
     return server
 
 

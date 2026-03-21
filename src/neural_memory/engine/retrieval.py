@@ -1539,13 +1539,15 @@ class ReflexPipeline:
         # Doc-trained fibers start at lower salience (ceiling 0.5) and EPISODIC stage,
         # so lifecycle naturally handles ranking without retrieval-time hacks.
         fw = self._config.freshness_weight
+        halflife = self._config.recency_halflife_hours
+        tag_boost = self._config.tag_match_boost
 
         def _fiber_score(fiber: Fiber) -> float:
             # --- Base quality: salience * recency * conductivity ---
             recency = 0.5
             if fiber.last_conducted:
                 hours_ago = (utcnow() - fiber.last_conducted).total_seconds() / 3600
-                recency = max(0.1, 1.0 / (1.0 + math.exp((hours_ago - 72) / 36)))
+                recency = max(0.1, 1.0 / (1.0 + math.exp((hours_ago - halflife) / (halflife / 2))))
 
             base_score = fiber.salience * recency * fiber.conductivity
 
@@ -1574,6 +1576,16 @@ class ReflexPipeline:
             stage_multiplier = 1.1 if stage == "semantic" else 1.0
 
             score = base_score * activation_signal * stage_multiplier
+
+            # --- Tag-aware scoring boost ---
+            if tags and tag_boost > 0:
+                fiber_tags = set(fiber.metadata.get("tags", [])) if fiber.metadata else set()
+                if fiber_tags:
+                    tag_overlap = len(tags & fiber_tags)
+                    if tag_overlap > 0:
+                        score += tag_boost * min(tag_overlap, 3) / 3  # cap at 3 matching tags
+                    else:
+                        score -= tag_boost * 0.5  # mild penalty for zero overlap
 
             # --- Adaptive instruction boost ---
             fiber_meta = fiber.metadata or {}
