@@ -55,6 +55,8 @@ class Fiber:
     salience: float = 0.0
     frequency: int = 0
     summary: str | None = None
+    essence: str | None = None
+    last_ghost_shown_at: datetime | None = None
     # Tag origin tracking (v0.14.0)
     auto_tags: set[str] = field(default_factory=set)
     agent_tags: set[str] = field(default_factory=set)
@@ -82,6 +84,7 @@ class Fiber:
         time_start: datetime | None = None,
         time_end: datetime | None = None,
         summary: str | None = None,
+        essence: str | None = None,
         tags: set[str] | None = None,
         auto_tags: set[str] | None = None,
         agent_tags: set[str] | None = None,
@@ -133,6 +136,7 @@ class Fiber:
             time_start=time_start,
             time_end=time_end,
             summary=summary,
+            essence=essence,
             auto_tags=effective_auto,
             agent_tags=effective_agent,
             metadata=metadata or {},
@@ -171,6 +175,10 @@ class Fiber:
             New Fiber with summary
         """
         return replace(self, summary=summary)
+
+    def with_essence(self, essence: str) -> Fiber:
+        """Create a new Fiber with an essence (single-sentence distillation, max 150 chars)."""
+        return replace(self, essence=essence)
 
     def add_tags(self, *new_tags: str) -> Fiber:
         """

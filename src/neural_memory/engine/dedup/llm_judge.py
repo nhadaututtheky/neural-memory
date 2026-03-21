@@ -124,7 +124,8 @@ class AnthropicDedupJudge(LLMDedupJudge):
                 ],
                 max_tokens=100,
             )
-            text = response.content[0].text if response.content else ""
+            first_block = response.content[0] if response.content else None
+            text = first_block.text if first_block and hasattr(first_block, "text") else ""
             return _parse_verdict(text)
         except Exception as e:
             logger.warning("Anthropic dedup judge failed: %s", e)

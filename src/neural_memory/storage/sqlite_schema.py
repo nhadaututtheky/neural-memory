@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 33
+SCHEMA_VERSION = 35
 
 # â”€â”€ Migrations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Each entry maps (from_version -> to_version) with a list of SQL statements.
@@ -606,6 +606,14 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
         "ALTER TABLE neurons ADD COLUMN ephemeral INTEGER DEFAULT 0",
         "CREATE INDEX IF NOT EXISTS idx_neurons_ephemeral ON neurons(brain_id, ephemeral)",
     ],
+    (33, 34): [
+        # Fidelity layers Phase 1: essence field on fibers for single-sentence distillation
+        "ALTER TABLE fibers ADD COLUMN essence TEXT",
+    ],
+    (34, 35): [
+        # Fidelity layers Phase 3: ghost recall tracking
+        "ALTER TABLE fibers ADD COLUMN last_ghost_shown_at TEXT",
+    ],
 }
 
 
@@ -810,6 +818,8 @@ CREATE TABLE IF NOT EXISTS fibers (
     salience REAL DEFAULT 0.0,
     frequency INTEGER DEFAULT 0,
     summary TEXT,
+    essence TEXT,  -- Single-sentence distillation (max 150 chars) for fidelity layers
+    last_ghost_shown_at TEXT,  -- When fiber was last rendered as ghost in context
     tags TEXT DEFAULT '[]',  -- JSON array (union of auto_tags + agent_tags)
     auto_tags TEXT DEFAULT '[]',  -- JSON array: tags from auto-extraction
     agent_tags TEXT DEFAULT '[]',  -- JSON array: tags from calling agent

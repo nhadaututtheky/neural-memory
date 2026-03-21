@@ -969,6 +969,35 @@ class ToolHandler:
         query = args.get("query")
         if not query or not isinstance(query, str):
             return {"error": "query is required and must be a string"}
+
+        # Ghost recall key: exact fiber lookup via "fiber:{id}" or "recall:fiber:{id}"
+        fiber_key = None
+        if query.startswith("recall:fiber:"):
+            fiber_key = query[len("recall:fiber:") :]
+        elif query.startswith("fiber:"):
+            fiber_key = query[len("fiber:") :]
+
+        if fiber_key:
+            fiber_key = fiber_key.strip()
+            if not fiber_key:
+                return {"error": "Invalid recall key: empty fiber ID"}
+            fiber = await storage.get_fiber(fiber_key)
+            if not fiber:
+                return {"error": f"No fiber found with ID: {fiber_key}"}
+            anchor = (
+                await storage.get_neuron(fiber.anchor_neuron_id) if fiber.anchor_neuron_id else None
+            )
+            content = (anchor.content if anchor else None) or fiber.summary or ""
+            fiber_tags = sorted(fiber.tags)[:5]
+            return {
+                "answer": content,
+                "fiber_id": fiber.id,
+                "summary": fiber.summary,
+                "tags": fiber_tags,
+                "confidence": 1.0,
+                "recall_type": "exact_fiber",
+            }
+
         try:
             depth = DepthLevel(args.get("depth", 1))
         except ValueError:
@@ -1458,13 +1487,60 @@ class ToolHandler:
                 max_tokens = 4000
         except (TypeError, ValueError, AttributeError):
             max_tokens = 4000
-        plan = await optimize_context(storage, fibers, max_tokens)
+        # Pass fidelity config — fetch from storage brain (BrainConfig has fidelity fields)
+        # BrainSettings (self.config.brain) does NOT have fidelity fields
+        brain_obj = await storage.get_brain(storage.brain_id) if storage.brain_id else None
+        brain_config = brain_obj.config if brain_obj else None
+        plan = await optimize_context(
+            storage,
+            fibers,
+            max_tokens,
+            fidelity_enabled=brain_config.fidelity_enabled if brain_config else True,
+            fidelity_full_threshold=brain_config.fidelity_full_threshold if brain_config else 0.6,
+            fidelity_summary_threshold=brain_config.fidelity_summary_threshold
+            if brain_config
+            else 0.3,
+            fidelity_essence_threshold=brain_config.fidelity_essence_threshold
+            if brain_config
+            else 0.1,
+            decay_rate=brain_config.decay_rate if brain_config else 0.1,
+            decay_floor=brain_config.decay_floor if brain_config else 0.05,
+        )
+
+        include_ghosts = args.get("include_ghosts", True)
 
         if plan.items:
-            context_parts = [f"- {item.content}" for item in plan.items]
-            context_text = "\n".join(context_parts)
+            # Separate ghost items from non-ghost items
+            non_ghost = [item for item in plan.items if item.fidelity_level != "ghost"]
+            ghost_items = [item for item in plan.items if item.fidelity_level == "ghost"]
+
+            context_parts = [f"- {item.content}" for item in non_ghost]
+            context_text = "\n".join(context_parts) if context_parts else ""
+
+            # Append ghost section if enabled and ghosts exist
+            if include_ghosts and ghost_items:
+                ghost_parts = [f"- {item.content}" for item in ghost_items]
+                ghost_section = "\n--- faded memories (use recall key to restore) ---\n"
+                ghost_section += "\n".join(ghost_parts)
+                context_text = (
+                    (context_text + "\n" + ghost_section) if context_text else ghost_section
+                )
+
+            if not context_text:
+                context_text = "No context available."
         else:
             context_text = "No context available."
+
+        # Track ghost shown timestamps (only if ghosts were actually shown)
+        if include_ghosts and plan.ghost_fiber_ids:
+            try:
+                from neural_memory.utils.timeutils import utcnow as _utcnow
+
+                now = _utcnow()
+                # Batch update: single SQL for all ghost fibers (avoids N round-trips)
+                await storage.batch_update_ghost_shown(plan.ghost_fiber_ids, now)
+            except Exception:
+                logger.debug("Ghost tracking update failed", exc_info=True)
 
         await self._record_tool_action("context")
 
@@ -1478,6 +1554,18 @@ class ToolHandler:
             response["optimization_stats"] = {
                 "items_dropped": plan.dropped_count,
                 "top_score": round(plan.items[0].score, 4) if plan.items else 0.0,
+            }
+
+        # Fidelity stats — always include when fidelity is enabled so callers
+        # can distinguish "fidelity off" from "all items at FULL"
+        fidelity_on = brain_config.fidelity_enabled if brain_config else True
+        fs = plan.fidelity_stats
+        if fidelity_on:
+            response["fidelity_stats"] = {
+                "full": fs.full,
+                "summary": fs.summary,
+                "essence": fs.essence,
+                "ghost": fs.ghost,
             }
 
         # Expiry warnings (opt-in)

@@ -100,6 +100,13 @@ class BrainConfig:
     diminishing_returns_threshold: float = 0.15
     diminishing_returns_min_neurons: int = 2
     diminishing_returns_grace_hops: int = 1
+    # Fidelity layers
+    decay_floor: float = 0.05
+    fidelity_enabled: bool = True
+    fidelity_full_threshold: float = 0.6
+    fidelity_summary_threshold: float = 0.3
+    fidelity_essence_threshold: float = 0.1
+    essence_generator: str = "extractive"  # "extractive" or "llm"
 
     def with_updates(self, **kwargs: Any) -> BrainConfig:
         """Create a new config with updated values."""

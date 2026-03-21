@@ -137,6 +137,12 @@ def row_to_fiber(row: aiosqlite.Row) -> Fiber:
         salience=row["salience"],
         frequency=row["frequency"],
         summary=row["summary"],
+        essence=row["essence"] if "essence" in row_keys else None,
+        last_ghost_shown_at=(
+            datetime.fromisoformat(row["last_ghost_shown_at"])
+            if "last_ghost_shown_at" in row_keys and row["last_ghost_shown_at"]
+            else None
+        ),
         auto_tags=auto_tags,
         agent_tags=agent_tags,
         metadata=json.loads(row["metadata"]),
@@ -239,6 +245,12 @@ def row_to_brain(row: aiosqlite.Row) -> Brain:
         embedding_provider=config_data.get("embedding_provider", "sentence_transformer"),
         embedding_model=config_data.get("embedding_model", "all-MiniLM-L6-v2"),
         embedding_similarity_threshold=config_data.get("embedding_similarity_threshold", 0.7),
+        decay_floor=config_data.get("decay_floor", 0.05),
+        fidelity_enabled=config_data.get("fidelity_enabled", True),
+        fidelity_full_threshold=config_data.get("fidelity_full_threshold", 0.6),
+        fidelity_summary_threshold=config_data.get("fidelity_summary_threshold", 0.3),
+        fidelity_essence_threshold=config_data.get("fidelity_essence_threshold", 0.1),
+        essence_generator=config_data.get("essence_generator", "extractive"),
     )
 
     return Brain(

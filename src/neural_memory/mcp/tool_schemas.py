@@ -464,6 +464,10 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "maximum": 90,
                     "description": "If set, warn about memories expiring within this many days. Adds expiry_warnings to response.",
                 },
+                "include_ghosts": {
+                    "type": "boolean",
+                    "description": "Include faded ghost memories at bottom of context with recall keys (default: true). Set false to suppress.",
+                },
             },
         },
     },

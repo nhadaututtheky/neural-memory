@@ -516,6 +516,18 @@ class NeuralStorage(ABC):
         """
         ...
 
+    async def batch_update_ghost_shown(self, fiber_ids: list[str], timestamp: datetime) -> int:
+        """Batch update last_ghost_shown_at for multiple fibers.
+
+        Args:
+            fiber_ids: Fiber IDs to update
+            timestamp: Timestamp to set
+
+        Returns:
+            Number of fibers updated
+        """
+        raise NotImplementedError
+
     async def update_fiber_metadata(self, fiber_id: str, metadata: dict[str, Any]) -> None:
         """Merge metadata into a fiber's existing metadata JSON.
 

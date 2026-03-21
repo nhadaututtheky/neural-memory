@@ -271,6 +271,7 @@ class AutoHandler:
                         "type": item["type"],
                         "priority": item.get("priority", 5),
                         "tags": ["emergency_flush"],
+                        "_auto_capture": True,
                     }
                 )
                 for item in redacted
@@ -414,6 +415,7 @@ class AutoHandler:
                         "content": item["content"],
                         "type": item["type"],
                         "priority": item.get("priority", 5),
+                        "_auto_capture": True,
                     }
                 )
                 for item in redacted_eligible

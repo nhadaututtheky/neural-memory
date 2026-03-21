@@ -49,9 +49,10 @@ class SQLiteFiberMixin:
                    (id, brain_id, neuron_ids, synapse_ids, anchor_neuron_id,
                     pathway, conductivity, last_conducted,
                     time_start, time_end, coherence, salience, frequency,
-                    summary, tags, auto_tags, agent_tags, metadata,
+                    summary, essence, last_ghost_shown_at,
+                    tags, auto_tags, agent_tags, metadata,
                     compression_tier, pinned, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     fiber.id,
                     brain_id,
@@ -67,6 +68,8 @@ class SQLiteFiberMixin:
                     fiber.salience,
                     fiber.frequency,
                     fiber.summary,
+                    fiber.essence,
+                    fiber.last_ghost_shown_at.isoformat() if fiber.last_ghost_shown_at else None,
                     json.dumps(list(fiber.tags)),
                     json.dumps(list(fiber.auto_tags)),
                     json.dumps(list(fiber.agent_tags)),
@@ -246,7 +249,8 @@ class SQLiteFiberMixin:
                anchor_neuron_id = ?, pathway = ?, conductivity = ?,
                last_conducted = ?, time_start = ?, time_end = ?,
                coherence = ?, salience = ?, frequency = ?,
-               summary = ?, tags = ?, auto_tags = ?, agent_tags = ?,
+               summary = ?, essence = ?, last_ghost_shown_at = ?,
+               tags = ?, auto_tags = ?, agent_tags = ?,
                metadata = ?, compression_tier = ?, pinned = ?
                WHERE id = ? AND brain_id = ?""",
             (
@@ -262,6 +266,8 @@ class SQLiteFiberMixin:
                 fiber.salience,
                 fiber.frequency,
                 fiber.summary,
+                fiber.essence,
+                fiber.last_ghost_shown_at.isoformat() if fiber.last_ghost_shown_at else None,
                 json.dumps(list(fiber.tags)),
                 json.dumps(list(fiber.auto_tags)),
                 json.dumps(list(fiber.agent_tags)),
@@ -448,6 +454,20 @@ class SQLiteFiberMixin:
         ) as cursor:
             row = await cursor.fetchone()
             return row[0] if row else 0
+
+    async def batch_update_ghost_shown(self, fiber_ids: list[str], timestamp: datetime) -> int:
+        """Batch update last_ghost_shown_at for multiple fibers in one query."""
+        if not fiber_ids:
+            return 0
+        conn = self._ensure_conn()
+        brain_id = self._get_brain_id()
+        placeholders = ",".join("?" for _ in fiber_ids)
+        await conn.execute(
+            f"UPDATE fibers SET last_ghost_shown_at = ? WHERE brain_id = ? AND id IN ({placeholders})",
+            [timestamp.isoformat(), brain_id, *fiber_ids],
+        )
+        await conn.commit()
+        return len(fiber_ids)
 
     async def get_keyword_df_batch(self, keywords: list[str]) -> dict[str, int]:
         """Get document frequency for a batch of keywords."""

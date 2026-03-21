@@ -359,9 +359,31 @@ async def capture_text(text: str) -> dict[str, Any]:
         auto_redact_severity = config.safety.auto_redact_min_severity
         saved: list[str] = []
 
+        # Write gate check for stop hook (auto-capture path)
+        write_gate_cfg = config.write_gate
+        gate_enabled = write_gate_cfg.enabled
+
         for item in eligible:
             try:
                 content = item["content"]
+
+                # Apply write gate if enabled (uses auto_capture threshold)
+                if gate_enabled:
+                    from neural_memory.engine.quality_scorer import check_write_gate
+
+                    gate_result = check_write_gate(
+                        content,
+                        gate_config=write_gate_cfg,
+                        is_auto_capture=True,
+                        memory_type=item.get("type"),
+                    )
+                    if gate_result.rejected:
+                        logger.debug(
+                            "Stop hook write gate rejected: %s",
+                            gate_result.rejection_reason,
+                        )
+                        continue
+
                 redacted_content, matches, _ = auto_redact_content(
                     content, min_severity=auto_redact_severity
                 )
@@ -397,26 +419,44 @@ async def capture_text(text: str) -> dict[str, Any]:
         if not saved:
             summary = _extract_session_summary(text)
             if summary and len(summary) > 30:
-                try:
-                    redacted_summary, _, _ = auto_redact_content(
-                        summary, min_severity=auto_redact_severity
+                # Apply write gate to session summary too
+                if gate_enabled:
+                    from neural_memory.engine.quality_scorer import check_write_gate
+
+                    gate_result = check_write_gate(
+                        summary,
+                        gate_config=write_gate_cfg,
+                        is_auto_capture=True,
+                        memory_type="context",
                     )
-                    result = await encoder.encode(
-                        content=redacted_summary,
-                        timestamp=utcnow(),
-                        tags={"stop_hook", "session_end", "session_summary"},
-                    )
-                    typed_mem = TypedMemory.create(
-                        fiber_id=result.fiber.id,
-                        memory_type=MemoryType.CONTEXT,
-                        priority=Priority.from_int(4),
-                        source="stop_hook",
-                        tags={"stop_hook", "session_end", "session_summary"},
-                    )
-                    await storage.add_typed_memory(typed_mem)
-                    saved.append(redacted_summary[:60])
-                except Exception:
-                    logger.debug("Failed to save session summary", exc_info=True)
+                    if gate_result.rejected:
+                        logger.debug(
+                            "Stop hook session summary rejected: %s",
+                            gate_result.rejection_reason,
+                        )
+                        summary = None  # type: ignore[assignment]
+
+                if summary:
+                    try:
+                        redacted_summary, _, _ = auto_redact_content(
+                            summary, min_severity=auto_redact_severity
+                        )
+                        result = await encoder.encode(
+                            content=redacted_summary,
+                            timestamp=utcnow(),
+                            tags={"stop_hook", "session_end", "session_summary"},
+                        )
+                        typed_mem = TypedMemory.create(
+                            fiber_id=result.fiber.id,
+                            memory_type=MemoryType.CONTEXT,
+                            priority=Priority.from_int(4),
+                            source="stop_hook",
+                            tags={"stop_hook", "session_end", "session_summary"},
+                        )
+                        await storage.add_typed_memory(typed_mem)
+                        saved.append(redacted_summary[:60])
+                    except Exception:
+                        logger.debug("Failed to save session summary", exc_info=True)
 
         await storage.batch_save()
 

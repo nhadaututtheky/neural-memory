@@ -1,5 +1,14 @@
 # Progress Log
 
+## 2026-03-18
+- Full 8-dimension audit completed (Rune audit skill)
+  - Verdict: WARNING, Overall health: 8.0/10
+  - Findings: 0 CRITICAL, 3 HIGH, 8 MEDIUM, 5 LOW, 2 INFO
+  - HIGH: input firewall gap on explicit nmem_remember, tool_handlers.py 2609 LOC, magic number duplication
+  - Positives: zero ruff/mypy errors, 4361 tests, comprehensive security posture
+  - Report: AUDIT-REPORT.md
+  - ADR: .rune/adr/ADR-001-input-firewall-explicit-path-gap.md
+
 ## 2026-03-12
 - v4.1.0 released: docs engine + chatbot + brain fix + CI docs check
   - Auto-generated MCP tool reference (44 tools) + CLI reference (66 commands)

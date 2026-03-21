@@ -265,8 +265,8 @@ class TestRunDoctorIntegration:
             mock.return_value = {"name": "test", "status": OK, "detail": "ok"}
 
         result = run_doctor(json_output=True)
-        assert result["total"] == 11
-        assert result["passed"] == 11
+        assert result["total"] == 12
+        assert result["passed"] == 12
 
     def test_quickstart_url_defined(self) -> None:
         assert "quickstart" in QUICKSTART_URL

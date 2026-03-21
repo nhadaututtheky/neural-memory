@@ -102,7 +102,7 @@ class TestSchemaMigrationV23:
     def test_schema_version_is_25(self) -> None:
         from neural_memory.storage.sqlite_schema import SCHEMA_VERSION
 
-        assert SCHEMA_VERSION == 33
+        assert SCHEMA_VERSION == 35
 
     def test_migration_22_23_exists(self) -> None:
         from neural_memory.storage.sqlite_schema import MIGRATIONS

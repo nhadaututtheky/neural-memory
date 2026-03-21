@@ -27,6 +27,8 @@ from neural_memory.utils.timeutils import utcnow
 if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
 
+logger = logging.getLogger(__name__)
+
 
 class ConsolidationStrategy(StrEnum):
     """Available consolidation strategies."""
@@ -44,6 +46,7 @@ class ConsolidationStrategy(StrEnum):
     COMPRESS = "compress"
     LIFECYCLE = "lifecycle"
     PROCESS_TOOL_EVENTS = "process_tool_events"
+    ESSENCE_BACKFILL = "essence_backfill"
     DETECT_DRIFT = "detect_drift"
     ALL = "all"
 
@@ -100,6 +103,7 @@ class ConsolidationReport:
     fibers_compressed: int = 0
     tokens_saved: int = 0
     neurons_reactivated: int = 0
+    essences_generated: int = 0
     merge_details: list[MergeDetail] = field(default_factory=list)
     dry_run: bool = False
     extra: dict[str, Any] = field(default_factory=dict)
@@ -211,6 +215,7 @@ class ConsolidationEngine:
             {
                 ConsolidationStrategy.SUMMARIZE,
                 ConsolidationStrategy.INFER,
+                ConsolidationStrategy.ESSENCE_BACKFILL,
             }
         ),
         frozenset(
@@ -266,6 +271,7 @@ class ConsolidationEngine:
                 report, dry_run
             ),
             ConsolidationStrategy.DETECT_DRIFT: lambda: self._detect_drift(report, dry_run),
+            ConsolidationStrategy.ESSENCE_BACKFILL: lambda: self._essence_backfill(report, dry_run),
         }
         handler = dispatch.get(strategy)
         if handler is not None:
@@ -888,6 +894,100 @@ class ConsolidationEngine:
             await self._storage.add_neuron(pattern.concept_neuron)
             for synapse in pattern.synapses:
                 await self._storage.add_synapse(synapse)
+
+        # Phase 3: Generate essence for fibers that have content but no essence
+        await self._essence_backfill(report, dry_run)
+
+    async def _essence_backfill(
+        self,
+        report: ConsolidationReport,
+        dry_run: bool,
+    ) -> None:
+        """Generate essence for fibers missing it, or upgrade extractive → LLM.
+
+        Uses configured essence_generator strategy from BrainConfig:
+        - "extractive" (default): sentence-level scoring, fast and free
+        - "llm": LLM abstractive with cost guard (priority < 3 skipped)
+
+        Paginates in batches of 500 to avoid the storage cap.
+        """
+        from neural_memory.engine.fidelity import get_essence_generator
+
+        # Resolve generator strategy from brain config
+        strategy = "extractive"
+        try:
+            brain_id = self._storage._get_brain_id()
+            brain = await self._storage.get_brain(brain_id)
+            if brain and brain.config:
+                strategy = getattr(brain.config, "essence_generator", "extractive")
+        except Exception:
+            logger.debug("Could not read brain config for essence strategy", exc_info=True)
+
+        generator = get_essence_generator(strategy)
+
+        backfilled = 0
+        batch_size = 500
+
+        # Paginate using created_at cursor to avoid re-fetching same fibers
+        last_created: str | None = None
+
+        while True:
+            # Fetch fibers missing essence, ordered by created_at for cursor pagination
+            fibers = await self._storage.get_fibers(limit=batch_size)
+            if not fibers:
+                break
+
+            # Filter to fibers needing essence and not yet processed
+            candidates = [f for f in fibers if not f.essence]
+            if last_created:
+                candidates = [
+                    f
+                    for f in candidates
+                    if f.created_at and f.created_at.isoformat() > last_created
+                ]
+            if not candidates:
+                break
+
+            for fiber in candidates:
+                anchor = await self._storage.get_neuron(fiber.anchor_neuron_id)
+                if not anchor or not anchor.content:
+                    continue
+
+                # Get priority from typed memory for cost guard
+                priority = 5
+                try:
+                    typed_mem = await self._storage.get_typed_memory(fiber.id)
+                    if (
+                        typed_mem
+                        and hasattr(typed_mem, "priority")
+                        and isinstance(typed_mem.priority, (int, float))
+                    ):
+                        priority = int(typed_mem.priority)
+                except Exception:
+                    pass
+
+                essence = await generator.generate(anchor.content, priority=priority)
+                if not essence:
+                    continue
+
+                if dry_run:
+                    backfilled += 1
+                    continue
+
+                updated = fiber.with_essence(essence)
+                await self._storage.update_fiber(updated)
+                backfilled += 1
+
+            # Advance cursor
+            last_fiber = fibers[-1]
+            last_created = last_fiber.created_at.isoformat() if last_fiber.created_at else None
+
+            if len(fibers) < batch_size:
+                break
+
+        if backfilled > 0:
+            logger.info("Essence backfill: %d fibers updated", backfilled)
+        report.essences_generated += backfilled
 
     async def _infer(
         self,

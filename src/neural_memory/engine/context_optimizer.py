@@ -9,7 +9,7 @@ Zero LLM dependency — pure graph metrics.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -46,6 +46,17 @@ class ContextItem:
     score: float
     token_count: int
     truncated: bool = False
+    fidelity_level: str = "full"
+
+
+@dataclass(frozen=True)
+class FidelityStats:
+    """Counts of items at each fidelity level."""
+
+    full: int = 0
+    summary: int = 0
+    essence: int = 0
+    ghost: int = 0
 
 
 @dataclass(frozen=True)
@@ -56,11 +67,15 @@ class ContextPlan:
         items: Ordered context items (highest score first)
         total_tokens: Total estimated tokens used
         dropped_count: Items dropped due to budget or dedup
+        fidelity_stats: Count of items at each fidelity level
+        ghost_fiber_ids: Fiber IDs rendered as ghosts (for tracking)
     """
 
     items: list[ContextItem]
     total_tokens: int
     dropped_count: int
+    fidelity_stats: FidelityStats = FidelityStats()
+    ghost_fiber_ids: list[str] = field(default_factory=list)
 
 
 def compute_composite_score(
@@ -184,6 +199,7 @@ def allocate_token_budgets(
                     score=item.score,
                     token_count=truncated_tokens,
                     truncated=True,
+                    fidelity_level=item.fidelity_level,
                 )
             )
             tokens_used += truncated_tokens
@@ -196,10 +212,17 @@ async def optimize_context(
     fibers: list[Fiber],
     max_tokens: int,
     reference_time: datetime | None = None,
+    fidelity_enabled: bool = True,
+    fidelity_full_threshold: float = 0.6,
+    fidelity_summary_threshold: float = 0.3,
+    fidelity_essence_threshold: float = 0.1,
+    decay_rate: float = 0.1,
+    decay_floor: float = 0.05,
 ) -> ContextPlan:
     """Optimize context selection and token allocation.
 
     Scores each fiber by composite relevance, deduplicates by SimHash,
+    selects fidelity level per item based on score + budget pressure,
     allocates token budget proportionally, and truncates low-priority items.
 
     Args:
@@ -207,10 +230,22 @@ async def optimize_context(
         fibers: Candidate fibers (already filtered by freshness if needed)
         max_tokens: Maximum total token budget
         reference_time: Reference time for freshness (default: now)
+        fidelity_enabled: Whether to use fidelity-aware content selection
+        fidelity_full_threshold: Score threshold for FULL fidelity
+        fidelity_summary_threshold: Score threshold for SUMMARY fidelity
+        fidelity_essence_threshold: Score threshold for ESSENCE fidelity
+        decay_rate: Lambda for fidelity decay formula
+        decay_floor: Minimum fidelity score (ghost floor)
 
     Returns:
-        ContextPlan with ordered, budget-constrained items
+        ContextPlan with ordered, budget-constrained items + fidelity stats
     """
+    from neural_memory.engine.fidelity import (
+        compute_fidelity_score,
+        render_at_fidelity,
+        select_fidelity,
+    )
+
     if not fibers:
         return ContextPlan(items=[], total_tokens=0, dropped_count=0)
 
@@ -219,20 +254,30 @@ async def optimize_context(
 
         reference_time = utcnow()
 
-    # Phase 1: Build scored items
+    # Phase 1: Build scored items with full content + metadata
     scored_items: list[ContextItem] = []
     content_hashes: dict[str, int] = {}
+    # Keep fiber refs and anchor content for fidelity rendering
+    fiber_map: dict[str, Fiber] = {}
+    anchor_content_map: dict[str, str] = {}
+    activation_map: dict[str, float] = {}
+    priority_map: dict[str, float] = {}
 
     for fiber in fibers:
         # Get content
-        content = fiber.summary
-        if not content and fiber.anchor_neuron_id:
+        anchor_content: str | None = None
+        if fiber.anchor_neuron_id:
             anchor = await storage.get_neuron(fiber.anchor_neuron_id)
             if anchor:
-                content = anchor.content
+                anchor_content = anchor.content
                 content_hashes[fiber.id] = anchor.content_hash
+
+        content = fiber.summary or anchor_content
         if not content:
             continue
+
+        fiber_map[fiber.id] = fiber
+        anchor_content_map[fiber.id] = anchor_content or ""
 
         # Get activation level from neuron state
         activation = 0.0
@@ -243,6 +288,7 @@ async def optimize_context(
                     activation = float(state.activation_level)
         except (TypeError, ValueError, AttributeError):
             pass
+        activation_map[fiber.id] = activation
 
         # Get priority from typed memory
         priority_norm = 0.5
@@ -256,6 +302,7 @@ async def optimize_context(
                 priority_norm = typed_mem.priority / 10.0
         except (TypeError, ValueError, AttributeError):
             pass
+        priority_map[fiber.id] = priority_norm
 
         # Frequency (cap at 20)
         freq = getattr(fiber, "frequency", 0) or 0
@@ -301,9 +348,78 @@ async def optimize_context(
     scored_items = deduplicate_by_simhash(scored_items, content_hashes)
     dedup_dropped = initial_count - len(scored_items)
 
+    # Phase 3.5: Fidelity-aware content selection
+    if fidelity_enabled and scored_items:
+        # Estimate budget pressure from raw token demand vs budget
+        raw_tokens = sum(item.token_count for item in scored_items)
+        budget_pressure = min(1.0, max(0.0, (raw_tokens - max_tokens) / max(1, raw_tokens)))
+
+        fidelity_items: list[ContextItem] = []
+        for item in scored_items:
+            fiber_or_none = fiber_map.get(item.fiber_id)
+            if not fiber_or_none:
+                fidelity_items.append(item)
+                continue
+            fiber = fiber_or_none
+
+            # Compute per-fiber fidelity score using decay formula
+            last_access = fiber.last_conducted or fiber.created_at
+            # No timestamp → treat as old (30 days) so score degrades gracefully
+            hours = (reference_time - last_access).total_seconds() / 3600 if last_access else 720.0
+
+            fidelity_score = compute_fidelity_score(
+                activation=activation_map.get(fiber.id, 0.0),
+                importance=priority_map.get(fiber.id, 0.5),
+                hours_since_access=hours,
+                decay_rate=decay_rate,
+                decay_floor=decay_floor,
+            )
+
+            # Ghost visibility boost: recently-shown ghosts are contextually relevant
+            if fiber.last_ghost_shown_at:
+                ghost_age_hours = (
+                    reference_time - fiber.last_ghost_shown_at
+                ).total_seconds() / 3600
+                if ghost_age_hours < 24:
+                    fidelity_score = min(1.0, fidelity_score + 0.1)
+
+            level = select_fidelity(
+                fidelity_score,
+                budget_pressure,
+                full_threshold=fidelity_full_threshold,
+                summary_threshold=fidelity_summary_threshold,
+                essence_threshold=fidelity_essence_threshold,
+            )
+
+            rendered = render_at_fidelity(
+                fiber, level, anchor_content=anchor_content_map.get(fiber.id)
+            )
+            if not rendered:
+                rendered = item.content  # Fallback to original
+
+            fidelity_items.append(
+                ContextItem(
+                    fiber_id=item.fiber_id,
+                    content=rendered,
+                    score=item.score,
+                    token_count=_estimate_tokens(rendered),
+                    fidelity_level=level.value,
+                )
+            )
+
+        scored_items = fidelity_items
+
     # Phase 4: Allocate token budgets
     budgeted = allocate_token_budgets(scored_items, max_tokens)
     budget_dropped = len(scored_items) - len(budgeted)
+
+    # Recount fidelity stats and collect ghost fiber IDs from budgeted items only
+    final_counts = {"full": 0, "summary": 0, "essence": 0, "ghost": 0}
+    ghost_ids: list[str] = []
+    for item in budgeted:
+        final_counts[item.fidelity_level] = final_counts.get(item.fidelity_level, 0) + 1
+        if item.fidelity_level == "ghost":
+            ghost_ids.append(item.fiber_id)
 
     total_tokens = sum(item.token_count for item in budgeted)
 
@@ -311,4 +427,11 @@ async def optimize_context(
         items=budgeted,
         total_tokens=total_tokens,
         dropped_count=dedup_dropped + budget_dropped,
+        fidelity_stats=FidelityStats(
+            full=final_counts["full"],
+            summary=final_counts["summary"],
+            essence=final_counts["essence"],
+            ghost=final_counts["ghost"],
+        ),
+        ghost_fiber_ids=ghost_ids,
     )
