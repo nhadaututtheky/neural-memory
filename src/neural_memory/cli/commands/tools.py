@@ -946,6 +946,88 @@ def setup(
         raise typer.Exit(1)
 
 
+def lifecycle(
+    action: Annotated[str, typer.Argument(help="Action: status, freeze, thaw, recover")] = "status",
+    neuron_id: Annotated[
+        str | None, typer.Argument(help="Neuron/fiber ID (required for freeze/thaw/recover)")
+    ] = None,
+    brain: Annotated[str | None, typer.Option("--brain", "-b", help="Brain name")] = None,
+) -> None:
+    """Manage memory lifecycle states.
+
+    View lifecycle distribution or freeze/thaw/recover individual memories.
+
+    Examples:
+        nmem lifecycle                     # Show lifecycle distribution
+        nmem lifecycle status              # Same as above
+        nmem lifecycle freeze <neuron-id>  # Prevent compression
+        nmem lifecycle thaw <neuron-id>    # Resume normal lifecycle
+        nmem lifecycle recover <id>        # Rehydrate compressed memory
+    """
+
+    async def _lifecycle() -> None:
+        config = get_config()
+        brain_name = brain or config.current_brain
+        storage = await get_storage(config, brain_name=brain_name)
+
+        if action == "status":
+            distribution = await storage.get_lifecycle_distribution()
+            total = sum(distribution.values())
+            typer.secho(f"Brain: {brain_name}", bold=True)
+            typer.echo(f"Total neurons: {total}")
+            typer.echo()
+            for state, count in sorted(distribution.items(), key=lambda x: -x[1]):
+                pct = (count / total * 100) if total else 0
+                bar = "#" * int(pct / 2)
+                typer.echo(f"  {state:<12} {count:>6}  {pct:5.1f}%  {bar}")
+
+        elif action == "freeze":
+            if not neuron_id:
+                typer.secho("Error: neuron_id required for freeze", fg=typer.colors.RED, err=True)
+                raise typer.Exit(1)
+            await storage.update_neuron_frozen(neuron_id, frozen=True)
+            typer.secho(f"Frozen: {neuron_id}", fg=typer.colors.CYAN)
+
+        elif action == "thaw":
+            if not neuron_id:
+                typer.secho("Error: neuron_id required for thaw", fg=typer.colors.RED, err=True)
+                raise typer.Exit(1)
+            await storage.update_neuron_frozen(neuron_id, frozen=False)
+            typer.secho(f"Thawed: {neuron_id}", fg=typer.colors.GREEN)
+
+        elif action == "recover":
+            if not neuron_id:
+                typer.secho("Error: id required for recover", fg=typer.colors.RED, err=True)
+                raise typer.Exit(1)
+            from neural_memory.engine.compression import CompressionEngine
+
+            engine = CompressionEngine(storage)
+            # Try as fiber_id first, then look up by neuron_id
+            fibers = await storage.find_fibers(contains_neuron=neuron_id)
+            if fibers:
+                success = await engine.recover_fiber(fibers[0].id)
+                fid = fibers[0].id
+            else:
+                success = await engine.recover_fiber(neuron_id)
+                fid = neuron_id
+
+            if success:
+                typer.secho(f"Recovered: {fid}", fg=typer.colors.GREEN)
+            else:
+                typer.secho(f"Recovery failed for {neuron_id}", fg=typer.colors.RED, err=True)
+                raise typer.Exit(1)
+
+        else:
+            typer.secho(
+                f"Unknown action: {action}. Valid: status, freeze, thaw, recover",
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(1)
+
+    run_async(_lifecycle())
+
+
 def register(app: typer.Typer) -> None:
     """Register tool commands on the app."""
     app.command()(mcp)
@@ -961,3 +1043,4 @@ def register(app: typer.Typer) -> None:
     app.command(name="install-skills")(install_skills)
     app.command()(doctor)
     app.command()(setup)
+    app.command()(lifecycle)

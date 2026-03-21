@@ -47,6 +47,7 @@ def run_doctor(*, json_output: bool = False, fix: bool = False) -> dict[str, Any
     checks.append(_check_hooks())
     checks.append(_check_dedup())
     checks.append(_check_surface())
+    checks.append(_check_config_freshness())
     checks.append(_check_cli_tools())
 
     # Auto-fix pass
@@ -459,6 +460,58 @@ def _check_surface() -> dict[str, Any]:
         }
 
 
+def _check_config_freshness() -> dict[str, Any]:
+    """Check if config.toml has all sections from current version."""
+    try:
+        import tomllib
+
+        from neural_memory.unified_config import get_neuralmemory_dir
+
+        config_path = get_neuralmemory_dir() / "config.toml"
+        if not config_path.exists():
+            return {
+                "name": "Config freshness",
+                "status": SKIP,
+                "detail": "no config.toml",
+            }
+
+        raw = tomllib.loads(config_path.read_text(encoding="utf-8"))
+        expected_sections = [
+            "brain",
+            "embedding",
+            "auto",
+            "eternal",
+            "maintenance",
+            "conflict",
+            "safety",
+            "encryption",
+            "write_gate",
+            "dedup",
+            "tool_memory",
+        ]
+        missing = [s for s in expected_sections if s not in raw]
+        if missing:
+            return {
+                "name": "Config freshness",
+                "status": WARN,
+                "detail": f"missing sections: {', '.join(missing)}",
+                "fix": "Run: nmem doctor --fix",
+                "fixable": True,
+            }
+
+        return {
+            "name": "Config freshness",
+            "status": OK,
+            "detail": "all sections present",
+        }
+    except Exception:
+        return {
+            "name": "Config freshness",
+            "status": SKIP,
+            "detail": "could not check config freshness",
+        }
+
+
 # ---------------------------------------------------------------------------
 # Auto-fix
 # ---------------------------------------------------------------------------
@@ -498,6 +551,7 @@ _FIX_HANDLERS: dict[str, Any] = {
     "Hooks": lambda: _fix_hooks(),
     "Dedup": lambda: _fix_dedup(),
     "Embedding provider": lambda: _fix_embedding(),
+    "Config freshness": lambda: _fix_config_freshness(),
 }
 
 
@@ -567,6 +621,27 @@ def _fix_embedding() -> dict[str, Any]:
         "status": WARN,
         "detail": "no provider available to auto-enable",
         "fix": "Run: nmem setup embeddings",
+    }
+
+
+def _fix_config_freshness() -> dict[str, Any]:
+    """Auto-fix: re-save config.toml to add missing sections with defaults."""
+    try:
+        from neural_memory.unified_config import get_config
+
+        config = get_config(reload=True)
+        config.save()
+        return {
+            "name": "Config freshness",
+            "status": OK,
+            "detail": "auto-fixed: config.toml updated with new sections",
+        }
+    except Exception:
+        pass
+    return {
+        "name": "Config freshness",
+        "status": WARN,
+        "detail": "auto-fix failed",
     }
 
 

@@ -5,11 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.18.1] — 2026-03-21
+
+### Added
+
+- **`nmem lifecycle` CLI** — manage memory lifecycle states from CLI: `status` (distribution), `freeze` (prevent compression), `thaw` (resume lifecycle), `recover` (rehydrate compressed memory). Mirrors MCP `nmem_lifecycle` tool (#97)
+- **Config freshness check** — `nmem doctor` now detects missing config sections from newer versions. `nmem doctor --fix` auto-adds them with defaults (#97)
+
+### Fixed
+
+- **Write gate scope clarification** — changelog now documents that write gate applies to MCP pipeline only; CLI `nmem remember` bypasses it (explicit user intent). Disabled by default (#97)
+
 ## [4.18.0] — 2026-03-21
 
 ### Added
 
-- **Write gate** — hard quality filter before storage with configurable thresholds (`min_length`, `min_quality_score`, `reject_generic_filler`, `max_content_length`). Rejects low-quality and generic filler content before it reaches the brain
+- **Write gate** — hard quality filter before storage with configurable thresholds (`min_length`, `min_quality_score`, `reject_generic_filler`, `max_content_length`). Applies to MCP pipeline only (auto-capture + `nmem_remember` tool). CLI `nmem remember` bypasses write gate (explicit user intent). Disabled by default (`enabled = false`) — opt-in via `config.toml` `[write_gate]` section
 - **Agent identity capture** — MCP `clientInfo.name` auto-injected as `agent:` tag on every memory, enabling per-agent filtering in multi-agent setups
 - **Consolidation lock** — atomic file-based lock (`O_CREAT|O_EXCL`) with per-brain isolation and cross-platform PID check (Windows + Unix), prevents concurrent consolidation corruption
 - **Sync dedup** — content hash check on neuron import (skip duplicates), fiber anchor match with tag union merge on sync
