@@ -1,6 +1,6 @@
 {
   "name": "neuralmemory",
-  "version": "1.14.0",
+  "version": "1.15.0",
   "description": "NeuralMemory plugin for OpenClaw — brain-inspired persistent memory for AI agents",
   "type": "module",
   "main": "dist/index.js",

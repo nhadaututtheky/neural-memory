@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.17.0] — 2026-03-21
+
+### Fixed
+
+- **Per-project Knowledge Surface** — `save_surface_text()` always wrote to global `~/.neuralmemory/surfaces/` because `get_surface_path()` only returned project path when the file already existed (chicken-and-egg bug). Now uses `for_write=True` to prefer project-level `<root>/.neuralmemory/surface.nm` when a project root is detected, regardless of whether the file exists yet
+- **Stale global surface warning** — logs `INFO` when both project and global surface files coexist, alerting users to the stale global copy
+
+### Tests
+
+- 2 new resolver tests: write-mode project path creation, read-mode global fallback
+
 ## [4.16.0] — 2026-03-21
 
 ### Improved
