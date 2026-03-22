@@ -10,6 +10,8 @@ from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
+from neural_memory.server.auth import APIKeyMiddleware
+from neural_memory.server.rate_limit import RateLimitMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -465,6 +467,12 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Rate limiting middleware (inner — runs before auth, closest to handler)
+    app.add_middleware(RateLimitMiddleware)
+
+    # API key authentication middleware (outer — first line of defence)
+    app.add_middleware(APIKeyMiddleware)
 
     # Override storage dependency using the shared module
     from neural_memory.server.dependencies import get_storage as shared_get_storage
