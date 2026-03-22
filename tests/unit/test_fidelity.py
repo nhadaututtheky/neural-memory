@@ -253,8 +253,10 @@ class TestFidelityDecayUnitConsistency:
 
         # Fidelity: 24 hours, base=1.0
         fidelity = compute_fidelity_score(
-            activation=0.5, importance=0.5,
-            hours_since_access=24, decay_rate=decay_rate,
+            activation=0.5,
+            importance=0.5,
+            hours_since_access=24,
+            decay_rate=decay_rate,
         )
         # base = 1.0, decay = e^(-0.1 * 1 day) = 0.905
         expected = 1.0 * neuron_decay
@@ -265,7 +267,8 @@ class TestFidelityDecayUnitConsistency:
     def test_seven_days_still_full_or_summary(self) -> None:
         """7-day old memory with moderate importance should NOT be GHOST."""
         score = compute_fidelity_score(
-            activation=0.5, importance=0.5,
+            activation=0.5,
+            importance=0.5,
             hours_since_access=168,  # 7 days
             decay_rate=0.1,
         )
@@ -279,7 +282,8 @@ class TestFidelityDecayUnitConsistency:
     def test_thirty_days_not_immediately_ghost(self) -> None:
         """30-day memory with high importance should still be above floor."""
         score = compute_fidelity_score(
-            activation=0.3, importance=0.7,
+            activation=0.3,
+            importance=0.7,
             hours_since_access=720,  # 30 days
             decay_rate=0.1,
         )
@@ -290,12 +294,16 @@ class TestFidelityDecayUnitConsistency:
     def test_one_hour_barely_decays(self) -> None:
         """1 hour old memory should barely decay (< 1% drop)."""
         fresh = compute_fidelity_score(
-            activation=0.5, importance=0.5,
-            hours_since_access=0, decay_rate=0.1,
+            activation=0.5,
+            importance=0.5,
+            hours_since_access=0,
+            decay_rate=0.1,
         )
         one_hour = compute_fidelity_score(
-            activation=0.5, importance=0.5,
-            hours_since_access=1, decay_rate=0.1,
+            activation=0.5,
+            importance=0.5,
+            hours_since_access=1,
+            decay_rate=0.1,
         )
         # 1 hour = 1/24 day → e^(-0.1/24) ≈ 0.9958 → ~0.4% drop
         drop = (fresh - one_hour) / fresh
@@ -307,22 +315,28 @@ class TestFidelityDecayUnitConsistency:
 
         # 1 day → should be FULL (score ~0.905)
         s1 = compute_fidelity_score(
-            activation=0.5, importance=0.5,
-            hours_since_access=24, decay_rate=decay_rate,
+            activation=0.5,
+            importance=0.5,
+            hours_since_access=24,
+            decay_rate=decay_rate,
         )
         assert select_fidelity(s1) == FidelityLevel.FULL
 
         # 14 days → should be SUMMARY (score ~0.247)
         s14 = compute_fidelity_score(
-            activation=0.3, importance=0.3,
-            hours_since_access=336, decay_rate=decay_rate,
+            activation=0.3,
+            importance=0.3,
+            hours_since_access=336,
+            decay_rate=decay_rate,
         )
         assert select_fidelity(s14) in (FidelityLevel.SUMMARY, FidelityLevel.ESSENCE)
 
         # 60 days → should be GHOST (score near floor)
         s60 = compute_fidelity_score(
-            activation=0.1, importance=0.1,
-            hours_since_access=1440, decay_rate=decay_rate,
+            activation=0.1,
+            importance=0.1,
+            hours_since_access=1440,
+            decay_rate=decay_rate,
         )
         assert select_fidelity(s60) == FidelityLevel.GHOST
 

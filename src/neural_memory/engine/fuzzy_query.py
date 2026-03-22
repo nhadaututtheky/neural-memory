@@ -109,7 +109,6 @@ def parse_fuzzy_query(query: str) -> FuzzyNode:
         return VectorNode(query=query)
 
     # Build AST left-to-right
-    # tokens = [part1, "AND", part2, "OR", part3, ...]
     node: FuzzyNode = VectorNode(query=tokens[0].strip())
 
     i = 1
@@ -244,10 +243,7 @@ def _collect(node: FuzzyNode, acc: list[str]) -> None:
     if isinstance(node, VectorNode):
         if node.query:
             acc.append(node.query)
-    elif isinstance(node, AndNode):
-        _collect(node.left, acc)
-        _collect(node.right, acc)
-    elif isinstance(node, OrNode):
+    elif isinstance(node, (AndNode, OrNode)):
         _collect(node.left, acc)
         _collect(node.right, acc)
     elif isinstance(node, NotNode):

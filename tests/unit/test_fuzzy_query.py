@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from neural_memory.engine.fuzzy_query import (
     AndNode,
     NotNode,
@@ -15,7 +13,6 @@ from neural_memory.engine.fuzzy_query import (
     is_fuzzy_query,
     parse_fuzzy_query,
 )
-
 
 # ── Detection ────────────────────────────────────────────────────────
 

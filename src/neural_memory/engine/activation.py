@@ -267,9 +267,7 @@ class SpreadingActivation:
         # Periodic trim to prevent unbounded dict growth
         if current_gen % self._TRIM_INTERVAL == 0:
             cutoff = current_gen - self._TRIM_KEEP_GENERATIONS
-            self._visited_gen = {
-                k: g for k, g in self._visited_gen.items() if g >= cutoff
-            }
+            self._visited_gen = {k: g for k, g in self._visited_gen.items() if g >= cutoff}
 
         # Track which hop levels have been checked for diminishing returns
         dr_checked_hops: set[int] = set()

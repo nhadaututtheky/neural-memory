@@ -11,7 +11,6 @@ from neural_memory.engine.clustering import UnionFind
 from neural_memory.engine.drift_detection import (
     JACCARD_MERGE_THRESHOLD,
     MIN_COOCCURRENCE_COUNT,
-    ActivationDriftReport,
     DriftReport,
     TagCluster,
     compute_jaccard,

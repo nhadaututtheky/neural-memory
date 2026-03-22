@@ -9,9 +9,9 @@ import pytest
 from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.engine.connection_explainer import (
+    _confidence_to_strength,
     compute_path_confidence,
     explain_connection,
-    _confidence_to_strength,
 )
 from neural_memory.mcp.server import MCPServer, handle_message
 from neural_memory.unified_config import ResponseConfig, ToolTierConfig

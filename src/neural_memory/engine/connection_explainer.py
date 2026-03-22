@@ -159,7 +159,9 @@ async def explain_connection(
     strength = _confidence_to_strength(confidence)
 
     frozen_steps = tuple(steps)
-    md = _build_markdown(best_source, frozen_steps, from_entity, to_entity, avg_weight, confidence, strength)
+    md = _build_markdown(
+        best_source, frozen_steps, from_entity, to_entity, avg_weight, confidence, strength
+    )
 
     return ConnectionExplanation(
         found=True,
