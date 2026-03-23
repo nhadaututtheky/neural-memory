@@ -102,6 +102,9 @@ embeddings = [
 embeddings-openai = [
     "openai>=1.0",
 ]
+embeddings-openrouter = [
+    "openai>=1.0",
+]
 embeddings-gemini = [
     "google-genai>=1.0",
 ]

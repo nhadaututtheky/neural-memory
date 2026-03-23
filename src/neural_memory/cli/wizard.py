@@ -50,7 +50,7 @@ _PROVIDERS: list[dict[str, str]] = [
     {
         "key": "openrouter",
         "name": "OpenRouter (cloud)",
-        "install": "pip install neural-memory[embeddings-openai]",
+        "install": "pip install neural-memory[embeddings-openrouter]",
         "note": "OpenAI-compatible, needs OPENROUTER_API_KEY",
     },
 ]

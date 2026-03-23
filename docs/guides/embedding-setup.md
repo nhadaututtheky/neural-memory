@@ -156,7 +156,7 @@ similarity_threshold = 0.7
 Uses OpenRouter's OpenAI-compatible embeddings endpoint with provider-routed models like `openai/text-embedding-3-small`.
 
 ```bash
-pip install neural-memory[embeddings-openai]
+pip install neural-memory[embeddings-openrouter]
 ```
 
 Set your API key:

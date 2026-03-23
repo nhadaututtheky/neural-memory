@@ -118,7 +118,8 @@ pip install neural-memory[server]       # FastAPI server + dashboard
 pip install neural-memory[extract]      # PDF/DOCX/PPTX/HTML/XLSX extraction
 pip install neural-memory[nlp-vi]       # Vietnamese NLP
 pip install neural-memory[embeddings]   # Local embedding models
-pip install neural-memory[embeddings-openai] # OpenAI / OpenRouter embeddings
+pip install neural-memory[embeddings-openai] # OpenAI embeddings
+pip install neural-memory[embeddings-openrouter] # OpenRouter embeddings
 pip install neural-memory[all]          # Everything
 ```
 

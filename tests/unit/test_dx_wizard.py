@@ -89,7 +89,7 @@ class TestDoctor:
             result = _check_embedding_provider()
             assert result["status"] == "fail"
             assert "not installed" in result["detail"]
-            assert result["fix"] == "Run: pip install neural-memory[embeddings-openai]"
+            assert result["fix"] == "Run: pip install neural-memory[embeddings-openrouter]"
 
     def test_check_embedding_openai_not_installed_uses_embeddings_extra(self) -> None:
         from neural_memory.cli.doctor import _check_embedding_provider
@@ -262,9 +262,9 @@ class TestEmbeddingSetup:
 
         install_by_key = {provider["key"]: provider["install"] for provider in _PROVIDERS}
         assert install_by_key["openai"] == "pip install neural-memory[embeddings-openai]"
-        assert install_by_key["openrouter"] == "pip install neural-memory[embeddings-openai]"
+        assert install_by_key["openrouter"] == "pip install neural-memory[embeddings-openrouter]"
 
-    def test_pyproject_embeddings_extra_includes_openai(self) -> None:
+    def test_pyproject_embedding_extras_include_cloud_sdk(self) -> None:
         import tomllib
         from pathlib import Path
 
@@ -275,6 +275,9 @@ class TestEmbeddingSetup:
 
         embeddings_openai = data["project"]["optional-dependencies"]["embeddings-openai"]
         assert "openai>=1.0" in embeddings_openai
+
+        embeddings_openrouter = data["project"]["optional-dependencies"]["embeddings-openrouter"]
+        assert "openai>=1.0" in embeddings_openrouter
 
     def test_all_providers_have_required_fields(self) -> None:
         from neural_memory.cli.embedding_setup import _PROVIDERS
