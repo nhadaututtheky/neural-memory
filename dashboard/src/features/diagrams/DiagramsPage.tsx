@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { FiberMindmap } from "./FiberMindmap"
+import type { FiberSummary } from "@/api/types"
 import { useTranslation } from "react-i18next"
 
 interface SelectedNeuron {
@@ -18,6 +19,7 @@ export default function DiagramsPage() {
   const { data: diagram, isLoading: diagramLoading } =
     useFiberDiagram(selectedFiber)
   const [selectedNeuron, setSelectedNeuron] = useState<SelectedNeuron | null>(null)
+  const selectedFiberSummary = fiberList?.fibers.find((f: FiberSummary) => f.id === selectedFiber)
   const { t } = useTranslation()
 
   return (
@@ -71,7 +73,7 @@ export default function DiagramsPage() {
             <CardHeader className="py-3 px-4 shrink-0 flex flex-row items-center justify-between">
               <CardTitle className="text-sm">
                 {diagram
-                  ? t("diagrams.fiberLabel", { id: diagram.fiber_id.slice(0, 16) })
+                  ? selectedFiberSummary?.summary ?? t("diagrams.fiberLabel", { id: diagram.fiber_id.slice(0, 16) })
                   : t("diagrams.selectFiber")}
               </CardTitle>
               {diagram && (
@@ -95,6 +97,7 @@ export default function DiagramsPage() {
               ) : diagram ? (
                 <FiberMindmap
                   diagram={diagram}
+                  fiberName={selectedFiberSummary?.summary}
                   onSelectNeuron={(id, content, type) =>
                     setSelectedNeuron({ id, content, type })
                   }

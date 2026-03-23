@@ -4,6 +4,7 @@ import { useLayoutStore } from "@/stores/useLayoutStore"
 import { useStats, useHealthCheck } from "@/api/hooks/useDashboard"
 import { Badge } from "@/components/ui/badge"
 import { useTranslation } from "react-i18next"
+import { CommandPalette } from "@/components/common/CommandPalette"
 
 const themeIcons = {
   light: Sun,
@@ -56,6 +57,9 @@ export function TopBar() {
           </Badge>
         </div>
       )}
+
+      {/* Command palette trigger */}
+      <CommandPalette />
 
       {/* Spacer */}
       <div className="flex-1" />

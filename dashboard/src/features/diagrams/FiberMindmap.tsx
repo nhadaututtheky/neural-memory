@@ -208,11 +208,12 @@ function RootNode({ data }: NodeProps<MindmapNode>) {
       style={{
         background: `linear-gradient(135deg, ${color}20, ${color}40)`,
         border: `2px solid ${color}`,
-        minWidth: 100,
+        minWidth: 120,
+        maxWidth: 220,
         opacity: data.dimmed ? 0.25 : 1,
       }}
     >
-      <p className="font-display text-sm font-bold" style={{ color }}>
+      <p className="font-display text-xs font-bold truncate" style={{ color }}>
         {data.label}
       </p>
       <Handle type="source" position={Position.Right} className="!bg-transparent !border-0" />
@@ -324,7 +325,7 @@ function layoutTree(nodes: Node[], edges: Edge[]): { nodes: Node[]; edges: Edge[
   })
 
   for (const node of nodes) {
-    const width = node.type === "root" ? 160 : node.type === "group" ? 140 : 220
+    const width = node.type === "root" ? 220 : node.type === "group" ? 140 : 220
     const height = node.type === "root" ? 50 : node.type === "group" ? 40 : 44
     g.setNode(node.id, { width, height })
   }
@@ -337,7 +338,7 @@ function layoutTree(nodes: Node[], edges: Edge[]): { nodes: Node[]; edges: Edge[
 
   const layoutedNodes = nodes.map((node) => {
     const pos = g.node(node.id)
-    const width = node.type === "root" ? 160 : node.type === "group" ? 140 : 220
+    const width = node.type === "root" ? 220 : node.type === "group" ? 140 : 220
     const height = node.type === "root" ? 50 : node.type === "group" ? 40 : 44
     return {
       ...node,
@@ -382,7 +383,7 @@ function buildAdjacency(diagram: FiberDiagramResponse) {
 /*  Build ReactFlow nodes/edges from FiberDiagramResponse              */
 /* ------------------------------------------------------------------ */
 
-function buildFlowData(diagram: FiberDiagramResponse): { nodes: Node[]; edges: Edge[] } {
+function buildFlowData(diagram: FiberDiagramResponse, fiberName?: string): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = []
   const edges: Edge[] = []
 
@@ -403,8 +404,8 @@ function buildFlowData(diagram: FiberDiagramResponse): { nodes: Node[]; edges: E
     type: "root",
     position: { x: 0, y: 0 },
     data: {
-      label: "Fiber",
-      fullContent: diagram.fiber_id,
+      label: fiberName ?? "Fiber",
+      fullContent: fiberName ?? diagram.fiber_id,
       neuronType: "root",
       isGroup: false,
       highlighted: false,
@@ -533,13 +534,14 @@ function SynapseLegend({ synapseTypes }: { synapseTypes: string[] }) {
 
 interface FiberMindmapProps {
   diagram: FiberDiagramResponse
+  fiberName?: string
   onSelectNeuron?: (id: string, content: string, type: string) => void
 }
 
-function FiberMindmapInner({ diagram, onSelectNeuron }: FiberMindmapProps) {
+function FiberMindmapInner({ diagram, fiberName, onSelectNeuron }: FiberMindmapProps) {
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(
-    () => buildFlowData(diagram),
-    [diagram],
+    () => buildFlowData(diagram, fiberName),
+    [diagram, fiberName],
   )
 
   const { neighbors, synapseEdgeIds } = useMemo(

@@ -266,6 +266,19 @@
     "copied": "Copied!",
     "downloadCard": "Download"
   },
+  "commandPalette": {
+    "search": "Search...",
+    "placeholder": "Search pages, fibers, memories...",
+    "noResults": "No results found.",
+    "pages": "Pages",
+    "fibers": "Fibers",
+    "neurons": "Memories",
+    "semanticSearch": "Semantic Search — find by meaning",
+    "crossBrainSearch": "Cross-Brain Search — search all brains",
+    "navigate": "navigate",
+    "select": "open",
+    "close": "close"
+  },
   "toolStats": {
     "title": "Tool Stats",
     "totalEvents": "Total Events",

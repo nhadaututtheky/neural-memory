@@ -229,6 +229,19 @@
     "copied": "Đã chép!",
     "downloadCard": "Tải xuống"
   },
+  "commandPalette": {
+    "search": "Tìm kiếm...",
+    "placeholder": "Tìm trang, fiber, ký ức...",
+    "noResults": "Không tìm thấy kết quả.",
+    "pages": "Trang",
+    "fibers": "Fiber",
+    "neurons": "Ký ức",
+    "semanticSearch": "Tìm kiếm ngữ nghĩa — tìm theo ý nghĩa",
+    "crossBrainSearch": "Tìm xuyên Brain — tìm trên mọi brain",
+    "navigate": "di chuyển",
+    "select": "mở",
+    "close": "đóng"
+  },
   "toolStats": {
     "title": "Thống kê công cụ",
     "totalEvents": "Tổng sự kiện",
