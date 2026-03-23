@@ -85,6 +85,82 @@ nmem_auto(action="process", text="<brief session summary>")
 All tools support compact=true (saves 60-80% tokens) and token_budget=N.`;
 }
 
+// ── Prompt cleaning for autoContext ────────────────────────
+// When OpenClaw + Telegram (or other frontends) forward a prompt,
+// it often contains metadata preamble: NeuralMemory context blocks,
+// conversation JSON, sender JSON, system messages, media lines, etc.
+// Sending this raw to recall creates junk neurons.  Strip it.
+
+/**
+ * Strip metadata / context preamble from an agent prompt,
+ * returning only the actual user message content.
+ */
+export function stripPromptMetadata(raw: string): string {
+  let text = raw;
+
+  // 1. Remove [NeuralMemory — ...] blocks (may be multi-line until next
+  //    section header or double-newline boundary)
+  text = text.replace(
+    /\[NeuralMemory\s*[—–-][^\]]*\][\s\S]*?(?=\n\n(?!\s*[-•*])|$)/gi,
+    "",
+  );
+
+  // 2. Remove ## Relevant Memories / ## Related Information sections
+  text = text.replace(
+    /^#{1,3}\s*(Relevant Memories|Related Information|Relevant Context)[\s\S]*?(?=\n#{1,3}\s|\n\n(?![-•*\s]))/gim,
+    "",
+  );
+
+  // 3. Remove lines that look like memory entries (- [type] ...)
+  text = text.replace(/^-\s*\[(concept|entity|decision|error|preference|insight|memory)\].*$/gim, "");
+
+  // 4. Remove JSON-ish metadata blocks: { "conversation": ..., "sender": ... }
+  //    Heuristic: block starting with { on its own line, containing known keys,
+  //    ending with } on its own line.
+  text = text.replace(
+    /^\{[^}]*"(?:conversation|sender|chat_id|message_id|metadata|context)"[^]*?\n\}\s*$/gm,
+    "",
+  );
+
+  // 5. Remove [Subagent Context] / [Subagent Task] blocks
+  text = text.replace(
+    /\[Subagent\s+(?:Context|Task)\][\s\S]*?(?=\n\n|$)/gi,
+    "",
+  );
+
+  // 6. Remove system-message style lines: [Mon 2026-...] timestamps
+  text = text.replace(
+    /^\[(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{4}-\d{2}-\d{2}[^\]]*\].*$/gm,
+    "",
+  );
+
+  // 7. Remove media attachment lines (image/audio/video/file)
+  text = text.replace(
+    /^(?:📎|🖼|🎵|🎥|📁|\[(?:image|photo|audio|video|file|sticker|document)\b)[^\n]*$/gim,
+    "",
+  );
+
+  // 8. Remove IMPORTANT: ... instruction lines from orchestrator
+  text = text.replace(/^IMPORTANT:.*$/gm, "");
+
+  // 9. Remove export/env lines
+  text = text.replace(/^export\s+\w+=.*$/gm, "");
+
+  // 10. Remove lines that are purely URLs or "URL: ..."
+  text = text.replace(/^(?:URL:\s*)?https?:\/\/\S+\s*$/gm, "");
+
+  // 11. Collapse multiple blank lines and trim
+  text = text.replace(/\n{3,}/g, "\n\n").trim();
+
+  // If stripping removed everything, fall back to last non-empty line of raw
+  if (text.length === 0) {
+    const lines = raw.split("\n").filter((l) => l.trim().length > 0);
+    text = lines[lines.length - 1]?.trim() ?? raw.trim();
+  }
+
+  return text;
+}
+
 // ── Config ─────────────────────────────────────────────────
 
 type PluginConfig = {
@@ -282,8 +358,12 @@ const plugin: OpenClawPluginDefinition = {
           const ev = event as BeforeAgentStartEvent;
 
           try {
+            // Strip metadata preamble so recall matches on actual
+            // user content, not JSON tokens / system boilerplate.
+            const cleanedPrompt = stripPromptMetadata(ev.prompt);
+
             const raw = await mcp.callTool("nmem_recall", {
-              query: ev.prompt,
+              query: cleanedPrompt,
               depth: cfg.contextDepth,
               max_tokens: cfg.maxContextTokens,
             });
