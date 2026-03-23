@@ -451,6 +451,7 @@ class AutoTagStep:
     """Generate auto-tags and infer memory type."""
 
     tag_normalizer: TagNormalizer
+    MAX_KEYWORD_TAGS: int = 8
 
     @property
     def name(self) -> str:
@@ -470,7 +471,7 @@ class AutoTagStep:
                 auto_tags.add(tag)
 
         weighted = extract_weighted_keywords(ctx.content, language=ctx.language)
-        for kw in weighted[:5]:
+        for kw in weighted[: self.MAX_KEYWORD_TAGS]:
             tag = kw.text.lower().strip()
             if len(tag) >= 2:
                 auto_tags.add(tag)

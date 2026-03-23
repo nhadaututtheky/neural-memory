@@ -23,6 +23,7 @@ from neural_memory.engine.doc_extractor import (
     extract_to_markdown,
 )
 from neural_memory.engine.encoder import MemoryEncoder
+from neural_memory.engine.training_markdown import TrainingAnnotations, extract_training_annotations
 from neural_memory.utils.timeutils import utcnow
 
 # Extensions that are already markdown and don't need extraction
@@ -33,6 +34,14 @@ if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class _TrainingChunk:
+    """Chunk plus file-level training annotations."""
+
+    chunk: DocChunk
+    annotations: TrainingAnnotations
 
 
 @dataclass(frozen=True)
@@ -156,7 +165,7 @@ class DocTrainer:
             )
 
         # Collect all chunks from all files, with hash-based dedup
-        all_chunks: list[DocChunk] = []
+        all_chunks: list[_TrainingChunk] = []
         files_skipped = 0
         for file_path in files:
             # Check if file already trained (hash dedup)
@@ -169,13 +178,16 @@ class DocTrainer:
                 continue
 
             rel_path = str(file_path.relative_to(directory))
+            annotations = extract_training_annotations(text, source_name=rel_path)
             chunks = chunk_markdown(
                 text,
                 source_file=rel_path,
                 min_words=tc.min_chunk_words,
                 max_words=tc.max_chunk_words,
             )
-            all_chunks.extend(chunks)
+            all_chunks.extend(
+                [_TrainingChunk(chunk=chunk, annotations=annotations) for chunk in chunks]
+            )
 
             # Record file as trained
             await self._record_trained_file(file_path, len(chunks), tc)
@@ -220,9 +232,10 @@ class DocTrainer:
             min_words=tc.min_chunk_words,
             max_words=tc.max_chunk_words,
         )
+        annotations = extract_training_annotations(text, source_name=file_path.name)
 
         return await self._encode_chunks(
-            chunks=chunks,
+            chunks=[_TrainingChunk(chunk=chunk, annotations=annotations) for chunk in chunks],
             files_processed=1,
             training_config=tc,
         )
@@ -298,7 +311,7 @@ class DocTrainer:
     async def _encode_chunks(
         self,
         *,
-        chunks: list[DocChunk],
+        chunks: list[_TrainingChunk],
         files_processed: int,
         training_config: TrainingConfig,
     ) -> TrainingResult:
@@ -337,7 +350,9 @@ class DocTrainer:
         # Track chunk anchor neuron IDs for linking to heading neurons
         chunk_anchors: list[tuple[tuple[str, ...], str]] = []
 
-        for chunk in chunks:
+        for training_chunk in chunks:
+            chunk = training_chunk.chunk
+            annotations = training_chunk.annotations
             tags: set[str] = {"doc_train"}
             if tc.domain_tag:
                 tags.add(tc.domain_tag)
@@ -346,6 +361,8 @@ class DocTrainer:
             if chunk.source_file:
                 file_tag = Path(chunk.source_file).stem.lower().replace(" ", "-")
                 tags.add(f"file:{file_tag}")
+            tags.update(annotations.topic_tags)
+            tags.update({f"label:{label}" for label in annotations.labels})
 
             metadata: dict[str, object] = {
                 "type": tc.memory_type,
@@ -353,6 +370,7 @@ class DocTrainer:
                 "heading": chunk.heading,
                 "heading_path": "|".join(chunk.heading_path),
                 "doc_train": True,
+                "doc_labels": list(annotations.labels),
             }
 
             # Per-chunk error isolation: one failure doesn't abort the batch
@@ -398,7 +416,7 @@ class DocTrainer:
 
         # Build heading hierarchy + temporal topology
         hierarchy_synapses = await self._build_heading_hierarchy(
-            chunks=chunks,
+            chunks=[training_chunk.chunk for training_chunk in chunks],
             heading_neuron_ids=heading_neuron_ids,
             chunk_anchors=chunk_anchors,
         )
