@@ -46,7 +46,10 @@ def watch(
             return {"error": "No brain configured"}
 
         if action == "stop":
-            return {"action": "stop", "message": "Use MCP nmem_watch(action='stop') for background watcher"}
+            return {
+                "action": "stop",
+                "message": "Use MCP nmem_watch(action='stop') for background watcher",
+            }
 
         if action == "status":
             db = storage._db  # type: ignore[attr-defined]

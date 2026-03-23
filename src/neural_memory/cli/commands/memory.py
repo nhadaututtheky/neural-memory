@@ -178,7 +178,9 @@ def remember(
     ] = None,
     ephemeral: Annotated[
         bool,
-        typer.Option("--ephemeral", help="Session-scoped memory: auto-expires after 24h, never synced"),
+        typer.Option(
+            "--ephemeral", help="Session-scoped memory: auto-expires after 24h, never synced"
+        ),
     ] = False,
     stdin: Annotated[
         bool,
