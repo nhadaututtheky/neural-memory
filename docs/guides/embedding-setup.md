@@ -131,7 +131,7 @@ similarity_threshold = 0.7
 Uses OpenAI's `text-embedding-3-small` or `text-embedding-3-large`.
 
 ```bash
-pip install neural-memory[embeddings]
+pip install neural-memory[embeddings-openai]
 ```
 
 Set your API key:
@@ -156,7 +156,7 @@ similarity_threshold = 0.7
 Uses OpenRouter's OpenAI-compatible embeddings endpoint with provider-routed models like `openai/text-embedding-3-small`.
 
 ```bash
-pip install neural-memory[embeddings]
+pip install neural-memory[embeddings-openai]
 ```
 
 Set your API key:

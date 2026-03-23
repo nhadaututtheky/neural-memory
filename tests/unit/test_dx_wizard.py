@@ -89,7 +89,7 @@ class TestDoctor:
             result = _check_embedding_provider()
             assert result["status"] == "fail"
             assert "not installed" in result["detail"]
-            assert result["fix"] == "Run: pip install neural-memory[embeddings]"
+            assert result["fix"] == "Run: pip install neural-memory[embeddings-openai]"
 
     def test_check_embedding_openai_not_installed_uses_embeddings_extra(self) -> None:
         from neural_memory.cli.doctor import _check_embedding_provider
@@ -105,7 +105,7 @@ class TestDoctor:
         ):
             result = _check_embedding_provider()
             assert result["status"] == "fail"
-            assert result["fix"] == "Run: pip install neural-memory[embeddings]"
+            assert result["fix"] == "Run: pip install neural-memory[embeddings-openai]"
 
     def test_check_mcp_config_registered(self, tmp_path: Path) -> None:
         from neural_memory.cli.doctor import _check_mcp_config
@@ -261,8 +261,8 @@ class TestEmbeddingSetup:
         from neural_memory.cli.embedding_setup import _PROVIDERS
 
         install_by_key = {provider["key"]: provider["install"] for provider in _PROVIDERS}
-        assert install_by_key["openai"] == "pip install neural-memory[embeddings]"
-        assert install_by_key["openrouter"] == "pip install neural-memory[embeddings]"
+        assert install_by_key["openai"] == "pip install neural-memory[embeddings-openai]"
+        assert install_by_key["openrouter"] == "pip install neural-memory[embeddings-openai]"
 
     def test_pyproject_embeddings_extra_includes_openai(self) -> None:
         import tomllib
@@ -271,7 +271,10 @@ class TestEmbeddingSetup:
         pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
         data = tomllib.loads(pyproject.read_text())
         embeddings = data["project"]["optional-dependencies"]["embeddings"]
-        assert "openai>=1.0" in embeddings
+        assert "openai>=1.0" not in embeddings
+
+        embeddings_openai = data["project"]["optional-dependencies"]["embeddings-openai"]
+        assert "openai>=1.0" in embeddings_openai
 
     def test_all_providers_have_required_fields(self) -> None:
         from neural_memory.cli.embedding_setup import _PROVIDERS

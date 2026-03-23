@@ -216,8 +216,8 @@ def _check_embedding_provider() -> dict[str, Any]:
         except ImportError:
             install_hint = {
                 "sentence_transformer": "pip install neural-memory[embeddings]",
-                "openai": "pip install neural-memory[embeddings]",
-                "openrouter": "pip install neural-memory[embeddings]",
+                "openai": "pip install neural-memory[embeddings-openai]",
+                "openrouter": "pip install neural-memory[embeddings-openai]",
                 "gemini": "pip install neural-memory[embeddings-gemini]",
                 "ollama": "pip install neural-memory[embeddings]",
             }
