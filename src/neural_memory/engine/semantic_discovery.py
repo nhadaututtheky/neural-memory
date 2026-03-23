@@ -115,8 +115,17 @@ def _auto_detect_provider() -> tuple[str, str]:
     )
 
 
+# ── Singleton cache for embedding providers ──────────────────
+# Prevents re-loading the model on every ReflexPipeline instantiation.
+# Keyed by (provider_name, model_name) so different configs get separate instances.
+_provider_cache: dict[tuple[str, str], Any] = {}
+
+
 def _create_provider(config: BrainConfig, task_type: str = "RETRIEVAL_QUERY") -> Any:
-    """Create an embedding provider from BrainConfig.
+    """Create (or return cached) embedding provider from BrainConfig.
+
+    Uses a module-level singleton cache keyed by (provider, model) to avoid
+    re-loading heavy models (e.g. SentenceTransformer) on every tool call.
 
     Args:
         config: Brain configuration with embedding_provider and embedding_model.
@@ -132,26 +141,34 @@ def _create_provider(config: BrainConfig, task_type: str = "RETRIEVAL_QUERY") ->
         provider_name, model_name = _auto_detect_provider()
         logger.info("Auto-detected embedding provider: %s (model: %s)", provider_name, model_name)
 
+    # Return cached instance if available
+    cache_key = (provider_name, model_name)
+    if cache_key in _provider_cache:
+        return _provider_cache[cache_key]
+
     if provider_name == "sentence_transformer":
         from neural_memory.engine.embedding.sentence_transformer import (
             SentenceTransformerEmbedding,
         )
 
-        return SentenceTransformerEmbedding(model_name=model_name)
+        provider = SentenceTransformerEmbedding(model_name=model_name)
     elif provider_name == "openai":
         from neural_memory.engine.embedding.openai_embedding import OpenAIEmbedding
 
-        return OpenAIEmbedding(model=model_name)
+        provider = OpenAIEmbedding(model=model_name)
     elif provider_name == "gemini":
         from neural_memory.engine.embedding.gemini_embedding import GeminiEmbedding
 
-        return GeminiEmbedding(model=model_name, task_type=task_type)
+        provider = GeminiEmbedding(model=model_name, task_type=task_type)
     elif provider_name == "ollama":
         from neural_memory.engine.embedding.ollama_embedding import OllamaEmbedding
 
-        return OllamaEmbedding(model=model_name)
+        provider = OllamaEmbedding(model=model_name)
     else:
         raise ValueError(f"Unknown embedding provider: {provider_name}")
+
+    _provider_cache[cache_key] = provider
+    return provider
 
 
 async def discover_semantic_synapses(
