@@ -28,13 +28,20 @@ class OpenAIEmbedding(EmbeddingProvider):
         self,
         model: str = _DEFAULT_MODEL,
         api_key: str | None = None,
+        *,
+        base_url: str | None = None,
+        api_key_env: str = "OPENAI_API_KEY",
+        provider_label: str = "OpenAI",
     ) -> None:
         self._model = model
-        self._api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self._base_url = base_url.rstrip("/") if base_url else None
+        self._api_key_env = api_key_env
+        self._provider_label = provider_label
+        self._api_key = api_key or os.getenv(api_key_env)
         if not self._api_key:
             raise ValueError(
-                "An OpenAI API key is required. Pass it directly or set "
-                "the OPENAI_API_KEY environment variable."
+                f"A {provider_label} API key is required. Pass it directly or set "
+                f"the {api_key_env} environment variable."
             )
         self._client: Any | None = None
 
@@ -48,7 +55,10 @@ class OpenAIEmbedding(EmbeddingProvider):
                     "openai is required for OpenAIEmbedding. Install it with: pip install openai"
                 ) from exc
 
-            self._client = AsyncOpenAI(api_key=self._api_key)
+            client_kwargs: dict[str, Any] = {"api_key": self._api_key}
+            if self._base_url:
+                client_kwargs["base_url"] = self._base_url
+            self._client = AsyncOpenAI(**client_kwargs)
 
         return self._client
 

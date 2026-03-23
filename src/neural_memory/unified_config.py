@@ -117,6 +117,7 @@ class EmbeddingSettings:
     _VALID_PROVIDERS: ClassVar[tuple[str, ...]] = (
         "sentence_transformer",
         "openai",
+        "openrouter",
         "gemini",
         "ollama",
         "auto",
@@ -1205,7 +1206,7 @@ class UnifiedConfig:
             f"max_context_tokens = {self.brain.max_context_tokens}",
             f"freshness_weight = {self.brain.freshness_weight}",
             "",
-            "# Embedding settings (cross-language recall via Gemini/OpenAI)",
+            "# Embedding settings (cross-language recall via Gemini/OpenAI/OpenRouter)",
             "[embedding]",
             f"enabled = {'true' if self.embedding.enabled else 'false'}",
             f'provider = "{self.embedding.provider}"',

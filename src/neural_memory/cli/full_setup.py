@@ -53,6 +53,13 @@ _PROVIDER_PRIORITY: list[dict[str, str]] = [
         "label": "OpenAI",
         "env_key": "OPENAI_API_KEY",
     },
+    {
+        "key": "openrouter",
+        "module": "openai",
+        "model": "openai/text-embedding-3-small",
+        "label": "OpenRouter",
+        "env_key": "OPENROUTER_API_KEY",
+    },
 ]
 
 

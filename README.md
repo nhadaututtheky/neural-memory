@@ -117,7 +117,7 @@ Set memory slot in `~/.openclaw/openclaw.json`:
 pip install neural-memory[server]       # FastAPI server + dashboard
 pip install neural-memory[extract]      # PDF/DOCX/PPTX/HTML/XLSX extraction
 pip install neural-memory[nlp-vi]       # Vietnamese NLP
-pip install neural-memory[embeddings]   # Local embedding models
+pip install neural-memory[embeddings]   # Local + OpenAI/OpenRouter embedding support
 pip install neural-memory[all]          # Everything
 ```
 

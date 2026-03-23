@@ -98,6 +98,7 @@ extract = [
 ]
 embeddings = [
     "sentence-transformers>=2.0",
+    "openai>=1.0",
 ]
 embeddings-openai = [
     "openai>=1.0",

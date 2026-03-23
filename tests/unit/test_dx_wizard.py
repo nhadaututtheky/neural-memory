@@ -74,6 +74,39 @@ class TestDoctor:
             assert result["status"] == "fail"
             assert "not installed" in result["detail"]
 
+    def test_check_embedding_openrouter_not_installed(self) -> None:
+        from neural_memory.cli.doctor import _check_embedding_provider
+
+        mock_config = MagicMock()
+        mock_config.embedding.enabled = True
+        mock_config.embedding.provider = "openrouter"
+        mock_config.embedding.model = "openai/text-embedding-3-small"
+
+        with (
+            patch("neural_memory.unified_config.get_config", return_value=mock_config),
+            patch("neural_memory.cli.doctor.importlib.import_module", side_effect=ImportError),
+        ):
+            result = _check_embedding_provider()
+            assert result["status"] == "fail"
+            assert "not installed" in result["detail"]
+            assert result["fix"] == "Run: pip install neural-memory[embeddings]"
+
+    def test_check_embedding_openai_not_installed_uses_embeddings_extra(self) -> None:
+        from neural_memory.cli.doctor import _check_embedding_provider
+
+        mock_config = MagicMock()
+        mock_config.embedding.enabled = True
+        mock_config.embedding.provider = "openai"
+        mock_config.embedding.model = "text-embedding-3-small"
+
+        with (
+            patch("neural_memory.unified_config.get_config", return_value=mock_config),
+            patch("neural_memory.cli.doctor.importlib.import_module", side_effect=ImportError),
+        ):
+            result = _check_embedding_provider()
+            assert result["status"] == "fail"
+            assert result["fix"] == "Run: pip install neural-memory[embeddings]"
+
     def test_check_mcp_config_registered(self, tmp_path: Path) -> None:
         from neural_memory.cli.doctor import _check_mcp_config
 
@@ -222,7 +255,23 @@ class TestEmbeddingSetup:
         from neural_memory.cli.embedding_setup import _PROVIDERS
 
         keys = {p["key"] for p in _PROVIDERS}
-        assert keys == {"sentence_transformer", "gemini", "ollama", "openai"}
+        assert keys == {"sentence_transformer", "gemini", "ollama", "openai", "openrouter"}
+
+    def test_cloud_provider_install_hints_use_embeddings_extra(self) -> None:
+        from neural_memory.cli.embedding_setup import _PROVIDERS
+
+        install_by_key = {provider["key"]: provider["install"] for provider in _PROVIDERS}
+        assert install_by_key["openai"] == "pip install neural-memory[embeddings]"
+        assert install_by_key["openrouter"] == "pip install neural-memory[embeddings]"
+
+    def test_pyproject_embeddings_extra_includes_openai(self) -> None:
+        import tomllib
+        from pathlib import Path
+
+        pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+        data = tomllib.loads(pyproject.read_text())
+        embeddings = data["project"]["optional-dependencies"]["embeddings"]
+        assert "openai>=1.0" in embeddings
 
     def test_all_providers_have_required_fields(self) -> None:
         from neural_memory.cli.embedding_setup import _PROVIDERS
@@ -281,7 +330,7 @@ class TestWizard:
     def test_provider_metadata(self) -> None:
         from neural_memory.cli.wizard import _PROVIDERS
 
-        assert len(_PROVIDERS) == 4
+        assert len(_PROVIDERS) == 5
         for p in _PROVIDERS:
             assert "key" in p
             assert "name" in p

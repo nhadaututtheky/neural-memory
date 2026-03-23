@@ -72,6 +72,14 @@ class TestEmbeddingConfig:
         config = EmbeddingConfig(provider="gemini", model="gemini-embedding-001")
         assert config.provider == "gemini"
 
+    def test_openrouter_provider_valid(self) -> None:
+        """Should accept 'openrouter' as a valid provider."""
+        config = EmbeddingConfig(
+            provider="openrouter",
+            model="openai/text-embedding-3-small",
+        )
+        assert config.provider == "openrouter"
+
 
 # ── Provider protocol tests ──────────────────────────────────────
 
@@ -718,7 +726,7 @@ class TestEmbeddingSettings:
         """Should accept all valid provider names."""
         from neural_memory.unified_config import EmbeddingSettings
 
-        for provider in ("sentence_transformer", "openai", "gemini", "ollama", ""):
+        for provider in ("sentence_transformer", "openai", "openrouter", "gemini", "ollama", ""):
             s = EmbeddingSettings(provider=provider)
             assert s.provider == provider
 
@@ -951,3 +959,114 @@ class TestOllamaEmbedding:
         provider = _create_provider(config)
         assert isinstance(provider, OllamaEmbedding)
         assert provider._model == "bge-m3"
+
+
+# ── OpenRouterEmbedding tests ────────────────────────────────────
+
+
+class TestOpenRouterEmbedding:
+    """Test OpenRouterEmbedding with mocked OpenAI client."""
+
+    def test_requires_api_key(self) -> None:
+        """Should raise ValueError when no API key is provided."""
+        import os
+        import unittest.mock
+
+        from neural_memory.engine.embedding.openrouter_embedding import OpenRouterEmbedding
+
+        env_without_key = {
+            k: v for k, v in os.environ.items() if k != "OPENROUTER_API_KEY"
+        }
+        with unittest.mock.patch.dict(os.environ, env_without_key, clear=True):
+            with pytest.raises(ValueError, match="API key"):
+                OpenRouterEmbedding()
+
+    def test_accepts_openrouter_env_key(self) -> None:
+        """Should pick up OPENROUTER_API_KEY from environment."""
+        import os
+        import unittest.mock
+
+        from neural_memory.engine.embedding.openrouter_embedding import OpenRouterEmbedding
+
+        env = {k: v for k, v in os.environ.items() if k != "OPENROUTER_API_KEY"}
+        env["OPENROUTER_API_KEY"] = "env-openrouter-key"
+        with unittest.mock.patch.dict(os.environ, env, clear=True):
+            provider = OpenRouterEmbedding()
+            assert provider._api_key == "env-openrouter-key"
+
+    def test_defaults(self) -> None:
+        """Should use the documented OpenRouter defaults."""
+        from neural_memory.engine.embedding.openrouter_embedding import OpenRouterEmbedding
+
+        provider = OpenRouterEmbedding(api_key="test-key")
+        assert provider._model == "openai/text-embedding-3-small"
+        assert provider._base_url == "https://openrouter.ai/api/v1"
+
+    def test_dimension_known_model(self) -> None:
+        """Should return 1536 for OpenRouter's OpenAI small embedding model."""
+        from neural_memory.engine.embedding.openrouter_embedding import OpenRouterEmbedding
+
+        provider = OpenRouterEmbedding(
+            api_key="test-key",
+            model="openai/text-embedding-3-small",
+        )
+        assert provider.dimension == 1536
+
+    @pytest.mark.asyncio
+    async def test_embed_with_mock_client(self) -> None:
+        """Should call the OpenRouter client and return embedding."""
+        import unittest.mock
+
+        from neural_memory.engine.embedding.openrouter_embedding import OpenRouterEmbedding
+
+        provider = OpenRouterEmbedding(api_key="test-key")
+
+        mock_embedding = unittest.mock.MagicMock()
+        mock_embedding.embedding = [0.1, 0.2, 0.3]
+        mock_embedding.index = 0
+
+        mock_response = unittest.mock.MagicMock()
+        mock_response.data = [mock_embedding]
+
+        mock_client = unittest.mock.AsyncMock()
+        mock_client.embeddings.create = unittest.mock.AsyncMock(return_value=mock_response)
+
+        provider._client = mock_client
+
+        result = await provider.embed("hello")
+        assert result == [0.1, 0.2, 0.3]
+        mock_client.embeddings.create.assert_called_once_with(
+            input=["hello"],
+            model="openai/text-embedding-3-small",
+        )
+
+    def test_openrouter_in_valid_providers(self) -> None:
+        """'openrouter' should be a valid embedding provider."""
+        config = EmbeddingConfig(
+            provider="openrouter",
+            model="openai/text-embedding-3-small",
+        )
+        assert config.provider == "openrouter"
+
+    def test_factory_creates_openrouter_provider(self) -> None:
+        """_create_provider should create OpenRouterEmbedding for 'openrouter' provider."""
+        import os
+        import unittest.mock
+
+        from neural_memory.core.brain import BrainConfig
+        from neural_memory.engine.embedding.openrouter_embedding import OpenRouterEmbedding
+        from neural_memory.engine.semantic_discovery import _create_provider, _provider_cache
+
+        config = BrainConfig(
+            embedding_provider="openrouter",
+            embedding_model="openai/text-embedding-3-small",
+        )
+        env = {k: v for k, v in os.environ.items() if k != "OPENROUTER_API_KEY"}
+        env["OPENROUTER_API_KEY"] = "test-openrouter-key"
+
+        with unittest.mock.patch.dict(os.environ, env, clear=True):
+            provider = _create_provider(config)
+            assert isinstance(provider, OpenRouterEmbedding)
+            assert provider._model == "openai/text-embedding-3-small"
+
+        _provider_cache.clear()

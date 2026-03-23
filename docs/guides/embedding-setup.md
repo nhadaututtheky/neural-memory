@@ -30,6 +30,7 @@ Auto-detection checks (in order):
 2. **sentence-transformers** installed → uses `paraphrase-multilingual-MiniLM-L12-v2`
 3. **GEMINI_API_KEY** set → uses Google's free-tier embedding API
 4. **OPENAI_API_KEY** set → uses OpenAI's embedding API
+5. **OPENROUTER_API_KEY** set → uses OpenRouter's OpenAI-compatible embedding API
 
 If none are available, embedding stays disabled and recall falls back to graph-only (which works great for single-language use).
 
@@ -130,7 +131,7 @@ similarity_threshold = 0.7
 Uses OpenAI's `text-embedding-3-small` or `text-embedding-3-large`.
 
 ```bash
-pip install neural-memory[embeddings-openai]
+pip install neural-memory[embeddings]
 ```
 
 Set your API key:
@@ -150,20 +151,47 @@ model = "text-embedding-3-small"     # 1536D, $0.02/1M tokens
 similarity_threshold = 0.7
 ```
 
+### 5. OpenRouter (API)
+
+Uses OpenRouter's OpenAI-compatible embeddings endpoint with provider-routed models like `openai/text-embedding-3-small`.
+
+```bash
+pip install neural-memory[embeddings]
+```
+
+Set your API key:
+
+```bash
+export OPENROUTER_API_KEY="your-key-here"
+```
+
+**Config**:
+
+```toml
+[embedding]
+enabled = true
+provider = "openrouter"
+model = "openai/text-embedding-3-small"   # 1536D
+# model = "openai/text-embedding-3-large" # 3072D
+similarity_threshold = 0.7
+```
+
+> OpenRouter uses the `openai` Python SDK under the hood against `https://openrouter.ai/api/v1`.
+
 ## Provider Comparison
 
-| | Sentence Transformer | Ollama | Gemini | OpenAI |
-|---|---|---|---|---|
-| **Cost** | Free | Free | Free tier / pay-per-use | Pay-per-use |
-| **Privacy** | 100% local | 100% local | Data sent to Google | Data sent to OpenAI |
-| **Speed** | 15-150ms (CPU) | 10-50ms (GPU) | ~200ms (network) | ~200ms (network) |
-| **Quality** | Good | Good-Excellent | Excellent | Excellent |
-| **Multilingual** | With multilingual model | Model-dependent | Built-in | Built-in |
-| **Offline** | Yes | Yes | No | No |
-| **Setup** | `pip install` only | Ollama + model pull | API key required | API key required |
-| **GPU Accel** | Optional | Yes (native) | N/A | N/A |
+| | Sentence Transformer | Ollama | Gemini | OpenAI | OpenRouter |
+|---|---|---|---|---|---|
+| **Cost** | Free | Free | Free tier / pay-per-use | Pay-per-use | Pay-per-use |
+| **Privacy** | 100% local | 100% local | Data sent to Google | Data sent to OpenAI | Data sent to routed provider |
+| **Speed** | 15-150ms (CPU) | 10-50ms (GPU) | ~200ms (network) | ~200ms (network) | ~200ms (network) |
+| **Quality** | Good | Good-Excellent | Excellent | Excellent | Excellent |
+| **Multilingual** | With multilingual model | Model-dependent | Built-in | Built-in | Built-in |
+| **Offline** | Yes | Yes | No | No | No |
+| **Setup** | `pip install` only | Ollama + model pull | API key required | API key required | API key required |
+| **GPU Accel** | Optional | Yes (native) | N/A | N/A | N/A |
 
-**Recommendation**: Start with `sentence_transformer` + `paraphrase-multilingual-MiniLM-L12-v2` for simplicity. Use `ollama` if you have a GPU and want fast local inference. Switch to Gemini or OpenAI only if you need higher quality for production workloads.
+**Recommendation**: Start with `sentence_transformer` + `paraphrase-multilingual-MiniLM-L12-v2` for simplicity. Use `ollama` if you have a GPU and want fast local inference. Switch to Gemini, OpenAI, or OpenRouter if you need managed cloud embeddings.
 
 ## How It Works
 
@@ -212,7 +240,8 @@ You can change providers at any time. However, existing `SIMILAR_TO` synapses cr
     "neural-memory": {
       "command": "nmem-mcp",
       "env": {
-        "GEMINI_API_KEY": "your-key"
+        "GEMINI_API_KEY": "your-key",
+        "OPENROUTER_API_KEY": "your-key"
       }
     }
   }
