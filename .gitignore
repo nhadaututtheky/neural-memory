@@ -181,6 +181,8 @@ dashboard/node_modules/
 dashboard/dist/
 # Bundled dashboard UI for pip install — must be tracked
 !src/neural_memory/server/static/dist/
+# OpenClaw plugin dist — must be tracked (npm publish + git installs need it)
+!integrations/neuralmemory/dist/
 
 # spaCy models
 en_core_web_sm/
