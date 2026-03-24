@@ -346,6 +346,20 @@ export interface ConfigUpdateResponse {
   }
 }
 
+// GET /api/dashboard/watcher/status
+export interface WatcherStatusResponse {
+  enabled: boolean
+  running: boolean
+  paths: string[]
+  stats: Record<string, number>
+  recent: Array<{
+    path: string
+    action: string
+    neurons_created: number
+    timestamp: string
+  }>
+}
+
 // GET /api/dashboard/config/embedding
 export interface EmbeddingConfigResponse {
   enabled: boolean

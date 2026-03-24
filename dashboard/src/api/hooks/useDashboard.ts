@@ -19,6 +19,7 @@ import type {
   ConfigUpdateRequest,
   ConfigUpdateResponse,
   EmbeddingTestResponse,
+  WatcherStatusResponse,
 } from "@/api/types"
 
 // Keys
@@ -38,6 +39,7 @@ const keys = {
   brainFiles: ["dashboard", "brain-files"] as const,
   configStatus: ["dashboard", "config-status"] as const,
   embeddingConfig: ["config", "embedding"] as const,
+  watcherStatus: ["dashboard", "watcher-status"] as const,
 }
 
 // Stats
@@ -204,6 +206,15 @@ export function useUpdateConfig() {
       queryClient.invalidateQueries({ queryKey: keys.configStatus })
       queryClient.invalidateQueries({ queryKey: keys.embeddingConfig })
     },
+  })
+}
+
+// Watcher status
+export function useWatcherStatus() {
+  return useQuery({
+    queryKey: keys.watcherStatus,
+    queryFn: () => api.get<WatcherStatusResponse>("/api/dashboard/watcher/status"),
+    staleTime: 30_000,
   })
 }
 

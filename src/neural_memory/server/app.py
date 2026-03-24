@@ -78,7 +78,50 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         background_tasks.append(asyncio.create_task(_notification_loop(storage, config, maint)))
         _logger.info("Background notification daemon started")
 
+    # File watcher daemon
+    watcher_config = config.watcher if hasattr(config, "watcher") else None
+    if watcher_config and watcher_config.enabled and watcher_config.paths:
+        try:
+            from neural_memory.engine.doc_trainer import DocTrainer
+            from neural_memory.engine.file_watcher import FileWatcher, WatchConfig
+            from neural_memory.engine.watch_state import WatchStateTracker
+
+            brain_id = storage.brain_id
+            brain = await storage.get_brain(brain_id) if brain_id else None
+            if brain is None:
+                _logger.warning("File watcher skipped: no brain context set")
+            else:
+                db = storage._db  # type: ignore[attr-defined]
+                state_tracker = WatchStateTracker(db)
+                await state_tracker.initialize()
+                trainer = DocTrainer(storage, brain.config)
+                watch_cfg = WatchConfig(
+                    watch_paths=tuple(watcher_config.paths),
+                    extensions=frozenset(watcher_config.extensions),
+                    ignore_patterns=frozenset(watcher_config.ignore_patterns),
+                    debounce_seconds=watcher_config.debounce_seconds,
+                    max_file_size_mb=watcher_config.max_file_size_mb,
+                    max_watched_dirs=watcher_config.max_watched_dirs,
+                    memory_type=watcher_config.memory_type,
+                    domain_tag=watcher_config.domain_tag,
+                )
+                file_watcher = FileWatcher(trainer, state_tracker, watch_cfg)
+                try:
+                    file_watcher.start()
+                    app.state.file_watcher = file_watcher
+                    _logger.info(
+                        "File watcher daemon started: %d path(s)", len(watcher_config.paths)
+                    )
+                except ImportError:
+                    _logger.warning("watchdog not installed — file watcher disabled")
+        except Exception:
+            _logger.error("Failed to start file watcher", exc_info=True)
+
     yield
+
+    # Stop file watcher
+    if hasattr(app.state, "file_watcher"):
+        app.state.file_watcher.stop()
 
     for task in background_tasks:
         if not task.done():

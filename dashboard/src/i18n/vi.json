@@ -214,7 +214,14 @@
     "embeddingSaving": "Đang lưu...",
     "embeddingSaved": "Đã lưu cấu hình embedding",
     "embeddingSaveFailed": "Lưu cấu hình embedding thất bại",
-    "proFeature": "Pro"
+    "proFeature": "Pro",
+    "watcher": "Theo dõi tệp",
+    "watcherPaths": "Đường dẫn theo dõi",
+    "watcherRecent": "Hoạt động gần đây",
+    "watcherRunning": "Đang chạy",
+    "watcherStopped": "Đã dừng",
+    "watcherDisabled": "Tắt",
+    "watcherNoActivity": "Không có hoạt động gần đây"
   },
   "oracle": {
     "title": "Tiên Tri",

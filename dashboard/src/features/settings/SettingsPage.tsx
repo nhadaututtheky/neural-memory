@@ -8,6 +8,7 @@ import { ExternalLink, Bug, MessageSquare, Github } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import ConfigStatusCards from "./ConfigStatusCards"
 import EmbeddingConfig from "./EmbeddingConfig"
+import WatcherCard from "./WatcherCard"
 
 const FEEDBACK_ICONS = [Bug, MessageSquare, Github] as const
 const FEEDBACK_COLORS = ["#ef4444", "#6366f1", "#a8a29e"] as const
@@ -211,6 +212,9 @@ export default function SettingsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* File Watcher */}
+        <WatcherCard />
 
         {/* Embedding Provider (Pro) */}
         <EmbeddingConfig />

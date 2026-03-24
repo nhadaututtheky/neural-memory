@@ -1015,6 +1015,67 @@ class ResponseConfig:
         )
 
 
+@dataclass(frozen=True)
+class WatcherConfig:
+    """Settings for file watcher auto-ingestion."""
+
+    enabled: bool = False
+    paths: tuple[str, ...] = ()
+    extensions: tuple[str, ...] = (
+        ".md",
+        ".txt",
+        ".pdf",
+        ".docx",
+        ".pptx",
+        ".html",
+        ".json",
+        ".csv",
+        ".xlsx",
+        ".py",
+        ".ts",
+        ".js",
+    )
+    ignore_patterns: tuple[str, ...] = (
+        "__pycache__",
+        ".git",
+        "node_modules",
+        ".venv",
+        ".env",
+    )
+    debounce_seconds: float = 2.0
+    max_file_size_mb: int = 10
+    max_watched_dirs: int = 10
+    memory_type: str = "fact"
+    domain_tag: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "paths": list(self.paths),
+            "extensions": list(self.extensions),
+            "ignore_patterns": list(self.ignore_patterns),
+            "debounce_seconds": self.debounce_seconds,
+            "max_file_size_mb": self.max_file_size_mb,
+            "max_watched_dirs": self.max_watched_dirs,
+            "memory_type": self.memory_type,
+            "domain_tag": self.domain_tag,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> WatcherConfig:
+        return cls(
+            enabled=bool(data.get("enabled", False)),
+            paths=tuple(data.get("paths", ())),
+            extensions=tuple(data.get("extensions", cls.extensions)),
+            ignore_patterns=tuple(data.get("ignore_patterns", cls.ignore_patterns)),
+            debounce_seconds=float(data.get("debounce_seconds", 2.0)),
+            max_file_size_mb=int(data.get("max_file_size_mb", 10)),
+            max_watched_dirs=int(data.get("max_watched_dirs", 10)),
+            memory_type=str(data.get("memory_type", "fact")),
+            domain_tag=str(data.get("domain_tag", "")),
+        )
+
+
 @dataclass
 class UnifiedConfig:
     """Unified configuration for NeuralMemory.
@@ -1084,6 +1145,9 @@ class UnifiedConfig:
 
     # Telegram backup integration
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
+
+    # File watcher auto-ingestion
+    watcher: WatcherConfig = field(default_factory=WatcherConfig)
 
     # FalkorDB config (used when storage_backend == "falkordb")
     falkordb: FalkorDBConfig = field(default_factory=FalkorDBConfig)
@@ -1165,6 +1229,7 @@ class UnifiedConfig:
             telegram=TelegramConfig.from_dict(data.get("telegram", {})),
             tool_tier=ToolTierConfig.from_dict(data.get("tool_tier", {})),
             mem0_sync=Mem0SyncConfig.from_dict(data.get("mem0_sync", {})),
+            watcher=WatcherConfig.from_dict(data.get("watcher", {})),
             device_id=raw_device_id,
             sync=SyncConfig.from_dict(sync_data),
             storage_backend=_validate_storage_backend(str(data.get("storage_backend", "sqlite"))),
@@ -1350,6 +1415,18 @@ class UnifiedConfig:
             f"chat_ids = [{', '.join(repr(cid) for cid in self.telegram.chat_ids)}]",
             f"max_file_size_mb = {self.telegram.max_file_size_mb}",
             f"backup_on_consolidation = {'true' if self.telegram.backup_on_consolidation else 'false'}",
+            "",
+            "# File watcher auto-ingestion",
+            "[watcher]",
+            f"enabled = {'true' if self.watcher.enabled else 'false'}",
+            f"paths = [{', '.join(repr(p) for p in self.watcher.paths)}]",
+            f"extensions = [{', '.join(repr(e) for e in self.watcher.extensions)}]",
+            f"ignore_patterns = [{', '.join(repr(p) for p in self.watcher.ignore_patterns)}]",
+            f"debounce_seconds = {self.watcher.debounce_seconds}",
+            f"max_file_size_mb = {self.watcher.max_file_size_mb}",
+            f"max_watched_dirs = {self.watcher.max_watched_dirs}",
+            f'memory_type = "{_sanitize_toml_str(self.watcher.memory_type)}"',
+            f'domain_tag = "{_sanitize_toml_str(self.watcher.domain_tag)}"',
             "",
             "# MCP tool tier (minimal/standard/full)",
             "[tool_tier]",

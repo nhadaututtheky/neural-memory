@@ -214,7 +214,14 @@
     "embeddingSaving": "Saving...",
     "embeddingSaved": "Embedding settings saved",
     "embeddingSaveFailed": "Failed to save embedding settings",
-    "proFeature": "Pro"
+    "proFeature": "Pro",
+    "watcher": "File Watcher",
+    "watcherPaths": "Watched Paths",
+    "watcherRecent": "Recent Activity",
+    "watcherRunning": "Running",
+    "watcherStopped": "Stopped",
+    "watcherDisabled": "Disabled",
+    "watcherNoActivity": "No recent activity"
   },
   "sync": {
     "title": "Cloud Sync",

@@ -1321,6 +1321,43 @@ async def get_config_status(
     return ConfigStatusResponse(items=items)
 
 
+# ── File Watcher Status API ──────────────────────────────
+
+
+@router.get("/watcher/status")
+async def get_watcher_status(request: Request) -> dict[str, Any]:
+    """Return file watcher status and recent activity."""
+    from neural_memory.unified_config import get_config
+
+    config = get_config()
+    watcher_cfg = config.watcher if hasattr(config, "watcher") else None
+
+    result: dict[str, Any] = {
+        "enabled": bool(watcher_cfg and watcher_cfg.enabled),
+        "running": False,
+        "paths": list(watcher_cfg.paths) if watcher_cfg and hasattr(watcher_cfg, "paths") else [],
+        "stats": {},
+        "recent": [],
+    }
+
+    app = request.app
+    if hasattr(app.state, "file_watcher"):
+        watcher = app.state.file_watcher
+        result["running"] = True
+        results = watcher.get_recent_results()
+        result["recent"] = [
+            {
+                "path": str(r.path),
+                "action": r.event_type if hasattr(r, "event_type") else "processed",
+                "neurons_created": r.neurons_created,
+                "timestamp": "",
+            }
+            for r in results[:10]
+        ]
+
+    return result
+
+
 @router.get("/tool-stats")
 async def tool_stats(
     storage: Annotated[NeuralStorage, Depends(get_storage)],
