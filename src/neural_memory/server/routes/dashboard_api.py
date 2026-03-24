@@ -967,13 +967,12 @@ async def update_config(body: ConfigUpdateRequest) -> dict[str, Any]:
     new_embedding = config.embedding
 
     if body.embedding is not None:
-        update = body.embedding
-
-        if update.enabled is not None and bool(update.enabled) and not config.is_pro():
+        if not config.is_pro():
             raise HTTPException(
                 status_code=403,
-                detail="Embedding requires a Pro license. Activate via nmem_sync_config(action='activate').",
+                detail="Embedding configuration requires a Pro license. Activate via nmem_sync_config(action='activate').",
             )
+        update = body.embedding
 
         if update.enabled is not None:
             new_embedding = dc_replace(new_embedding, enabled=bool(update.enabled))

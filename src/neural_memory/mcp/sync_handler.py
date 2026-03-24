@@ -420,7 +420,10 @@ class SyncToolHandler:
                         # Persist license tier to config.toml
                         from dataclasses import replace as _dc_replace
 
-                        from neural_memory.unified_config import LicenseConfig
+                        from neural_memory.unified_config import (
+                            LicenseConfig,
+                            set_config,
+                        )
 
                         activated_tier = str(data.get("tier", "pro")).lower()
                         new_license = LicenseConfig.from_dict({
@@ -430,6 +433,7 @@ class SyncToolHandler:
                         })
                         self.config = _dc_replace(self.config, license=new_license)
                         self.config.save()
+                        set_config(self.config)  # Update singleton for REST API
 
                         return {
                             "status": "activated",

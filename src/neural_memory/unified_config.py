@@ -20,6 +20,7 @@ import re
 import shutil
 import tomllib
 from dataclasses import dataclass, field
+from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -1053,8 +1054,8 @@ class LicenseConfig:
             tier = "free"
         return cls(
             tier=tier,
-            activated_at=str(data.get("activated_at", "")),
-            expires_at=str(data.get("expires_at", "")),
+            activated_at=_sanitize_iso_datetime(str(data.get("activated_at", ""))),
+            expires_at=_sanitize_iso_datetime(str(data.get("expires_at", ""))),
         )
 
 
@@ -1252,8 +1253,21 @@ class UnifiedConfig:
     version: str = "1.0"
 
     def is_pro(self) -> bool:
-        """Return True if the current license tier is 'pro' or 'team'."""
-        return self.license.tier in ("pro", "team")
+        """Return True if the current license tier is 'pro' or 'team' and not expired."""
+        if self.license.tier not in ("pro", "team"):
+            return False
+        expires = self.license.expires_at
+        if not expires:
+            return True  # Perpetual license (no expiry set)
+        from datetime import datetime
+
+        try:
+            exp_dt = datetime.fromisoformat(expires.replace("Z", "+00:00"))
+            if exp_dt.tzinfo is None:
+                exp_dt = exp_dt.replace(tzinfo=UTC)
+            return datetime.now(UTC) <= exp_dt
+        except (ValueError, TypeError):
+            return True  # Malformed expiry → treat as perpetual
 
     @classmethod
     def load(cls, config_path: Path | None = None) -> UnifiedConfig:
@@ -1642,6 +1656,16 @@ def get_config(reload: bool = False) -> UnifiedConfig:
     if _config is None or reload:
         _config = UnifiedConfig.load()
     return _config
+
+
+def set_config(config: UnifiedConfig) -> None:
+    """Replace the in-memory config singleton.
+
+    Use after mutating config (e.g. license activation) so that
+    REST endpoints via get_config() see the updated values.
+    """
+    global _config
+    _config = config
 
 
 def _read_legacy_brain(data_dir: Path) -> str | None:
