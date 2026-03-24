@@ -28,7 +28,9 @@
  * Registers:
  *   N tools    — dynamically from MCP server (fallback: 5 core + 2 compat)
  *   1 service  — MCP process lifecycle (start/stop)
- *   2 hooks    — before_agent_start (auto-context), agent_end (auto-capture)
+ *   6 hooks    — before_agent_start (auto-context), agent_end (auto-capture),
+ *                session:compact:before (flush), command:new/reset (flush),
+ *                gateway:startup (consolidation)
  */
 import { NeuralMemoryMcpClient } from "./mcp-client.js";
 import { createToolsFromMcp, createFallbackTools, createCompatibilityTools } from "./tools.js";
@@ -110,6 +112,8 @@ const DEFAULT_CONFIG = {
     brain: "default",
     autoContext: true,
     autoCapture: true,
+    autoFlush: true,
+    autoConsolidate: true,
     contextDepth: 1,
     maxContextTokens: 500,
     timeout: 30_000,
@@ -132,6 +136,12 @@ export function resolveConfig(raw) {
         autoCapture: typeof merged.autoCapture === "boolean"
             ? merged.autoCapture
             : DEFAULT_CONFIG.autoCapture,
+        autoFlush: typeof merged.autoFlush === "boolean"
+            ? merged.autoFlush
+            : DEFAULT_CONFIG.autoFlush,
+        autoConsolidate: typeof merged.autoConsolidate === "boolean"
+            ? merged.autoConsolidate
+            : DEFAULT_CONFIG.autoConsolidate,
         contextDepth: typeof merged.contextDepth === "number" &&
             Number.isInteger(merged.contextDepth) &&
             merged.contextDepth >= 0 &&
@@ -287,9 +297,78 @@ const plugin = {
                 }
             }, { priority: 90 });
         }
+        // ── Hook: flush memories before context compaction ──
+        if (cfg.autoFlush) {
+            api.on("session:compact:before", async (_event, _ctx) => {
+                if (!mcp.connected)
+                    return;
+                try {
+                    await mcp.callTool("nmem_auto", {
+                        action: "process",
+                        text: "[pre-compact emergency flush]",
+                    });
+                    api.logger.info("Pre-compact flush completed");
+                }
+                catch (err) {
+                    api.logger.warn(`Pre-compact flush failed: ${err.message}`);
+                }
+            }, { priority: 5 });
+            // Flush on session boundary (new/reset commands)
+            api.on("command:new", async (_event, _ctx) => {
+                if (!mcp.connected)
+                    return;
+                try {
+                    await mcp.callTool("nmem_auto", {
+                        action: "process",
+                        text: "[session boundary — command:new]",
+                    });
+                }
+                catch (err) {
+                    api.logger.warn(`Session boundary flush failed: ${err.message}`);
+                }
+            }, { priority: 10 });
+            api.on("command:reset", async (_event, _ctx) => {
+                if (!mcp.connected)
+                    return;
+                try {
+                    await mcp.callTool("nmem_auto", {
+                        action: "process",
+                        text: "[session boundary — command:reset]",
+                    });
+                }
+                catch (err) {
+                    api.logger.warn(`Session reset flush failed: ${err.message}`);
+                }
+            }, { priority: 10 });
+        }
+        // ── Hook: consolidation on gateway startup ───────────
+        if (cfg.autoConsolidate) {
+            api.on("gateway:startup", async (_event, _ctx) => {
+                if (!mcp.connected) {
+                    try {
+                        await mcp.ensureConnected();
+                    }
+                    catch (err) {
+                        api.logger.warn(`MCP connect on startup failed: ${err.message}`);
+                        return;
+                    }
+                }
+                try {
+                    await mcp.callTool("nmem_consolidate", {
+                        strategy: "enrich",
+                        compact: true,
+                    });
+                    api.logger.info("Startup consolidation completed");
+                }
+                catch (err) {
+                    api.logger.warn(`Startup consolidation failed: ${err.message}`);
+                }
+            }, { priority: 50 });
+        }
         // ── Done ────────────────────────────────────────────
         api.logger.info(`NeuralMemory registered (brain: ${cfg.brain}, ` +
-            `autoContext: ${cfg.autoContext}, autoCapture: ${cfg.autoCapture}) — ` +
+            `autoContext: ${cfg.autoContext}, autoCapture: ${cfg.autoCapture}, ` +
+            `autoFlush: ${cfg.autoFlush}, autoConsolidate: ${cfg.autoConsolidate}) — ` +
             `tools will be loaded dynamically from MCP on service start`);
     },
 };

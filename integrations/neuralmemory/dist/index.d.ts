@@ -28,7 +28,9 @@
  * Registers:
  *   N tools    — dynamically from MCP server (fallback: 5 core + 2 compat)
  *   1 service  — MCP process lifecycle (start/stop)
- *   2 hooks    — before_agent_start (auto-context), agent_end (auto-capture)
+ *   6 hooks    — before_agent_start (auto-context), agent_end (auto-capture),
+ *                session:compact:before (flush), command:new/reset (flush),
+ *                gateway:startup (consolidation)
  */
 import type { OpenClawPluginDefinition } from "./types.js";
 /**
@@ -46,6 +48,8 @@ type PluginConfig = {
     brain: string;
     autoContext: boolean;
     autoCapture: boolean;
+    autoFlush: boolean;
+    autoConsolidate: boolean;
     contextDepth: number;
     maxContextTokens: number;
     timeout: number;

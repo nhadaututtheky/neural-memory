@@ -9,6 +9,8 @@ describe("resolveConfig", () => {
       brain: "default",
       autoContext: true,
       autoCapture: true,
+      autoFlush: true,
+      autoConsolidate: true,
       contextDepth: 1,
       maxContextTokens: 500,
       timeout: 30_000,

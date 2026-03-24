@@ -30,6 +30,16 @@
           "description": "Auto-extract and store memories after each agent run",
           "default": true
         },
+        "autoFlush": {
+          "type": "boolean",
+          "description": "Flush memories before context compaction and on session boundaries (new/reset)",
+          "default": true
+        },
+        "autoConsolidate": {
+          "type": "boolean",
+          "description": "Run consolidation on gateway startup to enrich and merge memories",
+          "default": true
+        },
         "contextDepth": {
           "type": "integer",
           "minimum": 0,
@@ -75,6 +85,14 @@
       "autoCapture": {
         "label": "Auto-capture Memories",
         "help": "Automatically extract facts, decisions, and insights after each agent run"
+      },
+      "autoFlush": {
+        "label": "Auto-flush on Compact/Reset",
+        "help": "Flush unsaved memories before context compaction and when starting a new session"
+      },
+      "autoConsolidate": {
+        "label": "Auto-consolidate on Startup",
+        "help": "Run memory consolidation (enrich strategy) when the OpenClaw gateway starts"
       },
       "contextDepth": {
         "label": "Context Depth",

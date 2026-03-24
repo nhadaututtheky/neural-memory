@@ -50,6 +50,22 @@ export type AgentContext = {
   workspaceDir?: string;
 };
 
+export type SessionCompactEvent = {
+  reason?: string;
+  messagesBeforeCompact?: number;
+};
+
+export type CommandEvent = {
+  command: string;           // "new", "reset", "stop"
+  sessionKey?: string;
+  workspaceDir?: string;
+};
+
+export type GatewayStartupEvent = {
+  version?: string;
+  workspaceDir?: string;
+};
+
 export type OpenClawPluginApi = {
   id: string;
   name: string;
