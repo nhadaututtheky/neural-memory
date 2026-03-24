@@ -575,6 +575,12 @@ class ConsolidationEngine:
 
         # Only compute Jaccard for actual candidate pairs
         for i, j in candidate_pairs:
+            # Domain guard: never merge structured/verbatim fibers with non-structured
+            fi_verbatim = fiber_list[i].metadata.get("_verbatim", False)
+            fj_verbatim = fiber_list[j].metadata.get("_verbatim", False)
+            if fi_verbatim != fj_verbatim:
+                continue
+
             set_a = fiber_list[i].neuron_ids
             set_b = fiber_list[j].neuron_ids
             intersection = len(set_a & set_b)

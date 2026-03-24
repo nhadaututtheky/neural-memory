@@ -23,6 +23,25 @@ class EntityType(StrEnum):
     UNKNOWN = "unknown"
 
 
+class EntitySubtype(StrEnum):
+    """Domain-specific entity subtypes for vertical intelligence."""
+
+    # Financial
+    FINANCIAL_METRIC = "financial_metric"  # ROE, revenue, EBITDA, P/E
+    CURRENCY_AMOUNT = "currency_amount"  # $25M, 500 triệu VND
+    FISCAL_PERIOD = "fiscal_period"  # Q1 2024, FY2025, H1/2024
+
+    # Legal
+    REGULATION = "regulation"  # Điều 468 BLDS, Section 301 SOX
+    CONTRACT_CLAUSE = "contract_clause"  # Clause 5.2, Khoản 3
+    LEGAL_ENTITY = "legal_entity"  # CTCP, LLC, Ltd, GmbH
+
+    # Technical
+    API_ENDPOINT = "api_endpoint"  # GET /api/v1/users, POST /webhook
+    CODE_SYMBOL = "code_symbol"  # function_name(), ClassName, module.attr
+    VERSION = "version"  # v2.1.0, Python 3.11, React 19
+
+
 @dataclass(frozen=True)
 class Entity:
     """
@@ -31,16 +50,22 @@ class Entity:
     Attributes:
         text: The original text of the entity
         type: The entity type
+        subtype: Optional domain-specific subtype
         start: Start character position in source text
         end: End character position in source text
         confidence: Extraction confidence (0.0 - 1.0)
+        raw_value: Original value string for verbatim recall
+        unit: Unit of measurement if applicable (percent, USD, VND)
     """
 
     text: str
     type: EntityType
     start: int
     end: int
+    subtype: EntitySubtype | None = None
     confidence: float = 1.0
+    raw_value: str = ""
+    unit: str = ""
 
 
 class EntityExtractor:
@@ -127,6 +152,89 @@ class EntityExtractor:
         re.IGNORECASE,
     )
 
+    # ── Domain extraction patterns ──────────────────────────────────
+
+    # Financial metrics: ROE, EBITDA, P/E, EPS, revenue, etc.
+    FINANCIAL_METRIC_PATTERN = re.compile(
+        r"\b(ROE|ROA|ROI|EBITDA|EPS|P/E|P/B|NPM|GPM|CAGR|WACC|"
+        r"IRR|NPV|ROIC|FCF|D/E|"
+        r"doanh thu|lợi nhuận|chi phí|tổng tài sản|vốn chủ sở hữu|"
+        r"revenue|profit|margin|earnings|net income|gross profit|"
+        r"operating income|total assets|equity|debt)"
+        r"\s*[=:≈]?\s*"
+        r"([\d.,]+\s*%?|[\d.,]+\s*(?:tỷ|triệu|nghìn|billion|million|thousand|[BMKbmk])?\b)?",
+        re.IGNORECASE,
+    )
+
+    # Currency amounts: $25M, 500 triệu VND, €1.2B, ¥100K
+    CURRENCY_AMOUNT_PATTERN = re.compile(
+        r"(?:"
+        r"[\$€£¥₫]\s*[\d.,]+\s*(?:billion|million|thousand|[BMKbmk])?"  # $25M
+        r"|[\d.,]+\s*(?:tỷ|triệu|nghìn)\s*(?:VND|VNĐ|đồng|đ)?"  # 500 triệu VND
+        r"|[\d.,]+\s*(?:USD|EUR|GBP|JPY|VND|VNĐ)"  # 25000 USD
+        r"|[\d.,]+\s*(?:billion|million)\s*(?:USD|EUR|GBP|VND)?"  # 1.2 billion USD
+        r")",
+        re.IGNORECASE,
+    )
+
+    # Fiscal periods: Q1 2024, FY2025, H1/2024, năm 2024
+    FISCAL_PERIOD_PATTERN = re.compile(
+        r"\b(?:"
+        r"Q[1-4]\s*[/.]?\s*\d{4}"  # Q1 2024, Q3/2024
+        r"|FY\s*\d{4}"  # FY2025
+        r"|H[12]\s*[/.]?\s*\d{4}"  # H1/2024
+        r"|(?:quý|năm tài chính|năm)\s+\d{4}"  # quý 2024, năm 2024
+        r"|(?:fiscal\s+)?(?:year|quarter)\s+\d{4}"  # fiscal year 2024
+        r")\b",
+        re.IGNORECASE,
+    )
+
+    # Legal: Điều 468 BLDS, Section 301 SOX, Article 5, Khoản 3
+    REGULATION_PATTERN = re.compile(
+        r"\b(?:"
+        r"(?:Điều|Khoản|Mục)\s+\d+(?:\.\d+)*\s*(?:[A-ZÀ-Ỹ][a-zà-ỹA-ZÀ-Ỹ\s]*?)?"  # Điều 468 BLDS
+        r"|(?:Section|Article|Clause|Rule|Regulation)\s+\d+(?:\.\d+)*"
+        r"(?:\s+(?:of\s+)?(?:the\s+)?[A-Z][A-Za-z\s]*?)?"  # Section 301 SOX
+        r"|(?:Nghị định|Thông tư|Luật)\s+\d+[/-]?\d*[/-]?(?:[A-ZĐ]+)?"  # Nghị định 123/2024
+        r")\b",
+        re.IGNORECASE,
+    )
+
+    # Contract clauses: Clause 5.2, Khoản 3 Điều 12
+    CONTRACT_CLAUSE_PATTERN = re.compile(
+        r"\b(?:"
+        r"(?:Clause|clause)\s+\d+(?:\.\d+)+"  # Clause 5.2.1
+        r"|Khoản\s+\d+\s+Điều\s+\d+"  # Khoản 3 Điều 12
+        r"|(?:Điểm|Point)\s+[a-z]\s+Khoản\s+\d+"  # Điểm a Khoản 3
+        r")\b",
+        re.IGNORECASE,
+    )
+
+    # Legal entities: CTCP, LLC, Ltd, GmbH, Corp
+    LEGAL_ENTITY_PATTERN = re.compile(
+        r"\b(?:"
+        r"(?:CTCP|TNHH|Công ty\s+(?:TNHH|Cổ phần|CP))\s+[A-ZÀ-Ỹ][^\n,;]{2,40}"
+        r"|[A-Z][A-Za-z\s]+\s+(?:LLC|Ltd|Inc|Corp|GmbH|AG|S\.A\.|PLC|Co\.|Pty)"
+        r")\b",
+    )
+
+    # API endpoints: GET /api/v1/users, POST /webhook
+    API_ENDPOINT_PATTERN = re.compile(
+        r"\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+"
+        r"(/[a-zA-Z0-9_/{}:.-]+)",
+        re.IGNORECASE,
+    )
+
+    # Version: v2.1.0, Python 3.11, React 19, Node.js 20
+    VERSION_PATTERN = re.compile(
+        r"\b(?:"
+        r"v\d+(?:\.\d+){1,3}(?:-[a-zA-Z0-9.]+)?"  # v2.1.0, v3.0.0-beta.1
+        r"|(?:Python|Node\.?js?|React|Vue|Angular|Java|Go|Rust|Ruby|PHP|Swift|Kotlin|TypeScript|TS)"
+        r"\s+\d+(?:\.\d+){0,2}"  # Python 3.11
+        r")\b",
+        re.IGNORECASE,
+    )
+
     def __init__(self, use_nlp: bool = False) -> None:
         """
         Initialize the extractor.
@@ -189,6 +297,7 @@ class EntityExtractor:
 
         # Fall back to pattern-based extraction
         entities.extend(self._extract_vietnamese_names(text))
+        entities.extend(self._extract_domain_entities(text))
         entities.extend(self._extract_code_entities(text, entities))
         entities.extend(self._extract_capitalized_words(text, entities))
         entities.extend(self._extract_locations(text, entities))
@@ -399,6 +508,127 @@ class EntityExtractor:
 
         return entities
 
+    def _extract_domain_entities(self, text: str) -> list[Entity]:
+        """Extract financial, legal, and technical domain entities."""
+        entities: list[Entity] = []
+
+        # Financial metrics (ROE = 12.8%, revenue = 500 tỷ)
+        for match in self.FINANCIAL_METRIC_PATTERN.finditer(text):
+            raw_val = match.group(2) or ""
+            entities.append(
+                Entity(
+                    text=match.group(0).strip(),
+                    type=EntityType.UNKNOWN,
+                    start=match.start(),
+                    end=match.end(),
+                    subtype=EntitySubtype.FINANCIAL_METRIC,
+                    confidence=0.85,
+                    raw_value=raw_val.strip(),
+                    unit=_detect_unit(raw_val) if raw_val else "",
+                )
+            )
+
+        # Currency amounts ($25M, 500 triệu VND)
+        for match in self.CURRENCY_AMOUNT_PATTERN.finditer(text):
+            entities.append(
+                Entity(
+                    text=match.group(0).strip(),
+                    type=EntityType.UNKNOWN,
+                    start=match.start(),
+                    end=match.end(),
+                    subtype=EntitySubtype.CURRENCY_AMOUNT,
+                    confidence=0.9,
+                    raw_value=match.group(0).strip(),
+                    unit=_detect_currency(match.group(0)),
+                )
+            )
+
+        # Fiscal periods (Q1 2024, FY2025)
+        for match in self.FISCAL_PERIOD_PATTERN.finditer(text):
+            entities.append(
+                Entity(
+                    text=match.group(0).strip(),
+                    type=EntityType.UNKNOWN,
+                    start=match.start(),
+                    end=match.end(),
+                    subtype=EntitySubtype.FISCAL_PERIOD,
+                    confidence=0.9,
+                    raw_value=match.group(0).strip(),
+                )
+            )
+
+        # Regulations (Điều 468 BLDS, Section 301)
+        for match in self.REGULATION_PATTERN.finditer(text):
+            entities.append(
+                Entity(
+                    text=match.group(0).strip(),
+                    type=EntityType.UNKNOWN,
+                    start=match.start(),
+                    end=match.end(),
+                    subtype=EntitySubtype.REGULATION,
+                    confidence=0.85,
+                    raw_value=match.group(0).strip(),
+                )
+            )
+
+        # Contract clauses (Clause 5.2, Khoản 3 Điều 12)
+        for match in self.CONTRACT_CLAUSE_PATTERN.finditer(text):
+            entities.append(
+                Entity(
+                    text=match.group(0).strip(),
+                    type=EntityType.UNKNOWN,
+                    start=match.start(),
+                    end=match.end(),
+                    subtype=EntitySubtype.CONTRACT_CLAUSE,
+                    confidence=0.85,
+                    raw_value=match.group(0).strip(),
+                )
+            )
+
+        # Legal entities (CTCP ABC, XYZ LLC)
+        for match in self.LEGAL_ENTITY_PATTERN.finditer(text):
+            entities.append(
+                Entity(
+                    text=match.group(0).strip(),
+                    type=EntityType.ORGANIZATION,
+                    start=match.start(),
+                    end=match.end(),
+                    subtype=EntitySubtype.LEGAL_ENTITY,
+                    confidence=0.8,
+                    raw_value=match.group(0).strip(),
+                )
+            )
+
+        # API endpoints (GET /api/v1/users)
+        for match in self.API_ENDPOINT_PATTERN.finditer(text):
+            entities.append(
+                Entity(
+                    text=match.group(0).strip(),
+                    type=EntityType.CODE,
+                    start=match.start(),
+                    end=match.end(),
+                    subtype=EntitySubtype.API_ENDPOINT,
+                    confidence=0.9,
+                    raw_value=match.group(1),
+                )
+            )
+
+        # Versions (v2.1.0, Python 3.11)
+        for match in self.VERSION_PATTERN.finditer(text):
+            entities.append(
+                Entity(
+                    text=match.group(0).strip(),
+                    type=EntityType.CODE,
+                    start=match.start(),
+                    end=match.end(),
+                    subtype=EntitySubtype.VERSION,
+                    confidence=0.9,
+                    raw_value=match.group(0).strip(),
+                )
+            )
+
+        return entities
+
     def _extract_locations(
         self,
         text: str,
@@ -430,3 +660,38 @@ class EntityExtractor:
                 )
 
         return entities
+
+
+# ── Module-level helpers for domain extraction ─────────────────────
+
+
+def _detect_unit(value: str) -> str:
+    """Detect unit from a financial value string."""
+    v = value.strip().lower()
+    if "%" in v:
+        return "percent"
+    if any(w in v for w in ("tỷ", "billion", "b")):
+        return "billion"
+    if any(w in v for w in ("triệu", "million", "m")):
+        return "million"
+    if any(w in v for w in ("nghìn", "thousand", "k")):
+        return "thousand"
+    return ""
+
+
+def _detect_currency(text: str) -> str:
+    """Detect currency from a currency amount string."""
+    t = text.strip()
+    if t.startswith("$") or "USD" in t.upper():
+        return "USD"
+    if t.startswith("€") or "EUR" in t.upper():
+        return "EUR"
+    if t.startswith("£") or "GBP" in t.upper():
+        return "GBP"
+    if t.startswith("¥") or "JPY" in t.upper():
+        return "JPY"
+    if t.startswith("₫") or any(w in t.upper() for w in ("VND", "VNĐ", "ĐỒNG")):
+        return "VND"
+    if any(w in t.lower() for w in ("tỷ", "triệu", "nghìn")):
+        return "VND"
+    return ""

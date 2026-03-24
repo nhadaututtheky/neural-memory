@@ -1597,6 +1597,12 @@ class NeuralStorage(ABC):
         """Get combined root hash across all entity types."""
         raise NotImplementedError
 
+    async def get_bucket_entity_ids(
+        self, entity_type: str, prefix: str, *, is_pro: bool = False
+    ) -> list[str]:
+        """Return all entity IDs in the given bucket prefix for delete detection."""
+        raise NotImplementedError
+
     # ========== Alert Operations ==========
 
     def _get_brain_id(self) -> str:

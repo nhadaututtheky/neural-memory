@@ -204,13 +204,22 @@ class ExtractEntityNeuronsStep:
                     continue
                 # Reached threshold — promote! (fall through to neuron creation)
 
+            meta: dict[str, Any] = {
+                "entity_type": entity.type.value,
+                "confidence": entity.confidence,
+            }
+            if entity.subtype:
+                meta["entity_subtype"] = entity.subtype.value
+            if entity.raw_value:
+                meta["raw_value"] = entity.raw_value
+                meta["_verbatim"] = True
+            if entity.unit:
+                meta["unit"] = entity.unit
+
             neuron = Neuron.create(
                 type=neuron_type,
                 content=entity.text,
-                metadata={
-                    "entity_type": entity.type.value,
-                    "confidence": entity.confidence,
-                },
+                metadata=meta,
                 content_hash=simhash(entity.text),
             )
             await storage.add_neuron(neuron)
@@ -443,6 +452,154 @@ class StructureDetectionStep:
         return ctx
 
 
+# ── Step 3.6: Structured Data Encoder ──
+
+
+_MAX_TABLE_ROWS = 50  # Cap table rows to avoid neuron explosion
+
+
+@dataclass
+class StructuredDataEncoderStep:
+    """Encode structured data (table, key-value, JSON) as graph neurons.
+
+    Reads ``_structure`` metadata set by StructureDetectionStep and creates
+    cell/row/column neurons with domain synapses (IN_ROW, IN_COLUMN, HAS_VALUE).
+    Cells have ``_verbatim: True`` so they return exact values on recall.
+
+    Caps at _MAX_TABLE_ROWS to avoid neuron explosion from large datasets.
+    """
+
+    @property
+    def name(self) -> str:
+        return "structured_data_encoder"
+
+    async def execute(
+        self,
+        ctx: PipelineContext,
+        storage: NeuralStorage,
+        config: BrainConfig,
+    ) -> PipelineContext:
+        structure = ctx.metadata.get("_structure")
+        if not structure:
+            return ctx
+
+        fmt = structure.get("format", "")
+        fields = structure.get("fields", [])
+
+        if not fields:
+            return ctx
+
+        if fmt == "key_value":
+            await self._encode_key_value(ctx, storage, fields)
+        elif fmt in ("table_row", "csv_row"):
+            await self._encode_table(ctx, storage, fields, fmt)
+        elif fmt == "json_object":
+            await self._encode_key_value(ctx, storage, fields)
+
+        return ctx
+
+    async def _encode_key_value(
+        self,
+        ctx: PipelineContext,
+        storage: NeuralStorage,
+        fields: list[dict[str, str]],
+    ) -> None:
+        """Encode key-value pairs as cell neurons with HAS_VALUE synapses."""
+        from neural_memory.core.neuron import Neuron, NeuronType
+        from neural_memory.core.synapse import Synapse, SynapseType
+        from neural_memory.utils.simhash import simhash
+
+        for field_dict in fields[:_MAX_TABLE_ROWS]:
+            name = field_dict.get("name", "")
+            value = field_dict.get("value", "")
+            field_type = field_dict.get("type", "text")
+
+            if not name or not value:
+                continue
+
+            cell_content = f"{name} = {value}"
+            cell_neuron = Neuron.create(
+                type=NeuronType.ENTITY,
+                content=cell_content,
+                metadata={
+                    "entity_type": "entity",
+                    "_verbatim": True,
+                    "raw_value": value,
+                    "field_name": name,
+                    "field_type": field_type,
+                    "_structured_cell": True,
+                },
+                content_hash=simhash(cell_content),
+            )
+            await storage.add_neuron(cell_neuron)
+            ctx.neurons_created.append(cell_neuron)
+            ctx.entity_neurons.append(cell_neuron)
+
+            # Link cell to anchor if available
+            if ctx.anchor_neuron:
+                synapse = Synapse.create(
+                    type=SynapseType.HAS_VALUE,
+                    source_id=ctx.anchor_neuron.id,
+                    target_id=cell_neuron.id,
+                    weight=0.8,
+                )
+                await storage.add_synapse(synapse)
+                ctx.synapses_created.append(synapse)
+
+    async def _encode_table(
+        self,
+        ctx: PipelineContext,
+        storage: NeuralStorage,
+        fields: list[dict[str, str]],
+        fmt: str,
+    ) -> None:
+        """Encode table rows as graph: row header → cell neurons with IN_ROW/IN_COLUMN."""
+        from neural_memory.core.neuron import Neuron, NeuronType
+        from neural_memory.core.synapse import Synapse, SynapseType
+        from neural_memory.utils.simhash import simhash
+
+        # Group fields by row (fields come as flat list; group by name pattern)
+        # For table_row format, each field is a column in a single row
+        for field_dict in fields[:_MAX_TABLE_ROWS]:
+            name = field_dict.get("name", "")
+            value = field_dict.get("value", "")
+            field_type = field_dict.get("type", "text")
+
+            if not name or not value:
+                continue
+
+            cell_content = f"{name}: {value}"
+            cell_neuron = Neuron.create(
+                type=NeuronType.ENTITY,
+                content=cell_content,
+                metadata={
+                    "entity_type": "entity",
+                    "_verbatim": True,
+                    "raw_value": value,
+                    "field_name": name,
+                    "field_type": field_type,
+                    "_structured_cell": True,
+                    "_table_format": fmt,
+                },
+                content_hash=simhash(cell_content),
+            )
+            await storage.add_neuron(cell_neuron)
+            ctx.neurons_created.append(cell_neuron)
+            ctx.entity_neurons.append(cell_neuron)
+
+            # Link to anchor with IN_COLUMN (column name is the structural key)
+            if ctx.anchor_neuron:
+                synapse = Synapse.create(
+                    type=SynapseType.IN_COLUMN,
+                    source_id=cell_neuron.id,
+                    target_id=ctx.anchor_neuron.id,
+                    weight=0.7,
+                    metadata={"column": name},
+                )
+                await storage.add_synapse(synapse)
+                ctx.synapses_created.append(synapse)
+
+
 # ── Step 4: Auto-Tag + Metadata ──
 
 
@@ -586,12 +743,18 @@ class CreateAnchorStep:
 
             ctx.anchor_neuron = alias_neuron
         else:
+            # Extract raw keywords from content for fidelity-aware recall
+            from neural_memory.extraction.keywords import extract_keywords
+
+            raw_kws = extract_keywords(ctx.content)[:10]
+
             anchor_neuron = Neuron.create(
                 type=NeuronType.CONCEPT,
                 content=ctx.content,
                 metadata={
                     "is_anchor": True,
                     "timestamp": ctx.timestamp.isoformat(),
+                    **({"_raw_keywords": raw_kws} if raw_kws else {}),
                     **ctx.effective_metadata,
                 },
                 content_hash=ctx.content_hash,
@@ -1346,6 +1509,11 @@ class BuildFiberStep:
 
         # Copy metadata to avoid leaking non-serializable objects into the fiber
         fiber_metadata = {k: v for k, v in ctx.effective_metadata.items() if k != "_pipeline_fiber"}
+
+        # Propagate _verbatim flag if any neuron has structured cell data
+        has_verbatim = any(n.metadata.get("_verbatim") for n in ctx.neurons_created)
+        if has_verbatim:
+            fiber_metadata = {**fiber_metadata, "_verbatim": True}
 
         # Encode-time token estimation: stored in metadata for budget-aware retrieval.
         # Uses word-count * 1.3 heuristic (same as retrieval_context._TOKEN_RATIO).

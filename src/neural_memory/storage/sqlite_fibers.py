@@ -88,6 +88,8 @@ class SQLiteFiberMixin:
                 )
 
             await conn.commit()
+            # Invalidate Merkle hash cache for the affected bucket
+            await self.invalidate_merkle_prefix("fiber", fiber.id, is_pro=True)  # type: ignore[attr-defined]
             return fiber.id
         except sqlite3.IntegrityError as exc:
             msg = str(exc).lower()
@@ -340,6 +342,8 @@ class SQLiteFiberMixin:
             (fiber_id, brain_id),
         )
         await conn.commit()
+        if cursor.rowcount > 0:
+            await self.invalidate_merkle_prefix("fiber", fiber_id, is_pro=True)  # type: ignore[attr-defined]
 
         return cursor.rowcount > 0
 

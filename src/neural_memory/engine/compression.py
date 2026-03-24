@@ -933,6 +933,11 @@ class CompressionEngine:
                 report.fibers_skipped += 1
                 continue
 
+            # Verbatim fibers (structured data cells) must not be compressed
+            if fiber.metadata.get("_verbatim"):
+                report.fibers_skipped += 1
+                continue
+
             target_tier = self.determine_target_tier(fiber, reference_time)
 
             if int(target_tier) <= fiber.compression_tier:

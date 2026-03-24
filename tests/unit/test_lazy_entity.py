@@ -21,6 +21,9 @@ class FakeEntity:
     text: str
     type: MagicMock
     confidence: float = 0.5
+    subtype: object = None
+    raw_value: str = ""
+    unit: str = ""
 
 
 def _make_ctx(content: str = "Test content about PostgreSQL", **kwargs: object) -> PipelineContext:

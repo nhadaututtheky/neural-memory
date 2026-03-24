@@ -29,6 +29,7 @@ from neural_memory.engine.pipeline_steps import (
     ExtractTimeNeuronsStep,
     RelationExtractionStep,
     SemanticLinkingStep,
+    StructuredDataEncoderStep,
     StructureDetectionStep,
     TemporalLinkingStep,
 )
@@ -103,6 +104,7 @@ def build_default_pipeline(
             AutoTagStep(tag_normalizer=tag_normalizer),
             DedupCheckStep(dedup_pipeline=dedup_pipeline),
             CreateAnchorStep(),
+            StructuredDataEncoderStep(),
             CreateSynapsesStep(),
             CoOccurrenceStep(),
             EmotionStep(sentiment_extractor=sentiment_extractor),

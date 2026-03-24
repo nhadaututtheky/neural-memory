@@ -66,6 +66,13 @@ class SynapseType(StrEnum):
     VERIFIED_BY = "verified_by"  # Prediction -> Observation (outcome confirmed it)
     FALSIFIED_BY = "falsified_by"  # Prediction -> Observation (outcome disproved it)
 
+    # Domain / Structured data relationships
+    HAS_VALUE = "has_value"  # Cell -> Value neuron (structured data)
+    MEASURED_AT = "measured_at"  # Metric -> FiscalPeriod (financial temporal)
+    REGULATES = "regulates"  # Regulation -> Entity (legal scope)
+    IN_ROW = "in_row"  # Cell -> Row header (table structure)
+    IN_COLUMN = "in_column"  # Cell -> Column header (table structure)
+
     # Source tracking
     SOURCE_OF = "source_of"  # Source -> Neuron (provenance link)
 

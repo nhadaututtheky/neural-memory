@@ -71,6 +71,8 @@ class SQLiteSynapseMixin:
                 ),
             )
             await conn.commit()
+            # Invalidate Merkle hash cache for the affected bucket
+            await self.invalidate_merkle_prefix("synapse", synapse.id, is_pro=True)  # type: ignore[attr-defined]
             return synapse.id
         except sqlite3.IntegrityError as exc:
             if "FOREIGN KEY" in str(exc):
@@ -193,6 +195,8 @@ class SQLiteSynapseMixin:
             (synapse_id, brain_id),
         )
         await conn.commit()
+        if cursor.rowcount > 0:
+            await self.invalidate_merkle_prefix("synapse", synapse_id, is_pro=True)  # type: ignore[attr-defined]
 
         return cursor.rowcount > 0
 

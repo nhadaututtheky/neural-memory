@@ -103,6 +103,8 @@ class SQLiteNeuronMixin:
             await conn.commit()
             # Surgical invalidation: only evict the key that this neuron matches
             self._neuron_cache.invalidate_key(neuron.content, neuron.type.value)
+            # Invalidate Merkle hash cache for the affected bucket
+            await self.invalidate_merkle_prefix("neuron", neuron.id, is_pro=True)  # type: ignore[attr-defined]
             return neuron.id
         except sqlite3.IntegrityError:
             raise ValueError(f"Neuron {neuron.id} already exists")
@@ -310,6 +312,8 @@ class SQLiteNeuronMixin:
         )
         await conn.commit()
         self._neuron_cache.invalidate()
+        if cursor.rowcount > 0:
+            await self.invalidate_merkle_prefix("neuron", neuron_id, is_pro=True)  # type: ignore[attr-defined]
 
         return cursor.rowcount > 0
 
