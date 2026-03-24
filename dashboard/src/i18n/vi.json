@@ -199,7 +199,22 @@
     "testFailed": "Gửi tin nhắn thử thất bại",
     "backupSuccess": "Đã sao lưu! {{brain}} ({{size}}MB) đến {{count}} chat",
     "backupSendFailed": "Sao lưu gửi thất bại",
-    "backupFailed": "Sao lưu thất bại"
+    "backupFailed": "Sao lưu thất bại",
+    "configStatus": "Trạng thái cấu hình",
+    "embeddingConfig": "Nhà cung cấp Embedding",
+    "embeddingProvider": "Nhà cung cấp",
+    "embeddingModel": "Model",
+    "embeddingEnabled": "Bật",
+    "embeddingThreshold": "Ngưỡng tương đồng",
+    "embeddingTest": "Kiểm tra kết nối",
+    "embeddingTesting": "Đang kiểm tra...",
+    "embeddingTestOk": "Kết nối OK — {{provider}} ({{dimension}}D)",
+    "embeddingTestFail": "Kiểm tra thất bại: {{error}}",
+    "embeddingSave": "Lưu",
+    "embeddingSaving": "Đang lưu...",
+    "embeddingSaved": "Đã lưu cấu hình embedding",
+    "embeddingSaveFailed": "Lưu cấu hình embedding thất bại",
+    "proFeature": "Pro"
   },
   "oracle": {
     "title": "Tiên Tri",

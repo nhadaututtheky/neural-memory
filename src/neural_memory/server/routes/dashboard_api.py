@@ -917,6 +917,149 @@ async def update_sync_config(
     }
 
 
+# ── Embedding Config API ──────────────────────────────────
+
+_VALID_EMBEDDING_PROVIDERS: tuple[str, ...] = (
+    "sentence_transformer",
+    "openai",
+    "openrouter",
+    "gemini",
+    "ollama",
+)
+
+
+class EmbeddingConfigUpdate(BaseModel):
+    """Partial update for embedding settings."""
+
+    enabled: bool | None = None
+    provider: str | None = None
+    model: str | None = None
+    similarity_threshold: float | None = None
+
+
+class ConfigUpdateRequest(BaseModel):
+    """Request body for PUT /config."""
+
+    embedding: EmbeddingConfigUpdate | None = None
+
+
+@router.get("/config/embedding")
+async def get_embedding_config() -> dict[str, Any]:
+    """Return current embedding settings."""
+    from neural_memory.unified_config import get_config
+
+    config = get_config()
+    return config.embedding.to_dict()
+
+
+@router.put("/config")
+async def update_config(body: ConfigUpdateRequest) -> dict[str, Any]:
+    """Update embedding configuration.
+
+    Only fields provided in the request body are changed; omitted fields
+    keep their current values.
+    """
+    from dataclasses import replace as dc_replace
+
+    from neural_memory.unified_config import get_config
+
+    config = get_config()
+    new_embedding = config.embedding
+
+    if body.embedding is not None:
+        update = body.embedding
+
+        if update.enabled is not None:
+            new_embedding = dc_replace(new_embedding, enabled=bool(update.enabled))
+
+        if update.provider is not None:
+            provider = str(update.provider).strip()
+            if provider not in _VALID_EMBEDDING_PROVIDERS:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Invalid provider. Use one of: {', '.join(_VALID_EMBEDDING_PROVIDERS)}",
+                )
+            new_embedding = dc_replace(new_embedding, provider=provider)
+
+        if update.model is not None:
+            model = str(update.model).strip()
+            if not model:
+                raise HTTPException(status_code=422, detail="model must be a non-empty string")
+            if len(model) > 128:
+                raise HTTPException(status_code=422, detail="model must be at most 128 characters")
+            new_embedding = dc_replace(new_embedding, model=model)
+
+        if update.similarity_threshold is not None:
+            threshold = float(update.similarity_threshold)
+            if not 0.0 <= threshold <= 1.0:
+                raise HTTPException(
+                    status_code=422,
+                    detail="similarity_threshold must be in [0.0, 1.0]",
+                )
+            new_embedding = dc_replace(new_embedding, similarity_threshold=threshold)
+
+    updated = dc_replace(config, embedding=new_embedding)
+    updated.save()
+
+    return {"status": "updated", "embedding": new_embedding.to_dict()}
+
+
+@router.post("/config/embedding/test")
+async def test_embedding_connection() -> dict[str, Any]:
+    """Test the current embedding provider connection.
+
+    Returns status "ok" with provider name and vector dimension on success,
+    or status "error" with an error message on failure.
+    """
+    from neural_memory.unified_config import get_config
+
+    config = get_config()
+    emb = config.embedding
+
+    if not emb.enabled:
+        return {"status": "error", "error": "Embedding not enabled"}
+
+    provider_name = emb.provider
+    model_name = emb.model
+
+    try:
+        provider: Any
+        if provider_name == "sentence_transformer":
+            from neural_memory.engine.embedding.sentence_transformer import (
+                SentenceTransformerEmbedding,
+            )
+
+            provider = SentenceTransformerEmbedding(model_name=model_name)
+        elif provider_name == "openai":
+            from neural_memory.engine.embedding.openai_embedding import OpenAIEmbedding
+
+            provider = OpenAIEmbedding(model=model_name)
+        elif provider_name == "openrouter":
+            from neural_memory.engine.embedding.openrouter_embedding import OpenRouterEmbedding
+
+            provider = OpenRouterEmbedding(model=model_name)
+        elif provider_name == "gemini":
+            from neural_memory.engine.embedding.gemini_embedding import GeminiEmbedding
+
+            provider = GeminiEmbedding(model=model_name)
+        elif provider_name == "ollama":
+            from neural_memory.engine.embedding.ollama_embedding import OllamaEmbedding
+
+            provider = OllamaEmbedding(model=model_name)
+        else:
+            return {"status": "error", "error": f"Unknown embedding provider: {provider_name!r}"}
+
+        vector = await provider.embed("hello")
+        return {
+            "status": "ok",
+            "provider": provider_name,
+            "dimension": len(vector),
+        }
+    except Exception as exc:
+        logger.error("Embedding connection test failed for provider %r: %s", provider_name, exc)
+        return {"status": "error", "error": str(exc)}
+
+
 # ── Config Status API ────────────────────────────────────
 
 

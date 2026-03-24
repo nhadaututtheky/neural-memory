@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { ExternalLink, Bug, MessageSquare, Github } from "lucide-react"
 import { useTranslation } from "react-i18next"
+import ConfigStatusCards from "./ConfigStatusCards"
+import EmbeddingConfig from "./EmbeddingConfig"
 
 const FEEDBACK_ICONS = [Bug, MessageSquare, Github] as const
 const FEEDBACK_COLORS = ["#ef4444", "#6366f1", "#a8a29e"] as const
@@ -72,6 +74,9 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6 p-6">
       <h1 className="font-display text-2xl font-bold">{t("settings.title")}</h1>
+
+      {/* Config Status */}
+      <ConfigStatusCards />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* General */}
@@ -206,6 +211,9 @@ export default function SettingsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Embedding Provider (Pro) */}
+        <EmbeddingConfig />
 
         {/* Feedback & Bug Report */}
         <Card>

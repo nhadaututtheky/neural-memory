@@ -162,10 +162,10 @@ CLAUDE.md
 .rune/
 chatbot/
 .mcp.json
-agents/
-commands/
-hooks/
-skills/
+/agents/
+/commands/
+/hooks/
+/skills/
 VISION.md
 .github/internal/
 

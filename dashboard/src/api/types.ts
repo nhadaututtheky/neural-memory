@@ -323,3 +323,41 @@ export interface ConfigStatusItem {
 export interface ConfigStatusResponse {
   items: ConfigStatusItem[]
 }
+
+// PUT /api/dashboard/config
+export interface EmbeddingConfigUpdate {
+  enabled?: boolean
+  provider?: string
+  model?: string
+  similarity_threshold?: number
+}
+
+export interface ConfigUpdateRequest {
+  embedding?: EmbeddingConfigUpdate
+}
+
+export interface ConfigUpdateResponse {
+  status: string
+  embedding: {
+    enabled: boolean
+    provider: string
+    model: string
+    similarity_threshold: number
+  }
+}
+
+// GET /api/dashboard/config/embedding
+export interface EmbeddingConfigResponse {
+  enabled: boolean
+  provider: string
+  model: string
+  similarity_threshold: number
+}
+
+// POST /api/dashboard/config/embedding/test
+export interface EmbeddingTestResponse {
+  status: "ok" | "error"
+  provider?: string
+  dimension?: number
+  error?: string
+}

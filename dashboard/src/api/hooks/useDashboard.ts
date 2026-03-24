@@ -15,6 +15,10 @@ import type {
   BrainFilesResponse,
   ToolStatsResponse,
   ConfigStatusResponse,
+  EmbeddingConfigResponse,
+  ConfigUpdateRequest,
+  ConfigUpdateResponse,
+  EmbeddingTestResponse,
 } from "@/api/types"
 
 // Keys
@@ -33,6 +37,7 @@ const keys = {
   graph: (limit: number) => ["graph", limit] as const,
   brainFiles: ["dashboard", "brain-files"] as const,
   configStatus: ["dashboard", "config-status"] as const,
+  embeddingConfig: ["config", "embedding"] as const,
 }
 
 // Stats
@@ -177,5 +182,35 @@ export function useConfigStatus() {
     queryKey: keys.configStatus,
     queryFn: () => api.get<ConfigStatusResponse>("/api/dashboard/config-status"),
     staleTime: 60_000,
+  })
+}
+
+// Embedding config
+export function useEmbeddingConfig() {
+  return useQuery({
+    queryKey: keys.embeddingConfig,
+    queryFn: () => api.get<EmbeddingConfigResponse>("/api/dashboard/config/embedding"),
+    staleTime: 60_000,
+  })
+}
+
+// Update config
+export function useUpdateConfig() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: ConfigUpdateRequest) =>
+      api.put<ConfigUpdateResponse>("/api/dashboard/config", body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: keys.configStatus })
+      queryClient.invalidateQueries({ queryKey: keys.embeddingConfig })
+    },
+  })
+}
+
+// Test embedding
+export function useTestEmbedding() {
+  return useMutation({
+    mutationFn: () =>
+      api.post<EmbeddingTestResponse>("/api/dashboard/config/embedding/test", {}),
   })
 }

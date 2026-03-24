@@ -199,7 +199,22 @@
     "testFailed": "Failed to send test message",
     "backupSuccess": "Backup sent! {{brain}} ({{size}}MB) to {{count}} chat(s)",
     "backupSendFailed": "Backup failed to send",
-    "backupFailed": "Backup failed"
+    "backupFailed": "Backup failed",
+    "configStatus": "Configuration Status",
+    "embeddingConfig": "Embedding Provider",
+    "embeddingProvider": "Provider",
+    "embeddingModel": "Model",
+    "embeddingEnabled": "Enabled",
+    "embeddingThreshold": "Similarity Threshold",
+    "embeddingTest": "Test Connection",
+    "embeddingTesting": "Testing...",
+    "embeddingTestOk": "Connection OK — {{provider}} ({{dimension}}D)",
+    "embeddingTestFail": "Test failed: {{error}}",
+    "embeddingSave": "Save",
+    "embeddingSaving": "Saving...",
+    "embeddingSaved": "Embedding settings saved",
+    "embeddingSaveFailed": "Failed to save embedding settings",
+    "proFeature": "Pro"
   },
   "sync": {
     "title": "Cloud Sync",
