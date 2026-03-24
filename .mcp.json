@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "neural-memory": {
-      "command": "uvx",
-      "args": ["--from", "neural-memory", "nmem-mcp"]
-    }
-  }
-}

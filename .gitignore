@@ -158,6 +158,16 @@ data/
 logs/
 .neural_memory/
 .claude/
+CLAUDE.md
+.rune/
+chatbot/
+.mcp.json
+agents/
+commands/
+hooks/
+skills/
+VISION.md
+.github/internal/
 
 # Temp/debug artifacts
 .tmp_*
