@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 35
+SCHEMA_VERSION = 36
 
 # â”€â”€ Migrations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Each entry maps (from_version -> to_version) with a list of SQL statements.
@@ -613,6 +613,19 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
     (34, 35): [
         # Fidelity layers Phase 3: ghost recall tracking
         "ALTER TABLE fibers ADD COLUMN last_ghost_shown_at TEXT",
+    ],
+    (35, 36): [
+        # Merkle Delta Sync Phase 1: persistent hash tree cache (Pro-only)
+        """CREATE TABLE IF NOT EXISTS merkle_hashes (
+            brain_id TEXT NOT NULL,
+            entity_type TEXT NOT NULL,
+            prefix TEXT NOT NULL,
+            hash TEXT NOT NULL,
+            entity_count INTEGER DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (brain_id, entity_type, prefix)
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_merkle_hashes_brain ON merkle_hashes(brain_id, entity_type)",
     ],
 }
 
@@ -1250,4 +1263,16 @@ CREATE TABLE IF NOT EXISTS drift_clusters (
     FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_drift_clusters_status ON drift_clusters(brain_id, status);
+
+-- Merkle hash tree cache for efficient delta sync (v36, Pro-only)
+CREATE TABLE IF NOT EXISTS merkle_hashes (
+    brain_id TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    prefix TEXT NOT NULL,
+    hash TEXT NOT NULL,
+    entity_count INTEGER DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (brain_id, entity_type, prefix)
+);
+CREATE INDEX IF NOT EXISTS idx_merkle_hashes_brain ON merkle_hashes(brain_id, entity_type);
 """

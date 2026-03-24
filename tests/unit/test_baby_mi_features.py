@@ -359,7 +359,7 @@ class TestTrustScore:
     """Trust score field on TypedMemory."""
 
     def test_schema_version_25(self):
-        assert SCHEMA_VERSION == 35
+        assert SCHEMA_VERSION == 36
 
     def test_trust_score_field_on_typed_memory(self):
         tm = TypedMemory.create(
