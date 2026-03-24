@@ -14,6 +14,7 @@ import status from "./routes/status.js";
 import devices from "./routes/devices.js";
 import health from "./routes/health.js";
 import auth from "./routes/auth.js";
+import activate from "./routes/activate.js";
 import { requireAuth } from "./middleware/auth.js";
 import { attachLicense } from "./middleware/license.js";
 import { handleError } from "./errors.js";
@@ -51,6 +52,7 @@ app.route("/v1/hub/sync", sync);
 app.route("/v1/hub/register", register);
 app.route("/v1/hub/status", status);
 app.route("/v1/hub/devices", devices);
+app.route("/v1/hub/activate", activate);
 
 // --- Root ---
 app.get("/", (c) => {
