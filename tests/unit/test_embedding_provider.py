@@ -974,9 +974,7 @@ class TestOpenRouterEmbedding:
 
         from neural_memory.engine.embedding.openrouter_embedding import OpenRouterEmbedding
 
-        env_without_key = {
-            k: v for k, v in os.environ.items() if k != "OPENROUTER_API_KEY"
-        }
+        env_without_key = {k: v for k, v in os.environ.items() if k != "OPENROUTER_API_KEY"}
         with unittest.mock.patch.dict(os.environ, env_without_key, clear=True):
             with pytest.raises(ValueError, match="API key"):
                 OpenRouterEmbedding()
