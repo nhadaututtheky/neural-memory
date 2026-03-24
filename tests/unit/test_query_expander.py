@@ -34,9 +34,7 @@ class TestSynonymExpansion:
         assert "issue" in result
 
     def test_vietnamese_synonym_chi_phi(self) -> None:
-        result = expand_terms(
-            ["chi phí"], enable_abbreviations=False, enable_cross_language=False
-        )
+        result = expand_terms(["chi phí"], enable_abbreviations=False, enable_cross_language=False)
         assert "phí" in result or "giá" in result
 
     def test_vietnamese_synonym_doanh_thu(self) -> None:
@@ -50,9 +48,7 @@ class TestSynonymExpansion:
         result_a = expand_terms(
             ["expense"], enable_abbreviations=False, enable_cross_language=False
         )
-        result_b = expand_terms(
-            ["cost"], enable_abbreviations=False, enable_cross_language=False
-        )
+        result_b = expand_terms(["cost"], enable_abbreviations=False, enable_cross_language=False)
         # Both should contain the other
         assert "cost" in result_a
         assert "expense" in result_b

@@ -155,10 +155,7 @@ def test_prefix_grouping() -> None:
 
 def test_large_tree_builds_without_error() -> None:
     """1000 entities build without raising an exception."""
-    entities = [
-        (f"{i:04x}abcd", "2026-01-01T00:00:00", f"hash{i}")
-        for i in range(1000)
-    ]
+    entities = [(f"{i:04x}abcd", "2026-01-01T00:00:00", f"hash{i}") for i in range(1000)]
     tree = MerkleTreeBuilder.build_tree(entities, "neuron")
     assert tree.entity_count == 1000
     assert tree.hash != _EMPTY_HASH

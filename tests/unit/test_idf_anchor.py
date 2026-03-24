@@ -40,9 +40,7 @@ class TestComputeIdfScores:
         assert all(s == 1.0 for s in scores.values())
 
     def test_scores_normalized_zero_one(self) -> None:
-        scores = compute_idf_scores(
-            {"rare": 1, "mid": 50, "common": 500}, total_docs=1000
-        )
+        scores = compute_idf_scores({"rare": 1, "mid": 50, "common": 500}, total_docs=1000)
         for score in scores.values():
             assert 0.0 <= score <= 1.0
 

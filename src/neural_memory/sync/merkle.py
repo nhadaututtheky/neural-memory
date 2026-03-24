@@ -104,17 +104,16 @@ class MerkleTreeBuilder:
         # Group by entity_id[:2] prefix
         buckets: dict[str, list[tuple[str, str, str]]] = {}
         for entity_id, updated_at, content_hash in sorted_entities:
-            bucket_key = entity_id[:2].lower() if len(entity_id) >= 2 else entity_id.lower().ljust(2, "0")
+            bucket_key = (
+                entity_id[:2].lower() if len(entity_id) >= 2 else entity_id.lower().ljust(2, "0")
+            )
             buckets.setdefault(bucket_key, []).append((entity_id, updated_at, content_hash))
 
         # Build leaf nodes (one per bucket)
         leaf_nodes: list[MerkleNode] = []
         for bucket_key in sorted(buckets.keys()):
             bucket_entities = buckets[bucket_key]
-            leaf_hashes = [
-                cls.compute_leaf_hash(eid, upd, ch)
-                for eid, upd, ch in bucket_entities
-            ]
+            leaf_hashes = [cls.compute_leaf_hash(eid, upd, ch) for eid, upd, ch in bucket_entities]
             bucket_hash = cls.compute_branch_hash(leaf_hashes)
             leaf_nodes.append(
                 MerkleNode(
@@ -156,9 +155,7 @@ class MerkleTreeBuilder:
         synapse_tree = cls.build_tree(synapses, "synapse")
         fiber_tree = cls.build_tree(fibers, "fiber")
 
-        root_hash = cls.compute_branch_hash(
-            [neuron_tree.hash, synapse_tree.hash, fiber_tree.hash]
-        )
+        root_hash = cls.compute_branch_hash([neuron_tree.hash, synapse_tree.hash, fiber_tree.hash])
         total_count = neuron_tree.entity_count + synapse_tree.entity_count + fiber_tree.entity_count
 
         return MerkleNode(

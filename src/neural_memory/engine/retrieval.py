@@ -1601,7 +1601,7 @@ class ReflexPipeline:
                 _fuzzy_results = await asyncio.gather(*_fuzzy_tasks) if _fuzzy_tasks else []
 
                 for (kw, _prefix), prefix_neurons in zip(
-                    _fuzzy_kw_prefix_pairs, _fuzzy_results
+                    _fuzzy_kw_prefix_pairs, _fuzzy_results, strict=False
                 ):
                     # Match against _raw_keywords metadata (short strings),
                     # falling back to content for neurons without raw keywords

@@ -70,7 +70,9 @@ class SQLiteMerkleMixin:
             return None
 
         if entity_type not in _ENTITY_TYPES:
-            raise ValueError(f"Unknown entity_type: {entity_type!r}. Must be one of {_ENTITY_TYPES}.")
+            raise ValueError(
+                f"Unknown entity_type: {entity_type!r}. Must be one of {_ENTITY_TYPES}."
+            )
 
         conn = self._ensure_conn()
         brain_id = self._get_brain_id()
@@ -159,7 +161,9 @@ class SQLiteMerkleMixin:
         brain_id = self._get_brain_id()
 
         type_prefix = f"{entity_type}s"
-        bucket_key = entity_id[:2].lower() if len(entity_id) >= 2 else entity_id.lower().ljust(2, "0")
+        bucket_key = (
+            entity_id[:2].lower() if len(entity_id) >= 2 else entity_id.lower().ljust(2, "0")
+        )
         bucket_prefix = f"{type_prefix}/{bucket_key}"
 
         # Delete the affected bucket and the type-root (both are stale)
@@ -205,7 +209,6 @@ class SQLiteMerkleMixin:
             hashes.append(str(row[0]))
 
         return MerkleTreeBuilder.compute_branch_hash(hashes)
-
 
     async def get_bucket_entity_ids(
         self,

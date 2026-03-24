@@ -275,9 +275,7 @@ class SyncEngine:
 
                     # Fetch entities for this bucket
                     bucket_key = prefix.split("/")[-1] if "/" in prefix else ""
-                    entities = await self._fetch_bucket_entities(
-                        entity_type, bucket_key
-                    )
+                    entities = await self._fetch_bucket_entities(entity_type, bucket_key)
                     entity_ids = [e["id"] for e in entities]
 
                     diffs.append(
@@ -320,9 +318,7 @@ class SyncEngine:
 
             # Get local IDs for this bucket
             bucket_key = diff.prefix.split("/")[-1] if "/" in diff.prefix else ""
-            local_entities = await self._fetch_bucket_entities(
-                diff.entity_type, bucket_key
-            )
+            local_entities = await self._fetch_bucket_entities(diff.entity_type, bucket_key)
             local_ids = {e["id"] for e in local_entities}
 
             # Inserts: remote has, local doesn't
@@ -408,15 +404,17 @@ class SyncEngine:
             for n in neurons:
                 nid = n.id[:2].lower() if len(n.id) >= 2 else n.id.lower().ljust(2, "0")
                 if nid == bucket_key:
-                    entities.append({
-                        "id": n.id,
-                        "type": n.type.value if hasattr(n.type, "value") else str(n.type),
-                        "content": n.content,
-                        "content_hash": n.content_hash,
-                        "created_at": n.created_at.isoformat() if n.created_at else "",
-                        "updated_at": getattr(n, "updated_at", n.created_at),
-                        "metadata": n.metadata or {},
-                    })
+                    entities.append(
+                        {
+                            "id": n.id,
+                            "type": n.type.value if hasattr(n.type, "value") else str(n.type),
+                            "content": n.content,
+                            "content_hash": n.content_hash,
+                            "created_at": n.created_at.isoformat() if n.created_at else "",
+                            "updated_at": getattr(n, "updated_at", n.created_at),
+                            "metadata": n.metadata or {},
+                        }
+                    )
                     if hasattr(entities[-1]["updated_at"], "isoformat"):
                         entities[-1]["updated_at"] = entities[-1]["updated_at"].isoformat()
 
@@ -425,39 +423,45 @@ class SyncEngine:
             for s in synapses:
                 sid = s.id[:2].lower() if len(s.id) >= 2 else s.id.lower().ljust(2, "0")
                 if sid == bucket_key:
-                    entities.append({
-                        "id": s.id,
-                        "source_id": s.source_id,
-                        "target_id": s.target_id,
-                        "type": s.type.value if hasattr(s.type, "value") else str(s.type),
-                        "weight": s.weight,
-                        "direction": s.direction.value if hasattr(s.direction, "value") else str(s.direction),
-                        "content_hash": getattr(s, "content_hash", 0),
-                        "reinforced_count": s.reinforced_count,
-                        "created_at": s.created_at.isoformat() if s.created_at else "",
-                        "metadata": s.metadata or {},
-                    })
+                    entities.append(
+                        {
+                            "id": s.id,
+                            "source_id": s.source_id,
+                            "target_id": s.target_id,
+                            "type": s.type.value if hasattr(s.type, "value") else str(s.type),
+                            "weight": s.weight,
+                            "direction": s.direction.value
+                            if hasattr(s.direction, "value")
+                            else str(s.direction),
+                            "content_hash": getattr(s, "content_hash", 0),
+                            "reinforced_count": s.reinforced_count,
+                            "created_at": s.created_at.isoformat() if s.created_at else "",
+                            "metadata": s.metadata or {},
+                        }
+                    )
 
         elif entity_type == "fiber":
             fibers = await self._storage.find_fibers(limit=10000)
             for f in fibers:
                 fid = f.id[:2].lower() if len(f.id) >= 2 else f.id.lower().ljust(2, "0")
                 if fid == bucket_key:
-                    entities.append({
-                        "id": f.id,
-                        "anchor_neuron_id": f.anchor_neuron_id,
-                        "summary": f.summary or "",
-                        "conductivity": f.conductivity,
-                        "salience": f.salience,
-                        "frequency": f.frequency,
-                        "neuron_ids": list(f.neuron_ids),
-                        "synapse_ids": list(f.synapse_ids),
-                        "pathway": list(f.pathway),
-                        "auto_tags": list(f.auto_tags),
-                        "agent_tags": list(f.agent_tags),
-                        "created_at": f.created_at.isoformat() if f.created_at else "",
-                        "metadata": f.metadata or {},
-                    })
+                    entities.append(
+                        {
+                            "id": f.id,
+                            "anchor_neuron_id": f.anchor_neuron_id,
+                            "summary": f.summary or "",
+                            "conductivity": f.conductivity,
+                            "salience": f.salience,
+                            "frequency": f.frequency,
+                            "neuron_ids": list(f.neuron_ids),
+                            "synapse_ids": list(f.synapse_ids),
+                            "pathway": list(f.pathway),
+                            "auto_tags": list(f.auto_tags),
+                            "agent_tags": list(f.agent_tags),
+                            "created_at": f.created_at.isoformat() if f.created_at else "",
+                            "metadata": f.metadata or {},
+                        }
+                    )
 
         return entities
 

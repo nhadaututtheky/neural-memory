@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
@@ -17,10 +16,10 @@ from neural_memory.engine.reranker import (
     reranker_available,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class FakeActivationResult:
@@ -35,19 +34,15 @@ class FakeActivationResult:
             self.path = []
 
 
-def _make_candidates(
-    n: int, *, base_activation: float = 0.5
-) -> list[tuple[str, str, float]]:
+def _make_candidates(n: int, *, base_activation: float = 0.5) -> list[tuple[str, str, float]]:
     """Build candidate tuples (id, content, activation)."""
-    return [
-        (f"n{i}", f"content about topic {i}", base_activation - i * 0.01)
-        for i in range(n)
-    ]
+    return [(f"n{i}", f"content about topic {i}", base_activation - i * 0.01) for i in range(n)]
 
 
 # ---------------------------------------------------------------------------
 # Sigmoid / normalization
 # ---------------------------------------------------------------------------
+
 
 class TestSigmoid:
     def test_sigmoid_zero(self) -> None:
@@ -85,15 +80,16 @@ class TestNormalize:
 # CrossEncoderReranker
 # ---------------------------------------------------------------------------
 
+
 class TestCrossEncoderReranker:
     @patch("neural_memory.engine.reranker._check_cross_encoder", return_value=True)
-    def test_rerank_empty_candidates(self, _mock: MagicMock) -> None:
+    def test_rerank_empty_candidates(self, mock_check: MagicMock) -> None:
         reranker = CrossEncoderReranker()
         result = reranker.rerank("test query", [], limit=5)
         assert result == []
 
     @patch("neural_memory.engine.reranker._check_cross_encoder", return_value=True)
-    def test_rerank_scores_blended(self, _mock: MagicMock) -> None:
+    def test_rerank_scores_blended(self, mock_check: MagicMock) -> None:
         """Reranked results should blend cross-encoder score with activation."""
         import numpy as np
 
@@ -119,7 +115,7 @@ class TestCrossEncoderReranker:
             assert 0.0 <= r.blended_score <= 1.0
 
     @patch("neural_memory.engine.reranker._check_cross_encoder", return_value=True)
-    def test_rerank_limit_respected(self, _mock: MagicMock) -> None:
+    def test_rerank_limit_respected(self, mock_check: MagicMock) -> None:
         import numpy as np
 
         mock_model = MagicMock()
@@ -134,7 +130,7 @@ class TestCrossEncoderReranker:
         assert len(results) <= 2
 
     @patch("neural_memory.engine.reranker._check_cross_encoder", return_value=True)
-    def test_rerank_min_score_filter(self, _mock: MagicMock) -> None:
+    def test_rerank_min_score_filter(self, mock_check: MagicMock) -> None:
         """Candidates with very low reranker scores should be filtered."""
         import numpy as np
 
@@ -152,7 +148,7 @@ class TestCrossEncoderReranker:
         assert len(results) == 3
 
     @patch("neural_memory.engine.reranker._check_cross_encoder", return_value=True)
-    def test_rerank_max_candidates_cap(self, _mock: MagicMock) -> None:
+    def test_rerank_max_candidates_cap(self, mock_check: MagicMock) -> None:
         """Should cap candidates at max_candidates."""
         import numpy as np
 
@@ -170,7 +166,7 @@ class TestCrossEncoderReranker:
         assert len(called_pairs) == 5
 
     @patch("neural_memory.engine.reranker._check_cross_encoder", return_value=True)
-    def test_blend_weight_bounds(self, _mock: MagicMock) -> None:
+    def test_blend_weight_bounds(self, mock_check: MagicMock) -> None:
         """Blend weight should be clamped to [0, 1]."""
         r1 = CrossEncoderReranker(blend_weight=-0.5)
         assert r1._blend_weight == 0.0
@@ -183,10 +179,11 @@ class TestCrossEncoderReranker:
 # reranker_available
 # ---------------------------------------------------------------------------
 
+
 class TestRerankerAvailable:
     @patch("neural_memory.engine.reranker._CROSS_ENCODER_AVAILABLE", None)
     @patch("neural_memory.engine.reranker._check_cross_encoder", return_value=False)
-    def test_not_available(self, _mock: MagicMock) -> None:
+    def test_not_available(self, mock_check: MagicMock) -> None:
         assert reranker_available() is False
 
     @patch("neural_memory.engine.reranker._CROSS_ENCODER_AVAILABLE", True)
@@ -198,9 +195,10 @@ class TestRerankerAvailable:
 # rerank_activations convenience function
 # ---------------------------------------------------------------------------
 
+
 class TestRerankActivations:
     @patch("neural_memory.engine.reranker.reranker_available", return_value=False)
-    def test_graceful_skip_when_unavailable(self, _mock: MagicMock) -> None:
+    def test_graceful_skip_when_unavailable(self, mock_available: MagicMock) -> None:
         """When reranker not installed, return activations unchanged."""
         activations = {
             "n1": FakeActivationResult(neuron_id="n1", activation_level=0.8),
@@ -210,7 +208,7 @@ class TestRerankActivations:
         assert result is activations  # same object, unchanged
 
     @patch("neural_memory.engine.reranker.reranker_available", return_value=True)
-    def test_rerank_updates_activation_levels(self, _mock: MagicMock) -> None:
+    def test_rerank_updates_activation_levels(self, mock_available: MagicMock) -> None:
         """Reranked activations should have blended scores."""
         import numpy as np
 
@@ -231,11 +229,11 @@ class TestRerankActivations:
 
         assert len(result) <= 2
         # Activation levels should now be blended scores
-        for nid, ar in result.items():
+        for ar in result.values():
             assert 0.0 <= ar.activation_level <= 1.0
 
     @patch("neural_memory.engine.reranker.reranker_available", return_value=True)
-    def test_empty_contents_returns_unchanged(self, _mock: MagicMock) -> None:
+    def test_empty_contents_returns_unchanged(self, mock_available: MagicMock) -> None:
         """If no neuron contents, return activations unchanged."""
         activations = {
             "n1": FakeActivationResult(neuron_id="n1", activation_level=0.8),
@@ -247,6 +245,7 @@ class TestRerankActivations:
 # ---------------------------------------------------------------------------
 # Config integration
 # ---------------------------------------------------------------------------
+
 
 class TestRerankerConfig:
     def test_brain_config_defaults(self) -> None:
@@ -298,6 +297,7 @@ class TestRerankerConfig:
 # ---------------------------------------------------------------------------
 # RerankedResult dataclass
 # ---------------------------------------------------------------------------
+
 
 class TestRerankedResult:
     def test_frozen(self) -> None:
