@@ -20,6 +20,8 @@ import type {
   ConfigUpdateResponse,
   EmbeddingTestResponse,
   WatcherStatusResponse,
+  VisualizeRequest,
+  VisualizeResponse,
 } from "@/api/types"
 
 // Keys
@@ -223,5 +225,13 @@ export function useTestEmbedding() {
   return useMutation({
     mutationFn: () =>
       api.post<EmbeddingTestResponse>("/api/dashboard/config/embedding/test", {}),
+  })
+}
+
+// Visualize memory data as chart
+export function useVisualize() {
+  return useMutation({
+    mutationFn: (req: VisualizeRequest) =>
+      api.post<VisualizeResponse>("/api/dashboard/visualize", req),
   })
 }

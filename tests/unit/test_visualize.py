@@ -275,3 +275,82 @@ class TestVisualizeHandler:
         # Should be capped at 50
         call_args = handler._storage.find_neurons.call_args
         assert call_args.kwargs.get("limit", call_args[1].get("limit", 50)) <= 50
+
+
+# ── Integration: encode financial data → visualize → valid Vega-Lite ──
+
+
+class TestVisualizeIntegration:
+    """End-to-end: financial neuron content → chart generation → valid spec."""
+
+    def test_financial_table_to_vega_lite(self) -> None:
+        """Encode a financial table as neurons, extract data, generate Vega-Lite."""
+        neurons = [
+            FakeNeuron(id="q1", content="Q1/2024 revenue: 125.5M USD"),
+            FakeNeuron(id="q2", content="Q2/2024 revenue: 130.2M USD"),
+            FakeNeuron(id="q3", content="Q3/2024 revenue: 118.7M USD"),
+            FakeNeuron(id="q4", content="Q4/2024 revenue: 142.0M USD"),
+        ]
+
+        data_points = extract_data_points(neurons, "revenue trend")
+        assert len(data_points) >= 2, "Should extract numeric data from financial content"
+
+        chart = generate_chart(
+            data_points,
+            title="Revenue Trend",
+            output_format="vega_lite",
+        )
+
+        assert chart.chart_type in ("line", "bar", "pie", "scatter", "table")
+        assert chart.vega_lite is not None, "Vega-Lite spec should be generated"
+
+        spec = chart.vega_lite
+        assert "$schema" in spec
+        assert "data" in spec
+        assert "mark" in spec or "layer" in spec
+
+    def test_mixed_content_to_markdown_table(self) -> None:
+        """Non-numeric content should produce markdown table fallback."""
+        neurons = [
+            FakeNeuron(id="n1", content="API rate limit is 1000 req/min"),
+            FakeNeuron(id="n2", content="Response time 95th percentile: 200ms"),
+        ]
+
+        data_points = extract_data_points(neurons, "API metrics")
+        chart = generate_chart(
+            data_points,
+            title="API Metrics",
+            output_format="markdown_table",
+        )
+
+        assert chart.markdown is not None
+        assert "|" in chart.markdown
+
+    def test_ascii_output(self) -> None:
+        """Data with numeric values should produce ASCII chart."""
+        neurons = [
+            FakeNeuron(id="n1", content="Users: 500"),
+            FakeNeuron(id="n2", content="Users: 750"),
+            FakeNeuron(id="n3", content="Users: 300"),
+        ]
+
+        data_points = extract_data_points(neurons, "user count")
+        if data_points:
+            chart = generate_chart(
+                data_points,
+                title="User Count",
+                output_format="ascii",
+            )
+            assert chart.ascii_chart is not None
+            assert "█" in chart.ascii_chart
+
+    def test_provenance_tracked(self) -> None:
+        """Each data point should track source neuron ID."""
+        neurons = [
+            FakeNeuron(id="src-001", content="Revenue: 100M"),
+            FakeNeuron(id="src-002", content="Revenue: 200M"),
+        ]
+
+        data_points = extract_data_points(neurons, "revenue")
+        for dp in data_points:
+            assert dp.neuron_id, "Data point should reference source neuron"

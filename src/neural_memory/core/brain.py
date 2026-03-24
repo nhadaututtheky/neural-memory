@@ -107,6 +107,13 @@ class BrainConfig:
     fidelity_summary_threshold: float = 0.3
     fidelity_essence_threshold: float = 0.1
     essence_generator: str = "extractive"  # "extractive" or "llm"
+    # Cross-encoder reranking (optional post-SA refinement)
+    reranker_enabled: bool = False
+    reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    reranker_overfetch_multiplier: int = 3
+    reranker_blend_weight: float = 0.7  # Reranker weight (SA gets 1 - this)
+    reranker_min_score: float = 0.15
+    reranker_max_candidates: int = 30  # Safety cap on overfetch
 
     def with_updates(self, **kwargs: Any) -> BrainConfig:
         """Create a new config with updated values."""

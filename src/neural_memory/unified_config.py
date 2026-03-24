@@ -1016,6 +1016,39 @@ class ResponseConfig:
 
 
 @dataclass(frozen=True)
+class RerankerConfig:
+    """Settings for optional cross-encoder reranking after spreading activation."""
+
+    enabled: bool = False
+    model_name: str = "BAAI/bge-reranker-v2-m3"
+    overfetch_multiplier: int = 3
+    blend_weight: float = 0.7  # Reranker weight (SA gets 1 - this)
+    min_score: float = 0.15
+    max_candidates: int = 30  # Safety cap on overfetch
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "model_name": self.model_name,
+            "overfetch_multiplier": self.overfetch_multiplier,
+            "blend_weight": self.blend_weight,
+            "min_score": self.min_score,
+            "max_candidates": self.max_candidates,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> RerankerConfig:
+        return cls(
+            enabled=bool(data.get("enabled", False)),
+            model_name=str(data.get("model_name", "BAAI/bge-reranker-v2-m3")),
+            overfetch_multiplier=int(data.get("overfetch_multiplier", 3)),
+            blend_weight=float(data.get("blend_weight", 0.7)),
+            min_score=float(data.get("min_score", 0.15)),
+            max_candidates=int(data.get("max_candidates", 30)),
+        )
+
+
+@dataclass(frozen=True)
 class WatcherConfig:
     """Settings for file watcher auto-ingestion."""
 
@@ -1146,6 +1179,9 @@ class UnifiedConfig:
     # Telegram backup integration
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
 
+    # Cross-encoder reranking (optional)
+    reranker: RerankerConfig = field(default_factory=RerankerConfig)
+
     # File watcher auto-ingestion
     watcher: WatcherConfig = field(default_factory=WatcherConfig)
 
@@ -1229,6 +1265,7 @@ class UnifiedConfig:
             telegram=TelegramConfig.from_dict(data.get("telegram", {})),
             tool_tier=ToolTierConfig.from_dict(data.get("tool_tier", {})),
             mem0_sync=Mem0SyncConfig.from_dict(data.get("mem0_sync", {})),
+            reranker=RerankerConfig.from_dict(data.get("reranker", {})),
             watcher=WatcherConfig.from_dict(data.get("watcher", {})),
             device_id=raw_device_id,
             sync=SyncConfig.from_dict(sync_data),
@@ -1415,6 +1452,15 @@ class UnifiedConfig:
             f"chat_ids = [{', '.join(repr(cid) for cid in self.telegram.chat_ids)}]",
             f"max_file_size_mb = {self.telegram.max_file_size_mb}",
             f"backup_on_consolidation = {'true' if self.telegram.backup_on_consolidation else 'false'}",
+            "",
+            "# Cross-encoder reranking (optional, requires pip install neural-memory[reranker])",
+            "[reranker]",
+            f"enabled = {'true' if self.reranker.enabled else 'false'}",
+            f'model_name = "{_sanitize_toml_str(self.reranker.model_name)}"',
+            f"overfetch_multiplier = {self.reranker.overfetch_multiplier}",
+            f"blend_weight = {self.reranker.blend_weight}",
+            f"min_score = {self.reranker.min_score}",
+            f"max_candidates = {self.reranker.max_candidates}",
             "",
             "# File watcher auto-ingestion",
             "[watcher]",

@@ -1057,7 +1057,10 @@ async def test_embedding_connection() -> dict[str, Any]:
         }
     except Exception as exc:
         logger.error("Embedding connection test failed for provider %r: %s", provider_name, exc)
-        return {"status": "error", "error": str(exc)}
+        return {
+            "status": "error",
+            "error": "Connection test failed. Check server logs for details.",
+        }
 
 
 # ── Config Status API ────────────────────────────────────
@@ -1330,12 +1333,12 @@ async def get_watcher_status(request: Request) -> dict[str, Any]:
     from neural_memory.unified_config import get_config
 
     config = get_config()
-    watcher_cfg = config.watcher if hasattr(config, "watcher") else None
+    watcher_cfg = config.watcher
 
     result: dict[str, Any] = {
-        "enabled": bool(watcher_cfg and watcher_cfg.enabled),
+        "enabled": watcher_cfg.enabled,
         "running": False,
-        "paths": list(watcher_cfg.paths) if watcher_cfg and hasattr(watcher_cfg, "paths") else [],
+        "paths": list(watcher_cfg.paths),
         "stats": {},
         "recent": [],
     }
@@ -1348,9 +1351,8 @@ async def get_watcher_status(request: Request) -> dict[str, Any]:
         result["recent"] = [
             {
                 "path": str(r.path),
-                "action": r.event_type if hasattr(r, "event_type") else "processed",
+                "action": "processed",
                 "neurons_created": r.neurons_created,
-                "timestamp": "",
             }
             for r in results[:10]
         ]
@@ -1375,3 +1377,73 @@ async def tool_stats(
     summary = await storage.get_tool_stats(brain.id)  # type: ignore[attr-defined]
     daily = await storage.get_tool_stats_by_period(brain.id, days=days, limit=limit)  # type: ignore[attr-defined]
     return {"summary": summary, "daily": daily}
+
+
+@router.post("/visualize")
+async def visualize_memory(
+    storage: Annotated[NeuralStorage, Depends(get_storage)],
+    body: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Generate chart spec from memory data via nmem_visualize pipeline."""
+    if body is None:
+        body = {}
+    query = str(body.get("query", "")).strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="query parameter is required")
+
+    chart_type = body.get("chart_type")
+    output_format = str(body.get("format", "vega_lite"))
+    limit = min(int(body.get("limit", 20)), 50)
+
+    try:
+        neurons = await storage.find_neurons(content_contains=query, limit=limit)
+    except Exception:
+        neurons = await storage.find_neurons(limit=limit)
+
+    if not neurons:
+        return {
+            "query": query,
+            "chart_type": "table",
+            "message": "No data found for query.",
+            "data_points": [],
+        }
+
+    from neural_memory.engine.chart_generator import extract_data_points, generate_chart
+
+    data_points = extract_data_points(neurons, query)
+    if not data_points:
+        return {
+            "query": query,
+            "chart_type": "table",
+            "message": "Found memories but no numeric data to chart.",
+            "memories": [
+                {
+                    "id": getattr(n, "id", ""),
+                    "content": (getattr(n, "content", "") or "")[:200],
+                    "type": getattr(n, "type", ""),
+                }
+                for n in neurons[:10]
+            ],
+        }
+
+    chart = generate_chart(
+        data_points,
+        chart_type=chart_type,
+        title=query,
+        output_format=output_format,
+    )
+
+    result: dict[str, Any] = {
+        "query": query,
+        "chart_type": chart.chart_type,
+        "title": chart.title,
+        "data_points_count": len(chart.data_points),
+    }
+    if chart.vega_lite:
+        result["vega_lite"] = chart.vega_lite
+    if chart.markdown:
+        result["markdown"] = chart.markdown
+    if chart.ascii_chart:
+        result["ascii"] = chart.ascii_chart
+
+    return result

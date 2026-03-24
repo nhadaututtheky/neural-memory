@@ -96,6 +96,9 @@ extract = [
     "markdownify>=0.11",
     "openpyxl>=3.1",
 ]
+reranker = [
+    "sentence-transformers>=2.2.0",
+]
 embeddings = [
     "sentence-transformers>=2.0",
 ]
@@ -270,6 +273,10 @@ disallow_untyped_decorators = false
 [[tool.mypy.overrides]]
 module = "neural_memory.engine.file_watcher"
 disallow_subclassing_any = false
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = "neural_memory.engine.reranker"
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]

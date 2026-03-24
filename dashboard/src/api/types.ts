@@ -356,7 +356,6 @@ export interface WatcherStatusResponse {
     path: string
     action: string
     neurons_created: number
-    timestamp: string
   }>
 }
 
@@ -374,4 +373,24 @@ export interface EmbeddingTestResponse {
   provider?: string
   dimension?: number
   error?: string
+}
+
+// POST /api/dashboard/visualize
+export interface VisualizeRequest {
+  query: string
+  chart_type?: string
+  format?: string
+  limit?: number
+}
+
+export interface VisualizeResponse {
+  query: string
+  chart_type: string
+  title?: string
+  data_points_count?: number
+  message?: string
+  vega_lite?: Record<string, unknown>
+  markdown?: string
+  ascii?: string
+  memories?: Array<{ id: string; content: string; type: string }>
 }

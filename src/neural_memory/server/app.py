@@ -79,8 +79,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         _logger.info("Background notification daemon started")
 
     # File watcher daemon
-    watcher_config = config.watcher if hasattr(config, "watcher") else None
-    if watcher_config and watcher_config.enabled and watcher_config.paths:
+    watcher_config = config.watcher
+    if watcher_config.enabled and watcher_config.paths:
         try:
             from neural_memory.engine.doc_trainer import DocTrainer
             from neural_memory.engine.file_watcher import FileWatcher, WatchConfig

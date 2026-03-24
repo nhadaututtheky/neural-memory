@@ -34,6 +34,9 @@
     "sigma": "^3.0.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
+    "vega": "^6.2.0",
+    "vega-embed": "^7.1.0",
+    "vega-lite": "^6.4.2",
     "zustand": "^5.0.11"
   },
   "devDependencies": {

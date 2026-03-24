@@ -474,6 +474,49 @@ class ReflexPipeline:
                     logger.debug("Deferred write flush failed (non-critical)", exc_info=True)
             return _early_result
 
+        # 4.9 Cross-encoder reranking (optional post-SA refinement)
+        if self._config.reranker_enabled and len(activations) > 1:
+            try:
+                from neural_memory.engine.reranker import reranker_available
+
+                if reranker_available():
+                    from neural_memory.engine.reranker import rerank_activations
+
+                    # Fetch content for top candidates
+                    top_nids = [
+                        nid
+                        for nid, _ in sorted(
+                            activations.items(),
+                            key=lambda x: x[1].activation_level,
+                            reverse=True,
+                        )
+                    ][: self._config.reranker_max_candidates]
+                    neuron_batch = await self._storage.get_neurons_batch(top_nids)
+                    neuron_contents = {
+                        nid: n.content for nid, n in neuron_batch.items() if n.content
+                    }
+
+                    if neuron_contents:
+                        activations = rerank_activations(
+                            query,
+                            activations,
+                            neuron_contents,
+                            model_name=self._config.reranker_model,
+                            blend_weight=self._config.reranker_blend_weight,
+                            min_score=self._config.reranker_min_score,
+                            max_candidates=self._config.reranker_max_candidates,
+                            limit=50,
+                        )
+                        logger.debug(
+                            "Reranked %d → %d activations",
+                            len(neuron_contents),
+                            len(activations),
+                        )
+            except ImportError:
+                logger.debug("Reranker not available (sentence-transformers not installed)")
+            except Exception:
+                logger.debug("Reranking failed (non-critical)", exc_info=True)
+
         # 5. Find matching fibers
         query_tokens = set(query.lower().split())
         fibers_matched = await self._find_matching_fibers(
