@@ -264,21 +264,27 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Neural Memory Pro
 
-Need more power? **[Neural Memory Pro](https://theio.vn)** replaces SQLite with InfinityDB — a purpose-built spatial database engine for neural graphs.
+Free NM recalls by **keyword matching**. Pro recalls by **meaning** — powered by InfinityDB, a purpose-built spatial database with HNSW vector search.
 
 | | Free (SQLite) | Pro (InfinityDB) |
 |--|---------------|-------------------|
-| **Vector search** | Sequential scan | HNSW index, <5ms at 1M neurons |
+| **Recall method** | Keyword match (FTS5) | Semantic similarity (HNSW) |
+| **Search speed** | ~500ms at 10K neurons | **<5ms** at 1M neurons |
 | **Scale** | ~50K neurons | 2M+ tested |
-| **Compression** | None | 5-tier adaptive (up to 89%) |
-| **Graph traversal** | SQL JOINs | Native BFS, <1ms depth-3 |
+| **Compression** | Text-level trimming | 5-tier vector compression (up to 97%) |
+| **Consolidation** | O(N²) brute-force | O(N×k) HNSW clustering |
+| **Storage per 1M neurons** | ~5 GB | **~1 GB** |
 | **MCP tools** | 52 | 52 + 3 Pro-exclusive |
 
+**Pro-exclusive features:** Cone Queries (adjustable semantic recall), Smart Merge (scalable consolidation), Directional Compression (multi-axis semantic preservation), 5-tier auto lifecycle (float32 → binary, auto-promote on access).
+
 ```bash
-pip install git+https://github.com/AIVN-Foundation/neural-memory-pro.git
+pip install neural-memory-pro
 ```
 
-One command. Auto-registers, auto-upgrades storage. All free tools keep working.
+One command. Auto-registers, auto-upgrades storage. All free tools keep working. **[$9/mo](https://nhadaututtheky.github.io/neural-memory/landing/pricing/) — 30-day money-back guarantee.**
+
+> 📖 [Full comparison](https://nhadaututtheky.github.io/neural-memory/landing/pro/) · [Pricing](https://nhadaututtheky.github.io/neural-memory/landing/pricing/)
 
 ## Support
 

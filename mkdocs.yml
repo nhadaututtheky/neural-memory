@@ -115,6 +115,9 @@ nav:
   - FAQ: FAQ.md
   - Contributing: contributing.md
   - Changelog: changelog.md
+  - Pro:
+    - Why Pro: landing/pro.md
+    - Pricing: landing/pricing.md
   - Blog:
     - Why I Built NeuralMemory: blog/why-i-built-neuralmemory.md
     - Honest Comparison 2026: blog/honest-comparison-2026.md

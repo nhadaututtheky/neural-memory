@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neural Memory Pro — Semantic Brain for AI Agents</title>
+  <meta name="description" content="Upgrade from keyword search to semantic understanding. InfinityDB replaces SQLite with HNSW vector search, 5-tier compression, and neural graph traversal.">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Neural Memory Pro">
+  <meta property="og:description" content="Your agent's brain, upgraded. From keyword search to semantic understanding.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://nhadaututtheky.github.io/neural-memory/landing/pro-landing.html">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <!-- Three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+  <!-- Polar.sh Checkout Embed -->
+  <script defer data-auto-init src="https://cdn.jsdelivr.net/npm/@polar-sh/checkout@latest/dist/embed.global.js"></script>
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwindcss.config = {
+      theme: {
+        extend: {
+          colors: {
+            nm: {
+              void: '#050510',
+              deep: '#0a0a1a',
+              surface: '#111128',
+              card: '#16163a',
+              border: '#2a2a5a',
+              text: '#e8e8f0',
+              muted: '#8888aa',
+              // Neural bio-luminescence palette
+              synapse: '#7c3aed',    // violet
+              axon: '#06b6d4',       // cyan
+              dendrite: '#f472b6',   // pink
+              pulse: '#a78bfa',      // light violet
+              fire: '#fbbf24',       // amber activation
+              grow: '#34d399',       // emerald growth
+            }
+          },
+          fontFamily: {
+            heading: ['"Space Grotesk"', 'system-ui', 'sans-serif'],
+            body: ['"Inter"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    html { scroll-padding-top: 5rem; }
+    body { font-family: 'Inter', system-ui, sans-serif; background: #050510; color: #e8e8f0; }
+    h1, h2, h3, h4 { font-family: 'Space Grotesk', system-ui, sans-serif; }
+    code, pre { font-family: 'JetBrains Mono', monospace; }
+
+    /* 3D canvas background */
+    #neural-canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Glow effects */
+    .glow-violet { box-shadow: 0 0 40px rgba(124, 58, 237, 0.3), 0 0 80px rgba(124, 58, 237, 0.1); }
+    .glow-cyan { box-shadow: 0 0 40px rgba(6, 182, 212, 0.3), 0 0 80px rgba(6, 182, 212, 0.1); }
+    .glow-text { text-shadow: 0 0 40px rgba(124, 58, 237, 0.5); }
+
+    /* Activation pulse */
+    @keyframes activation-pulse {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+    @keyframes signal-travel {
+      0% { background-position: 0% 50%; }
+      100% { background-position: 200% 50%; }
+    }
+
+    .pulse-slow { animation: activation-pulse 4s ease-in-out infinite; }
+    .pulse-fast { animation: activation-pulse 2s ease-in-out infinite; }
+
+    .signal-line {
+      background: linear-gradient(90deg, transparent, #7c3aed, #06b6d4, transparent);
+      background-size: 200% 100%;
+      animation: signal-travel 3s linear infinite;
+    }
+
+    /* Tier bars */
+    .tier-bar { transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1); }
+
+    /* Scroll reveal */
+    @media (prefers-reduced-motion: no-preference) {
+      .reveal {
+        opacity: 0;
+        transform: translateY(30px);
+        transition: opacity 0.8s ease, transform 0.8s ease;
+      }
+      .reveal.visible { opacity: 1; transform: translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .reveal { opacity: 1; transform: none; }
+    }
+
+    /* Pricing card hover */
+    .pricing-card {
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .pricing-card:hover {
+      transform: translateY(-4px);
+    }
+
+    /* Comparison slider */
+    .comparison-free { border-left: 3px solid #8888aa; }
+    .comparison-pro { border-left: 3px solid #7c3aed; }
+  </style>
+</head>
+
+<body class="antialiased overflow-x-hidden">
+
+  <!-- 3D Neural Brain Canvas -->
+  <canvas id="neural-canvas"></canvas>
+
+  <!-- Content wrapper -->
+  <div class="relative z-10">
+
+    <!-- ─── Navbar ─────────────────────────────────── -->
+    <nav class="fixed top-4 left-4 right-4 z-50 bg-nm-surface/70 backdrop-blur-xl border border-nm-border/50 rounded-2xl px-6 py-3 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2 font-heading font-bold text-lg">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="8" r="3" stroke="#7c3aed" stroke-width="2"/>
+          <circle cx="6" cy="18" r="2.5" stroke="#06b6d4" stroke-width="2"/>
+          <circle cx="18" cy="18" r="2.5" stroke="#f472b6" stroke-width="2"/>
+          <line x1="12" y1="11" x2="7" y2="16" stroke="#7c3aed" stroke-width="1.5" opacity="0.5"/>
+          <line x1="12" y1="11" x2="17" y2="16" stroke="#06b6d4" stroke-width="1.5" opacity="0.5"/>
+        </svg>
+        <span>Neural<span class="text-nm-synapse">Memory</span></span>
+        <span class="text-[10px] font-mono bg-nm-synapse/20 text-nm-pulse px-2 py-0.5 rounded-full ml-1">PRO</span>
+      </a>
+      <div class="hidden md:flex items-center gap-6 text-sm text-nm-muted">
+        <a href="#why" class="hover:text-nm-text transition-colors cursor-pointer">Why Pro</a>
+        <a href="#features" class="hover:text-nm-text transition-colors cursor-pointer">Features</a>
+        <a href="#pricing" class="hover:text-nm-text transition-colors cursor-pointer">Pricing</a>
+        <a href="https://github.com/nhadaututtheky/neural-memory" target="_blank" rel="noopener" class="hover:text-nm-text transition-colors cursor-pointer">GitHub</a>
+        <a href="#pricing" class="bg-nm-synapse hover:bg-nm-synapse/80 text-white px-4 py-2 rounded-lg font-medium transition-colors cursor-pointer">Get Pro</a>
+      </div>
+    </nav>
+
+    <!-- ─── Hero ───────────────────────────────────── -->
+    <section class="min-h-screen flex items-center pt-24 pb-16 px-6">
+      <div class="max-w-5xl mx-auto text-center">
+        <div class="inline-flex items-center gap-2 bg-nm-synapse/10 text-nm-pulse text-sm font-medium px-4 py-1.5 rounded-full mb-8 border border-nm-synapse/20">
+          <span class="w-2 h-2 bg-nm-synapse rounded-full pulse-fast"></span>
+          InfinityDB Engine — HNSW Vector Search
+        </div>
+
+        <h1 class="font-heading text-5xl md:text-6xl lg:text-7xl font-bold leading-[1.1] mb-6">
+          Your agent recalls<br>
+          by <span class="text-nm-synapse glow-text">meaning</span>,<br>
+          not by words
+        </h1>
+
+        <p class="text-nm-muted text-lg md:text-xl leading-relaxed mb-10 max-w-2xl mx-auto">
+          Free NM searches keywords. Pro searches <strong class="text-nm-axon">semantics</strong>.
+          Same 52 tools. Same API. Different brain underneath.
+        </p>
+
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+          <a href="#pricing" class="inline-flex items-center justify-center gap-2 bg-nm-synapse hover:bg-nm-synapse/80 text-white font-semibold px-8 py-4 rounded-xl transition-all glow-violet cursor-pointer text-lg">
+            Upgrade to Pro — $9/mo
+          </a>
+          <a href="#why" class="inline-flex items-center justify-center gap-2 bg-nm-surface/80 border border-nm-border text-nm-text font-medium px-8 py-4 rounded-xl hover:bg-nm-card transition-colors cursor-pointer text-lg">
+            See the difference
+          </a>
+        </div>
+
+        <!-- Speed stat -->
+        <div class="mt-16 flex justify-center gap-12 text-center">
+          <div>
+            <div class="font-mono text-3xl font-bold text-nm-axon">~5ms</div>
+            <div class="text-nm-muted text-sm mt-1">Search at 1M neurons</div>
+          </div>
+          <div class="w-px bg-nm-border"></div>
+          <div>
+            <div class="font-mono text-3xl font-bold text-nm-grow">97%</div>
+            <div class="text-nm-muted text-sm mt-1">Storage compression</div>
+          </div>
+          <div class="w-px bg-nm-border"></div>
+          <div>
+            <div class="font-mono text-3xl font-bold text-nm-dendrite">100x</div>
+            <div class="text-nm-muted text-sm mt-1">Faster consolidation</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Why Pro ────────────────────────────────── -->
+    <section id="why" class="py-24 px-6">
+      <div class="max-w-5xl mx-auto reveal">
+        <h2 class="font-heading text-3xl md:text-4xl font-bold text-center mb-4">
+          The Real Difference
+        </h2>
+        <p class="text-nm-muted text-center text-lg mb-16 max-w-2xl mx-auto">
+          It's not about speed. It's about <strong class="text-nm-text">recall quality</strong>.
+        </p>
+
+        <!-- Before/After comparison -->
+        <div class="grid md:grid-cols-2 gap-8">
+          <!-- Free -->
+          <div class="comparison-free bg-nm-surface/50 border border-nm-border/50 rounded-xl p-6">
+            <div class="flex items-center gap-2 mb-4">
+              <span class="text-nm-muted font-mono text-sm font-bold">FREE</span>
+              <span class="text-nm-muted text-sm">— SQLite + FTS5</span>
+            </div>
+            <div class="bg-nm-deep rounded-lg p-4 font-mono text-sm mb-4">
+              <div class="text-nm-muted mb-2"># User asks:</div>
+              <div class="text-nm-text">"What did we decide about auth?"</div>
+              <div class="text-nm-muted mt-3 mb-1"># FTS5 keyword search:</div>
+              <div class="text-nm-fire">MATCH "decide" AND "auth"</div>
+            </div>
+            <div class="flex items-center gap-3 text-sm">
+              <span class="font-mono text-nm-fire font-bold">2 / 7</span>
+              <span class="text-nm-muted">relevant memories found</span>
+            </div>
+            <p class="text-nm-muted text-sm mt-3">Misses memories that say "chose", "picked", "settled on" — different words, same meaning.</p>
+          </div>
+
+          <!-- Pro -->
+          <div class="comparison-pro bg-nm-card/80 border border-nm-synapse/30 rounded-xl p-6 glow-violet">
+            <div class="flex items-center gap-2 mb-4">
+              <span class="text-nm-synapse font-mono text-sm font-bold">PRO</span>
+              <span class="text-nm-muted text-sm">— InfinityDB + HNSW</span>
+            </div>
+            <div class="bg-nm-deep rounded-lg p-4 font-mono text-sm mb-4">
+              <div class="text-nm-muted mb-2"># User asks:</div>
+              <div class="text-nm-text">"What did we decide about auth?"</div>
+              <div class="text-nm-muted mt-3 mb-1"># HNSW semantic cone search:</div>
+              <div class="text-nm-synapse">similarity >= 0.7 | ranked by meaning</div>
+            </div>
+            <div class="flex items-center gap-3 text-sm">
+              <span class="font-mono text-nm-grow font-bold">7 / 7</span>
+              <span class="text-nm-muted">relevant memories found</span>
+            </div>
+            <p class="text-nm-muted text-sm mt-3">Finds all related memories regardless of wording — "chose JWT", "settled on OAuth", "picked Lucia".</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Features ───────────────────────────────── -->
+    <section id="features" class="py-24 px-6">
+      <div class="max-w-5xl mx-auto">
+        <h2 class="font-heading text-3xl md:text-4xl font-bold text-center mb-4 reveal">
+          Pro Features
+        </h2>
+        <p class="text-nm-muted text-center text-lg mb-16 max-w-2xl mx-auto reveal">
+          Four capabilities that transform how your agent remembers.
+        </p>
+
+        <!-- Feature 1: Cone Queries -->
+        <div class="grid md:grid-cols-2 gap-12 items-center mb-24 reveal">
+          <div>
+            <div class="inline-flex items-center gap-2 text-nm-synapse text-sm font-mono mb-3">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+              CONE QUERIES
+            </div>
+            <h3 class="font-heading text-2xl font-bold mb-4">Adjustable Semantic Recall</h3>
+            <p class="text-nm-muted leading-relaxed mb-4">
+              Search a <strong class="text-nm-text">semantic cone</strong> around your query. Narrow it for precision, widen it for exploration. Each result scored by meaning <em>and</em> activation history.
+            </p>
+            <div class="bg-nm-deep rounded-lg p-4 font-mono text-sm">
+              <span class="text-nm-muted">score</span> = <span class="text-nm-synapse">similarity</span> <span class="text-nm-muted">&times;</span> <span class="text-nm-fire">0.7</span> + <span class="text-nm-axon">activation</span> <span class="text-nm-muted">&times;</span> <span class="text-nm-fire">0.3</span>
+            </div>
+          </div>
+          <div class="bg-nm-surface/50 border border-nm-border/50 rounded-xl p-6">
+            <div class="font-mono text-sm space-y-2">
+              <div class="text-nm-muted"># Narrow cone — precise lookup</div>
+              <div><span class="text-nm-axon">nmem_cone_query</span>(</div>
+              <div class="pl-4">query=<span class="text-nm-grow">"auth architecture"</span>,</div>
+              <div class="pl-4">threshold=<span class="text-nm-fire">0.9</span></div>
+              <div>)</div>
+              <div class="mt-3 text-nm-muted"># Wide cone — brainstorm</div>
+              <div><span class="text-nm-axon">nmem_cone_query</span>(</div>
+              <div class="pl-4">query=<span class="text-nm-grow">"auth architecture"</span>,</div>
+              <div class="pl-4">threshold=<span class="text-nm-fire">0.6</span></div>
+              <div>)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Feature 2: Smart Merge -->
+        <div class="grid md:grid-cols-2 gap-12 items-center mb-24 reveal">
+          <div class="order-2 md:order-1 bg-nm-surface/50 border border-nm-border/50 rounded-xl p-6">
+            <div class="text-sm font-mono mb-4 text-nm-muted">Consolidation speed at scale</div>
+            <div class="space-y-4">
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="text-nm-muted">1K neurons</span>
+                  <span class="font-mono"><span class="text-nm-muted">Free: 2s</span> &middot; <span class="text-nm-grow">Pro: 0.1s</span></span>
+                </div>
+                <div class="h-2 bg-nm-deep rounded-full overflow-hidden">
+                  <div class="tier-bar h-full bg-nm-grow rounded-full" style="width: 5%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="text-nm-muted">10K neurons</span>
+                  <span class="font-mono"><span class="text-nm-muted">Free: 3min</span> &middot; <span class="text-nm-grow">Pro: 1s</span></span>
+                </div>
+                <div class="h-2 bg-nm-deep rounded-full overflow-hidden">
+                  <div class="tier-bar h-full bg-nm-grow rounded-full" style="width: 0.5%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="text-nm-muted">100K neurons</span>
+                  <span class="font-mono"><span class="text-nm-fire">Free: 5hrs</span> &middot; <span class="text-nm-grow">Pro: 10s</span></span>
+                </div>
+                <div class="h-2 bg-nm-deep rounded-full overflow-hidden">
+                  <div class="tier-bar h-full bg-nm-grow rounded-full" style="width: 0.05%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="order-1 md:order-2">
+            <div class="inline-flex items-center gap-2 text-nm-grow text-sm font-mono mb-3">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+              SMART MERGE
+            </div>
+            <h3 class="font-heading text-2xl font-bold mb-4">Consolidation That Scales</h3>
+            <p class="text-nm-muted leading-relaxed mb-4">
+              Free compares every pair — O(N&sup2;). Pro uses HNSW neighbors to find merge candidates in O(N&times;k).
+              <strong class="text-nm-text">Mutual similarity</strong>: only merges when A is near B <em>and</em> B is near A.
+            </p>
+            <div class="bg-nm-deep rounded-lg p-4 font-mono text-sm">
+              <span class="text-nm-axon">nmem_pro_merge</span>(dry_run=<span class="text-nm-fire">true</span>)
+            </div>
+          </div>
+        </div>
+
+        <!-- Feature 3: Directional Compression -->
+        <div class="grid md:grid-cols-2 gap-12 items-center mb-24 reveal">
+          <div>
+            <div class="inline-flex items-center gap-2 text-nm-dendrite text-sm font-mono mb-3">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              DIRECTIONAL COMPRESSION
+            </div>
+            <h3 class="font-heading text-2xl font-bold mb-4">Smarter Trimming</h3>
+            <p class="text-nm-muted leading-relaxed mb-4">
+              Free cuts sentences by entity density — it loses context. Pro scores each sentence against <strong class="text-nm-text">multiple semantic axes</strong>, preserving all relevant directions.
+            </p>
+            <p class="text-nm-muted leading-relaxed text-sm">
+              A memory about "React performance" keeps both the React angle <em>and</em> the performance angle — not just one.
+            </p>
+          </div>
+          <div class="bg-nm-surface/50 border border-nm-border/50 rounded-xl p-6">
+            <div class="text-sm font-mono mb-4 text-nm-muted">Multi-axis scoring</div>
+            <div class="space-y-3">
+              <div class="flex items-center gap-3">
+                <span class="w-20 text-right font-mono text-xs text-nm-dendrite">primary</span>
+                <div class="flex-1 h-3 bg-nm-deep rounded-full overflow-hidden">
+                  <div class="h-full bg-nm-dendrite/70 rounded-full" style="width: 60%"></div>
+                </div>
+                <span class="font-mono text-xs text-nm-muted">&times;0.6</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="w-20 text-right font-mono text-xs text-nm-axon">ref axis 1</span>
+                <div class="flex-1 h-3 bg-nm-deep rounded-full overflow-hidden">
+                  <div class="h-full bg-nm-axon/70 rounded-full" style="width: 40%"></div>
+                </div>
+                <span class="font-mono text-xs text-nm-muted">&times;0.4</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="w-20 text-right font-mono text-xs text-nm-synapse">ref axis 2</span>
+                <div class="flex-1 h-3 bg-nm-deep rounded-full overflow-hidden">
+                  <div class="h-full bg-nm-synapse/70 rounded-full" style="width: 35%"></div>
+                </div>
+                <span class="font-mono text-xs text-nm-muted">backup</span>
+              </div>
+            </div>
+            <div class="mt-4 pt-4 border-t border-nm-border/30 text-xs font-mono text-nm-muted">
+              Keeps sentences scoring high on <span class="text-nm-text">all</span> axes, not just one
+            </div>
+          </div>
+        </div>
+
+        <!-- Feature 4: 5-Tier Compression -->
+        <div class="grid md:grid-cols-2 gap-12 items-center reveal">
+          <div class="order-2 md:order-1 bg-nm-surface/50 border border-nm-border/50 rounded-xl p-6">
+            <div class="text-sm font-mono mb-4 text-nm-muted">Auto lifecycle — bytes per neuron (384D)</div>
+            <div class="space-y-3">
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="font-mono text-nm-fire">ACTIVE</span>
+                  <span class="font-mono text-nm-muted">1,536 B</span>
+                </div>
+                <div class="h-4 bg-nm-deep rounded-full overflow-hidden">
+                  <div class="h-full bg-gradient-to-r from-nm-fire to-nm-fire/50 rounded-full" style="width: 100%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="font-mono text-nm-synapse">WARM <span class="text-nm-muted text-xs">-50%</span></span>
+                  <span class="font-mono text-nm-muted">768 B</span>
+                </div>
+                <div class="h-4 bg-nm-deep rounded-full overflow-hidden">
+                  <div class="h-full bg-gradient-to-r from-nm-synapse to-nm-synapse/50 rounded-full" style="width: 50%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="font-mono text-nm-axon">COOL <span class="text-nm-muted text-xs">-75%</span></span>
+                  <span class="font-mono text-nm-muted">384 B</span>
+                </div>
+                <div class="h-4 bg-nm-deep rounded-full overflow-hidden">
+                  <div class="h-full bg-gradient-to-r from-nm-axon to-nm-axon/50 rounded-full" style="width: 25%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="font-mono text-nm-grow">FROZEN <span class="text-nm-muted text-xs">-97%</span></span>
+                  <span class="font-mono text-nm-muted">48 B</span>
+                </div>
+                <div class="h-4 bg-nm-deep rounded-full overflow-hidden">
+                  <div class="h-full bg-gradient-to-r from-nm-grow to-nm-grow/50 rounded-full" style="width: 3%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="font-mono text-nm-muted">CRYSTAL <span class="text-xs">-100%</span></span>
+                  <span class="font-mono text-nm-muted">0 B</span>
+                </div>
+                <div class="h-4 bg-nm-deep rounded-full overflow-hidden">
+                  <div class="h-full bg-nm-muted/30 rounded-full" style="width: 0.5%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="order-1 md:order-2">
+            <div class="inline-flex items-center gap-2 text-nm-fire text-sm font-mono mb-3">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+              5-TIER VECTOR COMPRESSION
+            </div>
+            <h3 class="font-heading text-2xl font-bold mb-4">Automatic Memory Lifecycle</h3>
+            <p class="text-nm-muted leading-relaxed mb-4">
+              Memories age. Pro automatically compresses their vectors: float32 &rarr; float16 &rarr; int8 &rarr; binary &rarr; metadata-only.
+            </p>
+            <ul class="text-nm-muted text-sm space-y-2">
+              <li class="flex items-start gap-2">
+                <span class="text-nm-fire mt-0.5">&#9679;</span>
+                Priority &ge; 8 stays ACTIVE forever
+              </li>
+              <li class="flex items-start gap-2">
+                <span class="text-nm-grow mt-0.5">&#9679;</span>
+                Auto-promotes when accessed again
+              </li>
+              <li class="flex items-start gap-2">
+                <span class="text-nm-axon mt-0.5">&#9679;</span>
+                1M neurons: 5GB &rarr; 1GB (80% saved)
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Comparison Table ───────────────────────── -->
+    <section class="py-24 px-6 bg-nm-deep/50">
+      <div class="max-w-4xl mx-auto reveal">
+        <h2 class="font-heading text-3xl md:text-4xl font-bold text-center mb-12">Full Comparison</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-nm-border">
+                <th class="py-4 pr-6 text-nm-muted font-medium text-sm w-1/3"></th>
+                <th class="py-4 pr-6 text-nm-muted font-medium text-sm">Free (SQLite)</th>
+                <th class="py-4 text-nm-synapse font-medium text-sm">Pro (InfinityDB)</th>
+              </tr>
+            </thead>
+            <tbody class="text-sm">
+              <tr class="border-b border-nm-border/30">
+                <td class="py-3 pr-6 text-nm-muted">Recall method</td>
+                <td class="py-3 pr-6">Keyword match (FTS5)</td>
+                <td class="py-3 text-nm-synapse font-medium">Semantic similarity (HNSW)</td>
+              </tr>
+              <tr class="border-b border-nm-border/30">
+                <td class="py-3 pr-6 text-nm-muted">Search speed (10K)</td>
+                <td class="py-3 pr-6">~500ms</td>
+                <td class="py-3 text-nm-synapse font-medium font-mono">&lt;5ms</td>
+              </tr>
+              <tr class="border-b border-nm-border/30">
+                <td class="py-3 pr-6 text-nm-muted">Scale tested</td>
+                <td class="py-3 pr-6">~50K neurons</td>
+                <td class="py-3 text-nm-synapse font-medium">2M+ neurons</td>
+              </tr>
+              <tr class="border-b border-nm-border/30">
+                <td class="py-3 pr-6 text-nm-muted">Vector storage</td>
+                <td class="py-3 pr-6">Not stored</td>
+                <td class="py-3 text-nm-synapse font-medium">Persistent mmap</td>
+              </tr>
+              <tr class="border-b border-nm-border/30">
+                <td class="py-3 pr-6 text-nm-muted">Compression</td>
+                <td class="py-3 pr-6">Text trimming</td>
+                <td class="py-3 text-nm-synapse font-medium">5-tier vector (97%)</td>
+              </tr>
+              <tr class="border-b border-nm-border/30">
+                <td class="py-3 pr-6 text-nm-muted">Consolidation</td>
+                <td class="py-3 pr-6">O(N&sup2;) brute-force</td>
+                <td class="py-3 text-nm-synapse font-medium">O(N&times;k) HNSW</td>
+              </tr>
+              <tr class="border-b border-nm-border/30">
+                <td class="py-3 pr-6 text-nm-muted">Graph traversal</td>
+                <td class="py-3 pr-6">SQL JOINs</td>
+                <td class="py-3 text-nm-synapse font-medium">Native BFS &lt;1ms</td>
+              </tr>
+              <tr class="border-b border-nm-border/30">
+                <td class="py-3 pr-6 text-nm-muted">Storage (1M neurons)</td>
+                <td class="py-3 pr-6">~5 GB</td>
+                <td class="py-3 text-nm-synapse font-medium font-mono">~1 GB</td>
+              </tr>
+              <tr>
+                <td class="py-3 pr-6 text-nm-muted">MCP tools</td>
+                <td class="py-3 pr-6">52</td>
+                <td class="py-3 text-nm-synapse font-medium">52 + 3 Pro</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Pricing ────────────────────────────────── -->
+    <section id="pricing" class="py-24 px-6">
+      <div class="max-w-5xl mx-auto">
+        <h2 class="font-heading text-3xl md:text-4xl font-bold text-center mb-4 reveal">Pricing</h2>
+        <p class="text-nm-muted text-center text-lg mb-16 reveal">Free users keep everything. Pro users get a better brain.</p>
+
+        <div class="grid md:grid-cols-3 gap-8 reveal">
+          <!-- Free -->
+          <div class="pricing-card bg-nm-surface/50 border border-nm-border/50 rounded-2xl p-8">
+            <h3 class="font-heading text-xl font-bold mb-2">Free</h3>
+            <div class="flex items-baseline gap-1 mb-6">
+              <span class="font-heading text-4xl font-bold">$0</span>
+              <span class="text-nm-muted">/forever</span>
+            </div>
+            <ul class="space-y-3 text-sm text-nm-muted mb-8">
+              <li class="flex items-center gap-2"><span class="text-nm-grow">&#10003;</span> 52 MCP tools</li>
+              <li class="flex items-center gap-2"><span class="text-nm-grow">&#10003;</span> SQLite storage</li>
+              <li class="flex items-center gap-2"><span class="text-nm-grow">&#10003;</span> Spreading activation</li>
+              <li class="flex items-center gap-2"><span class="text-nm-grow">&#10003;</span> 14 consolidation strategies</li>
+              <li class="flex items-center gap-2"><span class="text-nm-grow">&#10003;</span> FTS5 keyword search</li>
+              <li class="flex items-center gap-2"><span class="text-nm-grow">&#10003;</span> Cloud sync (100 neurons)</li>
+            </ul>
+            <a href="https://github.com/nhadaututtheky/neural-memory" target="_blank" rel="noopener" class="block text-center bg-nm-surface border border-nm-border text-nm-text font-medium px-6 py-3 rounded-xl hover:bg-nm-card transition-colors cursor-pointer">
+              pip install neural-memory
+            </a>
+          </div>
+
+          <!-- Pro (featured) -->
+          <div class="pricing-card bg-nm-card border-2 border-nm-synapse/50 rounded-2xl p-8 glow-violet relative">
+            <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-nm-synapse text-white text-xs font-bold px-3 py-1 rounded-full">
+              POPULAR
+            </div>
+            <h3 class="font-heading text-xl font-bold mb-2">Pro</h3>
+            <div class="flex items-baseline gap-1 mb-1">
+              <span class="font-heading text-4xl font-bold text-nm-synapse">$9</span>
+              <span class="text-nm-muted">/month</span>
+            </div>
+            <div class="text-nm-muted text-xs mb-6">or $89/year (save $19)</div>
+            <ul class="space-y-3 text-sm text-nm-muted mb-8">
+              <li class="flex items-center gap-2"><span class="text-nm-synapse">&#10003;</span> Everything in Free</li>
+              <li class="flex items-center gap-2"><span class="text-nm-synapse">&#10003;</span> <strong class="text-nm-text">InfinityDB engine</strong></li>
+              <li class="flex items-center gap-2"><span class="text-nm-synapse">&#10003;</span> <strong class="text-nm-text">Cone Queries</strong></li>
+              <li class="flex items-center gap-2"><span class="text-nm-synapse">&#10003;</span> <strong class="text-nm-text">Smart Merge</strong></li>
+              <li class="flex items-center gap-2"><span class="text-nm-synapse">&#10003;</span> <strong class="text-nm-text">Directional Compression</strong></li>
+              <li class="flex items-center gap-2"><span class="text-nm-synapse">&#10003;</span> 5-tier vector compression</li>
+              <li class="flex items-center gap-2"><span class="text-nm-synapse">&#10003;</span> 3 Pro MCP tools</li>
+              <li class="flex items-center gap-2"><span class="text-nm-synapse">&#10003;</span> Unlimited cloud sync</li>
+            </ul>
+
+            <!-- Polar checkout (international) — via pay.theio.vn -->
+            <button type="button" onclick="startPolarCheckout('NM-PRO-MONTHLY')"
+               class="block w-full text-center bg-nm-synapse hover:bg-nm-synapse/80 text-white font-semibold px-6 py-3 rounded-xl transition-colors cursor-pointer mb-3">
+              Get Pro — $9/mo (Card / PayPal)
+            </button>
+            <button type="button" onclick="startPolarCheckout('NM-PRO-YEARLY')"
+               class="block w-full text-center bg-nm-synapse/70 hover:bg-nm-synapse/60 text-white font-medium px-6 py-2.5 rounded-xl transition-colors cursor-pointer mb-3 text-sm">
+              Yearly — $89/yr (save $19)
+            </button>
+
+            <!-- Sepay (Vietnam) -->
+            <button type="button" onclick="showSepayModal('NM-PRO-MONTHLY', 219000)"
+                    class="block w-full text-center bg-nm-surface border border-nm-border text-nm-text font-medium px-6 py-3 rounded-xl hover:bg-nm-card transition-colors cursor-pointer text-sm">
+              Thanh toan QR — 219,000d/thang (VN)
+            </button>
+          </div>
+
+          <!-- Team -->
+          <div class="pricing-card bg-nm-surface/50 border border-nm-border/50 rounded-2xl p-8">
+            <h3 class="font-heading text-xl font-bold mb-2">Team</h3>
+            <div class="flex items-baseline gap-1 mb-1">
+              <span class="font-heading text-4xl font-bold">$29</span>
+              <span class="text-nm-muted">/seat/month</span>
+            </div>
+            <div class="text-nm-muted text-xs mb-6">or $249/seat/year (save $99)</div>
+            <ul class="space-y-3 text-sm text-nm-muted mb-8">
+              <li class="flex items-center gap-2"><span class="text-nm-axon">&#10003;</span> Everything in Pro</li>
+              <li class="flex items-center gap-2"><span class="text-nm-axon">&#10003;</span> Shared brain hub</li>
+              <li class="flex items-center gap-2"><span class="text-nm-axon">&#10003;</span> Brain-to-brain sync</li>
+              <li class="flex items-center gap-2"><span class="text-nm-axon">&#10003;</span> Role-based access</li>
+              <li class="flex items-center gap-2"><span class="text-nm-axon">&#10003;</span> Audit log</li>
+              <li class="flex items-center gap-2"><span class="text-nm-axon">&#10003;</span> Self-hosted Docker</li>
+            </ul>
+            <a href="mailto:enterprise@theio.vn" class="block text-center bg-nm-surface border border-nm-border text-nm-text font-medium px-6 py-3 rounded-xl hover:bg-nm-card transition-colors cursor-pointer">
+              Contact Us
+            </a>
+          </div>
+        </div>
+
+        <!-- Money-back -->
+        <p class="text-center text-nm-muted text-sm mt-8 reveal">
+          30-day money-back guarantee. No questions asked.
+        </p>
+      </div>
+    </section>
+
+    <!-- ─── Install ────────────────────────────────── -->
+    <section class="py-24 px-6 bg-nm-deep/50">
+      <div class="max-w-3xl mx-auto text-center reveal">
+        <h2 class="font-heading text-3xl md:text-4xl font-bold mb-4">One Command</h2>
+        <p class="text-nm-muted text-lg mb-8">Auto-registers. Auto-upgrades storage. All 52 tools keep working.</p>
+
+        <div class="bg-nm-surface border border-nm-border rounded-xl p-6 inline-block">
+          <code class="font-mono text-lg">
+            <span class="text-nm-muted">$</span>
+            <span class="text-nm-grow"> pip install</span>
+            <span class="text-nm-synapse"> neural-memory-pro</span>
+          </code>
+        </div>
+
+        <p class="text-nm-muted text-sm mt-6">
+          Downgrade safe — uninstall Pro and everything reverts to free SQLite. No data loss.
+        </p>
+      </div>
+    </section>
+
+    <!-- ─── Footer ─────────────────────────────────── -->
+    <footer class="py-12 px-6 border-t border-nm-border/30">
+      <div class="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-nm-muted">
+        <div class="flex items-center gap-4">
+          <a href="https://github.com/nhadaututtheky/neural-memory" target="_blank" rel="noopener" class="hover:text-nm-text transition-colors cursor-pointer">GitHub</a>
+          <a href="https://pypi.org/project/neural-memory/" target="_blank" rel="noopener" class="hover:text-nm-text transition-colors cursor-pointer">PyPI</a>
+          <a href="https://nhadaututtheky.github.io/neural-memory/" target="_blank" rel="noopener" class="hover:text-nm-text transition-colors cursor-pointer">Docs</a>
+        </div>
+        <div>&copy; 2024-2026 NeuralMemory Contributors. MIT License.</div>
+      </div>
+    </footer>
+
+  </div><!-- /content wrapper -->
+
+  <!-- ─── Checkout Modal (Email + GitHub) ──────────── -->
+  <div id="checkout-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div class="bg-nm-surface border border-nm-border rounded-2xl p-8 max-w-md mx-4 relative">
+      <button type="button" onclick="closeCheckoutModal()" class="absolute top-4 right-4 text-nm-muted hover:text-nm-text cursor-pointer" aria-label="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+      <h3 class="font-heading text-xl font-bold mb-2" id="checkout-title">Get Neural Memory Pro</h3>
+      <p class="text-nm-muted text-sm mb-6" id="checkout-subtitle">License key + private repo access</p>
+
+      <form id="checkout-form" class="space-y-4" onsubmit="return submitCheckout(event)">
+        <input type="hidden" id="checkout-product" value="">
+        <div>
+          <label for="checkout-email" class="block text-sm text-nm-muted mb-1">Email (for license delivery)</label>
+          <input type="email" id="checkout-email" required placeholder="you@example.com"
+                 class="w-full bg-nm-deep border border-nm-border rounded-lg px-4 py-3 text-nm-text placeholder-nm-muted/50 focus:border-nm-synapse focus:outline-none">
+        </div>
+        <div>
+          <label for="checkout-github" class="block text-sm text-nm-muted mb-1">GitHub username (for repo invite)</label>
+          <input type="text" id="checkout-github" placeholder="octocat"
+                 class="w-full bg-nm-deep border border-nm-border rounded-lg px-4 py-3 text-nm-text placeholder-nm-muted/50 focus:border-nm-synapse focus:outline-none">
+        </div>
+        <button type="submit" id="checkout-submit"
+                class="w-full bg-nm-synapse hover:bg-nm-synapse/80 text-white font-semibold px-6 py-3 rounded-xl transition-colors cursor-pointer">
+          Continue to Payment
+        </button>
+        <p id="checkout-error" class="text-red-400 text-sm hidden"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- ─── Sepay QR Modal ───────────────────────────── -->
+  <div id="sepay-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div class="bg-nm-surface border border-nm-border rounded-2xl p-8 max-w-md mx-4 relative">
+      <button type="button" onclick="closeSepayModal()" class="absolute top-4 right-4 text-nm-muted hover:text-nm-text cursor-pointer" aria-label="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+      <h3 class="font-heading text-xl font-bold mb-2">Thanh toan QR</h3>
+      <p class="text-nm-muted text-sm mb-6">Chuyen khoan ngan hang — tu dong kich hoat sau 1-5 phut</p>
+
+      <div class="mb-4">
+        <label for="sepay-email" class="block text-sm text-nm-muted mb-1">Email (nhan license key)</label>
+        <input type="email" id="sepay-email" required placeholder="you@example.com"
+               class="w-full bg-nm-deep border border-nm-border rounded-lg px-4 py-3 text-nm-text placeholder-nm-muted/50 focus:border-nm-synapse focus:outline-none mb-2"
+               oninput="updateSepayQR()">
+        <label for="sepay-github" class="block text-sm text-nm-muted mb-1 mt-2">GitHub username (optional)</label>
+        <input type="text" id="sepay-github" placeholder="octocat"
+               class="w-full bg-nm-deep border border-nm-border rounded-lg px-4 py-3 text-nm-text placeholder-nm-muted/50 focus:border-nm-synapse focus:outline-none">
+      </div>
+
+      <div class="bg-white rounded-xl p-4 mb-4 flex justify-center">
+        <img id="sepay-qr" src="" alt="QR thanh toan" width="250" height="250" class="rounded-lg">
+      </div>
+
+      <div class="text-sm space-y-2 text-nm-muted">
+        <div class="flex justify-between">
+          <span>So tien:</span>
+          <span id="sepay-amount" class="text-nm-text font-mono font-bold">219,000 VND</span>
+        </div>
+        <div class="flex justify-between">
+          <span>Noi dung CK:</span>
+          <span id="sepay-content" class="text-nm-synapse font-mono text-xs">NM-PRO-MONTHLY-XXXXXXXX</span>
+        </div>
+      </div>
+
+      <button type="button" onclick="confirmSepayOrder()"
+              class="w-full mt-4 bg-nm-grow hover:bg-nm-grow/80 text-nm-void font-semibold px-6 py-3 rounded-xl transition-colors cursor-pointer">
+        Da chuyen khoan xong
+      </button>
+
+      <p class="text-nm-muted text-xs mt-3 text-center">
+        Powered by <a href="https://sepay.vn" target="_blank" rel="noopener" class="text-nm-axon hover:underline">Sepay.vn</a> — tu dong xac nhan qua webhook
+      </p>
+    </div>
+  </div>
+
+  <!-- ─── Scripts ──────────────────────────────────── -->
+  <script>
+    // === 3D NEURAL BRAIN ===
+    (function() {
+      const canvas = document.getElementById('neural-canvas');
+      if (!canvas || typeof THREE === 'undefined') return;
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.z = 30;
+
+      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+      // --- Neurons (particles) ---
+      const NEURON_COUNT = 200;
+      const positions = new Float32Array(NEURON_COUNT * 3);
+      const colors = new Float32Array(NEURON_COUNT * 3);
+      const sizes = new Float32Array(NEURON_COUNT);
+      const velocities = [];
+
+      const palette = [
+        [0.486, 0.227, 0.929],  // violet #7c3aed
+        [0.024, 0.714, 0.831],  // cyan #06b6d4
+        [0.957, 0.447, 0.714],  // pink #f472b6
+        [0.655, 0.545, 0.980],  // light violet #a78bfa
+        [0.984, 0.749, 0.141],  // amber #fbbf24
+        [0.204, 0.827, 0.600],  // emerald #34d399
+      ];
+
+      for (let i = 0; i < NEURON_COUNT; i++) {
+        const r = 12 + Math.random() * 10;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+
+        positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+        positions[i * 3 + 2] = r * Math.cos(phi);
+
+        const c = palette[Math.floor(Math.random() * palette.length)];
+        colors[i * 3] = c[0];
+        colors[i * 3 + 1] = c[1];
+        colors[i * 3 + 2] = c[2];
+
+        sizes[i] = 0.15 + Math.random() * 0.25;
+
+        velocities.push({
+          x: (Math.random() - 0.5) * 0.002,
+          y: (Math.random() - 0.5) * 0.002,
+          z: (Math.random() - 0.5) * 0.002,
+        });
+      }
+
+      const neuronGeo = new THREE.BufferGeometry();
+      neuronGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      neuronGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      neuronGeo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+      const neuronMat = new THREE.ShaderMaterial({
+        vertexShader: `
+          attribute float size;
+          attribute vec3 color;
+          varying vec3 vColor;
+          void main() {
+            vColor = color;
+            vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+            gl_PointSize = size * 300.0 / -mvPos.z;
+            gl_Position = projectionMatrix * mvPos;
+          }
+        `,
+        fragmentShader: `
+          varying vec3 vColor;
+          void main() {
+            float d = length(gl_PointCoord - 0.5);
+            if (d > 0.5) discard;
+            float glow = 1.0 - smoothstep(0.0, 0.5, d);
+            float core = 1.0 - smoothstep(0.0, 0.2, d);
+            vec3 c = vColor * glow + vec3(1.0) * core * 0.3;
+            gl_FragColor = vec4(c, glow * 0.8);
+          }
+        `,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+
+      const neurons = new THREE.Points(neuronGeo, neuronMat);
+      scene.add(neurons);
+
+      // --- Synapses (lines) ---
+      const SYNAPSE_COUNT = 120;
+      const linePositions = new Float32Array(SYNAPSE_COUNT * 6);
+      const lineColors = new Float32Array(SYNAPSE_COUNT * 6);
+
+      for (let i = 0; i < SYNAPSE_COUNT; i++) {
+        const a = Math.floor(Math.random() * NEURON_COUNT);
+        let b = Math.floor(Math.random() * NEURON_COUNT);
+        if (b === a) b = (b + 1) % NEURON_COUNT;
+
+        const dx = positions[a*3] - positions[b*3];
+        const dy = positions[a*3+1] - positions[b*3+1];
+        const dz = positions[a*3+2] - positions[b*3+2];
+        const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+        if (dist < 12) {
+          linePositions[i*6] = positions[a*3];
+          linePositions[i*6+1] = positions[a*3+1];
+          linePositions[i*6+2] = positions[a*3+2];
+          linePositions[i*6+3] = positions[b*3];
+          linePositions[i*6+4] = positions[b*3+1];
+          linePositions[i*6+5] = positions[b*3+2];
+
+          const alpha = 0.15;
+          lineColors[i*6] = 0.486 * alpha;
+          lineColors[i*6+1] = 0.227 * alpha;
+          lineColors[i*6+2] = 0.929 * alpha;
+          lineColors[i*6+3] = 0.024 * alpha;
+          lineColors[i*6+4] = 0.714 * alpha;
+          lineColors[i*6+5] = 0.831 * alpha;
+        }
+      }
+
+      const lineGeo = new THREE.BufferGeometry();
+      lineGeo.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
+      lineGeo.setAttribute('color', new THREE.BufferAttribute(lineColors, 3));
+
+      const lineMat = new THREE.LineBasicMaterial({
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.6,
+        blending: THREE.AdditiveBlending,
+      });
+
+      const synapses = new THREE.LineSegments(lineGeo, lineMat);
+      scene.add(synapses);
+
+      // --- Activation pulse particles ---
+      const PULSE_COUNT = 30;
+      const pulsePositions = new Float32Array(PULSE_COUNT * 3);
+      const pulseSpeeds = [];
+
+      for (let i = 0; i < PULSE_COUNT; i++) {
+        const src = Math.floor(Math.random() * SYNAPSE_COUNT);
+        pulsePositions[i*3] = linePositions[src*6];
+        pulsePositions[i*3+1] = linePositions[src*6+1];
+        pulsePositions[i*3+2] = linePositions[src*6+2];
+        pulseSpeeds.push({
+          srcIdx: src,
+          t: Math.random(),
+          speed: 0.005 + Math.random() * 0.01,
+        });
+      }
+
+      const pulseGeo = new THREE.BufferGeometry();
+      pulseGeo.setAttribute('position', new THREE.BufferAttribute(pulsePositions, 3));
+
+      const pulseMat = new THREE.PointsMaterial({
+        color: 0xfbbf24,
+        size: 0.4,
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+
+      const pulses = new THREE.Points(pulseGeo, pulseMat);
+      scene.add(pulses);
+
+      // --- Mouse interaction ---
+      let mouseX = 0, mouseY = 0;
+      document.addEventListener('mousemove', (e) => {
+        mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+        mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+      });
+
+      // --- Animation loop ---
+      const clock = new THREE.Clock();
+
+      function animate() {
+        requestAnimationFrame(animate);
+        const t = clock.getElapsedTime();
+
+        // Rotate brain slowly
+        neurons.rotation.y = t * 0.05 + mouseX * 0.3;
+        neurons.rotation.x = Math.sin(t * 0.03) * 0.1 + mouseY * 0.2;
+        synapses.rotation.copy(neurons.rotation);
+        pulses.rotation.copy(neurons.rotation);
+
+        // Drift neurons
+        const pos = neuronGeo.attributes.position.array;
+        for (let i = 0; i < NEURON_COUNT; i++) {
+          pos[i*3] += velocities[i].x;
+          pos[i*3+1] += velocities[i].y;
+          pos[i*3+2] += velocities[i].z;
+
+          // Keep within sphere
+          const x = pos[i*3], y = pos[i*3+1], z = pos[i*3+2];
+          const d = Math.sqrt(x*x + y*y + z*z);
+          if (d > 24) {
+            velocities[i].x *= -1;
+            velocities[i].y *= -1;
+            velocities[i].z *= -1;
+          }
+        }
+        neuronGeo.attributes.position.needsUpdate = true;
+
+        // Animate pulses along synapses
+        const pp = pulseGeo.attributes.position.array;
+        for (let i = 0; i < PULSE_COUNT; i++) {
+          const p = pulseSpeeds[i];
+          p.t += p.speed;
+          if (p.t > 1) { p.t = 0; p.srcIdx = Math.floor(Math.random() * SYNAPSE_COUNT); }
+
+          const si = p.srcIdx * 6;
+          pp[i*3] = linePositions[si] + (linePositions[si+3] - linePositions[si]) * p.t;
+          pp[i*3+1] = linePositions[si+1] + (linePositions[si+4] - linePositions[si+1]) * p.t;
+          pp[i*3+2] = linePositions[si+2] + (linePositions[si+5] - linePositions[si+2]) * p.t;
+        }
+        pulseGeo.attributes.position.needsUpdate = true;
+
+        // Pulse neuron sizes
+        const sz = neuronGeo.attributes.size.array;
+        for (let i = 0; i < NEURON_COUNT; i++) {
+          sz[i] = 0.15 + 0.1 * Math.sin(t * 2 + i * 0.5);
+        }
+        neuronGeo.attributes.size.needsUpdate = true;
+
+        renderer.render(scene, camera);
+      }
+
+      animate();
+
+      // Resize
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      // Reduce motion
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        neurons.rotation.set(0.1, 0.2, 0);
+        // Still render once but don't animate
+      }
+    })();
+
+    // === SCROLL REVEAL ===
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+    // === PAYMENT CONFIG ===
+    const PAY_API = 'https://pay.theio.vn';
+    const SEPAY_BANK = 'TPBank';
+    const SEPAY_ACC = '04162263666';
+
+    const PRODUCTS = {
+      'NM-PRO-MONTHLY': { name: 'Neural Memory Pro — Monthly', price: 219000, priceUSD: '$9/mo' },
+      'NM-PRO-YEARLY': { name: 'Neural Memory Pro — Yearly', price: 2190000, priceUSD: '$89/yr' },
+      'NM-TEAM-MONTHLY': { name: 'Neural Memory Team — Monthly', price: 719000, priceUSD: '$29/mo' },
+      'NM-TEAM-YEARLY': { name: 'Neural Memory Team — Yearly', price: 6190000, priceUSD: '$249/yr' },
+    };
+
+    let currentProduct = '';
+    let sepayOrderCode = '';
+
+    // === POLAR CHECKOUT (International) ===
+    function startPolarCheckout(product) {
+      currentProduct = product;
+      const info = PRODUCTS[product];
+      document.getElementById('checkout-product').value = product;
+      document.getElementById('checkout-title').textContent = info.name;
+      document.getElementById('checkout-subtitle').textContent = info.priceUSD + ' — License key + private repo access';
+      document.getElementById('checkout-error').classList.add('hidden');
+      document.getElementById('checkout-modal').style.display = 'flex';
+    }
+
+    async function submitCheckout(e) {
+      e.preventDefault();
+      const btn = document.getElementById('checkout-submit');
+      const errEl = document.getElementById('checkout-error');
+      btn.textContent = 'Creating checkout...';
+      btn.disabled = true;
+      errEl.classList.add('hidden');
+
+      try {
+        const res = await fetch(PAY_API + '/checkout/polar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            product: document.getElementById('checkout-product').value,
+            email: document.getElementById('checkout-email').value,
+            githubUsername: document.getElementById('checkout-github').value || undefined,
+          }),
+        });
+        const data = await res.json();
+        if (data.url) {
+          window.location.href = data.url;
+        } else {
+          throw new Error(data.error || 'Checkout failed');
+        }
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.classList.remove('hidden');
+        btn.textContent = 'Continue to Payment';
+        btn.disabled = false;
+      }
+      return false;
+    }
+
+    function closeCheckoutModal() {
+      document.getElementById('checkout-modal').style.display = 'none';
+    }
+    document.getElementById('checkout-modal').addEventListener('click', function(e) {
+      if (e.target === this) closeCheckoutModal();
+    });
+
+    // === SEPAY (Vietnam Bank Transfer) ===
+    function generateOrderCode(product) {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let code = '';
+      const arr = new Uint8Array(8);
+      crypto.getRandomValues(arr);
+      for (const b of arr) code += chars[b % chars.length];
+      return product + '-' + code;
+    }
+
+    function showSepayModal(product, amount) {
+      currentProduct = product || 'NM-PRO-MONTHLY';
+      const info = PRODUCTS[currentProduct];
+      sepayOrderCode = generateOrderCode(currentProduct);
+
+      document.getElementById('sepay-amount').textContent =
+        new Intl.NumberFormat('vi-VN').format(info.price) + ' VND';
+      document.getElementById('sepay-content').textContent = sepayOrderCode;
+
+      updateSepayQR();
+      document.getElementById('sepay-modal').style.display = 'flex';
+    }
+
+    function updateSepayQR() {
+      const info = PRODUCTS[currentProduct];
+      if (!info) return;
+      const qrUrl = `https://qr.sepay.vn/img?acc=${SEPAY_ACC}&bank=${SEPAY_BANK}&amount=${info.price}&des=${encodeURIComponent(sepayOrderCode)}&template=compact`;
+      document.getElementById('sepay-qr').src = qrUrl;
+    }
+
+    async function confirmSepayOrder() {
+      const email = document.getElementById('sepay-email').value;
+      const github = document.getElementById('sepay-github').value;
+      if (!email) { alert('Vui long nhap email'); return; }
+
+      try {
+        await fetch(PAY_API + '/order/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderCode: sepayOrderCode,
+            product: currentProduct,
+            email,
+            githubUsername: github || undefined,
+            source: 'sepay',
+          }),
+        });
+        alert('Da ghi nhan! License key se gui ve ' + email + ' sau khi xac nhan chuyen khoan (1-5 phut).');
+        closeSepayModal();
+      } catch {
+        alert('Loi ket noi. Vui long thu lai hoac lien he support.');
+      }
+    }
+
+    function closeSepayModal() {
+      document.getElementById('sepay-modal').style.display = 'none';
+    }
+    document.getElementById('sepay-modal').addEventListener('click', function(e) {
+      if (e.target === this) closeSepayModal();
+    });
+
+    // === TIER BAR ANIMATION ===
+    const tierObserver = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.querySelectorAll('.tier-bar').forEach(bar => {
+            bar.style.width = bar.style.width;
+          });
+        }
+      });
+    }, { threshold: 0.3 });
+    document.querySelectorAll('.tier-bar').forEach(el => {
+      const parent = el.closest('.reveal') || el.parentElement;
+      if (parent) tierObserver.observe(parent);
+    });
+  </script>
+
+</body>
+</html>
