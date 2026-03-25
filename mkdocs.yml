@@ -7,6 +7,7 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
+  custom_dir: docs/overrides
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -127,7 +128,6 @@ extra_css:
   - assets/css/quickstart.css
 
 extra_javascript:
-  - assets/redirect.js
   - assets/js/quickstart.js
 
 extra:
