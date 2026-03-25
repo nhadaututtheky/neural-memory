@@ -1466,3 +1466,80 @@ async def get_license() -> dict[str, Any]:
         "activated_at": cfg.license.activated_at,
         "expires_at": cfg.license.expires_at,
     }
+
+
+class ActivateLicenseRequest(BaseModel):
+    license_key: str = Field(..., min_length=5, description="License key (NM-PRO-XXXX or nm_pro_xxxx)")
+
+
+@router.post("/license/activate", tags=["dashboard"], summary="Activate a license key")
+async def activate_license(body: ActivateLicenseRequest) -> dict[str, Any]:
+    """Activate a license key via the Sync Hub."""
+    from dataclasses import replace as _dc_replace
+
+    from neural_memory.unified_config import LicenseConfig, get_config, set_config
+
+    cfg = get_config()
+
+    # Normalize key format
+    key = body.license_key.strip()
+    if key.startswith("NM-"):
+        key = key.replace("-", "_").lower()
+    if not key.startswith("nm_"):
+        raise HTTPException(status_code=400, detail="Invalid key format. Expected NM-PRO-XXXX or nm_pro_*")
+
+    hub_url = cfg.sync.hub_url
+    api_key = cfg.sync.api_key
+    if not hub_url or not api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Sync not configured. Run: nmem sync setup",
+        )
+
+    # Call Sync Hub to verify + activate
+    try:
+        import aiohttp
+
+        url = hub_url.rstrip("/") + "/hub/activate"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                url,
+                json={"license_key": key},
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                data = await resp.json()
+                if resp.status != 200:
+                    raise HTTPException(
+                        status_code=resp.status,
+                        detail=data.get("error", "Activation failed"),
+                    )
+
+                # Persist to config
+                activated_tier = str(data.get("tier", "pro")).lower()
+                new_license = LicenseConfig.from_dict(
+                    {
+                        "tier": activated_tier,
+                        "activated_at": data.get("activatedAt", ""),
+                        "expires_at": data.get("expiresAt", ""),
+                    }
+                )
+                new_cfg = _dc_replace(cfg, license=new_license)
+                new_cfg.save()
+                set_config(new_cfg)
+
+                return {
+                    "success": True,
+                    "tier": activated_tier,
+                    "activated_at": data.get("activatedAt", ""),
+                    "expires_at": data.get("expiresAt", ""),
+                }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.error("License activation failed", exc_info=True)
+        raise HTTPException(status_code=502, detail="Could not reach activation server")

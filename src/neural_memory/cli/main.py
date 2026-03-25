@@ -83,6 +83,9 @@ app.add_typer(habits_app, name="habits")
 app.add_typer(version_app, name="version")
 app.add_typer(telegram_app, name="telegram")
 
+# "sync" is an alias for "shared" — users expect `nmem sync activate`
+app.add_typer(shared_app, name="sync")
+
 # Register top-level commands
 from neural_memory.cli.commands import (  # noqa: E402
     codebase,

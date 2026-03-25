@@ -330,5 +330,18 @@
     "free": "Free",
     "pro": "Pro",
     "team": "Team"
+  },
+  "upgrade": {
+    "title": "Get Neural Memory Pro",
+    "subtitle": "Choose your payment method",
+    "enterKey": "Enter your license key",
+    "enterEmail": "Enter your email for the license:",
+    "orActivate": "or activate a key",
+    "haveKey": "I already have a license key",
+    "licenseKey": "License Key",
+    "activate": "Activate",
+    "activated": "Pro activated!",
+    "activationFailed": "Activation failed. Check your key.",
+    "back": "Back"
   }
 }

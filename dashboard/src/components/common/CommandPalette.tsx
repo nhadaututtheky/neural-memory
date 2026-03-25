@@ -22,6 +22,7 @@ import {
   Lock,
   Command as CommandIcon,
 } from "lucide-react"
+import { openUpgradeModal } from "@/components/common/UpgradeModal"
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -270,7 +271,7 @@ export function CommandPalette() {
                 </Command.Group>
               )}
 
-              {/* Pro upsell hints */}
+              {/* Pro upsell hints — click opens upgrade modal */}
               <Command.Group
                 heading={
                   <span className="px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -279,8 +280,9 @@ export function CommandPalette() {
                 }
               >
                 <Command.Item
-                  disabled
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm opacity-50 cursor-not-allowed"
+                  value="pro-semantic-search"
+                  onSelect={() => { setOpen(false); openUpgradeModal() }}
+                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm opacity-60 cursor-pointer aria-selected:bg-accent aria-selected:opacity-100"
                 >
                   <Lock className="size-4 text-muted-foreground" aria-hidden="true" />
                   <span className="flex-1">{t("commandPalette.semanticSearch")}</span>
@@ -289,8 +291,9 @@ export function CommandPalette() {
                   </span>
                 </Command.Item>
                 <Command.Item
-                  disabled
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm opacity-50 cursor-not-allowed"
+                  value="pro-cross-brain-search"
+                  onSelect={() => { setOpen(false); openUpgradeModal() }}
+                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm opacity-60 cursor-pointer aria-selected:bg-accent aria-selected:opacity-100"
                 >
                   <Lock className="size-4 text-muted-foreground" aria-hidden="true" />
                   <span className="flex-1">{t("commandPalette.crossBrainSearch")}</span>

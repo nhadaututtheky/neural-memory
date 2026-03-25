@@ -20,6 +20,16 @@ logger = logging.getLogger(__name__)
 version_app = typer.Typer(help="Brain version control commands")
 
 
+@version_app.callback(invoke_without_command=True)
+def version_callback(ctx: typer.Context) -> None:
+    """Show Neural Memory version or manage brain versions."""
+    if ctx.invoked_subcommand is None:
+        from neural_memory import __version__
+
+        typer.echo(f"neural-memory {__version__}")
+        raise typer.Exit()
+
+
 @version_app.command("create")
 def version_create(
     name: Annotated[str, typer.Argument(help="Version name (must be unique)")],

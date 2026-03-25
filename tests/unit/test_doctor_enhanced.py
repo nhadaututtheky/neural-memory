@@ -253,6 +253,7 @@ class TestRunDoctorIntegration:
     @patch("neural_memory.cli.doctor._check_dedup")
     @patch("neural_memory.cli.doctor._check_hooks")
     @patch("neural_memory.cli.doctor._check_cli_tools")
+    @patch("neural_memory.cli.doctor._check_mcp_connection")
     @patch("neural_memory.cli.doctor._check_mcp_config")
     @patch("neural_memory.cli.doctor._check_schema_version")
     @patch("neural_memory.cli.doctor._check_embedding_provider")
@@ -260,13 +261,13 @@ class TestRunDoctorIntegration:
     @patch("neural_memory.cli.doctor._check_brain")
     @patch("neural_memory.cli.doctor._check_config")
     @patch("neural_memory.cli.doctor._check_python_version")
-    def test_includes_all_11_checks(self, *mocks: MagicMock) -> None:
+    def test_includes_all_13_checks(self, *mocks: MagicMock) -> None:
         for mock in mocks:
             mock.return_value = {"name": "test", "status": OK, "detail": "ok"}
 
         result = run_doctor(json_output=True)
-        assert result["total"] == 12
-        assert result["passed"] == 12
+        assert result["total"] == 13
+        assert result["passed"] == 13
 
     def test_quickstart_url_defined(self) -> None:
         assert "quickstart" in QUICKSTART_URL

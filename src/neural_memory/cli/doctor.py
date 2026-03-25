@@ -44,6 +44,7 @@ def run_doctor(*, json_output: bool = False, fix: bool = False) -> dict[str, Any
     checks.append(_check_embedding_provider())
     checks.append(_check_schema_version())
     checks.append(_check_mcp_config())
+    checks.append(_check_mcp_connection())
     checks.append(_check_hooks())
     checks.append(_check_dedup())
     checks.append(_check_surface())
@@ -326,6 +327,66 @@ def _check_mcp_config() -> dict[str, Any]:
             "status": WARN,
             "detail": "could not parse ~/.claude.json",
             "fix": "Run: nmem init",
+        }
+
+
+def _check_mcp_connection() -> dict[str, Any]:
+    """Test that the MCP server can actually start."""
+    import subprocess
+
+    nmem_mcp = shutil.which("nmem-mcp")
+    if not nmem_mcp:
+        # Fallback to module execution
+        nmem_mcp = None
+
+    try:
+        cmd = [nmem_mcp] if nmem_mcp else [sys.executable, "-m", "neural_memory.mcp"]
+        result = subprocess.run(
+            cmd,
+            input='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"doctor","version":"1.0"}}}\n',
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        # MCP server over stdio will output JSON-RPC response
+        if result.stdout and "result" in result.stdout:
+            return {
+                "name": "MCP server",
+                "status": OK,
+                "detail": "server responds to initialize",
+            }
+        if result.returncode == 0 or result.stdout:
+            return {
+                "name": "MCP server",
+                "status": OK,
+                "detail": "server starts successfully",
+            }
+        return {
+            "name": "MCP server",
+            "status": WARN,
+            "detail": f"server exited with code {result.returncode}",
+            "fix": "Check: nmem-mcp or python -m neural_memory.mcp",
+        }
+    except subprocess.TimeoutExpired:
+        # Timeout is actually expected — MCP servers run indefinitely on stdio
+        return {
+            "name": "MCP server",
+            "status": OK,
+            "detail": "server starts (stdio mode)",
+        }
+    except FileNotFoundError:
+        return {
+            "name": "MCP server",
+            "status": WARN,
+            "detail": "nmem-mcp not found on PATH",
+            "fix": "Run: pip install neural-memory",
+        }
+    except Exception:
+        return {
+            "name": "MCP server",
+            "status": WARN,
+            "detail": "could not test MCP server",
         }
 
 

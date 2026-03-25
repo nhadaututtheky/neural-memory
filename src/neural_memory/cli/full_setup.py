@@ -65,8 +65,11 @@ _PROVIDER_PRIORITY: list[dict[str, str]] = [
 
 def _is_module_available(module_name: str) -> bool:
     """Check if a Python module is importable without actually importing it."""
-    spec = importlib.util.find_spec(module_name)
-    return spec is not None
+    try:
+        spec = importlib.util.find_spec(module_name)
+        return spec is not None
+    except (ModuleNotFoundError, ValueError):
+        return False
 
 
 def detect_embedding_provider() -> dict[str, str] | None:
@@ -107,20 +110,31 @@ def _prompt_install_embeddings() -> dict[str, str] | None:
     if choice == "1":
         import subprocess
 
-        typer.echo("  Installing sentence-transformers...")
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "neural-memory[embeddings]"],
-            capture_output=True,
-            text=True,
-            timeout=300,
-            check=False,
-        )
-        if result.returncode == 0:
-            typer.secho("  Installed successfully.", fg=typer.colors.GREEN)
-            return _PROVIDER_PRIORITY[0]  # sentence_transformer
-        else:
-            typer.secho("  Installation failed. You can retry later:", fg=typer.colors.RED)
+        typer.echo("  Installing sentence-transformers (~440MB)...")
+        typer.echo("  This may take a few minutes. Use Ctrl+C to cancel.")
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "neural-memory[embeddings]"],
+                capture_output=False,  # Show pip output for progress
+                text=True,
+                timeout=300,
+                check=False,
+            )
+            if result.returncode == 0:
+                typer.secho("  Installed successfully.", fg=typer.colors.GREEN)
+                return _PROVIDER_PRIORITY[0]  # sentence_transformer
+            else:
+                typer.secho("  Installation failed. You can retry later:", fg=typer.colors.RED)
+                typer.echo(f"    {_PROVIDER_PRIORITY[0]['install']}")
+                return None
+        except subprocess.TimeoutExpired:
+            typer.secho(
+                "\n  Installation timed out (5 min). Retry manually:", fg=typer.colors.YELLOW
+            )
             typer.echo(f"    {_PROVIDER_PRIORITY[0]['install']}")
+            return None
+        except KeyboardInterrupt:
+            typer.secho("\n  Installation cancelled.", fg=typer.colors.YELLOW)
             return None
 
     return None
@@ -260,6 +274,7 @@ def print_full_banner(results: dict[str, str]) -> None:
     typer.echo(
         "  |  Run " + typer.style("nmem doctor", bold=True) + " to verify your setup        |"
     )
+    typer.echo("  |  including MCP server connectivity.            |")
     typer.secho("  |                                                  |", dim=True)
     typer.secho("  +--------------------------------------------------+", dim=True)
     typer.echo()

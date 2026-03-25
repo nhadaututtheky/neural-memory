@@ -27,6 +27,7 @@ app.use(
   cors({
     origin: [
       "https://neuralmemory.dev",
+      "https://synchub.theio.vn",
       "http://localhost:3000",
       "http://localhost:8000",
     ],

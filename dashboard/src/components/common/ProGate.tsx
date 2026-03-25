@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import { useIsPro } from "@/api/hooks/useDashboard"
 import { Badge } from "@/components/ui/badge"
 import { useTranslation } from "react-i18next"
+import { openUpgradeModal } from "@/components/common/UpgradeModal"
 
 interface ProGateProps {
   children: ReactNode
@@ -11,7 +12,7 @@ interface ProGateProps {
 
 /**
  * Wraps children with a Pro-tier gate.
- * Free users see a dimmed overlay with a "PRO" badge.
+ * Free users see a dimmed overlay with a "PRO" badge — click opens upgrade modal.
  * Pro/Team users see children normally.
  */
 export function ProGate({ children, label }: ProGateProps) {
@@ -27,14 +28,18 @@ export function ProGate({ children, label }: ProGateProps) {
       <div className="pointer-events-none opacity-50 select-none">
         {children}
       </div>
-      <div className="absolute inset-0 flex items-center justify-center">
+      <button
+        onClick={openUpgradeModal}
+        className="absolute inset-0 flex items-center justify-center cursor-pointer group"
+        aria-label={t("upgrade.title", "Get Neural Memory Pro")}
+      >
         <Badge
           variant="default"
-          className="bg-primary/90 text-primary-foreground px-3 py-1 text-sm shadow-lg"
+          className="bg-primary/90 text-primary-foreground px-3 py-1 text-sm shadow-lg group-hover:bg-primary transition-colors"
         >
           {label ?? t("license.pro_badge", "PRO")}
         </Badge>
-      </div>
+      </button>
     </div>
   )
 }

@@ -162,6 +162,112 @@ def shared_test() -> None:
         raise typer.Exit(1)
 
 
+@shared_app.command("activate")
+def shared_activate(
+    key: Annotated[str, typer.Option("--key", "-k", help="License key (NM-PRO-XXXX-XXXX-XXXX)")],
+) -> None:
+    """Activate a NeuralMemory Pro license key.
+
+    Examples:
+        nmem shared activate --key NM-PRO-XXXX-XXXX-XXXX
+    """
+    # Normalize XLabs format (NM-PRO-XXXX) → nm_pro_xxxx
+    license_key = key.strip()
+    if license_key.startswith("NM-"):
+        license_key = license_key.replace("-", "_").lower()
+    if not license_key.startswith("nm_"):
+        typer.secho(
+            "Invalid license key format. Expected NM-PRO-* or nm_pro_*", fg=typer.colors.RED
+        )
+        raise typer.Exit(1)
+
+    from neural_memory.unified_config import get_config as get_unified_config
+
+    uconfig = get_unified_config(reload=True)
+    hub_url = uconfig.sync.hub_url
+    api_key = uconfig.sync.api_key
+    if not hub_url or not api_key:
+        typer.secho(
+            "Cloud sync not configured. Set up sync first via the dashboard or MCP.",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(1)
+
+    async def _activate() -> dict[str, Any]:
+        import aiohttp
+
+        base = hub_url.rstrip("/")
+        if "localhost" in base or "127.0.0.1" in base:
+            activate_url = f"{base}/hub/activate"
+        else:
+            activate_url = f"{base}/v1/hub/activate"
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        }
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    activate_url,
+                    json={"license_key": license_key},
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=15),
+                ) as resp:
+                    data = await resp.json()
+                    if resp.status != 200:
+                        return {
+                            "success": False,
+                            "error": data.get("error", f"Activation failed ({resp.status})"),
+                        }
+
+                    return {
+                        "success": True,
+                        "tier": str(data.get("tier", "pro")).lower(),
+                        "expires_at": data.get("expiresAt"),
+                        "features": data.get("features", []),
+                        "message": data.get("message", "License activated!"),
+                    }
+        except aiohttp.ClientError as e:
+            logger.error("Activation failed: %s", e)
+            return {"success": False, "error": "Connection failed: hub unreachable"}
+        except Exception as e:
+            logger.error("Activation failed: %s", e)
+            return {"success": False, "error": "Activation failed unexpectedly"}
+
+    typer.echo("Activating license key...")
+    result = run_async(_activate())
+
+    if not result["success"]:
+        typer.secho(f"[FAILED] {result['error']}", fg=typer.colors.RED)
+        raise typer.Exit(1)
+
+    # Persist license to config.toml
+    from dataclasses import replace
+
+    from neural_memory.unified_config import LicenseConfig, set_config
+
+    new_license = LicenseConfig.from_dict(
+        {
+            "tier": result["tier"],
+            "activated_at": "",
+            "expires_at": result.get("expires_at", ""),
+        }
+    )
+    updated_config = replace(uconfig, license=new_license)
+    updated_config.save()
+    set_config(updated_config)
+
+    typer.secho(f"[OK] {result['message']}", fg=typer.colors.GREEN)
+    typer.echo(f"  Tier: {result['tier'].upper()}")
+    if result.get("expires_at"):
+        typer.echo(f"  Expires: {result['expires_at']}")
+    if result.get("features"):
+        typer.echo(f"  Features: {', '.join(result['features'])}")
+    typer.echo()
+    typer.secho("Restart your AI tool to apply Pro features.", fg=typer.colors.BRIGHT_BLACK)
+
+
 @shared_app.command("sync")
 def shared_sync(
     direction: Annotated[

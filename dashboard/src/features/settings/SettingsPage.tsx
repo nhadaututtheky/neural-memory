@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next"
 import ConfigStatusCards from "./ConfigStatusCards"
 import EmbeddingConfig from "./EmbeddingConfig"
 import WatcherCard from "./WatcherCard"
+import { openUpgradeModal } from "@/components/common/UpgradeModal"
 
 const FEEDBACK_ICONS = [Bug, MessageSquare, Github] as const
 const FEEDBACK_COLORS = ["#ef4444", "#6366f1", "#a8a29e"] as const
@@ -101,9 +102,19 @@ export default function SettingsPage() {
             </div>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">{t("license.tier", "License")}</span>
-              <Badge variant={license?.is_pro ? "success" : "secondary"}>
-                {(license?.tier ?? "free").toUpperCase()}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant={license?.is_pro ? "success" : "secondary"}>
+                  {(license?.tier ?? "free").toUpperCase()}
+                </Badge>
+                {!license?.is_pro && (
+                  <button
+                    onClick={openUpgradeModal}
+                    className="text-xs font-medium text-primary hover:text-primary/80 transition-colors cursor-pointer"
+                  >
+                    {t("upgrade.title", "Upgrade")}
+                  </button>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>

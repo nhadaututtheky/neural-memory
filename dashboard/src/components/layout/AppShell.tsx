@@ -3,6 +3,7 @@ import { Sidebar } from "./Sidebar"
 import { TopBar } from "./TopBar"
 import { useLayoutStore } from "@/stores/useLayoutStore"
 import { cn } from "@/lib/utils"
+import { UpgradeModal } from "@/components/common/UpgradeModal"
 
 export function AppShell() {
   const sidebarOpen = useLayoutStore((s) => s.sidebarOpen)
@@ -21,6 +22,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      <UpgradeModal />
     </div>
   )
 }

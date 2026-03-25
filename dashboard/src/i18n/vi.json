@@ -330,5 +330,18 @@
     "free": "Miễn phí",
     "pro": "Pro",
     "team": "Nhóm"
+  },
+  "upgrade": {
+    "title": "Nâng cấp Neural Memory Pro",
+    "subtitle": "Chọn phương thức thanh toán",
+    "enterKey": "Nhập license key của bạn",
+    "enterEmail": "Nhập email để nhận license:",
+    "orActivate": "hoặc kích hoạt key",
+    "haveKey": "Tôi đã có license key",
+    "licenseKey": "License Key",
+    "activate": "Kích hoạt",
+    "activated": "Đã kích hoạt Pro!",
+    "activationFailed": "Kích hoạt thất bại. Kiểm tra lại key.",
+    "back": "Quay lại"
   }
 }

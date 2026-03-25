@@ -182,6 +182,14 @@ def init(
         bool,
         typer.Option("--full", help="Extended setup: embeddings, dedup, maintenance script"),
     ] = False,
+    embeddings: Annotated[
+        bool,
+        typer.Option("--embeddings", help="Set up embedding provider"),
+    ] = False,
+    dedup: Annotated[
+        bool,
+        typer.Option("--dedup", help="Enable dedup"),
+    ] = False,
 ) -> None:
     """Set up NeuralMemory in one command.
 
@@ -294,6 +302,37 @@ def init(
     typer.echo("  Restart your AI tool to activate memory.")
     typer.echo("  For extended setup (embeddings, dedup): nmem init --full")
     typer.echo()
+    typer.secho("  Verify MCP connection: nmem doctor", dim=True)
+
+    # Handle individual opt-in flags
+    if embeddings or dedup:
+        from neural_memory.cli.full_setup import detect_embedding_provider, enable_config_defaults
+
+        provider = None
+        if embeddings:
+            provider = detect_embedding_provider()
+            if provider is None:
+                from neural_memory.cli.full_setup import _prompt_install_embeddings
+
+                provider = _prompt_install_embeddings()
+            if provider:
+                typer.secho(f"  Embeddings: {provider['label']}", fg=typer.colors.GREEN)
+            else:
+                typer.secho("  Embeddings: skipped", fg=typer.colors.YELLOW)
+
+        changes = enable_config_defaults(
+            embedding_provider=provider if embeddings else None,
+        )
+        if dedup and "dedup" not in changes:
+            from dataclasses import replace
+
+            from neural_memory.unified_config import get_config as _get_config
+
+            cfg = _get_config(reload=True)
+            if not cfg.dedup.enabled:
+                updated = replace(cfg, dedup=replace(cfg.dedup, enabled=True))
+                updated.save()
+                typer.secho("  Dedup: enabled", fg=typer.colors.GREEN)
 
 
 def serve(
