@@ -420,7 +420,10 @@ class ConsolidationEngine:
                 candidate_source_ids, direction="out"
             )
 
-        for synapse in all_synapses:
+        for syn_idx, synapse in enumerate(all_synapses):
+            if syn_idx % 500 == 0 and syn_idx > 0:
+                await asyncio.sleep(0)  # Yield to event loop
+
             # Skip synapses connected to pinned (KB) neurons
             if synapse.source_id in pinned_neuron_ids or synapse.target_id in pinned_neuron_ids:
                 continue
@@ -749,6 +752,13 @@ class ConsolidationEngine:
             return
 
         fiber_list = [f for f in fibers if f.tags]
+
+        # Cap fiber count for O(N²) pair comparison — keep highest-salience
+        max_fibers_for_clustering = 1000
+        if len(fiber_list) > max_fibers_for_clustering:
+            fiber_list = sorted(fiber_list, key=lambda f: f.salience, reverse=True)[
+                :max_fibers_for_clustering
+            ]
         if len(fiber_list) < self._config.summarize_min_cluster_size:
             return
 
@@ -761,12 +771,22 @@ class ConsolidationEngine:
                 tag_to_fibers.setdefault(tag, set()).add(idx)
 
         # Find candidate pairs (fibers sharing at least one tag)
+        # Skip overly common tags (>100 fibers) to avoid O(N²) explosion
+        max_pairs = 50_000
         candidate_pairs: set[tuple[int, int]] = set()
         for indices in tag_to_fibers.values():
+            if len(indices) > 100:
+                continue  # Tag too common — skip to avoid combinatorial blowup
             indices_list = sorted(indices)
             for i_pos in range(len(indices_list)):
+                if len(candidate_pairs) >= max_pairs:
+                    break
                 for j_pos in range(i_pos + 1, len(indices_list)):
+                    if len(candidate_pairs) >= max_pairs:
+                        break
                     candidate_pairs.add((indices_list[i_pos], indices_list[j_pos]))
+            if len(candidate_pairs) >= max_pairs:
+                break
 
         # Union-Find for tag clustering
         parent: dict[int, int] = {i: i for i in range(n)}
@@ -782,7 +802,9 @@ class ConsolidationEngine:
             if ra != rb:
                 parent[ra] = rb
 
-        for i, j in candidate_pairs:
+        for pair_idx, (i, j) in enumerate(candidate_pairs):
+            if pair_idx % 1000 == 0 and pair_idx > 0:
+                await asyncio.sleep(0)  # Yield to event loop
             tags_a = fiber_list[i].tags
             tags_b = fiber_list[j].tags
             intersection = len(tags_a & tags_b)
@@ -999,65 +1021,47 @@ class ConsolidationEngine:
 
         generator = get_essence_generator(strategy)
 
+        max_backfill = 2000  # Safety cap to avoid runaway
+
+        # Fetch fibers in one batch (get_fibers has no offset param; limit=1000 is storage cap)
+        fibers = await self._storage.get_fibers(limit=1000)
+        candidates = [f for f in fibers if not f.essence]
+
         backfilled = 0
-        batch_size = 500
-
-        # Paginate using created_at cursor to avoid re-fetching same fibers
-        last_created: str | None = None
-
-        while True:
-            # Fetch fibers missing essence, ordered by created_at for cursor pagination
-            fibers = await self._storage.get_fibers(limit=batch_size)
-            if not fibers:
+        for idx, fiber in enumerate(candidates):
+            if backfilled >= max_backfill:
                 break
+            if idx % 50 == 0 and idx > 0:
+                await asyncio.sleep(0)  # Yield to event loop
 
-            # Filter to fibers needing essence and not yet processed
-            candidates = [f for f in fibers if not f.essence]
-            if last_created:
-                candidates = [
-                    f
-                    for f in candidates
-                    if f.created_at and f.created_at.isoformat() > last_created
-                ]
-            if not candidates:
-                break
+            anchor = await self._storage.get_neuron(fiber.anchor_neuron_id)
+            if not anchor or not anchor.content:
+                continue
 
-            for fiber in candidates:
-                anchor = await self._storage.get_neuron(fiber.anchor_neuron_id)
-                if not anchor or not anchor.content:
-                    continue
+            # Get priority from typed memory for cost guard
+            priority = 5
+            try:
+                typed_mem = await self._storage.get_typed_memory(fiber.id)
+                if (
+                    typed_mem
+                    and hasattr(typed_mem, "priority")
+                    and isinstance(typed_mem.priority, (int, float))
+                ):
+                    priority = int(typed_mem.priority)
+            except Exception:
+                pass
 
-                # Get priority from typed memory for cost guard
-                priority = 5
-                try:
-                    typed_mem = await self._storage.get_typed_memory(fiber.id)
-                    if (
-                        typed_mem
-                        and hasattr(typed_mem, "priority")
-                        and isinstance(typed_mem.priority, (int, float))
-                    ):
-                        priority = int(typed_mem.priority)
-                except Exception:
-                    pass
+            essence = await generator.generate(anchor.content, priority=priority)
+            if not essence:
+                continue
 
-                essence = await generator.generate(anchor.content, priority=priority)
-                if not essence:
-                    continue
-
-                if dry_run:
-                    backfilled += 1
-                    continue
-
-                updated = fiber.with_essence(essence)
-                await self._storage.update_fiber(updated)
+            if dry_run:
                 backfilled += 1
+                continue
 
-            # Advance cursor
-            last_fiber = fibers[-1]
-            last_created = last_fiber.created_at.isoformat() if last_fiber.created_at else None
-
-            if len(fibers) < batch_size:
-                break
+            updated = fiber.with_essence(essence)
+            await self._storage.update_fiber(updated)
+            backfilled += 1
 
         if backfilled > 0:
             logger.info("Essence backfill: %d fibers updated", backfilled)
@@ -1109,6 +1113,7 @@ class ConsolidationEngine:
             return
 
         # 2. Build existing synapse pairs set + lookup for reinforcement
+        # Need all types: existing_pairs prevents duplicate creation, synapse_by_pair enables reinforcement
         all_synapses = await self._storage.get_synapses()
         existing_pairs: set[tuple[str, str]] = set()
         synapse_by_pair: dict[tuple[str, str], Synapse] = {}
@@ -1242,6 +1247,7 @@ class ConsolidationEngine:
         from dataclasses import replace as dc_replace
 
         try:
+            # Fetch all states — TODO: add dedicated dormant query to storage interface
             all_states = await self._storage.get_all_neuron_states()
         except Exception:
             logging.getLogger(__name__).debug(
@@ -1253,8 +1259,10 @@ class ConsolidationEngine:
         if not dormant:
             return
 
-        # Sample up to 20 dormant neurons
-        sample = dormant[:20]
+        # Sample up to 20 dormant neurons (randomize to avoid always picking the same)
+        import random
+
+        sample = random.sample(dormant, min(20, len(dormant)))
         if dry_run:
             report.neurons_reactivated = len(sample)
             return
@@ -1390,8 +1398,8 @@ class ConsolidationEngine:
         for i, anchor_a in enumerate(anchors):
             if anchor_a.id in seen:
                 continue
-            # Yield to event loop every 100 outer iterations so timeout can fire
-            if i % 100 == 0:
+            # Yield to event loop every 50 outer iterations so timeout can fire
+            if i % 50 == 0:
                 await asyncio.sleep(0)
             if anchor_a.content_hash is None or anchor_a.content_hash == 0:
                 continue

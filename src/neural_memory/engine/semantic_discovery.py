@@ -244,6 +244,7 @@ async def discover_semantic_synapses(
     neurons_embedded = len(embeddings)
 
     # Build set of existing synapse pairs for fast lookup
+    # Need all types to prevent creating duplicates across different synapse types
     all_synapses = await storage.get_synapses()
     existing_pairs: set[frozenset[str]] = set()
     for syn in all_synapses:

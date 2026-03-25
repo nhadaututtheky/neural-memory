@@ -139,8 +139,8 @@ async def find_cross_cluster_links(
         tags_a = tagged_fibers[i].tags
         if not tags_a:
             continue
-        # Yield to event loop every 50 outer iterations so timeout can fire
-        if i % 50 == 0:
+        # Yield to event loop every 20 outer iterations so timeout can fire
+        if i % 20 == 0:
             await asyncio.sleep(0)
         for j in range(i + 1, n):
             tags_b = tagged_fibers[j].tags

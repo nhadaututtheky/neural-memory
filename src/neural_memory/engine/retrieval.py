@@ -150,6 +150,8 @@ class ReflexPipeline:
         self._write_queue = DeferredWriteQueue()
         self._query_router = QueryRouter()
         self._cached_encryptor: Any = _UNSET
+        self._encryptor_cached_at: float = 0.0
+        self._encryptor_ttl: float = 300.0  # Re-check encryption config every 5 min
 
         # Predictive priming caches (per-session, keyed by session_id, LRU-bounded)
         self._activation_caches: collections.OrderedDict[str, Any] = collections.OrderedDict()
@@ -168,7 +170,13 @@ class ReflexPipeline:
 
     def _get_encryptor(self) -> Any:
         """Get cached MemoryEncryptor instance, or None if encryption disabled."""
-        if self._cached_encryptor is not _UNSET:
+        import time
+
+        now = time.monotonic()
+        if (
+            self._cached_encryptor is not _UNSET
+            and (now - self._encryptor_cached_at) < self._encryptor_ttl
+        ):
             return self._cached_encryptor
         try:
             from neural_memory.unified_config import get_config as _get_cfg
@@ -186,6 +194,7 @@ class ReflexPipeline:
                 self._cached_encryptor = None
         except Exception:
             self._cached_encryptor = None
+        self._encryptor_cached_at = now
         return self._cached_encryptor
 
     async def query(
