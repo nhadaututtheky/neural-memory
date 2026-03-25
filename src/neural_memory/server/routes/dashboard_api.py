@@ -1469,7 +1469,9 @@ async def get_license() -> dict[str, Any]:
 
 
 class ActivateLicenseRequest(BaseModel):
-    license_key: str = Field(..., min_length=5, description="License key (NM-PRO-XXXX or nm_pro_xxxx)")
+    license_key: str = Field(
+        ..., min_length=5, description="License key (NM-PRO-XXXX or nm_pro_xxxx)"
+    )
 
 
 @router.post("/license/activate", tags=["dashboard"], summary="Activate a license key")
@@ -1486,7 +1488,9 @@ async def activate_license(body: ActivateLicenseRequest) -> dict[str, Any]:
     if key.startswith("NM-"):
         key = key.replace("-", "_").lower()
     if not key.startswith("nm_"):
-        raise HTTPException(status_code=400, detail="Invalid key format. Expected NM-PRO-XXXX or nm_pro_*")
+        raise HTTPException(
+            status_code=400, detail="Invalid key format. Expected NM-PRO-XXXX or nm_pro_*"
+        )
 
     hub_url = cfg.sync.hub_url
     api_key = cfg.sync.api_key
