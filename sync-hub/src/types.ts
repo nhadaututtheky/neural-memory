@@ -104,6 +104,7 @@ export interface AuthContext {
 
 export interface Env {
   SYNC_DB: D1Database;
+  XLABS_API_KEY: string;
   // BRAIN_SNAPSHOTS: R2Bucket;  // Phase 1 placeholder
   // RATE_LIMITS: KVNamespace;   // Phase 2
 }
