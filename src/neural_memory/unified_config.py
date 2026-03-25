@@ -1334,7 +1334,9 @@ class UnifiedConfig:
             watcher=WatcherConfig.from_dict(data.get("watcher", {})),
             device_id=raw_device_id,
             sync=SyncConfig.from_dict(sync_data),
-            storage_backend=_validate_storage_backend(str(data.get("storage_backend", "sqlite"))),
+            storage_backend=_validate_storage_backend(
+                str(data.get("storage_backend") or sync_data.get("storage_backend") or "sqlite")
+            ),
             falkordb=FalkorDBConfig.from_dict(data.get("falkordb", {})),
             postgres=PostgresConfig.from_dict(data.get("postgres", {})),
             response=ResponseConfig.from_dict(data.get("response", {})),
@@ -1363,6 +1365,7 @@ class UnifiedConfig:
             "",
             f'version = "{self.version}"',
             f'current_brain = "{self.current_brain}"',
+            f'storage_backend = "{_sanitize_toml_str(self.storage_backend)}"',
             "",
             "# Brain behavior settings",
             "[brain]",
@@ -1491,9 +1494,6 @@ class UnifiedConfig:
             f"auto_sync = {'true' if self.sync.auto_sync else 'false'}",
             f"sync_interval_seconds = {self.sync.sync_interval_seconds}",
             f'conflict_strategy = "{self.sync.conflict_strategy}"',
-            "",
-            "# Storage backend: sqlite (default) or falkordb",
-            f'storage_backend = "{_sanitize_toml_str(self.storage_backend)}"',
             "",
             '# FalkorDB settings (when storage_backend = "falkordb")',
             "[falkordb]",
