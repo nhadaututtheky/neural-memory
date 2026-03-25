@@ -488,6 +488,9 @@ class SyncToolHandler:
                 license_key = str(args.get("license_key", "")).strip()
                 if not license_key:
                     return {"error": "Missing license_key parameter"}
+                # Normalize XLabs format (NM-PRO-XXXX) → nm_pro_XXXX
+                if license_key.startswith("NM-"):
+                    license_key = license_key.replace("-", "_").lower()
                 if not license_key.startswith("nm_"):
                     return {"error": "Invalid license key format. Expected nm_pro_* or nm_team_*"}
 

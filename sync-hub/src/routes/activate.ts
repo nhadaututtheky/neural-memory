@@ -26,8 +26,13 @@ activate.post("/", async (c) => {
       throw new HubError(400, "Missing license_key");
     }
 
+    // Normalize XLabs format (NM-PRO-XXXX) → nm_pro_XXXX
+    const normalizedKey = licenseKey.startsWith("NM-")
+      ? licenseKey.replaceAll("-", "_").toLowerCase()
+      : licenseKey;
+
     // Validate license key format strictly
-    if (!LICENSE_KEY_PATTERN.test(licenseKey)) {
+    if (!LICENSE_KEY_PATTERN.test(normalizedKey)) {
       throw new HubError(400, "Invalid license key format");
     }
 
@@ -35,7 +40,7 @@ activate.post("/", async (c) => {
     const verifyRes = await fetch(PAY_VERIFY_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: licenseKey }),
+      body: JSON.stringify({ key: normalizedKey }),
     });
     if (!verifyRes.ok) {
       throw new HubError(502, "License verification service unavailable");
@@ -70,7 +75,7 @@ activate.post("/", async (c) => {
           `INSERT INTO licenses (id, user_id, tier, status, payment_provider, payment_id, created_at, expires_at)
            VALUES (?, ?, ?, 'active', 'pay.theio.vn', ?, ?, ?)`,
         )
-        .bind(licenseKey, userId, tier, licenseKey, now, expiresAt),
+        .bind(normalizedKey, userId, tier, normalizedKey, now, expiresAt),
     ]);
 
     // Update user tier
