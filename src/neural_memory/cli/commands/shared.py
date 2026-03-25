@@ -224,7 +224,7 @@ def shared_activate(
                     return {
                         "success": True,
                         "tier": str(data.get("tier", "pro")).lower(),
-                        "expires_at": data.get("expiresAt"),
+                        "expires_at": data.get("expires_at"),
                         "features": data.get("features", []),
                         "message": data.get("message", "License activated!"),
                     }

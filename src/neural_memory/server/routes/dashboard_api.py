@@ -1532,8 +1532,8 @@ async def activate_license(body: ActivateLicenseRequest) -> dict[str, Any]:
                 new_license = LicenseConfig.from_dict(
                     {
                         "tier": activated_tier,
-                        "activated_at": data.get("activatedAt", ""),
-                        "expires_at": data.get("expiresAt", ""),
+                        "activated_at": data.get("activated_at", ""),
+                        "expires_at": data.get("expires_at", ""),
                     }
                 )
                 new_cfg = _dc_replace(cfg, license=new_license)
@@ -1543,8 +1543,8 @@ async def activate_license(body: ActivateLicenseRequest) -> dict[str, Any]:
                 return {
                     "success": True,
                     "tier": activated_tier,
-                    "activated_at": data.get("activatedAt", ""),
-                    "expires_at": data.get("expiresAt", ""),
+                    "activated_at": data.get("activated_at", ""),
+                    "expires_at": data.get("expires_at", ""),
                 }
     except HTTPException:
         raise

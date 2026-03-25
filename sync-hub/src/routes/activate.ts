@@ -121,7 +121,8 @@ activate.post("/", async (c) => {
     return c.json({
       status: "activated",
       tier,
-      expiresAt,
+      activated_at: now,
+      expires_at: expiresAt,
       features,
       message: `License activated! You now have ${tier} tier access.`,
     });

@@ -534,8 +534,8 @@ class SyncToolHandler:
                         new_license = LicenseConfig.from_dict(
                             {
                                 "tier": activated_tier,
-                                "activated_at": data.get("activatedAt", ""),
-                                "expires_at": data.get("expiresAt", ""),
+                                "activated_at": data.get("activated_at", ""),
+                                "expires_at": data.get("expires_at", ""),
                             }
                         )
                         self.config = _dc_replace(self.config, license=new_license)
@@ -545,7 +545,7 @@ class SyncToolHandler:
                         return {
                             "status": "activated",
                             "tier": activated_tier,
-                            "expires_at": data.get("expiresAt"),
+                            "expires_at": data.get("expires_at"),
                             "features": data.get("features", []),
                             "message": data.get("message", "License activated!"),
                         }
