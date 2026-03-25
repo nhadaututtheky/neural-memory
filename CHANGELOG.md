@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.20.1] — 2026-03-25
+
+### Fixed
+
+- **Consolidate prune crash** (#113) — `consolidate --strategy prune` crashed with `TypeError: can't subtract offset-naive and offset-aware datetimes`. Added `ensure_naive_utc()` helper to normalize timezone-aware reference times in `synapse.time_decay()`, `consolidation.run()`, and `compression.run()`
+- **CLI packaging regression** (#114, #115) — v4.20.0 wheel published to PyPI was missing `cli/commands/` directory, breaking all `nmem` CLI commands. Rebuilt wheel includes all command modules. Added import smoke tests to prevent regression
+
+### Tests
+
+- 7 new tests: timezone-aware decay (2), `ensure_naive_utc` helper (3), package integrity smoke (2)
+
 ## [4.20.0] — 2026-03-23
 
 ### Added
