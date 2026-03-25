@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="scroll-smooth">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,991 +10,1365 @@
   <meta property="og:title" content="Neural Memory Pro">
   <meta property="og:description" content="Your agent's brain, upgraded. From keyword search to semantic understanding.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://nhadaututtheky.github.io/neural-memory/landing/pro-landing.html">
+  <meta property="og:url" content="https://neuralmemory.theio.vn">
 
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 
-  <!-- Three.js -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <!-- Three.js + OrbitControls -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
 
   <!-- Polar.sh Checkout Embed -->
   <script defer data-auto-init src="https://cdn.jsdelivr.net/npm/@polar-sh/checkout@latest/dist/embed.global.js"></script>
 
-  <!-- Tailwind CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwindcss.config = {
-      theme: {
-        extend: {
-          colors: {
-            nm: {
-              void: '#050510',
-              deep: '#0a0a1a',
-              surface: '#111128',
-              card: '#16163a',
-              border: '#2a2a5a',
-              text: '#e8e8f0',
-              muted: '#8888aa',
-              // Neural bio-luminescence palette
-              synapse: '#7c3aed',    // violet
-              axon: '#06b6d4',       // cyan
-              dendrite: '#f472b6',   // pink
-              pulse: '#a78bfa',      // light violet
-              fire: '#fbbf24',       // amber activation
-              grow: '#34d399',       // emerald growth
-            }
-          },
-          fontFamily: {
-            heading: ['"Space Grotesk"', 'system-ui', 'sans-serif'],
-            body: ['"Inter"', 'system-ui', 'sans-serif'],
-            mono: ['"JetBrains Mono"', 'monospace'],
-          }
-        }
-      }
-    }
-  </script>
-
   <style>
-    html { scroll-padding-top: 5rem; }
-    body { font-family: 'Inter', system-ui, sans-serif; background: #050510; color: #e8e8f0; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #050510;
+      --bg-card: #0e0e24;
+      --bg-panel: rgba(10, 10, 30, 0.92);
+      --text: #e8e8f0;
+      --text-muted: #8888aa;
+      --border: #2a2a5a;
+      --violet: #7c3aed;
+      --cyan: #06b6d4;
+      --pink: #f472b6;
+      --amber: #fbbf24;
+      --emerald: #34d399;
+      --pulse: #a78bfa;
+      --scene-bg: #050510;
+      --panel-blur: 20px;
+    }
+
+    [data-theme="light"] {
+      --bg: #f8f7f4;
+      --bg-card: #ffffff;
+      --bg-panel: rgba(248, 247, 244, 0.94);
+      --text: #1a1a2e;
+      --text-muted: #6b6b8a;
+      --border: #d4d4e0;
+      --scene-bg: #e8e6e0;
+      --panel-blur: 24px;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
     h1, h2, h3, h4 { font-family: 'Space Grotesk', system-ui, sans-serif; }
     code, pre { font-family: 'JetBrains Mono', monospace; }
 
-    /* 3D canvas background */
+    /* Full-screen 3D canvas */
     #neural-canvas {
       position: fixed;
       top: 0; left: 0;
       width: 100%; height: 100%;
       z-index: 0;
+      cursor: grab;
+    }
+    #neural-canvas:active { cursor: grabbing; }
+
+    /* Top bar */
+    .top-bar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
       pointer-events: none;
     }
+    .top-bar > * { pointer-events: auto; }
 
-    /* Glow effects */
-    .glow-violet { box-shadow: 0 0 40px rgba(124, 58, 237, 0.3), 0 0 80px rgba(124, 58, 237, 0.1); }
-    .glow-cyan { box-shadow: 0 0 40px rgba(6, 182, 212, 0.3), 0 0 80px rgba(6, 182, 212, 0.1); }
-    .glow-text { text-shadow: 0 0 40px rgba(124, 58, 237, 0.5); }
-
-    /* Activation pulse */
-    @keyframes activation-pulse {
-      0%, 100% { opacity: 0.6; }
-      50% { opacity: 1; }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--text);
+      text-decoration: none;
     }
-    @keyframes signal-travel {
-      0% { background-position: 0% 50%; }
-      100% { background-position: 200% 50%; }
-    }
-
-    .pulse-slow { animation: activation-pulse 4s ease-in-out infinite; }
-    .pulse-fast { animation: activation-pulse 2s ease-in-out infinite; }
-
-    .signal-line {
-      background: linear-gradient(90deg, transparent, #7c3aed, #06b6d4, transparent);
-      background-size: 200% 100%;
-      animation: signal-travel 3s linear infinite;
+    .logo .pro-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      background: rgba(124, 58, 237, 0.2);
+      color: var(--pulse);
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-left: 4px;
     }
 
-    /* Tier bars */
-    .tier-bar { transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1); }
-
-    /* Scroll reveal */
-    @media (prefers-reduced-motion: no-preference) {
-      .reveal {
-        opacity: 0;
-        transform: translateY(30px);
-        transition: opacity 0.8s ease, transform 0.8s ease;
-      }
-      .reveal.visible { opacity: 1; transform: translateY(0); }
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
+
+    .theme-toggle {
+      width: 40px; height: 40px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+    .theme-toggle:hover { border-color: var(--violet); }
+
+    .btn-get-pro {
+      background: var(--violet);
+      color: #fff;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+      padding: 10px 20px;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+    .btn-get-pro:hover { filter: brightness(1.15); transform: translateY(-1px); }
+
+    /* Floating cluster labels */
+    .cluster-label {
+      position: absolute;
+      z-index: 20;
+      pointer-events: auto;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 12px;
+      background: var(--bg-panel);
+      backdrop-filter: blur(var(--panel-blur));
+      border: 1px solid var(--border);
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      transition: all 0.3s ease;
+      white-space: nowrap;
+      user-select: none;
+      opacity: 0;
+      transform: scale(0.9);
+    }
+    .cluster-label.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+    .cluster-label:hover {
+      border-color: var(--violet);
+      transform: scale(1.05);
+      box-shadow: 0 0 20px rgba(124, 58, 237, 0.2);
+    }
+    .cluster-label .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* Center hint */
+    .center-hint {
+      position: fixed;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-size: 14px;
+      color: var(--text-muted);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      pointer-events: none;
+      transition: opacity 0.5s ease;
+    }
+    .center-hint .title {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text);
+      text-align: center;
+      line-height: 1.2;
+    }
+    .center-hint .subtitle {
+      font-size: 15px;
+      color: var(--text-muted);
+    }
+    .center-hint .drag-icon {
+      animation: float 2s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+
+    /* Feature panel (slides in when clicking a cluster) */
+    .feature-panel {
+      position: fixed;
+      top: 0; right: 0;
+      width: min(520px, 90vw);
+      height: 100vh;
+      z-index: 40;
+      background: var(--bg-panel);
+      backdrop-filter: blur(var(--panel-blur));
+      border-left: 1px solid var(--border);
+      padding: 80px 32px 32px;
+      overflow-y: auto;
+      transform: translateX(100%);
+      transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .feature-panel.open {
+      transform: translateX(0);
+    }
+    .feature-panel .back-btn {
+      position: absolute;
+      top: 20px; left: 20px;
+      width: 40px; height: 40px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+    .feature-panel .back-btn:hover { border-color: var(--violet); }
+
+    .feature-panel .feature-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+    .feature-panel h2 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      line-height: 1.2;
+    }
+    .feature-panel p {
+      color: var(--text-muted);
+      font-size: 15px;
+      line-height: 1.7;
+      margin-bottom: 16px;
+    }
+    .feature-panel p strong { color: var(--text); }
+    .feature-panel .code-block {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      margin: 16px 0;
+      overflow-x: auto;
+    }
+    .feature-panel .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin: 20px 0;
+    }
+    .feature-panel .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    .feature-panel .stat-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .feature-panel .stat-label {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Tier bars inside panel */
+    .tier-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .tier-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      width: 70px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .tier-bar-bg {
+      flex: 1;
+      height: 12px;
+      background: var(--bg-card);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .tier-bar-fill {
+      height: 100%;
+      border-radius: 6px;
+      transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .tier-bytes {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-muted);
+      width: 60px;
+      flex-shrink: 0;
+    }
+
+    /* Pricing section inside panel */
+    .pricing-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin: 20px 0;
+    }
+    .price-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      transition: all 0.25s ease;
+    }
+    .price-card.featured {
+      border-color: var(--violet);
+      box-shadow: 0 0 30px rgba(124, 58, 237, 0.15);
+    }
+    .price-card h3 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .price-card .price {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 32px;
+      font-weight: 700;
+    }
+    .price-card .period {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+    .price-card ul {
+      list-style: none;
+      margin: 12px 0;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .price-card ul li {
+      padding: 4px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .price-card ul li .check { color: var(--emerald); }
+
+    .btn-checkout {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      border-radius: 12px;
+      border: none;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      margin-bottom: 8px;
+    }
+    .btn-checkout:hover { filter: brightness(1.1); }
+    .btn-checkout.primary {
+      background: var(--violet);
+      color: #fff;
+    }
+    .btn-checkout.secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-checkout.secondary:hover {
+      border-color: var(--violet);
+    }
+
+    /* Compare table in panel */
+    .compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin: 16px 0;
+    }
+    .compare-table th {
+      text-align: left;
+      padding: 8px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+      font-weight: 500;
+      font-size: 12px;
+    }
+    .compare-table td {
+      padding: 8px;
+      border-bottom: 1px solid rgba(128,128,128,0.1);
+    }
+    .compare-table td:last-child {
+      color: var(--violet);
+      font-weight: 600;
+    }
+
+    /* Modal styles */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(8px);
+    }
+    .modal-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px;
+      max-width: 420px;
+      width: calc(100% - 32px);
+      position: relative;
+    }
+    .modal-close {
+      position: absolute;
+      top: 16px; right: 16px;
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal-box h3 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .modal-box .subtitle {
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-bottom: 20px;
+    }
+    .modal-box label {
+      display: block;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .modal-box input[type="email"],
+    .modal-box input[type="text"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      color: var(--text);
+      font-size: 14px;
+      margin-bottom: 12px;
+      outline: none;
+      transition: border-color 0.25s;
+    }
+    .modal-box input:focus { border-color: var(--violet); }
+    .modal-box .btn-submit {
+      width: 100%;
+      padding: 12px;
+      border-radius: 12px;
+      border: none;
+      background: var(--violet);
+      color: #fff;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.25s;
+    }
+    .modal-box .btn-submit:hover { filter: brightness(1.1); }
+    .modal-box .error-msg {
+      color: #ef4444;
+      font-size: 13px;
+      margin-top: 8px;
+      display: none;
+    }
+    .qr-container {
+      background: #fff;
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      justify-content: center;
+      margin: 12px 0;
+    }
+    .qr-container img { border-radius: 8px; }
+    .sepay-info {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .sepay-info .row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+    }
+    .sepay-info .value {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text);
+      font-weight: 600;
+    }
+    .btn-confirm-sepay {
+      width: 100%;
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 12px;
+      border: none;
+      background: var(--emerald);
+      color: #0a0a1a;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    /* Mobile responsive */
+    @media (max-width: 640px) {
+      .feature-panel { width: 100vw; padding: 72px 20px 20px; }
+      .center-hint .title { font-size: 22px; }
+      .top-bar { padding: 12px 16px; }
+      .btn-get-pro { padding: 8px 14px; font-size: 13px; }
+    }
+
+    /* Reduced motion */
     @media (prefers-reduced-motion: reduce) {
-      .reveal { opacity: 1; transform: none; }
+      .cluster-label, .feature-panel { transition-duration: 0.01ms !important; }
+      .center-hint .drag-icon { animation: none; }
     }
-
-    /* Pricing card hover */
-    .pricing-card {
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    .pricing-card:hover {
-      transform: translateY(-4px);
-    }
-
-    /* Comparison slider */
-    .comparison-free { border-left: 3px solid #8888aa; }
-    .comparison-pro { border-left: 3px solid #7c3aed; }
   </style>
 </head>
 
-<body class="antialiased overflow-x-hidden">
+<body>
 
-  <!-- 3D Neural Brain Canvas -->
+  <!-- 3D Canvas (full screen) -->
   <canvas id="neural-canvas"></canvas>
 
-  <!-- Content wrapper -->
-  <div class="relative z-10">
-
-    <!-- ─── Navbar ─────────────────────────────────── -->
-    <nav class="fixed top-4 left-4 right-4 z-50 bg-nm-surface/70 backdrop-blur-xl border border-nm-border/50 rounded-2xl px-6 py-3 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-2 font-heading font-bold text-lg">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="8" r="3" stroke="#7c3aed" stroke-width="2"/>
-          <circle cx="6" cy="18" r="2.5" stroke="#06b6d4" stroke-width="2"/>
-          <circle cx="18" cy="18" r="2.5" stroke="#f472b6" stroke-width="2"/>
-          <line x1="12" y1="11" x2="7" y2="16" stroke="#7c3aed" stroke-width="1.5" opacity="0.5"/>
-          <line x1="12" y1="11" x2="17" y2="16" stroke="#06b6d4" stroke-width="1.5" opacity="0.5"/>
-        </svg>
-        <span>Neural<span class="text-nm-synapse">Memory</span></span>
-        <span class="text-[10px] font-mono bg-nm-synapse/20 text-nm-pulse px-2 py-0.5 rounded-full ml-1">PRO</span>
-      </a>
-      <div class="hidden md:flex items-center gap-6 text-sm text-nm-muted">
-        <a href="#why" class="hover:text-nm-text transition-colors cursor-pointer">Why Pro</a>
-        <a href="#features" class="hover:text-nm-text transition-colors cursor-pointer">Features</a>
-        <a href="#pricing" class="hover:text-nm-text transition-colors cursor-pointer">Pricing</a>
-        <a href="https://github.com/nhadaututtheky/neural-memory" target="_blank" rel="noopener" class="hover:text-nm-text transition-colors cursor-pointer">GitHub</a>
-        <a href="#pricing" class="bg-nm-synapse hover:bg-nm-synapse/80 text-white px-4 py-2 rounded-lg font-medium transition-colors cursor-pointer">Get Pro</a>
-      </div>
-    </nav>
-
-    <!-- ─── Hero ───────────────────────────────────── -->
-    <section class="min-h-screen flex items-center pt-24 pb-16 px-6">
-      <div class="max-w-5xl mx-auto text-center">
-        <div class="inline-flex items-center gap-2 bg-nm-synapse/10 text-nm-pulse text-sm font-medium px-4 py-1.5 rounded-full mb-8 border border-nm-synapse/20">
-          <span class="w-2 h-2 bg-nm-synapse rounded-full pulse-fast"></span>
-          InfinityDB Engine — HNSW Vector Search
-        </div>
-
-        <h1 class="font-heading text-5xl md:text-6xl lg:text-7xl font-bold leading-[1.1] mb-6">
-          Your agent recalls<br>
-          by <span class="text-nm-synapse glow-text">meaning</span>,<br>
-          not by words
-        </h1>
-
-        <p class="text-nm-muted text-lg md:text-xl leading-relaxed mb-10 max-w-2xl mx-auto">
-          Free NM searches keywords. Pro searches <strong class="text-nm-axon">semantics</strong>.
-          Same 52 tools. Same API. Different brain underneath.
-        </p>
-
-        <div class="flex flex-col sm:flex-row gap-4 justify-center">
-          <a href="#pricing" class="inline-flex items-center justify-center gap-2 bg-nm-synapse hover:bg-nm-synapse/80 text-white font-semibold px-8 py-4 rounded-xl transition-all glow-violet cursor-pointer text-lg">
-            Upgrade to Pro — $9/mo
-          </a>
-          <a href="#why" class="inline-flex items-center justify-center gap-2 bg-nm-surface/80 border border-nm-border text-nm-text font-medium px-8 py-4 rounded-xl hover:bg-nm-card transition-colors cursor-pointer text-lg">
-            See the difference
-          </a>
-        </div>
-
-        <!-- Speed stat -->
-        <div class="mt-16 flex justify-center gap-12 text-center">
-          <div>
-            <div class="font-mono text-3xl font-bold text-nm-axon">~5ms</div>
-            <div class="text-nm-muted text-sm mt-1">Search at 1M neurons</div>
-          </div>
-          <div class="w-px bg-nm-border"></div>
-          <div>
-            <div class="font-mono text-3xl font-bold text-nm-grow">97%</div>
-            <div class="text-nm-muted text-sm mt-1">Storage compression</div>
-          </div>
-          <div class="w-px bg-nm-border"></div>
-          <div>
-            <div class="font-mono text-3xl font-bold text-nm-dendrite">100x</div>
-            <div class="text-nm-muted text-sm mt-1">Faster consolidation</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ─── Why Pro ────────────────────────────────── -->
-    <section id="why" class="py-24 px-6">
-      <div class="max-w-5xl mx-auto reveal">
-        <h2 class="font-heading text-3xl md:text-4xl font-bold text-center mb-4">
-          The Real Difference
-        </h2>
-        <p class="text-nm-muted text-center text-lg mb-16 max-w-2xl mx-auto">
-          It's not about speed. It's about <strong class="text-nm-text">recall quality</strong>.
-        </p>
-
-        <!-- Before/After comparison -->
-        <div class="grid md:grid-cols-2 gap-8">
-          <!-- Free -->
-          <div class="comparison-free bg-nm-surface/50 border border-nm-border/50 rounded-xl p-6">
-            <div class="flex items-center gap-2 mb-4">
-              <span class="text-nm-muted font-mono text-sm font-bold">FREE</span>
-              <span class="text-nm-muted text-sm">— SQLite + FTS5</span>
-            </div>
-            <div class="bg-nm-deep rounded-lg p-4 font-mono text-sm mb-4">
-              <div class="text-nm-muted mb-2"># User asks:</div>
-              <div class="text-nm-text">"What did we decide about auth?"</div>
-              <div class="text-nm-muted mt-3 mb-1"># FTS5 keyword search:</div>
-              <div class="text-nm-fire">MATCH "decide" AND "auth"</div>
-            </div>
-            <div class="flex items-center gap-3 text-sm">
-              <span class="font-mono text-nm-fire font-bold">2 / 7</span>
-              <span class="text-nm-muted">relevant memories found</span>
-            </div>
-            <p class="text-nm-muted text-sm mt-3">Misses memories that say "chose", "picked", "settled on" — different words, same meaning.</p>
-          </div>
-
-          <!-- Pro -->
-          <div class="comparison-pro bg-nm-card/80 border border-nm-synapse/30 rounded-xl p-6 glow-violet">
-            <div class="flex items-center gap-2 mb-4">
-              <span class="text-nm-synapse font-mono text-sm font-bold">PRO</span>
-              <span class="text-nm-muted text-sm">— InfinityDB + HNSW</span>
-            </div>
-            <div class="bg-nm-deep rounded-lg p-4 font-mono text-sm mb-4">
-              <div class="text-nm-muted mb-2"># User asks:</div>
-              <div class="text-nm-text">"What did we decide about auth?"</div>
-              <div class="text-nm-muted mt-3 mb-1"># HNSW semantic cone search:</div>
-              <div class="text-nm-synapse">similarity >= 0.7 | ranked by meaning</div>
-            </div>
-            <div class="flex items-center gap-3 text-sm">
-              <span class="font-mono text-nm-grow font-bold">7 / 7</span>
-              <span class="text-nm-muted">relevant memories found</span>
-            </div>
-            <p class="text-nm-muted text-sm mt-3">Finds all related memories regardless of wording — "chose JWT", "settled on OAuth", "picked Lucia".</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ─── Features ───────────────────────────────── -->
-    <section id="features" class="py-24 px-6">
-      <div class="max-w-5xl mx-auto">
-        <h2 class="font-heading text-3xl md:text-4xl font-bold text-center mb-4 reveal">
-          Pro Features
-        </h2>
-        <p class="text-nm-muted text-center text-lg mb-16 max-w-2xl mx-auto reveal">
-          Four capabilities that transform how your agent remembers.
-        </p>
-
-        <!-- Feature 1: Cone Queries -->
-        <div class="grid md:grid-cols-2 gap-12 items-center mb-24 reveal">
-          <div>
-            <div class="inline-flex items-center gap-2 text-nm-synapse text-sm font-mono mb-3">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
-              CONE QUERIES
-            </div>
-            <h3 class="font-heading text-2xl font-bold mb-4">Adjustable Semantic Recall</h3>
-            <p class="text-nm-muted leading-relaxed mb-4">
-              Search a <strong class="text-nm-text">semantic cone</strong> around your query. Narrow it for precision, widen it for exploration. Each result scored by meaning <em>and</em> activation history.
-            </p>
-            <div class="bg-nm-deep rounded-lg p-4 font-mono text-sm">
-              <span class="text-nm-muted">score</span> = <span class="text-nm-synapse">similarity</span> <span class="text-nm-muted">&times;</span> <span class="text-nm-fire">0.7</span> + <span class="text-nm-axon">activation</span> <span class="text-nm-muted">&times;</span> <span class="text-nm-fire">0.3</span>
-            </div>
-          </div>
-          <div class="bg-nm-surface/50 border border-nm-border/50 rounded-xl p-6">
-            <div class="font-mono text-sm space-y-2">
-              <div class="text-nm-muted"># Narrow cone — precise lookup</div>
-              <div><span class="text-nm-axon">nmem_cone_query</span>(</div>
-              <div class="pl-4">query=<span class="text-nm-grow">"auth architecture"</span>,</div>
-              <div class="pl-4">threshold=<span class="text-nm-fire">0.9</span></div>
-              <div>)</div>
-              <div class="mt-3 text-nm-muted"># Wide cone — brainstorm</div>
-              <div><span class="text-nm-axon">nmem_cone_query</span>(</div>
-              <div class="pl-4">query=<span class="text-nm-grow">"auth architecture"</span>,</div>
-              <div class="pl-4">threshold=<span class="text-nm-fire">0.6</span></div>
-              <div>)</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Feature 2: Smart Merge -->
-        <div class="grid md:grid-cols-2 gap-12 items-center mb-24 reveal">
-          <div class="order-2 md:order-1 bg-nm-surface/50 border border-nm-border/50 rounded-xl p-6">
-            <div class="text-sm font-mono mb-4 text-nm-muted">Consolidation speed at scale</div>
-            <div class="space-y-4">
-              <div>
-                <div class="flex justify-between text-sm mb-1">
-                  <span class="text-nm-muted">1K neurons</span>
-                  <span class="font-mono"><span class="text-nm-muted">Free: 2s</span> &middot; <span class="text-nm-grow">Pro: 0.1s</span></span>
-                </div>
-                <div class="h-2 bg-nm-deep rounded-full overflow-hidden">
-                  <div class="tier-bar h-full bg-nm-grow rounded-full" style="width: 5%"></div>
-                </div>
-              </div>
-              <div>
-                <div class="flex justify-between text-sm mb-1">
-                  <span class="text-nm-muted">10K neurons</span>
-                  <span class="font-mono"><span class="text-nm-muted">Free: 3min</span> &middot; <span class="text-nm-grow">Pro: 1s</span></span>
-                </div>
-                <div class="h-2 bg-nm-deep rounded-full overflow-hidden">
-                  <div class="tier-bar h-full bg-nm-grow rounded-full" style="width: 0.5%"></div>
-                </div>
-              </div>
-              <div>
-                <div class="flex justify-between text-sm mb-1">
-                  <span class="text-nm-muted">100K neurons</span>
-                  <span class="font-mono"><span class="text-nm-fire">Free: 5hrs</span> &middot; <span class="text-nm-grow">Pro: 10s</span></span>
-                </div>
-                <div class="h-2 bg-nm-deep rounded-full overflow-hidden">
-                  <div class="tier-bar h-full bg-nm-grow rounded-full" style="width: 0.05%"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="order-1 md:order-2">
-            <div class="inline-flex items-center gap-2 text-nm-grow text-sm font-mono mb-3">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
-              SMART MERGE
-            </div>
-            <h3 class="font-heading text-2xl font-bold mb-4">Consolidation That Scales</h3>
-            <p class="text-nm-muted leading-relaxed mb-4">
-              Free compares every pair — O(N&sup2;). Pro uses HNSW neighbors to find merge candidates in O(N&times;k).
-              <strong class="text-nm-text">Mutual similarity</strong>: only merges when A is near B <em>and</em> B is near A.
-            </p>
-            <div class="bg-nm-deep rounded-lg p-4 font-mono text-sm">
-              <span class="text-nm-axon">nmem_pro_merge</span>(dry_run=<span class="text-nm-fire">true</span>)
-            </div>
-          </div>
-        </div>
-
-        <!-- Feature 3: Directional Compression -->
-        <div class="grid md:grid-cols-2 gap-12 items-center mb-24 reveal">
-          <div>
-            <div class="inline-flex items-center gap-2 text-nm-dendrite text-sm font-mono mb-3">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-              DIRECTIONAL COMPRESSION
-            </div>
-            <h3 class="font-heading text-2xl font-bold mb-4">Smarter Trimming</h3>
-            <p class="text-nm-muted leading-relaxed mb-4">
-              Free cuts sentences by entity density — it loses context. Pro scores each sentence against <strong class="text-nm-text">multiple semantic axes</strong>, preserving all relevant directions.
-            </p>
-            <p class="text-nm-muted leading-relaxed text-sm">
-              A memory about "React performance" keeps both the React angle <em>and</em> the performance angle — not just one.
-            </p>
-          </div>
-          <div class="bg-nm-surface/50 border border-nm-border/50 rounded-xl p-6">
-            <div class="text-sm font-mono mb-4 text-nm-muted">Multi-axis scoring</div>
-            <div class="space-y-3">
-              <div class="flex items-center gap-3">
-                <span class="w-20 text-right font-mono text-xs text-nm-dendrite">primary</span>
-                <div class="flex-1 h-3 bg-nm-deep rounded-full overflow-hidden">
-                  <div class="h-full bg-nm-dendrite/70 rounded-full" style="width: 60%"></div>
-                </div>
-                <span class="font-mono text-xs text-nm-muted">&times;0.6</span>
-              </div>
-              <div class="flex items-center gap-3">
-                <span class="w-20 text-right font-mono text-xs text-nm-axon">ref axis 1</span>
-                <div class="flex-1 h-3 bg-nm-deep rounded-full overflow-hidden">
-                  <div class="h-full bg-nm-axon/70 rounded-full" style="width: 40%"></div>
-                </div>
-                <span class="font-mono text-xs text-nm-muted">&times;0.4</span>
-              </div>
-              <div class="flex items-center gap-3">
-                <span class="w-20 text-right font-mono text-xs text-nm-synapse">ref axis 2</span>
-                <div class="flex-1 h-3 bg-nm-deep rounded-full overflow-hidden">
-                  <div class="h-full bg-nm-synapse/70 rounded-full" style="width: 35%"></div>
-                </div>
-                <span class="font-mono text-xs text-nm-muted">backup</span>
-              </div>
-            </div>
-            <div class="mt-4 pt-4 border-t border-nm-border/30 text-xs font-mono text-nm-muted">
-              Keeps sentences scoring high on <span class="text-nm-text">all</span> axes, not just one
-            </div>
-          </div>
-        </div>
-
-        <!-- Feature 4: 5-Tier Compression -->
-        <div class="grid md:grid-cols-2 gap-12 items-center reveal">
-          <div class="order-2 md:order-1 bg-nm-surface/50 border border-nm-border/50 rounded-xl p-6">
-            <div class="text-sm font-mono mb-4 text-nm-muted">Auto lifecycle — bytes per neuron (384D)</div>
-            <div class="space-y-3">
-              <div>
-                <div class="flex justify-between text-sm mb-1">
-                  <span class="font-mono text-nm-fire">ACTIVE</span>
-                  <span class="font-mono text-nm-muted">1,536 B</span>
-                </div>
-                <div class="h-4 bg-nm-deep rounded-full overflow-hidden">
-                  <div class="h-full bg-gradient-to-r from-nm-fire to-nm-fire/50 rounded-full" style="width: 100%"></div>
-                </div>
-              </div>
-              <div>
-                <div class="flex justify-between text-sm mb-1">
-                  <span class="font-mono text-nm-synapse">WARM <span class="text-nm-muted text-xs">-50%</span></span>
-                  <span class="font-mono text-nm-muted">768 B</span>
-                </div>
-                <div class="h-4 bg-nm-deep rounded-full overflow-hidden">
-                  <div class="h-full bg-gradient-to-r from-nm-synapse to-nm-synapse/50 rounded-full" style="width: 50%"></div>
-                </div>
-              </div>
-              <div>
-                <div class="flex justify-between text-sm mb-1">
-                  <span class="font-mono text-nm-axon">COOL <span class="text-nm-muted text-xs">-75%</span></span>
-                  <span class="font-mono text-nm-muted">384 B</span>
-                </div>
-                <div class="h-4 bg-nm-deep rounded-full overflow-hidden">
-                  <div class="h-full bg-gradient-to-r from-nm-axon to-nm-axon/50 rounded-full" style="width: 25%"></div>
-                </div>
-              </div>
-              <div>
-                <div class="flex justify-between text-sm mb-1">
-                  <span class="font-mono text-nm-grow">FROZEN <span class="text-nm-muted text-xs">-97%</span></span>
-                  <span class="font-mono text-nm-muted">48 B</span>
-                </div>
-                <div class="h-4 bg-nm-deep rounded-full overflow-hidden">
-                  <div class="h-full bg-gradient-to-r from-nm-grow to-nm-grow/50 rounded-full" style="width: 3%"></div>
-                </div>
-              </div>
-              <div>
-                <div class="flex justify-between text-sm mb-1">
-                  <span class="font-mono text-nm-muted">CRYSTAL <span class="text-xs">-100%</span></span>
-                  <span class="font-mono text-nm-muted">0 B</span>
-                </div>
-                <div class="h-4 bg-nm-deep rounded-full overflow-hidden">
-                  <div class="h-full bg-nm-muted/30 rounded-full" style="width: 0.5%"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="order-1 md:order-2">
-            <div class="inline-flex items-center gap-2 text-nm-fire text-sm font-mono mb-3">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
-              5-TIER VECTOR COMPRESSION
-            </div>
-            <h3 class="font-heading text-2xl font-bold mb-4">Automatic Memory Lifecycle</h3>
-            <p class="text-nm-muted leading-relaxed mb-4">
-              Memories age. Pro automatically compresses their vectors: float32 &rarr; float16 &rarr; int8 &rarr; binary &rarr; metadata-only.
-            </p>
-            <ul class="text-nm-muted text-sm space-y-2">
-              <li class="flex items-start gap-2">
-                <span class="text-nm-fire mt-0.5">&#9679;</span>
-                Priority &ge; 8 stays ACTIVE forever
-              </li>
-              <li class="flex items-start gap-2">
-                <span class="text-nm-grow mt-0.5">&#9679;</span>
-                Auto-promotes when accessed again
-              </li>
-              <li class="flex items-start gap-2">
-                <span class="text-nm-axon mt-0.5">&#9679;</span>
-                1M neurons: 5GB &rarr; 1GB (80% saved)
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ─── Comparison Table ───────────────────────── -->
-    <section class="py-24 px-6 bg-nm-deep/50">
-      <div class="max-w-4xl mx-auto reveal">
-        <h2 class="font-heading text-3xl md:text-4xl font-bold text-center mb-12">Full Comparison</h2>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse">
-            <thead>
-              <tr class="border-b border-nm-border">
-                <th class="py-4 pr-6 text-nm-muted font-medium text-sm w-1/3"></th>
-                <th class="py-4 pr-6 text-nm-muted font-medium text-sm">Free (SQLite)</th>
-                <th class="py-4 text-nm-synapse font-medium text-sm">Pro (InfinityDB)</th>
-              </tr>
-            </thead>
-            <tbody class="text-sm">
-              <tr class="border-b border-nm-border/30">
-                <td class="py-3 pr-6 text-nm-muted">Recall method</td>
-                <td class="py-3 pr-6">Keyword match (FTS5)</td>
-                <td class="py-3 text-nm-synapse font-medium">Semantic similarity (HNSW)</td>
-              </tr>
-              <tr class="border-b border-nm-border/30">
-                <td class="py-3 pr-6 text-nm-muted">Search speed (10K)</td>
-                <td class="py-3 pr-6">~500ms</td>
-                <td class="py-3 text-nm-synapse font-medium font-mono">&lt;5ms</td>
-              </tr>
-              <tr class="border-b border-nm-border/30">
-                <td class="py-3 pr-6 text-nm-muted">Scale tested</td>
-                <td class="py-3 pr-6">~50K neurons</td>
-                <td class="py-3 text-nm-synapse font-medium">2M+ neurons</td>
-              </tr>
-              <tr class="border-b border-nm-border/30">
-                <td class="py-3 pr-6 text-nm-muted">Vector storage</td>
-                <td class="py-3 pr-6">Not stored</td>
-                <td class="py-3 text-nm-synapse font-medium">Persistent mmap</td>
-              </tr>
-              <tr class="border-b border-nm-border/30">
-                <td class="py-3 pr-6 text-nm-muted">Compression</td>
-                <td class="py-3 pr-6">Text trimming</td>
-                <td class="py-3 text-nm-synapse font-medium">5-tier vector (97%)</td>
-              </tr>
-              <tr class="border-b border-nm-border/30">
-                <td class="py-3 pr-6 text-nm-muted">Consolidation</td>
-                <td class="py-3 pr-6">O(N&sup2;) brute-force</td>
-                <td class="py-3 text-nm-synapse font-medium">O(N&times;k) HNSW</td>
-              </tr>
-              <tr class="border-b border-nm-border/30">
-                <td class="py-3 pr-6 text-nm-muted">Graph traversal</td>
-                <td class="py-3 pr-6">SQL JOINs</td>
-                <td class="py-3 text-nm-synapse font-medium">Native BFS &lt;1ms</td>
-              </tr>
-              <tr class="border-b border-nm-border/30">
-                <td class="py-3 pr-6 text-nm-muted">Storage (1M neurons)</td>
-                <td class="py-3 pr-6">~5 GB</td>
-                <td class="py-3 text-nm-synapse font-medium font-mono">~1 GB</td>
-              </tr>
-              <tr>
-                <td class="py-3 pr-6 text-nm-muted">MCP tools</td>
-                <td class="py-3 pr-6">52</td>
-                <td class="py-3 text-nm-synapse font-medium">52 + 3 Pro</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- ─── Pricing ────────────────────────────────── -->
-    <section id="pricing" class="py-24 px-6">
-      <div class="max-w-5xl mx-auto">
-        <h2 class="font-heading text-3xl md:text-4xl font-bold text-center mb-4 reveal">Pricing</h2>
-        <p class="text-nm-muted text-center text-lg mb-16 reveal">Free users keep everything. Pro users get a better brain.</p>
-
-        <div class="grid md:grid-cols-3 gap-8 reveal">
-          <!-- Free -->
-          <div class="pricing-card bg-nm-surface/50 border border-nm-border/50 rounded-2xl p-8">
-            <h3 class="font-heading text-xl font-bold mb-2">Free</h3>
-            <div class="flex items-baseline gap-1 mb-6">
-              <span class="font-heading text-4xl font-bold">$0</span>
-              <span class="text-nm-muted">/forever</span>
-            </div>
-            <ul class="space-y-3 text-sm text-nm-muted mb-8">
-              <li class="flex items-center gap-2"><span class="text-nm-grow">&#10003;</span> 52 MCP tools</li>
-              <li class="flex items-center gap-2"><span class="text-nm-grow">&#10003;</span> SQLite storage</li>
-              <li class="flex items-center gap-2"><span class="text-nm-grow">&#10003;</span> Spreading activation</li>
-              <li class="flex items-center gap-2"><span class="text-nm-grow">&#10003;</span> 14 consolidation strategies</li>
-              <li class="flex items-center gap-2"><span class="text-nm-grow">&#10003;</span> FTS5 keyword search</li>
-              <li class="flex items-center gap-2"><span class="text-nm-grow">&#10003;</span> Cloud sync (100 neurons)</li>
-            </ul>
-            <a href="https://github.com/nhadaututtheky/neural-memory" target="_blank" rel="noopener" class="block text-center bg-nm-surface border border-nm-border text-nm-text font-medium px-6 py-3 rounded-xl hover:bg-nm-card transition-colors cursor-pointer">
-              pip install neural-memory
-            </a>
-          </div>
-
-          <!-- Pro (featured) -->
-          <div class="pricing-card bg-nm-card border-2 border-nm-synapse/50 rounded-2xl p-8 glow-violet relative">
-            <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-nm-synapse text-white text-xs font-bold px-3 py-1 rounded-full">
-              POPULAR
-            </div>
-            <h3 class="font-heading text-xl font-bold mb-2">Pro</h3>
-            <div class="flex items-baseline gap-1 mb-1">
-              <span class="font-heading text-4xl font-bold text-nm-synapse">$9</span>
-              <span class="text-nm-muted">/month</span>
-            </div>
-            <div class="text-nm-muted text-xs mb-6">or $89/year (save $19)</div>
-            <ul class="space-y-3 text-sm text-nm-muted mb-8">
-              <li class="flex items-center gap-2"><span class="text-nm-synapse">&#10003;</span> Everything in Free</li>
-              <li class="flex items-center gap-2"><span class="text-nm-synapse">&#10003;</span> <strong class="text-nm-text">InfinityDB engine</strong></li>
-              <li class="flex items-center gap-2"><span class="text-nm-synapse">&#10003;</span> <strong class="text-nm-text">Cone Queries</strong></li>
-              <li class="flex items-center gap-2"><span class="text-nm-synapse">&#10003;</span> <strong class="text-nm-text">Smart Merge</strong></li>
-              <li class="flex items-center gap-2"><span class="text-nm-synapse">&#10003;</span> <strong class="text-nm-text">Directional Compression</strong></li>
-              <li class="flex items-center gap-2"><span class="text-nm-synapse">&#10003;</span> 5-tier vector compression</li>
-              <li class="flex items-center gap-2"><span class="text-nm-synapse">&#10003;</span> 3 Pro MCP tools</li>
-              <li class="flex items-center gap-2"><span class="text-nm-synapse">&#10003;</span> Unlimited cloud sync</li>
-            </ul>
-
-            <!-- Polar checkout (international) — via pay.theio.vn -->
-            <button type="button" onclick="startPolarCheckout('NM-PRO-MONTHLY')"
-               class="block w-full text-center bg-nm-synapse hover:bg-nm-synapse/80 text-white font-semibold px-6 py-3 rounded-xl transition-colors cursor-pointer mb-3">
-              Get Pro — $9/mo (Card / PayPal)
-            </button>
-            <button type="button" onclick="startPolarCheckout('NM-PRO-YEARLY')"
-               class="block w-full text-center bg-nm-synapse/70 hover:bg-nm-synapse/60 text-white font-medium px-6 py-2.5 rounded-xl transition-colors cursor-pointer mb-3 text-sm">
-              Yearly — $89/yr (save $19)
-            </button>
-
-            <!-- Sepay (Vietnam) -->
-            <button type="button" onclick="showSepayModal('NM-PRO-MONTHLY', 219000)"
-                    class="block w-full text-center bg-nm-surface border border-nm-border text-nm-text font-medium px-6 py-3 rounded-xl hover:bg-nm-card transition-colors cursor-pointer text-sm">
-              Thanh toan QR — 219,000d/thang (VN)
-            </button>
-          </div>
-
-          <!-- Team -->
-          <div class="pricing-card bg-nm-surface/50 border border-nm-border/50 rounded-2xl p-8">
-            <h3 class="font-heading text-xl font-bold mb-2">Team</h3>
-            <div class="flex items-baseline gap-1 mb-1">
-              <span class="font-heading text-4xl font-bold">$29</span>
-              <span class="text-nm-muted">/seat/month</span>
-            </div>
-            <div class="text-nm-muted text-xs mb-6">or $249/seat/year (save $99)</div>
-            <ul class="space-y-3 text-sm text-nm-muted mb-8">
-              <li class="flex items-center gap-2"><span class="text-nm-axon">&#10003;</span> Everything in Pro</li>
-              <li class="flex items-center gap-2"><span class="text-nm-axon">&#10003;</span> Shared brain hub</li>
-              <li class="flex items-center gap-2"><span class="text-nm-axon">&#10003;</span> Brain-to-brain sync</li>
-              <li class="flex items-center gap-2"><span class="text-nm-axon">&#10003;</span> Role-based access</li>
-              <li class="flex items-center gap-2"><span class="text-nm-axon">&#10003;</span> Audit log</li>
-              <li class="flex items-center gap-2"><span class="text-nm-axon">&#10003;</span> Self-hosted Docker</li>
-            </ul>
-            <a href="mailto:enterprise@theio.vn" class="block text-center bg-nm-surface border border-nm-border text-nm-text font-medium px-6 py-3 rounded-xl hover:bg-nm-card transition-colors cursor-pointer">
-              Contact Us
-            </a>
-          </div>
-        </div>
-
-        <!-- Money-back -->
-        <p class="text-center text-nm-muted text-sm mt-8 reveal">
-          30-day money-back guarantee. No questions asked.
-        </p>
-      </div>
-    </section>
-
-    <!-- ─── Install ────────────────────────────────── -->
-    <section class="py-24 px-6 bg-nm-deep/50">
-      <div class="max-w-3xl mx-auto text-center reveal">
-        <h2 class="font-heading text-3xl md:text-4xl font-bold mb-4">One Command</h2>
-        <p class="text-nm-muted text-lg mb-8">Auto-registers. Auto-upgrades storage. All 52 tools keep working.</p>
-
-        <div class="bg-nm-surface border border-nm-border rounded-xl p-6 inline-block">
-          <code class="font-mono text-lg">
-            <span class="text-nm-muted">$</span>
-            <span class="text-nm-grow"> pip install</span>
-            <span class="text-nm-synapse"> neural-memory-pro</span>
-          </code>
-        </div>
-
-        <p class="text-nm-muted text-sm mt-6">
-          Downgrade safe — uninstall Pro and everything reverts to free SQLite. No data loss.
-        </p>
-      </div>
-    </section>
-
-    <!-- ─── Footer ─────────────────────────────────── -->
-    <footer class="py-12 px-6 border-t border-nm-border/30">
-      <div class="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-nm-muted">
-        <div class="flex items-center gap-4">
-          <a href="https://github.com/nhadaututtheky/neural-memory" target="_blank" rel="noopener" class="hover:text-nm-text transition-colors cursor-pointer">GitHub</a>
-          <a href="https://pypi.org/project/neural-memory/" target="_blank" rel="noopener" class="hover:text-nm-text transition-colors cursor-pointer">PyPI</a>
-          <a href="https://nhadaututtheky.github.io/neural-memory/" target="_blank" rel="noopener" class="hover:text-nm-text transition-colors cursor-pointer">Docs</a>
-        </div>
-        <div>&copy; 2024-2026 NeuralMemory Contributors. MIT License.</div>
-      </div>
-    </footer>
-
-  </div><!-- /content wrapper -->
-
-  <!-- ─── Checkout Modal (Email + GitHub) ──────────── -->
-  <div id="checkout-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/70 backdrop-blur-sm">
-    <div class="bg-nm-surface border border-nm-border rounded-2xl p-8 max-w-md mx-4 relative">
-      <button type="button" onclick="closeCheckoutModal()" class="absolute top-4 right-4 text-nm-muted hover:text-nm-text cursor-pointer" aria-label="Close">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  <!-- Top bar -->
+  <div class="top-bar">
+    <a href="https://github.com/nhadaututtheky/neural-memory" target="_blank" rel="noopener" class="logo">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="8" r="3" stroke="var(--violet)" stroke-width="2"/>
+        <circle cx="6" cy="18" r="2.5" stroke="var(--cyan)" stroke-width="2"/>
+        <circle cx="18" cy="18" r="2.5" stroke="var(--pink)" stroke-width="2"/>
+        <line x1="12" y1="11" x2="7" y2="16" stroke="var(--violet)" stroke-width="1.5" opacity="0.5"/>
+        <line x1="12" y1="11" x2="17" y2="16" stroke="var(--cyan)" stroke-width="1.5" opacity="0.5"/>
+      </svg>
+      Neural<span style="color:var(--violet)">Memory</span>
+      <span class="pro-badge">PRO</span>
+    </a>
+    <div class="top-actions">
+      <a href="https://nhadaututtheky.github.io/neural-memory/" target="_blank" rel="noopener"
+         style="color:var(--text-muted);font-size:13px;text-decoration:none;">Docs</a>
+      <a href="https://github.com/nhadaututtheky/neural-memory" target="_blank" rel="noopener"
+         style="color:var(--text-muted);font-size:13px;text-decoration:none;">GitHub</a>
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+        <svg id="theme-icon-dark" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        <svg id="theme-icon-light" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
       </button>
-      <h3 class="font-heading text-xl font-bold mb-2" id="checkout-title">Get Neural Memory Pro</h3>
-      <p class="text-nm-muted text-sm mb-6" id="checkout-subtitle">License key + private repo access</p>
+      <button class="btn-get-pro" onclick="showFeature('pricing')">Get Pro</button>
+    </div>
+  </div>
 
-      <form id="checkout-form" class="space-y-4" onsubmit="return submitCheckout(event)">
+  <!-- Center hint (visible when no panel is open) -->
+  <div class="center-hint" id="center-hint">
+    <div class="title">Your agent's brain,<br>upgraded</div>
+    <div class="subtitle">Click a neuron cluster to explore features</div>
+    <div class="drag-icon">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5">
+        <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Cluster labels (positioned by JS to track 3D positions) -->
+  <div id="label-cone" class="cluster-label" data-feature="cone">
+    <span class="dot" style="background:var(--violet)"></span>
+    Cone Queries
+  </div>
+  <div id="label-merge" class="cluster-label" data-feature="merge">
+    <span class="dot" style="background:var(--emerald)"></span>
+    Smart Merge
+  </div>
+  <div id="label-compress" class="cluster-label" data-feature="compress">
+    <span class="dot" style="background:var(--pink)"></span>
+    Directional Compression
+  </div>
+  <div id="label-tiers" class="cluster-label" data-feature="tiers">
+    <span class="dot" style="background:var(--amber)"></span>
+    5-Tier Lifecycle
+  </div>
+  <div id="label-engine" class="cluster-label" data-feature="engine">
+    <span class="dot" style="background:var(--cyan)"></span>
+    InfinityDB Engine
+  </div>
+  <div id="label-pricing" class="cluster-label" data-feature="pricing">
+    <span class="dot" style="background:var(--pulse)"></span>
+    Pricing
+  </div>
+
+  <!-- Feature panel (slides from right) -->
+  <div class="feature-panel" id="feature-panel">
+    <button class="back-btn" onclick="closePanel()" aria-label="Back to brain">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+    </button>
+    <div id="panel-content"></div>
+  </div>
+
+  <!-- Checkout Modal (Polar) -->
+  <div id="checkout-modal" class="modal-overlay">
+    <div class="modal-box">
+      <button class="modal-close" onclick="closeCheckoutModal()" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+      <h3 id="checkout-title">Get Neural Memory Pro</h3>
+      <p class="subtitle" id="checkout-subtitle">License key + private repo access</p>
+      <form id="checkout-form" onsubmit="return submitCheckout(event)">
         <input type="hidden" id="checkout-product" value="">
-        <div>
-          <label for="checkout-email" class="block text-sm text-nm-muted mb-1">Email (for license delivery)</label>
-          <input type="email" id="checkout-email" required placeholder="you@example.com"
-                 class="w-full bg-nm-deep border border-nm-border rounded-lg px-4 py-3 text-nm-text placeholder-nm-muted/50 focus:border-nm-synapse focus:outline-none">
-        </div>
-        <div>
-          <label for="checkout-github" class="block text-sm text-nm-muted mb-1">GitHub username (for repo invite)</label>
-          <input type="text" id="checkout-github" placeholder="octocat"
-                 class="w-full bg-nm-deep border border-nm-border rounded-lg px-4 py-3 text-nm-text placeholder-nm-muted/50 focus:border-nm-synapse focus:outline-none">
-        </div>
-        <button type="submit" id="checkout-submit"
-                class="w-full bg-nm-synapse hover:bg-nm-synapse/80 text-white font-semibold px-6 py-3 rounded-xl transition-colors cursor-pointer">
-          Continue to Payment
-        </button>
-        <p id="checkout-error" class="text-red-400 text-sm hidden"></p>
+        <label for="checkout-email">Email (for license delivery)</label>
+        <input type="email" id="checkout-email" required placeholder="you@example.com">
+        <label for="checkout-github">GitHub username (for repo invite)</label>
+        <input type="text" id="checkout-github" placeholder="octocat">
+        <button type="submit" class="btn-submit" id="checkout-submit">Continue to Payment</button>
+        <p class="error-msg" id="checkout-error"></p>
       </form>
     </div>
   </div>
 
-  <!-- ─── Sepay QR Modal ───────────────────────────── -->
-  <div id="sepay-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/70 backdrop-blur-sm">
-    <div class="bg-nm-surface border border-nm-border rounded-2xl p-8 max-w-md mx-4 relative">
-      <button type="button" onclick="closeSepayModal()" class="absolute top-4 right-4 text-nm-muted hover:text-nm-text cursor-pointer" aria-label="Close">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  <!-- Sepay QR Modal -->
+  <div id="sepay-modal" class="modal-overlay">
+    <div class="modal-box">
+      <button class="modal-close" onclick="closeSepayModal()" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
-      <h3 class="font-heading text-xl font-bold mb-2">Thanh toan QR</h3>
-      <p class="text-nm-muted text-sm mb-6">Chuyen khoan ngan hang — tu dong kich hoat sau 1-5 phut</p>
-
-      <div class="mb-4">
-        <label for="sepay-email" class="block text-sm text-nm-muted mb-1">Email (nhan license key)</label>
-        <input type="email" id="sepay-email" required placeholder="you@example.com"
-               class="w-full bg-nm-deep border border-nm-border rounded-lg px-4 py-3 text-nm-text placeholder-nm-muted/50 focus:border-nm-synapse focus:outline-none mb-2"
-               oninput="updateSepayQR()">
-        <label for="sepay-github" class="block text-sm text-nm-muted mb-1 mt-2">GitHub username (optional)</label>
-        <input type="text" id="sepay-github" placeholder="octocat"
-               class="w-full bg-nm-deep border border-nm-border rounded-lg px-4 py-3 text-nm-text placeholder-nm-muted/50 focus:border-nm-synapse focus:outline-none">
+      <h3>Thanh toan QR</h3>
+      <p class="subtitle">Chuyen khoan ngan hang — tu dong kich hoat sau 1-5 phut</p>
+      <label for="sepay-email">Email (nhan license key)</label>
+      <input type="email" id="sepay-email" required placeholder="you@example.com" oninput="updateSepayQR()">
+      <label for="sepay-github">GitHub username (optional)</label>
+      <input type="text" id="sepay-github" placeholder="octocat">
+      <div class="qr-container">
+        <img id="sepay-qr" src="" alt="QR thanh toan" width="220" height="220">
       </div>
-
-      <div class="bg-white rounded-xl p-4 mb-4 flex justify-center">
-        <img id="sepay-qr" src="" alt="QR thanh toan" width="250" height="250" class="rounded-lg">
+      <div class="sepay-info">
+        <div class="row"><span>So tien:</span><span class="value" id="sepay-amount">219,000 VND</span></div>
+        <div class="row"><span>Noi dung CK:</span><span class="value" id="sepay-content" style="color:var(--violet);font-size:11px;">NM-PRO-MONTHLY-XXXXXXXX</span></div>
       </div>
-
-      <div class="text-sm space-y-2 text-nm-muted">
-        <div class="flex justify-between">
-          <span>So tien:</span>
-          <span id="sepay-amount" class="text-nm-text font-mono font-bold">219,000 VND</span>
-        </div>
-        <div class="flex justify-between">
-          <span>Noi dung CK:</span>
-          <span id="sepay-content" class="text-nm-synapse font-mono text-xs">NM-PRO-MONTHLY-XXXXXXXX</span>
-        </div>
-      </div>
-
-      <button type="button" onclick="confirmSepayOrder()"
-              class="w-full mt-4 bg-nm-grow hover:bg-nm-grow/80 text-nm-void font-semibold px-6 py-3 rounded-xl transition-colors cursor-pointer">
-        Da chuyen khoan xong
-      </button>
-
-      <p class="text-nm-muted text-xs mt-3 text-center">
-        Powered by <a href="https://sepay.vn" target="_blank" rel="noopener" class="text-nm-axon hover:underline">Sepay.vn</a> — tu dong xac nhan qua webhook
+      <button class="btn-confirm-sepay" onclick="confirmSepayOrder()">Da chuyen khoan xong</button>
+      <p style="color:var(--text-muted);font-size:11px;text-align:center;margin-top:8px;">
+        Powered by <a href="https://sepay.vn" target="_blank" rel="noopener" style="color:var(--cyan);">Sepay.vn</a>
       </p>
     </div>
   </div>
 
   <!-- ─── Scripts ──────────────────────────────────── -->
-  <script>
-    // === 3D NEURAL BRAIN ===
-    (function() {
-      const canvas = document.getElementById('neural-canvas');
-      if (!canvas || typeof THREE === 'undefined') return;
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-      camera.position.z = 30;
+    // ── SCENE SETUP ──
+    const canvas = document.getElementById('neural-canvas');
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 500);
+    camera.position.set(0, 2, 38);
 
-      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x050510, 1);
 
-      // --- Neurons (particles) ---
-      const NEURON_COUNT = 200;
-      const positions = new Float32Array(NEURON_COUNT * 3);
-      const colors = new Float32Array(NEURON_COUNT * 3);
-      const sizes = new Float32Array(NEURON_COUNT);
-      const velocities = [];
+    const controls = new OrbitControls(camera, canvas);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.enablePan = false;
+    controls.minDistance = 18;
+    controls.maxDistance = 60;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.4;
 
-      const palette = [
-        [0.486, 0.227, 0.929],  // violet #7c3aed
-        [0.024, 0.714, 0.831],  // cyan #06b6d4
-        [0.957, 0.447, 0.714],  // pink #f472b6
-        [0.655, 0.545, 0.980],  // light violet #a78bfa
-        [0.984, 0.749, 0.141],  // amber #fbbf24
-        [0.204, 0.827, 0.600],  // emerald #34d399
-      ];
+    // ── FEATURE CLUSTER POSITIONS (in 3D space) ──
+    const FEATURES = {
+      cone:     { pos: new THREE.Vector3(-9,  7,  4),  color: 0x7c3aed, label: 'label-cone' },
+      merge:    { pos: new THREE.Vector3( 10, 4, -3),  color: 0x34d399, label: 'label-merge' },
+      compress: { pos: new THREE.Vector3(-7, -5,  8),  color: 0xf472b6, label: 'label-compress' },
+      tiers:    { pos: new THREE.Vector3( 8, -6, -5),  color: 0xfbbf24, label: 'label-tiers' },
+      engine:   { pos: new THREE.Vector3( 0,  10, -6), color: 0x06b6d4, label: 'label-engine' },
+      pricing:  { pos: new THREE.Vector3( 0, -10, 5),  color: 0xa78bfa, label: 'label-pricing' },
+    };
 
+    // ── BRAIN NEURONS (particle cloud in a sphere) ──
+    const NEURON_COUNT = 350;
+    const positions = new Float32Array(NEURON_COUNT * 3);
+    const colors = new Float32Array(NEURON_COUNT * 3);
+    const sizes = new Float32Array(NEURON_COUNT);
+    const velocities = [];
+
+    const palette = [
+      [0.486, 0.227, 0.929],
+      [0.024, 0.714, 0.831],
+      [0.957, 0.447, 0.714],
+      [0.655, 0.545, 0.980],
+      [0.984, 0.749, 0.141],
+      [0.204, 0.827, 0.600],
+    ];
+
+    for (let i = 0; i < NEURON_COUNT; i++) {
+      // Distribute in a brain-like ellipsoid
+      const r = 8 + Math.random() * 8;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      positions[i * 3]     = r * Math.sin(phi) * Math.cos(theta) * 1.2; // wider X
+      positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * 0.85; // shorter Y
+      positions[i * 3 + 2] = r * Math.cos(phi);
+
+      const c = palette[Math.floor(Math.random() * palette.length)];
+      colors[i * 3] = c[0]; colors[i * 3 + 1] = c[1]; colors[i * 3 + 2] = c[2];
+      sizes[i] = 0.12 + Math.random() * 0.22;
+      velocities.push({
+        x: (Math.random() - 0.5) * 0.003,
+        y: (Math.random() - 0.5) * 0.003,
+        z: (Math.random() - 0.5) * 0.003,
+      });
+    }
+
+    const neuronGeo = new THREE.BufferGeometry();
+    neuronGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    neuronGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    neuronGeo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+    const neuronMat = new THREE.ShaderMaterial({
+      vertexShader: `
+        attribute float size;
+        attribute vec3 color;
+        varying vec3 vColor;
+        void main() {
+          vColor = color;
+          vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = size * 350.0 / -mvPos.z;
+          gl_Position = projectionMatrix * mvPos;
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vColor;
+        void main() {
+          float d = length(gl_PointCoord - 0.5);
+          if (d > 0.5) discard;
+          float glow = 1.0 - smoothstep(0.0, 0.5, d);
+          float core = 1.0 - smoothstep(0.0, 0.15, d);
+          vec3 c = vColor * glow + vec3(1.0) * core * 0.4;
+          gl_FragColor = vec4(c, glow * 0.85);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+
+    const brainGroup = new THREE.Group();
+    const neurons = new THREE.Points(neuronGeo, neuronMat);
+    brainGroup.add(neurons);
+
+    // ── SYNAPSES (connections) ──
+    const SYNAPSE_COUNT = 200;
+    const linePos = new Float32Array(SYNAPSE_COUNT * 6);
+    const lineCol = new Float32Array(SYNAPSE_COUNT * 6);
+    let validSynapses = 0;
+
+    for (let i = 0; i < SYNAPSE_COUNT; i++) {
+      const a = Math.floor(Math.random() * NEURON_COUNT);
+      let b = Math.floor(Math.random() * NEURON_COUNT);
+      if (b === a) b = (b + 1) % NEURON_COUNT;
+
+      const dx = positions[a*3] - positions[b*3];
+      const dy = positions[a*3+1] - positions[b*3+1];
+      const dz = positions[a*3+2] - positions[b*3+2];
+      const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+      if (dist < 10) {
+        const idx = validSynapses;
+        linePos[idx*6]   = positions[a*3];
+        linePos[idx*6+1] = positions[a*3+1];
+        linePos[idx*6+2] = positions[a*3+2];
+        linePos[idx*6+3] = positions[b*3];
+        linePos[idx*6+4] = positions[b*3+1];
+        linePos[idx*6+5] = positions[b*3+2];
+
+        const alpha = 0.2;
+        lineCol[idx*6]   = colors[a*3] * alpha;
+        lineCol[idx*6+1] = colors[a*3+1] * alpha;
+        lineCol[idx*6+2] = colors[a*3+2] * alpha;
+        lineCol[idx*6+3] = colors[b*3] * alpha;
+        lineCol[idx*6+4] = colors[b*3+1] * alpha;
+        lineCol[idx*6+5] = colors[b*3+2] * alpha;
+        validSynapses++;
+      }
+    }
+
+    const lineGeo = new THREE.BufferGeometry();
+    lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos.slice(0, validSynapses * 6), 3));
+    lineGeo.setAttribute('color', new THREE.BufferAttribute(lineCol.slice(0, validSynapses * 6), 3));
+    const lineMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending });
+    const synapses = new THREE.LineSegments(lineGeo, lineMat);
+    brainGroup.add(synapses);
+
+    // ── FEATURE CLUSTER SPHERES (clickable) ──
+    const clusterMeshes = {};
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    for (const [key, feat] of Object.entries(FEATURES)) {
+      // Glowing sphere at cluster position
+      const geo = new THREE.SphereGeometry(1.4, 24, 24);
+      const mat = new THREE.MeshBasicMaterial({
+        color: feat.color,
+        transparent: true,
+        opacity: 0.35,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.copy(feat.pos);
+      mesh.userData = { feature: key };
+      brainGroup.add(mesh);
+      clusterMeshes[key] = mesh;
+
+      // Inner bright core
+      const coreGeo = new THREE.SphereGeometry(0.6, 16, 16);
+      const coreMat = new THREE.MeshBasicMaterial({ color: feat.color, transparent: true, opacity: 0.8 });
+      const core = new THREE.Mesh(coreGeo, coreMat);
+      core.position.copy(feat.pos);
+      brainGroup.add(core);
+
+      // Small particle cloud around cluster
+      const cCount = 20;
+      const cPos = new Float32Array(cCount * 3);
+      for (let j = 0; j < cCount; j++) {
+        cPos[j*3]   = feat.pos.x + (Math.random() - 0.5) * 4;
+        cPos[j*3+1] = feat.pos.y + (Math.random() - 0.5) * 4;
+        cPos[j*3+2] = feat.pos.z + (Math.random() - 0.5) * 4;
+      }
+      const cGeo = new THREE.BufferGeometry();
+      cGeo.setAttribute('position', new THREE.BufferAttribute(cPos, 3));
+      const cMat = new THREE.PointsMaterial({
+        color: feat.color,
+        size: 0.2,
+        transparent: true,
+        opacity: 0.5,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      brainGroup.add(new THREE.Points(cGeo, cMat));
+    }
+
+    // ── ACTIVATION PULSES ──
+    const PULSE_COUNT = 40;
+    const pulsePos = new Float32Array(PULSE_COUNT * 3);
+    const pulseSpeeds = [];
+    const lp = lineGeo.attributes.position.array;
+    const synCount = validSynapses;
+
+    for (let i = 0; i < PULSE_COUNT; i++) {
+      const src = Math.floor(Math.random() * synCount);
+      pulsePos[i*3]   = lp[src*6];
+      pulsePos[i*3+1] = lp[src*6+1];
+      pulsePos[i*3+2] = lp[src*6+2];
+      pulseSpeeds.push({ srcIdx: src, t: Math.random(), speed: 0.004 + Math.random() * 0.008 });
+    }
+    const pulseGeo = new THREE.BufferGeometry();
+    pulseGeo.setAttribute('position', new THREE.BufferAttribute(pulsePos, 3));
+    const pulseMat = new THREE.PointsMaterial({
+      color: 0xfbbf24, size: 0.35, transparent: true, opacity: 0.9,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const pulses = new THREE.Points(pulseGeo, pulseMat);
+    brainGroup.add(pulses);
+
+    scene.add(brainGroup);
+
+    // ── CLICK / TAP DETECTION ──
+    let panelOpen = false;
+    const meshArray = Object.values(clusterMeshes);
+
+    canvas.addEventListener('pointerdown', onPointerDown);
+    let pointerDownPos = { x: 0, y: 0 };
+
+    function onPointerDown(e) {
+      pointerDownPos = { x: e.clientX, y: e.clientY };
+      canvas.addEventListener('pointerup', onPointerUp, { once: true });
+    }
+
+    function onPointerUp(e) {
+      const dx = e.clientX - pointerDownPos.x;
+      const dy = e.clientY - pointerDownPos.y;
+      if (Math.sqrt(dx*dx + dy*dy) > 8) return; // was a drag
+
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObjects(meshArray);
+      if (hits.length > 0) {
+        const feature = hits[0].object.userData.feature;
+        showFeature(feature);
+      }
+    }
+
+    // Also handle clicking labels
+    document.querySelectorAll('.cluster-label').forEach(el => {
+      el.addEventListener('click', () => showFeature(el.dataset.feature));
+    });
+
+    // ── CAMERA ZOOM TO FEATURE ──
+    let cameraTarget = null;
+    let cameraLookTarget = null;
+    const ZOOM_SPEED = 0.04;
+
+    window.showFeature = function(featureKey) {
+      const feat = FEATURES[featureKey];
+      if (feat) {
+        // Calculate camera position: offset from cluster
+        const dir = feat.pos.clone().normalize();
+        cameraTarget = feat.pos.clone().add(dir.multiplyScalar(12));
+        cameraLookTarget = feat.pos.clone();
+        controls.autoRotate = false;
+      }
+      // Show panel content
+      document.getElementById('panel-content').innerHTML = getPanelHTML(featureKey);
+      document.getElementById('feature-panel').classList.add('open');
+      document.getElementById('center-hint').style.opacity = '0';
+      panelOpen = true;
+    };
+
+    window.closePanel = function() {
+      document.getElementById('feature-panel').classList.remove('open');
+      document.getElementById('center-hint').style.opacity = '1';
+      panelOpen = false;
+      // Return camera
+      cameraTarget = new THREE.Vector3(0, 2, 38);
+      cameraLookTarget = new THREE.Vector3(0, 0, 0);
+      setTimeout(() => { controls.autoRotate = true; }, 800);
+    };
+
+    // ── UPDATE LABELS (project 3D → 2D) ──
+    function updateLabels() {
+      for (const [key, feat] of Object.entries(FEATURES)) {
+        const el = document.getElementById(feat.label);
+        if (!el) continue;
+
+        // Project 3D position to screen
+        const worldPos = feat.pos.clone();
+        brainGroup.localToWorld(worldPos);
+        const projected = worldPos.clone().project(camera);
+
+        // Check if in front of camera
+        if (projected.z > 1) {
+          el.classList.remove('visible');
+          continue;
+        }
+
+        const x = (projected.x * 0.5 + 0.5) * window.innerWidth;
+        const y = (-projected.y * 0.5 + 0.5) * window.innerHeight;
+
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+        el.style.transform = `translate(-50%, -50%) scale(${panelOpen ? 0 : 1})`;
+        el.classList.toggle('visible', !panelOpen);
+      }
+    }
+
+    // ── ANIMATION LOOP ──
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const t = clock.getElapsedTime();
+
+      controls.update();
+
+      // Smooth camera zoom
+      if (cameraTarget) {
+        camera.position.lerp(cameraTarget, ZOOM_SPEED);
+        if (cameraLookTarget) {
+          const currentLook = new THREE.Vector3();
+          controls.target.lerp(cameraLookTarget, ZOOM_SPEED);
+        }
+        if (camera.position.distanceTo(cameraTarget) < 0.1) {
+          cameraTarget = null;
+          cameraLookTarget = null;
+        }
+      }
+
+      // Drift neurons
+      const pos = neuronGeo.attributes.position.array;
       for (let i = 0; i < NEURON_COUNT; i++) {
-        const r = 12 + Math.random() * 10;
-        const theta = Math.random() * Math.PI * 2;
-        const phi = Math.acos(2 * Math.random() - 1);
-
-        positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-        positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-        positions[i * 3 + 2] = r * Math.cos(phi);
-
-        const c = palette[Math.floor(Math.random() * palette.length)];
-        colors[i * 3] = c[0];
-        colors[i * 3 + 1] = c[1];
-        colors[i * 3 + 2] = c[2];
-
-        sizes[i] = 0.15 + Math.random() * 0.25;
-
-        velocities.push({
-          x: (Math.random() - 0.5) * 0.002,
-          y: (Math.random() - 0.5) * 0.002,
-          z: (Math.random() - 0.5) * 0.002,
-        });
-      }
-
-      const neuronGeo = new THREE.BufferGeometry();
-      neuronGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      neuronGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      neuronGeo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-
-      const neuronMat = new THREE.ShaderMaterial({
-        vertexShader: `
-          attribute float size;
-          attribute vec3 color;
-          varying vec3 vColor;
-          void main() {
-            vColor = color;
-            vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
-            gl_PointSize = size * 300.0 / -mvPos.z;
-            gl_Position = projectionMatrix * mvPos;
-          }
-        `,
-        fragmentShader: `
-          varying vec3 vColor;
-          void main() {
-            float d = length(gl_PointCoord - 0.5);
-            if (d > 0.5) discard;
-            float glow = 1.0 - smoothstep(0.0, 0.5, d);
-            float core = 1.0 - smoothstep(0.0, 0.2, d);
-            vec3 c = vColor * glow + vec3(1.0) * core * 0.3;
-            gl_FragColor = vec4(c, glow * 0.8);
-          }
-        `,
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      });
-
-      const neurons = new THREE.Points(neuronGeo, neuronMat);
-      scene.add(neurons);
-
-      // --- Synapses (lines) ---
-      const SYNAPSE_COUNT = 120;
-      const linePositions = new Float32Array(SYNAPSE_COUNT * 6);
-      const lineColors = new Float32Array(SYNAPSE_COUNT * 6);
-
-      for (let i = 0; i < SYNAPSE_COUNT; i++) {
-        const a = Math.floor(Math.random() * NEURON_COUNT);
-        let b = Math.floor(Math.random() * NEURON_COUNT);
-        if (b === a) b = (b + 1) % NEURON_COUNT;
-
-        const dx = positions[a*3] - positions[b*3];
-        const dy = positions[a*3+1] - positions[b*3+1];
-        const dz = positions[a*3+2] - positions[b*3+2];
-        const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-
-        if (dist < 12) {
-          linePositions[i*6] = positions[a*3];
-          linePositions[i*6+1] = positions[a*3+1];
-          linePositions[i*6+2] = positions[a*3+2];
-          linePositions[i*6+3] = positions[b*3];
-          linePositions[i*6+4] = positions[b*3+1];
-          linePositions[i*6+5] = positions[b*3+2];
-
-          const alpha = 0.15;
-          lineColors[i*6] = 0.486 * alpha;
-          lineColors[i*6+1] = 0.227 * alpha;
-          lineColors[i*6+2] = 0.929 * alpha;
-          lineColors[i*6+3] = 0.024 * alpha;
-          lineColors[i*6+4] = 0.714 * alpha;
-          lineColors[i*6+5] = 0.831 * alpha;
+        pos[i*3]   += velocities[i].x;
+        pos[i*3+1] += velocities[i].y;
+        pos[i*3+2] += velocities[i].z;
+        const x = pos[i*3], y = pos[i*3+1], z = pos[i*3+2];
+        const d = Math.sqrt(x*x + y*y + z*z);
+        if (d > 20) {
+          velocities[i].x *= -1;
+          velocities[i].y *= -1;
+          velocities[i].z *= -1;
         }
       }
+      neuronGeo.attributes.position.needsUpdate = true;
 
-      const lineGeo = new THREE.BufferGeometry();
-      lineGeo.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
-      lineGeo.setAttribute('color', new THREE.BufferAttribute(lineColors, 3));
+      // Pulse sizes
+      const sz = neuronGeo.attributes.size.array;
+      for (let i = 0; i < NEURON_COUNT; i++) {
+        sz[i] = 0.12 + 0.08 * Math.sin(t * 1.5 + i * 0.4);
+      }
+      neuronGeo.attributes.size.needsUpdate = true;
 
-      const lineMat = new THREE.LineBasicMaterial({
-        vertexColors: true,
-        transparent: true,
-        opacity: 0.6,
-        blending: THREE.AdditiveBlending,
-      });
+      // Animate cluster sphere pulsing
+      for (const [key, mesh] of Object.entries(clusterMeshes)) {
+        const s = 1 + 0.1 * Math.sin(t * 2 + key.length);
+        mesh.scale.setScalar(s);
+        mesh.material.opacity = 0.25 + 0.1 * Math.sin(t * 3 + key.length * 2);
+      }
 
-      const synapses = new THREE.LineSegments(lineGeo, lineMat);
-      scene.add(synapses);
-
-      // --- Activation pulse particles ---
-      const PULSE_COUNT = 30;
-      const pulsePositions = new Float32Array(PULSE_COUNT * 3);
-      const pulseSpeeds = [];
-
+      // Animate pulses along synapses
+      const pp = pulseGeo.attributes.position.array;
       for (let i = 0; i < PULSE_COUNT; i++) {
-        const src = Math.floor(Math.random() * SYNAPSE_COUNT);
-        pulsePositions[i*3] = linePositions[src*6];
-        pulsePositions[i*3+1] = linePositions[src*6+1];
-        pulsePositions[i*3+2] = linePositions[src*6+2];
-        pulseSpeeds.push({
-          srcIdx: src,
-          t: Math.random(),
-          speed: 0.005 + Math.random() * 0.01,
-        });
+        const p = pulseSpeeds[i];
+        p.t += p.speed;
+        if (p.t > 1) { p.t = 0; p.srcIdx = Math.floor(Math.random() * synCount); }
+        const si = p.srcIdx * 6;
+        pp[i*3]   = lp[si]   + (lp[si+3] - lp[si])   * p.t;
+        pp[i*3+1] = lp[si+1] + (lp[si+4] - lp[si+1]) * p.t;
+        pp[i*3+2] = lp[si+2] + (lp[si+5] - lp[si+2]) * p.t;
       }
+      pulseGeo.attributes.position.needsUpdate = true;
 
-      const pulseGeo = new THREE.BufferGeometry();
-      pulseGeo.setAttribute('position', new THREE.BufferAttribute(pulsePositions, 3));
+      updateLabels();
+      renderer.render(scene, camera);
+    }
 
-      const pulseMat = new THREE.PointsMaterial({
-        color: 0xfbbf24,
-        size: 0.4,
-        transparent: true,
-        opacity: 0.9,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      });
+    animate();
 
-      const pulses = new THREE.Points(pulseGeo, pulseMat);
-      scene.add(pulses);
+    // ── RESIZE ──
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
 
-      // --- Mouse interaction ---
-      let mouseX = 0, mouseY = 0;
-      document.addEventListener('mousemove', (e) => {
-        mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
-        mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
-      });
-
-      // --- Animation loop ---
-      const clock = new THREE.Clock();
-
-      function animate() {
-        requestAnimationFrame(animate);
-        const t = clock.getElapsedTime();
-
-        // Rotate brain slowly
-        neurons.rotation.y = t * 0.05 + mouseX * 0.3;
-        neurons.rotation.x = Math.sin(t * 0.03) * 0.1 + mouseY * 0.2;
-        synapses.rotation.copy(neurons.rotation);
-        pulses.rotation.copy(neurons.rotation);
-
-        // Drift neurons
-        const pos = neuronGeo.attributes.position.array;
-        for (let i = 0; i < NEURON_COUNT; i++) {
-          pos[i*3] += velocities[i].x;
-          pos[i*3+1] += velocities[i].y;
-          pos[i*3+2] += velocities[i].z;
-
-          // Keep within sphere
-          const x = pos[i*3], y = pos[i*3+1], z = pos[i*3+2];
-          const d = Math.sqrt(x*x + y*y + z*z);
-          if (d > 24) {
-            velocities[i].x *= -1;
-            velocities[i].y *= -1;
-            velocities[i].z *= -1;
-          }
-        }
-        neuronGeo.attributes.position.needsUpdate = true;
-
-        // Animate pulses along synapses
-        const pp = pulseGeo.attributes.position.array;
-        for (let i = 0; i < PULSE_COUNT; i++) {
-          const p = pulseSpeeds[i];
-          p.t += p.speed;
-          if (p.t > 1) { p.t = 0; p.srcIdx = Math.floor(Math.random() * SYNAPSE_COUNT); }
-
-          const si = p.srcIdx * 6;
-          pp[i*3] = linePositions[si] + (linePositions[si+3] - linePositions[si]) * p.t;
-          pp[i*3+1] = linePositions[si+1] + (linePositions[si+4] - linePositions[si+1]) * p.t;
-          pp[i*3+2] = linePositions[si+2] + (linePositions[si+5] - linePositions[si+2]) * p.t;
-        }
-        pulseGeo.attributes.position.needsUpdate = true;
-
-        // Pulse neuron sizes
-        const sz = neuronGeo.attributes.size.array;
-        for (let i = 0; i < NEURON_COUNT; i++) {
-          sz[i] = 0.15 + 0.1 * Math.sin(t * 2 + i * 0.5);
-        }
-        neuronGeo.attributes.size.needsUpdate = true;
-
-        renderer.render(scene, camera);
+    // ── THEME ──
+    window.toggleTheme = function() {
+      const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+      if (isLight) {
+        document.documentElement.removeAttribute('data-theme');
+        renderer.setClearColor(0x050510, 1);
+        document.getElementById('theme-icon-dark').style.display = '';
+        document.getElementById('theme-icon-light').style.display = 'none';
+        neuronMat.blending = THREE.AdditiveBlending;
+        lineMat.blending = THREE.AdditiveBlending;
+        pulseMat.blending = THREE.AdditiveBlending;
+      } else {
+        document.documentElement.setAttribute('data-theme', 'light');
+        renderer.setClearColor(0xe8e6e0, 1);
+        document.getElementById('theme-icon-dark').style.display = 'none';
+        document.getElementById('theme-icon-light').style.display = '';
+        neuronMat.blending = THREE.NormalBlending;
+        lineMat.blending = THREE.NormalBlending;
+        pulseMat.blending = THREE.NormalBlending;
       }
+      neuronMat.needsUpdate = true;
+      lineMat.needsUpdate = true;
+      pulseMat.needsUpdate = true;
+    };
 
-      animate();
+    // Show labels after scene loads
+    setTimeout(() => {
+      document.querySelectorAll('.cluster-label').forEach(el => el.classList.add('visible'));
+    }, 500);
 
-      // Resize
-      window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      });
+    // Reduced motion
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      controls.autoRotate = false;
+    }
+  </script>
 
-      // Reduce motion
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        neurons.rotation.set(0.1, 0.2, 0);
-        // Still render once but don't animate
-      }
-    })();
-
-    // === SCROLL REVEAL ===
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
-    }, { threshold: 0.1 });
-    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+  <!-- ─── Panel Content Templates + Payment Logic ──── -->
+  <script>
+    // === FEATURE PANEL CONTENT ===
+    function getPanelHTML(key) {
+      const panels = {
+        cone: `
+          <div class="feature-tag" style="color:var(--violet)">CONE QUERIES</div>
+          <h2>Adjustable Semantic Recall</h2>
+          <p>Instead of matching keywords, Cone Queries search a <strong>semantic cone</strong> around your query embedding. Narrow it for precision, widen it for exploration.</p>
+          <div class="stat-grid">
+            <div class="stat-card">
+              <div class="stat-value" style="color:var(--violet)">7/7</div>
+              <div class="stat-label">Relevant memories found</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" style="color:var(--text-muted)">2/7</div>
+              <div class="stat-label">Free keyword match</div>
+            </div>
+          </div>
+          <p><strong>How scoring works:</strong></p>
+          <div class="code-block">
+            <span style="color:var(--text-muted)">combined_score</span> = <span style="color:var(--violet)">similarity</span> &times; 0.7 + <span style="color:var(--cyan)">activation</span> &times; 0.3
+          </div>
+          <p>A memory can be semantically relevant (high similarity) even if rarely accessed. A frequently accessed memory gets a boost even at moderate similarity.</p>
+          <div class="code-block">
+            <div style="color:var(--text-muted)"># Narrow cone &mdash; precise lookup</div>
+            <div><span style="color:var(--cyan)">nmem_cone_query</span>(</div>
+            <div>&nbsp;&nbsp;query=<span style="color:var(--emerald)">"auth architecture"</span>,</div>
+            <div>&nbsp;&nbsp;threshold=<span style="color:var(--amber)">0.9</span></div>
+            <div>)</div>
+            <br>
+            <div style="color:var(--text-muted)"># Wide cone &mdash; brainstorm</div>
+            <div><span style="color:var(--cyan)">nmem_cone_query</span>(</div>
+            <div>&nbsp;&nbsp;query=<span style="color:var(--emerald)">"auth architecture"</span>,</div>
+            <div>&nbsp;&nbsp;threshold=<span style="color:var(--amber)">0.6</span></div>
+            <div>)</div>
+          </div>
+          <table class="compare-table">
+            <tr><th>Threshold</th><th>Behavior</th></tr>
+            <tr><td>0.60 &ndash; 0.70</td><td>Wide cone &mdash; more results, broader</td></tr>
+            <tr><td>0.75 &ndash; 0.85</td><td>Balanced &mdash; default recall</td></tr>
+            <tr><td>0.90 &ndash; 0.95</td><td>Narrow &mdash; near-exact matches</td></tr>
+          </table>
+        `,
+        merge: `
+          <div class="feature-tag" style="color:var(--emerald)">SMART MERGE</div>
+          <h2>Consolidation That Scales</h2>
+          <p>Free compares every pair of neurons &mdash; O(N&sup2;). At 5K neurons, that's 12.5M comparisons. <strong>Slow.</strong></p>
+          <p>Pro uses HNSW neighbor search to find merge candidates in <strong>O(N&times;k)</strong>:</p>
+          <div class="code-block">
+            <div>1. Find k=10 nearest HNSW neighbors</div>
+            <div>2. <span style="color:var(--emerald)">Mutual similarity check</span>: A near B AND B near A</div>
+            <div>3. Cluster mutually similar neurons</div>
+            <div>4. Rank by priority &times; activation</div>
+            <div>5. Merge low-ranked into anchor</div>
+          </div>
+          <div class="stat-grid">
+            <div class="stat-card">
+              <div class="stat-value" style="color:var(--emerald)">100x</div>
+              <div class="stat-label">Faster at 100K neurons</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" style="color:var(--amber)">10s</div>
+              <div class="stat-label">vs 5 hours (Free)</div>
+            </div>
+          </div>
+          <table class="compare-table">
+            <tr><th>Neurons</th><th>Free</th><th>Pro</th></tr>
+            <tr><td>1,000</td><td>~2s</td><td style="color:var(--emerald)">~0.1s</td></tr>
+            <tr><td>10,000</td><td>~3 min</td><td style="color:var(--emerald)">~1s</td></tr>
+            <tr><td>100,000</td><td>~5 hours</td><td style="color:var(--emerald)">~10s</td></tr>
+          </table>
+          <div class="code-block">
+            <span style="color:var(--cyan)">nmem_pro_merge</span>(
+            <br>&nbsp;&nbsp;similarity_threshold=<span style="color:var(--amber)">0.85</span>,
+            <br>&nbsp;&nbsp;max_merges=<span style="color:var(--amber)">20</span>,
+            <br>&nbsp;&nbsp;dry_run=<span style="color:var(--amber)">true</span>
+            <br>)
+          </div>
+        `,
+        compress: `
+          <div class="feature-tag" style="color:var(--pink)">DIRECTIONAL COMPRESSION</div>
+          <h2>Smarter Memory Trimming</h2>
+          <p>Free cuts sentences by entity density &mdash; it doesn't know <strong>which direction</strong> matters.</p>
+          <p>Pro scores each sentence against <strong>multiple semantic axes</strong> (the memory's own embedding + up to 3 related neuron embeddings), keeping sentences that preserve <strong>all</strong> relevant directions.</p>
+          <div class="code-block">
+            score = <span style="color:var(--pink)">primary_similarity</span> &times; 0.6 + <span style="color:var(--cyan)">max(ref_similarities)</span> &times; 0.4
+          </div>
+          <p><strong>Example:</strong> A memory about "React performance optimization" relates to both React AND performance. Free compression might keep only React-heavy sentences. Pro keeps sentences scoring high on <strong>both</strong> axes.</p>
+          <table class="compare-table">
+            <tr><th>Level</th><th>Content kept</th><th>When</th></tr>
+            <tr><td>FULL</td><td>100%</td><td>Active memories</td></tr>
+            <tr><td>SUMMARY</td><td>66%</td><td>7-30 days old</td></tr>
+            <tr><td>ESSENCE</td><td>33%</td><td>30-90 days old</td></tr>
+            <tr><td>GHOST</td><td>First 5 words</td><td>&gt;90 days old</td></tr>
+          </table>
+        `,
+        tiers: `
+          <div class="feature-tag" style="color:var(--amber)">5-TIER VECTOR COMPRESSION</div>
+          <h2>Automatic Memory Lifecycle</h2>
+          <p>Memories age. Pro automatically manages their storage footprint:</p>
+          <div style="margin:20px 0">
+            <div class="tier-row">
+              <span class="tier-name" style="color:var(--amber)">ACTIVE</span>
+              <div class="tier-bar-bg"><div class="tier-bar-fill" style="width:100%;background:var(--amber)"></div></div>
+              <span class="tier-bytes">1,536 B</span>
+            </div>
+            <div class="tier-row">
+              <span class="tier-name" style="color:var(--violet)">WARM</span>
+              <div class="tier-bar-bg"><div class="tier-bar-fill" style="width:50%;background:var(--violet)"></div></div>
+              <span class="tier-bytes">768 B</span>
+            </div>
+            <div class="tier-row">
+              <span class="tier-name" style="color:var(--cyan)">COOL</span>
+              <div class="tier-bar-bg"><div class="tier-bar-fill" style="width:25%;background:var(--cyan)"></div></div>
+              <span class="tier-bytes">384 B</span>
+            </div>
+            <div class="tier-row">
+              <span class="tier-name" style="color:var(--emerald)">FROZEN</span>
+              <div class="tier-bar-bg"><div class="tier-bar-fill" style="width:3%;background:var(--emerald)"></div></div>
+              <span class="tier-bytes">48 B</span>
+            </div>
+            <div class="tier-row">
+              <span class="tier-name" style="color:var(--text-muted)">CRYSTAL</span>
+              <div class="tier-bar-bg"><div class="tier-bar-fill" style="width:0.5%;background:var(--text-muted)"></div></div>
+              <span class="tier-bytes">0 B</span>
+            </div>
+          </div>
+          <p><strong>Smart rules prevent over-compression:</strong></p>
+          <p>&bull; Priority &ge; 8 &rarr; always ACTIVE (critical memories never compress)<br>
+             &bull; Recent access &rarr; auto-promote back to higher tier<br>
+             &bull; Ephemeral memories &rarr; CRYSTAL immediately</p>
+          <div class="stat-grid">
+            <div class="stat-card">
+              <div class="stat-value" style="color:var(--amber)">92%</div>
+              <div class="stat-label">Savings at 1M neurons</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" style="color:var(--emerald)">120 MB</div>
+              <div class="stat-label">vs 1.5 GB (Free)</div>
+            </div>
+          </div>
+        `,
+        engine: `
+          <div class="feature-tag" style="color:var(--cyan)">INFINITYDB ENGINE</div>
+          <h2>Purpose-Built for Neural Graphs</h2>
+          <p>Not a wrapper around SQLite. A <strong>custom storage engine</strong> designed for one job: neural memory graphs.</p>
+          <div class="code-block">
+            <div><span style="color:var(--cyan)">brain.inf</span>&nbsp;&nbsp;&nbsp;Header (magic + version + dims)</div>
+            <div><span style="color:var(--violet)">brain.vec</span>&nbsp;&nbsp;&nbsp;Memory-mapped vectors (numpy mmap)</div>
+            <div><span style="color:var(--emerald)">brain.idx</span>&nbsp;&nbsp;&nbsp;HNSW index (M=16, ef=200)</div>
+            <div><span style="color:var(--pink)">brain.graph</span>&nbsp;Directed synapse edges (msgpack)</div>
+            <div><span style="color:var(--amber)">brain.meta</span>&nbsp;&nbsp;Neuron metadata (O(1) lookup)</div>
+            <div><span style="color:var(--pulse)">brain.wal</span>&nbsp;&nbsp;&nbsp;Write-ahead log (idempotent replay)</div>
+          </div>
+          <div class="stat-grid">
+            <div class="stat-card">
+              <div class="stat-value" style="color:var(--cyan)">&lt;5ms</div>
+              <div class="stat-label">Search at 1M neurons</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" style="color:var(--emerald)">2M+</div>
+              <div class="stat-label">Neurons tested</div>
+            </div>
+          </div>
+          <table class="compare-table">
+            <tr><th></th><th>Free (SQLite)</th><th>Pro (InfinityDB)</th></tr>
+            <tr><td>Recall</td><td>Keyword (FTS5)</td><td style="color:var(--violet)">Semantic (HNSW)</td></tr>
+            <tr><td>Speed (10K)</td><td>~500ms</td><td style="color:var(--violet)">&lt;5ms</td></tr>
+            <tr><td>Scale</td><td>~50K</td><td style="color:var(--violet)">2M+</td></tr>
+            <tr><td>Storage (1M)</td><td>~5 GB</td><td style="color:var(--violet)">~1 GB</td></tr>
+            <tr><td>Graph</td><td>SQL JOINs</td><td style="color:var(--violet)">Native BFS &lt;1ms</td></tr>
+            <tr><td>Crash recovery</td><td>SQLite WAL</td><td style="color:var(--violet)">Custom WAL + replay</td></tr>
+            <tr><td>MCP tools</td><td>52</td><td style="color:var(--violet)">52 + 3 Pro</td></tr>
+          </table>
+          <div style="margin-top:20px">
+            <div class="code-block">
+              <span style="color:var(--text-muted)">$</span> <span style="color:var(--emerald)">pip install</span> <span style="color:var(--violet)">neural-memory-pro</span>
+            </div>
+            <p style="font-size:13px">Auto-registers via entry points. All 52 free tools keep working. Three new tools appear automatically.</p>
+          </div>
+        `,
+        pricing: `
+          <div class="feature-tag" style="color:var(--pulse)">PRICING</div>
+          <h2>Free users keep everything.<br>Pro users get a better brain.</h2>
+          <div class="pricing-cards">
+            <div class="price-card">
+              <h3>Free</h3>
+              <div class="price" style="color:var(--text)">$0</div>
+              <div class="period">forever</div>
+              <ul>
+                <li><span class="check">&#10003;</span> 52 MCP tools</li>
+                <li><span class="check">&#10003;</span> SQLite storage + FTS5 search</li>
+                <li><span class="check">&#10003;</span> Spreading activation retrieval</li>
+                <li><span class="check">&#10003;</span> 14 consolidation strategies</li>
+                <li><span class="check">&#10003;</span> Cloud sync (100 neurons)</li>
+              </ul>
+              <a href="https://github.com/nhadaututtheky/neural-memory" target="_blank" rel="noopener"
+                 class="btn-checkout secondary" style="text-align:center;text-decoration:none">pip install neural-memory</a>
+            </div>
+            <div class="price-card featured">
+              <div style="font-size:11px;font-weight:700;color:var(--violet);margin-bottom:8px">POPULAR</div>
+              <h3>Pro</h3>
+              <div class="price" style="color:var(--violet)">$9<span class="period">/month</span></div>
+              <div class="period">or $89/year (save $19) &bull; 219,000 VND/thang</div>
+              <ul>
+                <li><span class="check">&#10003;</span> Everything in Free</li>
+                <li><span class="check">&#10003;</span> <strong style="color:var(--text)">InfinityDB engine</strong> (HNSW)</li>
+                <li><span class="check">&#10003;</span> <strong style="color:var(--text)">Cone Queries</strong></li>
+                <li><span class="check">&#10003;</span> <strong style="color:var(--text)">Smart Merge</strong></li>
+                <li><span class="check">&#10003;</span> <strong style="color:var(--text)">Directional Compression</strong></li>
+                <li><span class="check">&#10003;</span> 5-tier vector compression</li>
+                <li><span class="check">&#10003;</span> 3 Pro MCP tools</li>
+                <li><span class="check">&#10003;</span> Unlimited cloud sync</li>
+              </ul>
+              <button class="btn-checkout primary" onclick="startPolarCheckout('NM-PRO-MONTHLY')">Get Pro &mdash; $9/mo (Card / PayPal)</button>
+              <button class="btn-checkout secondary" onclick="startPolarCheckout('NM-PRO-YEARLY')">Yearly &mdash; $89/yr (save $19)</button>
+              <button class="btn-checkout secondary" onclick="showSepayModal('NM-PRO-MONTHLY', 219000)">Thanh toan QR &mdash; 219,000d/thang (VN)</button>
+            </div>
+            <div class="price-card">
+              <h3>Team</h3>
+              <div class="price" style="color:var(--text)">$29<span class="period">/seat/month</span></div>
+              <div class="period">or $249/seat/year (save $99)</div>
+              <ul>
+                <li><span class="check">&#10003;</span> Everything in Pro</li>
+                <li><span class="check">&#10003;</span> Shared brain hub</li>
+                <li><span class="check">&#10003;</span> Brain-to-brain sync</li>
+                <li><span class="check">&#10003;</span> Role-based access</li>
+                <li><span class="check">&#10003;</span> Audit log</li>
+                <li><span class="check">&#10003;</span> Self-hosted Docker</li>
+              </ul>
+              <a href="mailto:enterprise@theio.vn" class="btn-checkout secondary" style="text-align:center;text-decoration:none">Contact Us</a>
+            </div>
+          </div>
+          <p style="font-size:13px;text-align:center">30-day money-back guarantee. No questions asked.</p>
+        `,
+      };
+      return panels[key] || '<p>Feature details coming soon.</p>';
+    }
 
     // === PAYMENT CONFIG ===
     const PAY_API = 'https://pay.theio.vn';
@@ -1018,7 +1392,7 @@
       document.getElementById('checkout-product').value = product;
       document.getElementById('checkout-title').textContent = info.name;
       document.getElementById('checkout-subtitle').textContent = info.priceUSD + ' — License key + private repo access';
-      document.getElementById('checkout-error').classList.add('hidden');
+      document.getElementById('checkout-error').style.display = 'none';
       document.getElementById('checkout-modal').style.display = 'flex';
     }
 
@@ -1028,7 +1402,7 @@
       const errEl = document.getElementById('checkout-error');
       btn.textContent = 'Creating checkout...';
       btn.disabled = true;
-      errEl.classList.add('hidden');
+      errEl.style.display = 'none';
 
       try {
         const res = await fetch(PAY_API + '/checkout/polar', {
@@ -1048,7 +1422,7 @@
         }
       } catch (err) {
         errEl.textContent = err.message;
-        errEl.classList.remove('hidden');
+        errEl.style.display = 'block';
         btn.textContent = 'Continue to Payment';
         btn.disabled = false;
       }
@@ -1121,21 +1495,6 @@
     }
     document.getElementById('sepay-modal').addEventListener('click', function(e) {
       if (e.target === this) closeSepayModal();
-    });
-
-    // === TIER BAR ANIMATION ===
-    const tierObserver = new IntersectionObserver((entries) => {
-      entries.forEach(e => {
-        if (e.isIntersecting) {
-          e.target.querySelectorAll('.tier-bar').forEach(bar => {
-            bar.style.width = bar.style.width;
-          });
-        }
-      });
-    }, { threshold: 0.3 });
-    document.querySelectorAll('.tier-bar').forEach(el => {
-      const parent = el.closest('.reveal') || el.parentElement;
-      if (parent) tierObserver.observe(parent);
     });
   </script>
 
