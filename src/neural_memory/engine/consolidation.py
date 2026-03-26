@@ -50,6 +50,7 @@ class ConsolidationStrategy(StrEnum):
     ESSENCE_BACKFILL = "essence_backfill"
     DETECT_DRIFT = "detect_drift"
     SMART_MERGE = "smart_merge"  # Pro: HNSW-accelerated merge via plugin
+    REPLAY = "replay"  # Hippocampal replay: LTP/LTD on recent fibers
     ALL = "all"
 
 
@@ -227,6 +228,7 @@ class ConsolidationEngine:
             {
                 ConsolidationStrategy.ENRICH,
                 ConsolidationStrategy.DREAM,
+                ConsolidationStrategy.REPLAY,
             }
         ),
         frozenset(
@@ -278,6 +280,7 @@ class ConsolidationEngine:
             ConsolidationStrategy.DETECT_DRIFT: lambda: self._detect_drift(report, dry_run),
             ConsolidationStrategy.ESSENCE_BACKFILL: lambda: self._essence_backfill(report, dry_run),
             ConsolidationStrategy.SMART_MERGE: lambda: self._smart_merge_pro(report, dry_run),
+            ConsolidationStrategy.REPLAY: lambda: self._replay(report, dry_run),
         }
         handler = dispatch.get(strategy)
         if handler is not None:
@@ -1312,6 +1315,28 @@ class ConsolidationEngine:
                 report.dream_synapses_created += 1
             except ValueError:
                 logger.debug("Dream synapse already exists, skipping")
+
+    async def _replay(
+        self,
+        report: ConsolidationReport,
+        dry_run: bool,
+    ) -> None:
+        """Run hippocampal replay — LTP/LTD on recent fibers."""
+        from neural_memory.engine.hippocampal_replay import hippocampal_replay
+
+        brain_id = self._storage.current_brain_id
+        if not brain_id:
+            return
+        brain = await self._storage.get_brain(brain_id)
+        if not brain:
+            return
+
+        result = await hippocampal_replay(
+            self._storage, brain.config, dry_run=dry_run,
+        )
+        report.extra["replay_episodes"] = result.episodes_replayed
+        report.extra["replay_ltp"] = result.synapses_strengthened
+        report.extra["replay_ltd"] = result.synapses_weakened
 
     async def _learn_habits(
         self,

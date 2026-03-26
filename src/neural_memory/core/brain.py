@@ -137,6 +137,15 @@ class BrainConfig:
     # Retrieval reconsolidation (recalled memories absorb context)
     reconsolidation_enabled: bool = True
     reconsolidation_drift_threshold: float = 0.6
+    # Context-dependent retrieval (project-scoped scoring)
+    context_retrieval_enabled: bool = True
+    # Hippocampal replay consolidation (LTP/LTD)
+    replay_enabled: bool = True
+    replay_ltp_factor: float = 1.1
+    replay_ltd_factor: float = 0.98
+    # Working memory chunking (group retrieval output)
+    chunking_enabled: bool = True
+    max_chunks: int = 5
 
     def with_updates(self, **kwargs: Any) -> BrainConfig:
         """Create a new config with updated values."""

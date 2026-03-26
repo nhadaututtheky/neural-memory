@@ -527,6 +527,45 @@ class RecallHandler:
         except Exception:
             logger.debug("Source enrichment failed (non-critical)", exc_info=True)
 
+        # Cognitive chunking: group results when many fibers matched
+        if (
+            getattr(brain.config, "chunking_enabled", True)
+            and result.fibers_matched
+            and len(result.fibers_matched) > 7
+        ):
+            try:
+                from neural_memory.engine.chunking import chunk_retrieval_results
+
+                chunk_neuron_ids = list(result.neurons_activated) if result.neurons_activated else []
+                chunk_activations = dict.fromkeys(chunk_neuron_ids, 1.0)
+                synapse_pairs: list[tuple[str, str, float]] = []
+                for nid in chunk_neuron_ids[:20]:
+                    syns = await storage.get_synapses(source_id=nid)
+                    for s in syns:
+                        synapse_pairs.append((s.source_id, s.target_id, s.weight))
+
+                max_chunks = int(getattr(brain.config, "max_chunks", 5)) if isinstance(
+                    getattr(brain.config, "max_chunks", 5), (int, float)
+                ) else 5
+                chunks = chunk_retrieval_results(
+                    neuron_ids=chunk_neuron_ids,
+                    activation_levels=chunk_activations,
+                    synapse_pairs=synapse_pairs,
+                    max_chunks=max_chunks,
+                )
+                if chunks:
+                    response["cognitive_chunks"] = [
+                        {
+                            "label": c.label,
+                            "neuron_ids": list(c.neuron_ids),
+                            "coherence": c.coherence,
+                            "relevance": c.relevance,
+                        }
+                        for c in chunks
+                    ]
+            except Exception:
+                logger.debug("Cognitive chunking failed (non-critical)", exc_info=True)
+
         # Session intelligence: attach topic context
         session_topics = (result.metadata or {}).get("session_topics")
         if session_topics:

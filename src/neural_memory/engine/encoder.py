@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 from neural_memory.core.neuron import Neuron
 from neural_memory.core.synapse import Synapse
 from neural_memory.engine.arousal import ArousalStep
+from neural_memory.engine.context_retrieval import ContextFingerprintStep
 from neural_memory.engine.pipeline import Pipeline, PipelineContext
 from neural_memory.engine.pipeline_steps import (
     AutoTagStep,
@@ -119,6 +120,7 @@ def build_default_pipeline(
             TemporalLinkingStep(),
             SemanticLinkingStep(),
             CrossMemoryLinkStep(),
+            ContextFingerprintStep(),
             BuildFiberStep(),
             TemporalBindingStep(),
         ]

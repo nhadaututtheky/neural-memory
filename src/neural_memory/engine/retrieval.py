@@ -1810,6 +1810,21 @@ class ReflexPipeline:
             if isinstance(arousal, (int, float)) and arousal > 0.0:
                 score *= 1.0 + float(arousal) * 0.2  # up to 20% boost at max arousal
 
+            # --- Context-dependent retrieval: match encoding vs query context ---
+            if getattr(self._config, "context_retrieval_enabled", True):
+                stored_fp = fiber_meta.get("_context_fingerprint")
+                if stored_fp and isinstance(stored_fp, dict) and query_tokens:
+                    from neural_memory.engine.context_retrieval import (
+                        ContextFingerprint,
+                        context_match_score,
+                    )
+                    enc_ctx = ContextFingerprint.from_dict(stored_fp)
+                    ret_ctx = ContextFingerprint(
+                        dominant_topics=tuple(sorted(query_tokens)[:10]),
+                    )
+                    ctx_mult = context_match_score(enc_ctx, ret_ctx)
+                    score *= ctx_mult
+
             # --- Adaptive instruction boost ---
             if fiber_meta.get("memory_type") == "instruction" or fiber_meta.get("type") in (
                 "instruction",
