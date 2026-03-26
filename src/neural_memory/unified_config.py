@@ -1612,10 +1612,14 @@ class UnifiedConfig:
         return db_path
 
     def list_brains(self) -> list[str]:
-        """List available brains (by database files)."""
+        """List available brains (SQLite .db files + InfinityDB directories)."""
         if not self.brains_dir.exists():
             return []
-        return sorted(p.stem for p in self.brains_dir.glob("*.db"))
+        # SQLite: brains/*.db
+        db_brains = {p.stem for p in self.brains_dir.glob("*.db")}
+        # InfinityDB: brains/<name>/brain.inf
+        inf_brains = {p.parent.name for p in self.brains_dir.glob("*/brain.inf")}
+        return sorted(db_brains | inf_brains)
 
     def switch_brain(self, brain_name: str) -> None:
         """Switch to a different brain and save config."""
@@ -1912,17 +1916,17 @@ async def _get_sqlite_storage(
 
 
 # Cached FalkorDB storage (single connection, multi-graph)
-_infinitydb_storage: NeuralStorage | None = None
 _falkordb_storage: NeuralStorage | None = None
 
 
 async def _get_infinitydb_storage(config: UnifiedConfig, name: str) -> NeuralStorage:
-    """Create or return cached InfinityDB storage (Pro plugin)."""
-    global _infinitydb_storage
+    """Create or return cached InfinityDB storage (Pro plugin).
 
-    if _infinitydb_storage is not None:
-        _infinitydb_storage.set_brain(name)
-        return _infinitydb_storage
+    Each brain gets its own InfinityDB instance (separate directory with
+    binary files), cached in _storage_cache with an 'inf:' prefix to avoid
+    collisions with SQLite cache keys.
+    """
+    lock = _get_storage_lock()
 
     from neural_memory.plugins import get_storage_class
 
@@ -1935,13 +1939,41 @@ async def _get_infinitydb_storage(config: UnifiedConfig, name: str) -> NeuralSto
 
     base_dir = config.data_dir / "brains"
     base_dir.mkdir(parents=True, exist_ok=True)
+    cache_key = f"inf:{name}"
 
-    storage = storage_cls(base_dir=str(base_dir), brain_id=name)
-    await storage.open()
+    async with lock:
+        # Return cached storage if available and engine is open
+        if cache_key in _storage_cache:
+            cached = _storage_cache[cache_key]
+            if getattr(cached, "_db", None) is not None:
+                return cached
 
-    _infinitydb_storage = storage
-    logger.info("InfinityDB storage initialized for brain '%s'", name)
-    return _infinitydb_storage
+        # Log migration hint if SQLite data exists but InfinityDB dir doesn't
+        sqlite_path = base_dir / f"{name}.db"
+        infinity_dir = base_dir / name
+        if sqlite_path.exists() and not (infinity_dir / "brain.inf").exists():
+            logger.info(
+                "SQLite data exists for brain '%s' but no InfinityDB data found. "
+                "Run 'nmem migrate --backend infinitydb' to migrate, or data "
+                "will start empty.",
+                name,
+            )
+
+        try:
+            inf_storage = storage_cls(base_dir=str(base_dir), brain_id=name)
+            await inf_storage.open()
+        except Exception:
+            logger.error(
+                "InfinityDB open() failed for brain '%s', falling back to SQLite",
+                name,
+                exc_info=True,
+            )
+            return await _get_sqlite_storage(config, name, None)
+
+        result: NeuralStorage = inf_storage
+        _storage_cache[cache_key] = result
+        logger.info("InfinityDB storage initialized for brain '%s'", name)
+        return result
 
 
 async def _get_falkordb_storage(config: UnifiedConfig, name: str) -> NeuralStorage:

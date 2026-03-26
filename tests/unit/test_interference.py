@@ -63,7 +63,9 @@ class TestDetectInterference:
         config.fan_effect_threshold = 15
 
         new_neuron = _make_neuron("Python async await patterns are complex", ["python"])
-        old_neuron = _make_neuron("Python async await patterns are complicated", ["python"], created_offset_hours=24)
+        old_neuron = _make_neuron(
+            "Python async await patterns are complicated", ["python"], created_offset_hours=24
+        )
 
         storage = AsyncMock()
         storage.find_neurons = AsyncMock(return_value=[old_neuron])
@@ -80,7 +82,9 @@ class TestDetectInterference:
         config.fan_effect_threshold = 15
 
         new_neuron = _make_neuron("The weather is sunny today", ["weather"])
-        old_neuron = _make_neuron("Database indexing improves query speed", ["weather"], created_offset_hours=24)
+        old_neuron = _make_neuron(
+            "Database indexing improves query speed", ["weather"], created_offset_hours=24
+        )
 
         storage = AsyncMock()
         storage.find_neurons = AsyncMock(return_value=[old_neuron])
@@ -98,7 +102,11 @@ class TestDetectInterference:
 
         new_neuron = _make_neuron("Python fact new", ["python"])
         candidates = [
-            _make_neuron(f"Python fact {i} about different topics entirely", ["python"], created_offset_hours=i)
+            _make_neuron(
+                f"Python fact {i} about different topics entirely",
+                ["python"],
+                created_offset_hours=i,
+            )
             for i in range(5)
         ]
 
@@ -191,8 +199,10 @@ class TestResolveInterference:
         ]
 
         old_syn = Synapse.create(
-            source_id="n1", target_id="n99",
-            type=SynapseType.CO_OCCURS, weight=0.5,
+            source_id="n1",
+            target_id="n99",
+            type=SynapseType.CO_OCCURS,
+            weight=0.5,
         )
         storage = AsyncMock()
         storage.get_synapses = AsyncMock(return_value=[old_syn])

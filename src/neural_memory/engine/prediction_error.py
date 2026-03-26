@@ -64,8 +64,30 @@ def _detects_reversal(content_a: str, content_b: str) -> bool:
 
     if a_has_neg != b_has_neg:
         # Check word overlap (excluding stop words / negations)
-        a_words = set(re.findall(r"\b\w{3,}\b", a_lower)) - {"not", "don", "doesn", "didn", "can", "cannot", "won", "isn", "aren", "wasn"}
-        b_words = set(re.findall(r"\b\w{3,}\b", b_lower)) - {"not", "don", "doesn", "didn", "can", "cannot", "won", "isn", "aren", "wasn"}
+        a_words = set(re.findall(r"\b\w{3,}\b", a_lower)) - {
+            "not",
+            "don",
+            "doesn",
+            "didn",
+            "can",
+            "cannot",
+            "won",
+            "isn",
+            "aren",
+            "wasn",
+        }
+        b_words = set(re.findall(r"\b\w{3,}\b", b_lower)) - {
+            "not",
+            "don",
+            "doesn",
+            "didn",
+            "can",
+            "cannot",
+            "won",
+            "isn",
+            "aren",
+            "wasn",
+        }
         if len(a_words & b_words) >= 2:
             return True
 

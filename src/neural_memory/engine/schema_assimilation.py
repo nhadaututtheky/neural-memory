@@ -103,7 +103,10 @@ async def assimilate_or_accommodate(
 
     # No matching schema — check if cluster is large enough to create one
     domain_neurons = await _find_neurons_by_tags(
-        storage, new_tags, min_matches=min_cluster, max_results=min_cluster + 5,
+        storage,
+        new_tags,
+        min_matches=min_cluster,
+        max_results=min_cluster + 5,
     )
 
     if len(domain_neurons) < min_cluster:
@@ -346,7 +349,7 @@ async def batch_schema_assimilation(
             schemas_created += 1
             continue
 
-        neurons = tag_neurons[tag][:min_cluster + 10]
+        neurons = tag_neurons[tag][: min_cluster + 10]
         result = await _create_schema(neurons, {tag}, storage)
         if result.action == AssimilationAction.SCHEMA_CREATED:
             schemas_created += 1

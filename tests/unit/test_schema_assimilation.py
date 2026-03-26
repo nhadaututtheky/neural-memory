@@ -16,7 +16,9 @@ from neural_memory.engine.schema_assimilation import (
 )
 
 
-def _make_neuron(content: str, tags: list[str] | None = None, ntype: NeuronType = NeuronType.CONCEPT) -> Neuron:
+def _make_neuron(
+    content: str, tags: list[str] | None = None, ntype: NeuronType = NeuronType.CONCEPT
+) -> Neuron:
     return Neuron.create(
         content=content,
         type=ntype,
@@ -82,10 +84,12 @@ class TestAssimilateOrAccommodate:
 
         storage = AsyncMock()
         # No existing schemas
-        storage.find_neurons = AsyncMock(side_effect=[
-            [],  # schema search
-            [_make_neuron(f"fact {i}", ["python"]) for i in range(5)],  # domain search
-        ])
+        storage.find_neurons = AsyncMock(
+            side_effect=[
+                [],  # schema search
+                [_make_neuron(f"fact {i}", ["python"]) for i in range(5)],  # domain search
+            ]
+        )
 
         result = await assimilate_or_accommodate(neuron, storage, config)
         assert result.action == AssimilationAction.NO_SCHEMA
@@ -99,10 +103,12 @@ class TestAssimilateOrAccommodate:
 
         domain_neurons = [_make_neuron(f"Python fact {i}", ["python"]) for i in range(12)]
         storage = AsyncMock()
-        storage.find_neurons = AsyncMock(side_effect=[
-            [],  # no existing schemas
-            domain_neurons,  # enough domain memories
-        ])
+        storage.find_neurons = AsyncMock(
+            side_effect=[
+                [],  # no existing schemas
+                domain_neurons,  # enough domain memories
+            ]
+        )
         storage.add_neuron = AsyncMock()
         storage.add_synapse = AsyncMock()
 
@@ -121,6 +127,7 @@ class TestAssimilateOrAccommodate:
         schema = _make_neuron("Schema: python patterns", ["python"], NeuronType.SCHEMA)
         schema_meta = {**schema.metadata, "schema_version": 1}
         from dataclasses import replace
+
         schema = replace(schema, metadata=schema_meta)
 
         neuron = _make_neuron("Python decorators are useful", ["python"])
@@ -142,6 +149,7 @@ class TestAssimilateOrAccommodate:
         schema = _make_neuron("Python is fast for development", ["python"], NeuronType.SCHEMA)
         schema_meta = {**schema.metadata, "schema_version": 1}
         from dataclasses import replace
+
         schema = replace(schema, metadata=schema_meta)
 
         # Contradictory memory
@@ -165,10 +173,12 @@ class TestAssimilateOrAccommodate:
 
         neuron = _make_neuron("test fact", ["python"])
         storage = AsyncMock()
-        storage.find_neurons = AsyncMock(side_effect=[
-            [],  # no schemas
-            [_make_neuron(f"fact {i}", ["python"]) for i in range(50)],
-        ])
+        storage.find_neurons = AsyncMock(
+            side_effect=[
+                [],  # no schemas
+                [_make_neuron(f"fact {i}", ["python"]) for i in range(50)],
+            ]
+        )
 
         result = await assimilate_or_accommodate(neuron, storage, config)
         assert result.action == AssimilationAction.NO_SCHEMA
@@ -192,10 +202,12 @@ class TestBatchSchemaAssimilation:
 
         neurons = [_make_neuron(f"fact {i}", ["python"]) for i in range(5)]
         storage = AsyncMock()
-        storage.find_neurons = AsyncMock(side_effect=[
-            [],  # no existing schemas
-            neurons,  # all neurons
-        ])
+        storage.find_neurons = AsyncMock(
+            side_effect=[
+                [],  # no existing schemas
+                neurons,  # all neurons
+            ]
+        )
 
         count = await batch_schema_assimilation(storage, config, dry_run=True)
         assert count >= 1

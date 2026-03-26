@@ -162,9 +162,7 @@ async def reconsolidate_on_recall(
     if drift > threshold and query_entities:
         bridges = 0
         for entity in query_entities[:_MAX_BRIDGE_PER_RECALL]:
-            anchor_id = await _find_or_create_context_anchor(
-                storage, entity, brain_id
-            )
+            anchor_id = await _find_or_create_context_anchor(storage, entity, brain_id)
             if anchor_id and anchor_id != anchor_neuron_id:
                 try:
                     bridge = Synapse.create(

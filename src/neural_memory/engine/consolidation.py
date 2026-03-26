@@ -1338,7 +1338,9 @@ class ConsolidationEngine:
             return
 
         result = await hippocampal_replay(
-            self._storage, brain.config, dry_run=dry_run,
+            self._storage,
+            brain.config,
+            dry_run=dry_run,
         )
         report.extra["replay_episodes"] = result.episodes_replayed
         report.extra["replay_ltp"] = result.synapses_strengthened
@@ -1360,7 +1362,9 @@ class ConsolidationEngine:
             return
 
         schemas_created = await batch_schema_assimilation(
-            self._storage, brain.config, dry_run=dry_run,
+            self._storage,
+            brain.config,
+            dry_run=dry_run,
         )
         report.extra["schemas_created"] = schemas_created
 
@@ -1380,7 +1384,9 @@ class ConsolidationEngine:
             return
 
         result = await batch_interference_scan(
-            self._storage, brain.config, dry_run=dry_run,
+            self._storage,
+            brain.config,
+            dry_run=dry_run,
         )
         report.extra["interference_fan_effects"] = result.fan_effects_flagged
 

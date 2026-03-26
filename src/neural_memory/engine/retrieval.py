@@ -652,8 +652,7 @@ class ReflexPipeline:
                 "sufficiency_gate": _sufficiency.gate,
                 "sufficiency_confidence": _sufficiency.confidence,
                 "activation_levels": {
-                    nid: round(ar.activation_level, 4)
-                    for nid, ar in activations.items()
+                    nid: round(ar.activation_level, 4) for nid, ar in activations.items()
                 },
             },
         )
@@ -785,9 +784,7 @@ class ReflexPipeline:
                 from neural_memory.engine.reconsolidation import reconsolidate_on_recall
 
                 query_tags = set(stimulus.keywords) if stimulus.keywords else set()
-                query_entities = (
-                    [e.text for e in stimulus.entities] if stimulus.entities else []
-                )
+                query_entities = [e.text for e in stimulus.entities] if stimulus.entities else []
                 brain_id = getattr(self._storage, "_brain_id", "")
                 for fiber in fibers_matched[:5]:  # top 5 only
                     if fiber.anchor_neuron_id:
@@ -1822,6 +1819,7 @@ class ReflexPipeline:
                         ContextFingerprint,
                         context_match_score,
                     )
+
                     enc_ctx = ContextFingerprint.from_dict(stored_fp)
                     ret_ctx = ContextFingerprint(
                         dominant_topics=tuple(sorted(query_tokens)[:10]),

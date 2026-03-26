@@ -131,21 +131,25 @@ async def detect_interference(
             else:
                 itype = InterferenceType.PROACTIVE
 
-            results.append(InterferenceResult(
-                neuron_id=candidate.id,
-                score=round(score, 4),
-                interference_type=itype,
-            ))
+            results.append(
+                InterferenceResult(
+                    neuron_id=candidate.id,
+                    score=round(score, 4),
+                    interference_type=itype,
+                )
+            )
 
     # Check fan effect
     fan_threshold = getattr(config, "fan_effect_threshold", 15)
     fan_threshold = int(fan_threshold) if isinstance(fan_threshold, (int, float)) else 15
     if same_tag_count >= fan_threshold:
-        results.append(InterferenceResult(
-            neuron_id=new_neuron.id,
-            score=min(1.0, same_tag_count / (fan_threshold * 2)),
-            interference_type=InterferenceType.FAN_EFFECT,
-        ))
+        results.append(
+            InterferenceResult(
+                neuron_id=new_neuron.id,
+                score=min(1.0, same_tag_count / (fan_threshold * 2)),
+                interference_type=InterferenceType.FAN_EFFECT,
+            )
+        )
 
     return results[:max_candidates]
 
@@ -192,6 +196,7 @@ async def resolve_interference(
                 old_synapses = await storage.get_synapses(source_id=r.neuron_id)
                 for old_syn in old_synapses[:10]:
                     from dataclasses import replace
+
                     new_weight = max(0.01, old_syn.weight * 0.95)
                     if new_weight != old_syn.weight:
                         updated = replace(old_syn, weight=new_weight)
@@ -259,7 +264,9 @@ async def batch_interference_scan(
     for tag, count in tag_counts.items():
         if count >= fan_threshold:
             fan_effects += 1
-            logger.info("Fan effect: tag '%s' has %d memories (threshold: %d)", tag, count, fan_threshold)
+            logger.info(
+                "Fan effect: tag '%s' has %d memories (threshold: %d)", tag, count, fan_threshold
+            )
 
     return ResolutionReport(
         fan_effects_flagged=fan_effects,

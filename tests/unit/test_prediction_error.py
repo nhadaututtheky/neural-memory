@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from neural_memory.engine.prediction_error import (
     PredictionErrorStep,
@@ -54,7 +55,9 @@ class TestComputeSurpriseBonus:
         return config
 
     @pytest.mark.asyncio
-    async def test_novel_topic_no_existing(self, mock_storage: AsyncMock, mock_config: MagicMock) -> None:
+    async def test_novel_topic_no_existing(
+        self, mock_storage: AsyncMock, mock_config: MagicMock
+    ) -> None:
         """Completely novel topic → surprise 1.5."""
         result = await compute_surprise_bonus(
             content="quantum computing breakthroughs",
@@ -100,7 +103,9 @@ class TestComputeSurpriseBonus:
         assert result == 0.0
 
     @pytest.mark.asyncio
-    async def test_contradiction_high_surprise(self, mock_storage: AsyncMock, mock_config: MagicMock) -> None:
+    async def test_contradiction_high_surprise(
+        self, mock_storage: AsyncMock, mock_config: MagicMock
+    ) -> None:
         """Contradictory content → surprise 2.5."""
         existing = MagicMock()
         existing.id = "existing-1"
@@ -176,15 +181,19 @@ class TestPredictionErrorStep:
         mock_storage.find_neurons.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_skips_dedup_reused(self, mock_ctx: MagicMock, mock_storage: AsyncMock, mock_config: MagicMock) -> None:
+    async def test_skips_dedup_reused(
+        self, mock_ctx: MagicMock, mock_storage: AsyncMock, mock_config: MagicMock
+    ) -> None:
         """Skip prediction error if dedup already reused an anchor."""
         mock_ctx.effective_metadata["_dedup_reused_anchor"] = MagicMock()
         step = PredictionErrorStep()
-        result = await step.execute(mock_ctx, mock_storage, mock_config)
+        await step.execute(mock_ctx, mock_storage, mock_config)
         mock_storage.find_neurons.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_adds_surprise_bonus(self, mock_ctx: MagicMock, mock_storage: AsyncMock, mock_config: MagicMock) -> None:
+    async def test_adds_surprise_bonus(
+        self, mock_ctx: MagicMock, mock_storage: AsyncMock, mock_config: MagicMock
+    ) -> None:
         """Novel topic → surprise bonus added to effective_metadata."""
         step = PredictionErrorStep()
         result = await step.execute(mock_ctx, mock_storage, mock_config)
@@ -192,7 +201,9 @@ class TestPredictionErrorStep:
         assert result.effective_metadata["_surprise_bonus"] > 0
 
     @pytest.mark.asyncio
-    async def test_priority_clamped(self, mock_ctx: MagicMock, mock_storage: AsyncMock, mock_config: MagicMock) -> None:
+    async def test_priority_clamped(
+        self, mock_ctx: MagicMock, mock_storage: AsyncMock, mock_config: MagicMock
+    ) -> None:
         """Priority should be clamped to [1, 10]."""
         mock_ctx.effective_metadata["auto_priority"] = 9
 

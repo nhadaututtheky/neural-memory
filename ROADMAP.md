@@ -4,7 +4,7 @@
 > Every item passes the VISION.md 4-question test + brain test.
 > ZERO LLM dependency — pure algorithmic, regex, graph-based.
 
-**Current state**: v4.19.0 — 50 MCP tools, 4700+ tests, schema v35, SQLite + PostgreSQL backends, cognitive reasoning layer.
+**Current state**: v4.20.4 — 52 MCP tools, 5173+ tests, schema v36, SQLite + PostgreSQL + InfinityDB backends, cognitive reasoning layer.
 **Architecture**: Spreading activation reflex engine, biological memory model, MCP standard.
 
 ---
@@ -91,10 +91,28 @@
 
 ### A4. Stability & Polish
 
-- [ ] Pre-ship smoke test automation (`scripts/pre_ship.py` → CI)
+- [x] Pre-ship smoke test automation (`scripts/pre_ship.py` → CI)
 - [ ] E2E test coverage for dashboard (Playwright)
 - [ ] Schema migration rollback testing (v29 → v28 → v27)
 - [ ] Performance benchmarks: recall latency at 10K/50K/100K neurons
+- [x] Consolidation performance fixes (v4.20.2-v4.20.4: timeouts, O(N²) caps, async yields)
+- [x] InfinityDB integration fixes (7 bugs: singleton, list_brains, set_brain, WAL fallback, migrator)
+
+### A5. Neuroscience Engine — Issues #111, #112 (plan: `.rune/plan-neuro-engine.md`)
+
+**Problem**: Brain metaphor stops at storage/retrieval. Real brains have lateral inhibition, reconsolidation, prediction error, context-dependent recall, and tiered access patterns. NM treats all memories equally at encoding and retrieval time.
+
+**Scope**: 4 phases, 10 improvements (~1600 LOC total)
+- [ ] Phase 1: Lateral Inhibition + Temporal Binding + Emotional Valence (~250 LOC)
+- [ ] Phase 2: Prediction Error Encoding + Retrieval Reconsolidation (~350 LOC)
+- [ ] Phase 3: Context-Dependent Retrieval + Hippocampal Replay + Working Memory Chunking (~470 LOC)
+- [ ] Phase 4: Schema Assimilation + Interference Forgetting (~550 LOC)
+- **Brain test**: ALL 10 improvements map to documented neuroscience principles → Yes
+- **Zero LLM**: Pure algorithmic (regex, SimHash, graph ops). No embeddings required.
+
+**Relation to Issues**:
+- #111 (Tiered Memory HOT/WARM/COLD) → Phase 3 context retrieval + valence-based tier resistance
+- #112 (Pro Auto-tier) → Phase 3 hippocampal replay (LTP/LTD = auto promote/demote by usage)
 
 **Target**: v5.0 = "production-ready for teams" release.
 
@@ -158,11 +176,12 @@
 
 > From laptop brain to production brain. Handle millions of neurons.
 
-### C1. Tiered Storage Architecture
+### C1. Tiered Storage Architecture — Issues #111, #112
 
 **Problem**: SQLite great for <500K neurons. Beyond that, graph queries slow down.
 
 **Vision**: Hybrid storage — hot data in memory/FalkorDB, warm in SQLite WAL, cold in compressed archives.
+**Prerequisite**: A5 Neuroscience Engine provides the foundation (valence-based tier resistance, context fingerprints, LTP/LTD auto-promotion).
 
 ```
 Hot tier (in-memory + optional FalkorDB) — recent + frequently activated
@@ -268,34 +287,37 @@ Lifecycle hooks:
 
 > Where NeuralMemory goes beyond current AI memory paradigms.
 
-### E1. Dream Engine v2 (Insight Generation)
+### E1. Dream Engine v2 (Insight Generation) — *partially pulled to A5 Phase 3*
 
 **Vision**: During consolidation, detect patterns across unrelated memories → surface non-obvious connections.
 
 - Cross-domain pattern detection: "auth tokens expire" + "memory decay" → pattern
 - Anomaly detection: memories that should be connected but aren't
 - Weekly "dream report": "Your brain discovered 3 new connections this week"
+- **Pulled forward**: Hippocampal Replay (biased LTP/LTD) → A5 Phase 3
 - **Brain test**: Dreams create unexpected associations → Yes
 
-### E2. Forgetting Curves & Spaced Repetition
+### E2. Forgetting Curves & Spaced Repetition — *partially pulled to A5 Phase 4*
 
 **Vision**: Integrate Ebbinghaus curves into recall loop. Foundation exists (`nmem_review` with Leitner boxes).
 
 - Auto-schedule review for important memories approaching decay threshold
 - Agent hints: "You haven't recalled 'deployment checklist' in 14 days. Review?"
 - Memories surviving multiple reviews → lower decay rate automatically
+- **Pulled forward**: Interference Forgetting (retroactive/proactive/fan effect) → A5 Phase 4
 - **Brain test**: Não cần ôn lại để nhớ lâu → Yes
 
-### E3. Contextual Personality
+### E3. Contextual Personality — *partially pulled to A5 Phase 3*
 
 **Vision**: Brain adapts retrieval based on agent persona, task context, user preferences.
 
 - "Security expert" persona → boost security-related synapses
 - "Quick chat" context → shallow depth; "code review" → deep
 - Personality profiles stored as brain metadata
+- **Pulled forward**: Context-Dependent Retrieval (project/topic fingerprint) → A5 Phase 3
 - **Brain test**: Context ảnh hưởng cách não nhớ → Yes
 
-### E4. Causal Reasoning Engine
+### E4. Causal Reasoning Engine — *partially pulled to A5 Phase 2*
 
 **Vision**: Detect implicit causality from temporal patterns. "X always happens before Y" → auto-create causal synapse.
 
@@ -303,6 +325,7 @@ Lifecycle hooks:
 - Confidence scoring (correlation ≠ causation guard)
 - Counterfactual queries: "What would have happened if X didn't occur?"
 - Causal graph visualization in dashboard
+- **Pulled forward**: Prediction Error Encoding (surprise signal) → A5 Phase 2
 - **Brain test**: Não suy luận nhân quả từ kinh nghiệm → Yes
 
 ---
@@ -349,4 +372,4 @@ Every roadmap item must pass:
 ---
 
 *See [VISION.md](VISION.md) for the north star guiding all decisions.*
-*Last updated: 2026-03-17*
+*Last updated: 2026-03-26*

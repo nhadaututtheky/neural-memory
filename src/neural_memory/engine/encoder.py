@@ -468,4 +468,6 @@ class MemoryEncoder:
                 if results:
                     await resolve_interference(results, anchor, self._storage, self._config)
             except Exception:
-                logger.debug("Post-encode interference detection failed (non-critical)", exc_info=True)
+                logger.debug(
+                    "Post-encode interference detection failed (non-critical)", exc_info=True
+                )

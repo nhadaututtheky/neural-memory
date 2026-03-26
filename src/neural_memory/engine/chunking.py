@@ -98,12 +98,14 @@ def chunk_retrieval_results(
         # Auto-label from shared tags
         label = _auto_label(cluster, neuron_tags) if neuron_tags else f"cluster-{len(chunks) + 1}"
 
-        chunks.append(CognitiveChunk(
-            label=label,
-            neuron_ids=tuple(cluster),
-            coherence=round(coherence, 4),
-            relevance=round(relevance, 4),
-        ))
+        chunks.append(
+            CognitiveChunk(
+                label=label,
+                neuron_ids=tuple(cluster),
+                coherence=round(coherence, 4),
+                relevance=round(relevance, 4),
+            )
+        )
 
     # Add ungrouped high-activation neurons as singletons
     for nid in sorted_neurons:
@@ -111,12 +113,14 @@ def chunk_retrieval_results(
             activation = activation_levels.get(nid, 0.0)
             if activation > 0.0:
                 label = _auto_label([nid], neuron_tags) if neuron_tags else f"singleton-{nid[:8]}"
-                chunks.append(CognitiveChunk(
-                    label=label,
-                    neuron_ids=(nid,),
-                    coherence=0.0,
-                    relevance=round(activation, 4),
-                ))
+                chunks.append(
+                    CognitiveChunk(
+                        label=label,
+                        neuron_ids=(nid,),
+                        coherence=0.0,
+                        relevance=round(activation, 4),
+                    )
+                )
                 assigned.add(nid)
 
     # Sort by relevance

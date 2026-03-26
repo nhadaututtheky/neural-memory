@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import SynapseType
 from neural_memory.engine.reconsolidation import (
-    ReconsolidationResult,
+    _CONTEXT_ANCHOR_CACHE,
     _jaccard_distance,
     reconsolidate_on_recall,
-    _CONTEXT_ANCHOR_CACHE,
 )
 
 
@@ -64,7 +64,9 @@ class TestReconsolidateOnRecall:
         return config
 
     @pytest.mark.asyncio
-    async def test_same_context_low_drift(self, mock_storage: AsyncMock, mock_config: MagicMock) -> None:
+    async def test_same_context_low_drift(
+        self, mock_storage: AsyncMock, mock_config: MagicMock
+    ) -> None:
         """Recall in same context → low drift, no bridge."""
         result = await reconsolidate_on_recall(
             fiber_id="fiber-1",
@@ -80,7 +82,9 @@ class TestReconsolidateOnRecall:
         assert result.reconsolidation_count == 1
 
     @pytest.mark.asyncio
-    async def test_different_context_high_drift(self, mock_storage: AsyncMock, mock_config: MagicMock) -> None:
+    async def test_different_context_high_drift(
+        self, mock_storage: AsyncMock, mock_config: MagicMock
+    ) -> None:
         """Recall in different context → high drift, bridge created."""
         result = await reconsolidate_on_recall(
             fiber_id="fiber-1",
@@ -100,7 +104,9 @@ class TestReconsolidateOnRecall:
         assert call_args.metadata.get("_reconsolidation_bridge") is True
 
     @pytest.mark.asyncio
-    async def test_context_trail_updated(self, mock_storage: AsyncMock, mock_config: MagicMock) -> None:
+    async def test_context_trail_updated(
+        self, mock_storage: AsyncMock, mock_config: MagicMock
+    ) -> None:
         """Reconsolidation updates context trail in metadata."""
         await reconsolidate_on_recall(
             fiber_id="fiber-1",
@@ -118,10 +124,14 @@ class TestReconsolidateOnRecall:
         assert "python" in trail[0]["tags"]
 
     @pytest.mark.asyncio
-    async def test_context_trail_rolling_window(self, mock_storage: AsyncMock, mock_config: MagicMock) -> None:
+    async def test_context_trail_rolling_window(
+        self, mock_storage: AsyncMock, mock_config: MagicMock
+    ) -> None:
         """Context trail should be capped at 5 entries."""
         # Pre-populate with 5 trail entries
-        existing_trail = [{"tags": [f"tag{i}"], "entities": [], "ts": "2026-01-01"} for i in range(5)]
+        existing_trail = [
+            {"tags": [f"tag{i}"], "entities": [], "ts": "2026-01-01"} for i in range(5)
+        ]
         neuron = Neuron.create(
             type=NeuronType.CONCEPT,
             content="test",
@@ -146,7 +156,9 @@ class TestReconsolidateOnRecall:
         assert result.reconsolidation_count == 6
 
     @pytest.mark.asyncio
-    async def test_reconsolidation_count_increments(self, mock_storage: AsyncMock, mock_config: MagicMock) -> None:
+    async def test_reconsolidation_count_increments(
+        self, mock_storage: AsyncMock, mock_config: MagicMock
+    ) -> None:
         """Count increments on each recall."""
         neuron = Neuron.create(
             type=NeuronType.CONCEPT,
@@ -200,7 +212,9 @@ class TestReconsolidateOnRecall:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_context_anchor_reused_from_cache(self, mock_storage: AsyncMock, mock_config: MagicMock) -> None:
+    async def test_context_anchor_reused_from_cache(
+        self, mock_storage: AsyncMock, mock_config: MagicMock
+    ) -> None:
         """Context anchor should be cached and reused."""
         # First call — creates anchor
         await reconsolidate_on_recall(
@@ -214,7 +228,6 @@ class TestReconsolidateOnRecall:
         )
 
         # Reset find_neurons calls
-        find_call_count_1 = mock_storage.find_neurons.call_count
 
         # Second call — same entity, should use cache
         await reconsolidate_on_recall(
@@ -227,7 +240,6 @@ class TestReconsolidateOnRecall:
             brain_id="test-brain",
         )
 
-        find_call_count_2 = mock_storage.find_neurons.call_count
         # Second call should not trigger additional find_neurons for "Kubernetes"
         # (it may still call find_neurons for the neuron lookup, but anchor is cached)
         assert "test-brain:Kubernetes" in _CONTEXT_ANCHOR_CACHE

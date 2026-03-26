@@ -529,7 +529,9 @@ class RecallHandler:
 
         # Cognitive chunking: group results when many fibers matched
         fibers_count_for_chunking = (
-            len(result.fibers_matched) if isinstance(result.fibers_matched, list) else result.fibers_matched
+            len(result.fibers_matched)
+            if isinstance(result.fibers_matched, list)
+            else result.fibers_matched
         )
         if (
             getattr(brain.config, "chunking_enabled", True)
@@ -548,9 +550,11 @@ class RecallHandler:
                     for s in syns:
                         synapse_pairs.append((s.source_id, s.target_id, s.weight))
 
-                max_chunks = int(getattr(brain.config, "max_chunks", 5)) if isinstance(
-                    getattr(brain.config, "max_chunks", 5), (int, float)
-                ) else 5
+                max_chunks = (
+                    int(getattr(brain.config, "max_chunks", 5))
+                    if isinstance(getattr(brain.config, "max_chunks", 5), (int, float))
+                    else 5
+                )
                 chunks = chunk_retrieval_results(
                     neuron_ids=chunk_neuron_ids,
                     activation_levels=chunk_activations,
