@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -200,3 +200,104 @@ class TestBatchSchemaAssimilation:
         count = await batch_schema_assimilation(storage, config, dry_run=True)
         assert count >= 1
         storage.add_neuron.assert_not_called()
+
+
+class TestPostEncodeNeuroHook:
+    """Test that schema assimilation is wired as a post-encode hook."""
+
+    @pytest.mark.asyncio
+    async def test_post_encode_calls_assimilate(self) -> None:
+        """When schema_assimilation_enabled=True, encode triggers assimilate_or_accommodate."""
+        from neural_memory.engine.encoder import MemoryEncoder
+
+        config = MagicMock()
+        config.schema_assimilation_enabled = True
+        config.interference_detection_enabled = False
+        config.schema_min_cluster_size = 10
+
+        storage = AsyncMock()
+        storage.find_neurons = AsyncMock(return_value=[])
+        storage.add_neuron = AsyncMock()
+        storage.add_synapse = AsyncMock()
+
+        encoder = MemoryEncoder(storage, config)
+        anchor = _make_neuron("test content", ["python"])
+
+        with patch(
+            "neural_memory.engine.encoder.MemoryEncoder._post_encode_neuro"
+        ) as mock_hook:
+            mock_hook.return_value = None
+            # We can't easily run the full pipeline with mocks, so test the method directly
+            pass
+
+        # Direct test: call _post_encode_neuro and verify it calls assimilate
+        with patch(
+            "neural_memory.engine.schema_assimilation.assimilate_or_accommodate",
+            new_callable=AsyncMock,
+        ) as mock_assim:
+            mock_assim.return_value = AssimilationResult(action=AssimilationAction.NO_SCHEMA)
+            await encoder._post_encode_neuro(anchor)
+            mock_assim.assert_called_once_with(anchor, storage, config)
+
+    @pytest.mark.asyncio
+    async def test_post_encode_skips_when_disabled(self) -> None:
+        """When schema_assimilation_enabled=False, post-encode skips assimilate."""
+        from neural_memory.engine.encoder import MemoryEncoder
+
+        config = MagicMock()
+        config.schema_assimilation_enabled = False
+        config.interference_detection_enabled = False
+
+        storage = AsyncMock()
+        encoder = MemoryEncoder(storage, config)
+        anchor = _make_neuron("test content", ["python"])
+
+        with patch(
+            "neural_memory.engine.schema_assimilation.assimilate_or_accommodate",
+            new_callable=AsyncMock,
+        ) as mock_assim:
+            await encoder._post_encode_neuro(anchor)
+            mock_assim.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_post_encode_interference_wired(self) -> None:
+        """When interference_detection_enabled=True, post-encode runs interference detection."""
+        from neural_memory.engine.encoder import MemoryEncoder
+
+        config = MagicMock()
+        config.schema_assimilation_enabled = False
+        config.interference_detection_enabled = True
+        config.fan_effect_threshold = 15
+
+        storage = AsyncMock()
+        encoder = MemoryEncoder(storage, config)
+        anchor = _make_neuron("test content", ["python"])
+
+        with patch(
+            "neural_memory.engine.interference.detect_interference",
+            new_callable=AsyncMock,
+            return_value=[],
+        ) as mock_detect:
+            await encoder._post_encode_neuro(anchor)
+            mock_detect.assert_called_once_with(anchor, storage, config)
+
+    @pytest.mark.asyncio
+    async def test_post_encode_swallows_errors(self) -> None:
+        """Post-encode hook failures don't crash encoding."""
+        from neural_memory.engine.encoder import MemoryEncoder
+
+        config = MagicMock()
+        config.schema_assimilation_enabled = True
+        config.interference_detection_enabled = True
+
+        storage = AsyncMock()
+        encoder = MemoryEncoder(storage, config)
+        anchor = _make_neuron("test content", ["python"])
+
+        with patch(
+            "neural_memory.engine.schema_assimilation.assimilate_or_accommodate",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("boom"),
+        ):
+            # Should not raise
+            await encoder._post_encode_neuro(anchor)

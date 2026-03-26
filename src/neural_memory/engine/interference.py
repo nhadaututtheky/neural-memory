@@ -87,7 +87,7 @@ async def detect_interference(
         return []
 
     # Find neurons with overlapping tags (filter in-memory, no tags= param)
-    all_neurons = await storage.find_neurons(limit=max_candidates * 5)
+    all_neurons = await storage.find_neurons(limit=max(max_candidates * 5, 2000))
     candidates = [
         n for n in all_neurons
         if n.metadata and set(n.metadata.get("tags", [])) & new_tags
@@ -229,7 +229,7 @@ async def batch_interference_scan(
     fan_threshold = int(fan_threshold) if isinstance(fan_threshold, (int, float)) else 15
 
     # Scan tag clusters for overcrowding
-    all_neurons = await storage.find_neurons(limit=500)
+    all_neurons = await storage.find_neurons(limit=2000)
     tag_counts: dict[str, int] = {}
     for n in all_neurons:
         ntags = n.metadata.get("tags", []) if n.metadata else []

@@ -651,6 +651,10 @@ class ReflexPipeline:
                 "disputed_ids": disputed_ids,
                 "sufficiency_gate": _sufficiency.gate,
                 "sufficiency_confidence": _sufficiency.confidence,
+                "activation_levels": {
+                    nid: round(ar.activation_level, 4)
+                    for nid, ar in activations.items()
+                },
             },
         )
 

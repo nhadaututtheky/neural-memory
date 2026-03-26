@@ -539,8 +539,9 @@ class RecallHandler:
             try:
                 from neural_memory.engine.chunking import chunk_retrieval_results
 
-                chunk_neuron_ids = list(result.neurons_activated) if result.neurons_activated else []
-                chunk_activations = dict.fromkeys(chunk_neuron_ids, 1.0)
+                chunk_neuron_ids = list(result.subgraph.neuron_ids) if result.subgraph else []
+                stored_levels = (result.metadata or {}).get("activation_levels", {})
+                chunk_activations = {nid: stored_levels.get(nid, 0.5) for nid in chunk_neuron_ids}
                 synapse_pairs: list[tuple[str, str, float]] = []
                 for nid in chunk_neuron_ids[:20]:
                     syns = await storage.get_synapses(source_id=nid)

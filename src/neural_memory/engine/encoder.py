@@ -420,6 +420,10 @@ class MemoryEncoder:
             msg = "Pipeline did not produce a fiber (missing BuildFiberStep?)"
             raise RuntimeError(msg)
 
+        # Post-encode: schema assimilation + interference detection (non-critical)
+        if ctx.anchor_neuron is not None:
+            await self._post_encode_neuro(ctx.anchor_neuron)
+
         return EncodingResult(
             fiber=fiber,
             neurons_created=ctx.neurons_created,
@@ -427,3 +431,33 @@ class MemoryEncoder:
             synapses_created=ctx.synapses_created,
             conflicts_detected=ctx.conflicts_detected,
         )
+
+    async def _post_encode_neuro(self, anchor: Neuron) -> None:
+        """Run post-encode neuroscience hooks (schema assimilation + interference).
+
+        Non-critical: failures are logged and swallowed so encoding always succeeds.
+        """
+        # Schema assimilation: auto-wire when brain has enough memories
+        schema_enabled = getattr(self._config, "schema_assimilation_enabled", False)
+        if isinstance(schema_enabled, bool) and schema_enabled:
+            try:
+                from neural_memory.engine.schema_assimilation import assimilate_or_accommodate
+
+                await assimilate_or_accommodate(anchor, self._storage, self._config)
+            except Exception:
+                logger.debug("Post-encode schema assimilation failed (non-critical)", exc_info=True)
+
+        # Interference detection: detect and resolve competing memories
+        interference_enabled = getattr(self._config, "interference_detection_enabled", False)
+        if isinstance(interference_enabled, bool) and interference_enabled:
+            try:
+                from neural_memory.engine.interference import (
+                    detect_interference,
+                    resolve_interference,
+                )
+
+                results = await detect_interference(anchor, self._storage, self._config)
+                if results:
+                    await resolve_interference(results, anchor, self._storage, self._config)
+            except Exception:
+                logger.debug("Post-encode interference detection failed (non-critical)", exc_info=True)

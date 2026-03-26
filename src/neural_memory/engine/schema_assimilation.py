@@ -103,7 +103,7 @@ async def assimilate_or_accommodate(
 
     # No matching schema — check if cluster is large enough to create one
     # find_neurons doesn't support tags= param, so fetch and filter in-memory
-    all_neurons = await storage.find_neurons(limit=500)
+    all_neurons = await storage.find_neurons(limit=2000)
     domain_neurons = [
         n for n in all_neurons
         if n.metadata and set(n.metadata.get("tags", [])) & new_tags
@@ -282,7 +282,7 @@ async def batch_schema_assimilation(
         covered_tags.update(s.metadata.get("tags", []) if s.metadata else [])
 
     # Find popular tags that don't have schemas yet
-    all_neurons = await storage.find_neurons(limit=500)
+    all_neurons = await storage.find_neurons(limit=2000)
     tag_counts: Counter[str] = Counter()
     tag_neurons: dict[str, list[Neuron]] = {}
     for n in all_neurons:
