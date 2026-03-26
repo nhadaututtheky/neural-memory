@@ -775,6 +775,30 @@ class ReflexPipeline:
             except Exception:
                 logger.debug("Deferred write flush failed (non-critical)", exc_info=True)
 
+        # Post-recall reconsolidation: recalled memories absorb current context
+        if getattr(self._config, "reconsolidation_enabled", True) and fibers_matched:
+            try:
+                from neural_memory.engine.reconsolidation import reconsolidate_on_recall
+
+                query_tags = set(stimulus.keywords) if stimulus.keywords else set()
+                query_entities = (
+                    [e.text for e in stimulus.entities] if stimulus.entities else []
+                )
+                brain_id = getattr(self._storage, "_brain_id", "")
+                for fiber in fibers_matched[:5]:  # top 5 only
+                    if fiber.anchor_neuron_id:
+                        await reconsolidate_on_recall(
+                            fiber_id=fiber.id,
+                            anchor_neuron_id=fiber.anchor_neuron_id,
+                            query_tags=query_tags,
+                            query_entities=query_entities,
+                            storage=self._storage,
+                            config=self._config,
+                            brain_id=brain_id,
+                        )
+            except Exception:
+                logger.debug("Reconsolidation failed (non-critical)", exc_info=True)
+
         # Record session query (non-critical)
         if session_id:
             try:

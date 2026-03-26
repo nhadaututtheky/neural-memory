@@ -132,6 +132,11 @@ class BrainConfig:
     temporal_binding_window_seconds: float = 300.0  # 5-minute window
     # Arousal detection (emotional intensity for compression resistance)
     arousal_enabled: bool = True
+    # Prediction error encoding (surprise signal boosts priority)
+    prediction_error_enabled: bool = True
+    # Retrieval reconsolidation (recalled memories absorb context)
+    reconsolidation_enabled: bool = True
+    reconsolidation_drift_threshold: float = 0.6
 
     def with_updates(self, **kwargs: Any) -> BrainConfig:
         """Create a new config with updated values."""

@@ -34,6 +34,7 @@ from neural_memory.engine.pipeline_steps import (
     StructureDetectionStep,
     TemporalLinkingStep,
 )
+from neural_memory.engine.prediction_error import PredictionErrorStep
 from neural_memory.engine.temporal_binding import TemporalBindingStep
 from neural_memory.extraction.entities import EntityExtractor
 from neural_memory.extraction.relations import RelationExtractor
@@ -105,6 +106,7 @@ def build_default_pipeline(
             StructureDetectionStep(),
             AutoTagStep(tag_normalizer=tag_normalizer),
             DedupCheckStep(dedup_pipeline=dedup_pipeline),
+            PredictionErrorStep(),
             CreateAnchorStep(),
             StructuredDataEncoderStep(),
             CreateSynapsesStep(),
