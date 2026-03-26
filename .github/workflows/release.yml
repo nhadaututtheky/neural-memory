@@ -204,7 +204,8 @@ jobs:
           CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
         run: |
           VERSION="${GITHUB_REF#refs/tags/v}"
-          clawdhub publish --slug neural-memory --version "$VERSION" --token "$CLAWHUB_TOKEN" \
+          clawdhub login --token "$CLAWHUB_TOKEN" --no-browser
+          clawdhub publish .claude-plugin --slug neural-memory --version "$VERSION" \
             || echo "::warning::ClawHub publish failed — update manually"
 
   # ── Publish VS Code Extension ──────────────────────────────────
