@@ -127,6 +127,11 @@ class BrainConfig:
     reranker_blend_weight: float = 0.7  # Reranker weight (SA gets 1 - this)
     reranker_min_score: float = 0.15
     reranker_max_candidates: int = 30  # Safety cap on overfetch
+    # Temporal binding (session-level auto-linking)
+    temporal_binding_enabled: bool = True
+    temporal_binding_window_seconds: float = 300.0  # 5-minute window
+    # Arousal detection (emotional intensity for compression resistance)
+    arousal_enabled: bool = True
 
     def with_updates(self, **kwargs: Any) -> BrainConfig:
         """Create a new config with updated values."""

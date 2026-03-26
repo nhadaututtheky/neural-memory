@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from neural_memory.core.neuron import Neuron
 from neural_memory.core.synapse import Synapse
+from neural_memory.engine.arousal import ArousalStep
 from neural_memory.engine.pipeline import Pipeline, PipelineContext
 from neural_memory.engine.pipeline_steps import (
     AutoTagStep,
@@ -33,6 +34,7 @@ from neural_memory.engine.pipeline_steps import (
     StructureDetectionStep,
     TemporalLinkingStep,
 )
+from neural_memory.engine.temporal_binding import TemporalBindingStep
 from neural_memory.extraction.entities import EntityExtractor
 from neural_memory.extraction.relations import RelationExtractor
 from neural_memory.extraction.sentiment import SentimentExtractor
@@ -108,6 +110,7 @@ def build_default_pipeline(
             CreateSynapsesStep(),
             CoOccurrenceStep(),
             EmotionStep(sentiment_extractor=sentiment_extractor),
+            ArousalStep(),
             RelationExtractionStep(relation_extractor=relation_extractor),
             ConfirmatoryBoostStep(),
             ConflictDetectionStep(),
@@ -115,6 +118,7 @@ def build_default_pipeline(
             SemanticLinkingStep(),
             CrossMemoryLinkStep(),
             BuildFiberStep(),
+            TemporalBindingStep(),
         ]
     )
 

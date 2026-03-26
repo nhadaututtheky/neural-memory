@@ -961,7 +961,13 @@ class CompressionEngine:
                 report.fibers_skipped += 1
                 continue
 
-            target_tier = self.determine_target_tier(fiber, reference_time)
+            # Arousal-based compression resistance: high-arousal memories
+            # (production incidents, breakthroughs) resist compression
+            arousal = fiber.metadata.get("_arousal", 0.0) if fiber.metadata else 0.0
+            arousal_heat = float(arousal) * 0.3 if isinstance(arousal, (int, float)) else 0.0
+            target_tier = self.determine_target_tier(
+                fiber, reference_time, heat_score=arousal_heat,
+            )
 
             if int(target_tier) <= fiber.compression_tier:
                 report.fibers_skipped += 1

@@ -1780,8 +1780,13 @@ class ReflexPipeline:
                     else:
                         score -= tag_boost * 0.5  # mild penalty for zero overlap
 
-            # --- Adaptive instruction boost ---
+            # --- Arousal boost: emotionally charged memories are more memorable ---
             fiber_meta = fiber.metadata or {}
+            arousal = fiber_meta.get("_arousal", 0.0)
+            if isinstance(arousal, (int, float)) and arousal > 0.0:
+                score *= 1.0 + float(arousal) * 0.2  # up to 20% boost at max arousal
+
+            # --- Adaptive instruction boost ---
             if fiber_meta.get("memory_type") == "instruction" or fiber_meta.get("type") in (
                 "instruction",
                 "workflow",
