@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.21.0] — 2026-03-26
+
+### Added
+
+- **Neuroscience Engine** — 10 brain-inspired improvements across 4 phases:
+  - **Phase 1**: Temporal binding (TEMPORAL synapses between nearby memories) + arousal detection (emotional valence scoring via sentiment/punctuation/caps)
+  - **Phase 2**: Prediction error encoding (novelty-based priority boost via SimHash) + retrieval reconsolidation (context drift detection, context anchors for shifted memories)
+  - **Phase 3**: Context-dependent retrieval (encoding fingerprint stored per fiber, Jaccard similarity scoring at recall) + hippocampal replay (LTP/LTD synapse strengthening during consolidation) + cognitive chunking (greedy clustering of retrieval results by activation + synapse connectivity)
+  - **Phase 4**: Schema assimilation (auto-creates SCHEMA neurons when tag clusters exceed threshold, Piaget assimilate/accommodate) + interference forgetting (SimHash-based retroactive/proactive/fan-effect detection, CONTRADICTS synapses)
+- **Post-encode hooks** — schema assimilation + interference detection auto-run after every `encode()` when enabled (non-critical, swallowed on error)
+- **Real activation scores** — chunking now uses per-neuron activation levels from retrieval instead of dummy values
+- **Paginated tag fetch** — `_find_neurons_by_tags()` helper pages through large brains (1000/page) instead of fixed limit
+- 10 new `BrainConfig` fields (all default OFF except `context_retrieval_enabled` and `chunking_enabled`)
+- 107 new unit tests across all neuro engine modules
+
+### Fixed
+
+- **`list(int)` bug** in recall_handler chunking — `result.neurons_activated` is int, not iterable
+- **`replay_enabled` gate** — `hippocampal_replay()` now checks flag directly (was only checked at dispatcher level)
+- **Small brain skip** — post-encode schema hook checks `get_stats()` neuron count before querying
+
 ## [4.20.4] — 2026-03-25
 
 ### Fixed
