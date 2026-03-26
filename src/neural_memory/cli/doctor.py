@@ -202,7 +202,7 @@ def _check_embedding_provider() -> dict[str, Any]:
         "sentence_transformer": "sentence_transformers",
         "openai": "openai",
         "openrouter": "openai",
-        "gemini": "google.generativeai",
+        "gemini": "google.genai",
         "ollama": "ollama",
     }
 
