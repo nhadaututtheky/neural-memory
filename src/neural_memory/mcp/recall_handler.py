@@ -528,10 +528,13 @@ class RecallHandler:
             logger.debug("Source enrichment failed (non-critical)", exc_info=True)
 
         # Cognitive chunking: group results when many fibers matched
+        fibers_count_for_chunking = (
+            len(result.fibers_matched) if isinstance(result.fibers_matched, list) else result.fibers_matched
+        )
         if (
             getattr(brain.config, "chunking_enabled", True)
-            and result.fibers_matched
-            and len(result.fibers_matched) > 7
+            and fibers_count_for_chunking
+            and fibers_count_for_chunking > 7
         ):
             try:
                 from neural_memory.engine.chunking import chunk_retrieval_results
