@@ -436,14 +436,22 @@ class MemoryEncoder:
         """Run post-encode neuroscience hooks (schema assimilation + interference).
 
         Non-critical: failures are logged and swallowed so encoding always succeeds.
+        Schema assimilation skips small brains (< schema_min_cluster_size) since
+        there aren't enough neurons to form meaningful schemas.
         """
         # Schema assimilation: auto-wire when brain has enough memories
         schema_enabled = getattr(self._config, "schema_assimilation_enabled", False)
         if isinstance(schema_enabled, bool) and schema_enabled:
             try:
-                from neural_memory.engine.schema_assimilation import assimilate_or_accommodate
+                # Skip small brains — not enough neurons for schema formation
+                min_cluster = getattr(self._config, "schema_min_cluster_size", 10)
+                min_cluster = int(min_cluster) if isinstance(min_cluster, (int, float)) else 10
+                stats = await self._storage.get_stats(self._storage.brain_id or "")
+                neuron_count = stats.get("neuron_count", 0)
+                if neuron_count >= min_cluster:
+                    from neural_memory.engine.schema_assimilation import assimilate_or_accommodate
 
-                await assimilate_or_accommodate(anchor, self._storage, self._config)
+                    await assimilate_or_accommodate(anchor, self._storage, self._config)
             except Exception:
                 logger.debug("Post-encode schema assimilation failed (non-critical)", exc_info=True)
 

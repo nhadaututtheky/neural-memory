@@ -23,9 +23,20 @@ class TestReplayResult:
 
 class TestHippocampalReplay:
     @pytest.mark.asyncio
-    async def test_no_fibers_returns_zero(self) -> None:
-        """replay_enabled is checked by the consolidation dispatcher, not hippocampal_replay itself."""
+    async def test_disabled_returns_zero(self) -> None:
+        """When replay_enabled=False, hippocampal_replay returns immediately."""
         config = MagicMock()
+        config.replay_enabled = False
+        storage = AsyncMock()
+
+        result = await hippocampal_replay(storage, config)
+        assert result.episodes_replayed == 0
+        storage.find_fibers.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_fibers_returns_zero(self) -> None:
+        config = MagicMock()
+        config.replay_enabled = True
         config.replay_ltp_factor = 1.1
         config.replay_ltd_factor = 0.98
         storage = AsyncMock()

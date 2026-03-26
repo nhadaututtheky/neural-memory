@@ -86,12 +86,23 @@ async def detect_interference(
     if not new_tags:
         return []
 
-    # Find neurons with overlapping tags (filter in-memory, no tags= param)
-    all_neurons = await storage.find_neurons(limit=max(max_candidates * 5, 2000))
-    candidates = [
-        n for n in all_neurons
-        if n.metadata and set(n.metadata.get("tags", [])) & new_tags
-    ][:max_candidates * 2]
+    # Find neurons with overlapping tags (paginated to handle large brains)
+    candidates: list[Neuron] = []
+    page_size = 1000
+    target = max_candidates * 2
+    offset = 0
+    while len(candidates) < target:
+        batch = await storage.find_neurons(limit=page_size, offset=offset)
+        if not batch:
+            break
+        for n in batch:
+            if n.metadata and set(n.metadata.get("tags", [])) & new_tags:
+                candidates.append(n)
+                if len(candidates) >= target:
+                    break
+        if len(batch) < page_size:
+            break
+        offset += page_size
 
     results: list[InterferenceResult] = []
     same_tag_count = 0
@@ -228,13 +239,21 @@ async def batch_interference_scan(
     fan_threshold = getattr(config, "fan_effect_threshold", 15)
     fan_threshold = int(fan_threshold) if isinstance(fan_threshold, (int, float)) else 15
 
-    # Scan tag clusters for overcrowding
-    all_neurons = await storage.find_neurons(limit=2000)
+    # Scan tag clusters for overcrowding (paginated to handle large brains)
     tag_counts: dict[str, int] = {}
-    for n in all_neurons:
-        ntags = n.metadata.get("tags", []) if n.metadata else []
-        for t in ntags:
-            tag_counts[t] = tag_counts.get(t, 0) + 1
+    page_size = 1000
+    offset = 0
+    while True:
+        batch = await storage.find_neurons(limit=page_size, offset=offset)
+        if not batch:
+            break
+        for n in batch:
+            ntags = n.metadata.get("tags", []) if n.metadata else []
+            for t in ntags:
+                tag_counts[t] = tag_counts.get(t, 0) + 1
+        if len(batch) < page_size:
+            break
+        offset += page_size
 
     fan_effects = 0
     for tag, count in tag_counts.items():

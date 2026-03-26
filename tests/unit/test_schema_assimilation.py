@@ -207,7 +207,7 @@ class TestPostEncodeNeuroHook:
 
     @pytest.mark.asyncio
     async def test_post_encode_calls_assimilate(self) -> None:
-        """When schema_assimilation_enabled=True, encode triggers assimilate_or_accommodate."""
+        """When schema_assimilation_enabled=True and brain is large enough, triggers assimilate."""
         from neural_memory.engine.encoder import MemoryEncoder
 
         config = MagicMock()
@@ -216,6 +216,8 @@ class TestPostEncodeNeuroHook:
         config.schema_min_cluster_size = 10
 
         storage = AsyncMock()
+        storage.brain_id = "test-brain"
+        storage.get_stats = AsyncMock(return_value={"neuron_count": 500})
         storage.find_neurons = AsyncMock(return_value=[])
         storage.add_neuron = AsyncMock()
         storage.add_synapse = AsyncMock()
@@ -223,14 +225,6 @@ class TestPostEncodeNeuroHook:
         encoder = MemoryEncoder(storage, config)
         anchor = _make_neuron("test content", ["python"])
 
-        with patch(
-            "neural_memory.engine.encoder.MemoryEncoder._post_encode_neuro"
-        ) as mock_hook:
-            mock_hook.return_value = None
-            # We can't easily run the full pipeline with mocks, so test the method directly
-            pass
-
-        # Direct test: call _post_encode_neuro and verify it calls assimilate
         with patch(
             "neural_memory.engine.schema_assimilation.assimilate_or_accommodate",
             new_callable=AsyncMock,
@@ -258,6 +252,30 @@ class TestPostEncodeNeuroHook:
         ) as mock_assim:
             await encoder._post_encode_neuro(anchor)
             mock_assim.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_post_encode_skips_small_brain(self) -> None:
+        """When brain has fewer neurons than schema_min_cluster_size, skip schema assimilation."""
+        from neural_memory.engine.encoder import MemoryEncoder
+
+        config = MagicMock()
+        config.schema_assimilation_enabled = True
+        config.interference_detection_enabled = False
+        config.schema_min_cluster_size = 200
+
+        storage = AsyncMock()
+        storage.brain_id = "test-brain"
+        storage.get_stats = AsyncMock(return_value={"neuron_count": 50})
+
+        encoder = MemoryEncoder(storage, config)
+        anchor = _make_neuron("test content", ["python"])
+
+        with patch(
+            "neural_memory.engine.schema_assimilation.assimilate_or_accommodate",
+            new_callable=AsyncMock,
+        ) as mock_assim:
+            await encoder._post_encode_neuro(anchor)
+            mock_assim.assert_not_called()  # Skipped — brain too small
 
     @pytest.mark.asyncio
     async def test_post_encode_interference_wired(self) -> None:
@@ -289,8 +307,12 @@ class TestPostEncodeNeuroHook:
         config = MagicMock()
         config.schema_assimilation_enabled = True
         config.interference_detection_enabled = True
+        config.schema_min_cluster_size = 10
 
         storage = AsyncMock()
+        storage.brain_id = "test-brain"
+        storage.get_stats = AsyncMock(return_value={"neuron_count": 500})
+
         encoder = MemoryEncoder(storage, config)
         anchor = _make_neuron("test content", ["python"])
 

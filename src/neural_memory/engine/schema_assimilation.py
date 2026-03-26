@@ -102,12 +102,9 @@ async def assimilate_or_accommodate(
         return await _assimilate(new_neuron, matching_schema, storage)
 
     # No matching schema — check if cluster is large enough to create one
-    # find_neurons doesn't support tags= param, so fetch and filter in-memory
-    all_neurons = await storage.find_neurons(limit=2000)
-    domain_neurons = [
-        n for n in all_neurons
-        if n.metadata and set(n.metadata.get("tags", [])) & new_tags
-    ][:min_cluster + 5]
+    domain_neurons = await _find_neurons_by_tags(
+        storage, new_tags, min_matches=min_cluster, max_results=min_cluster + 5,
+    )
 
     if len(domain_neurons) < min_cluster:
         return AssimilationResult(action=AssimilationAction.NO_SCHEMA)
@@ -241,6 +238,47 @@ async def _create_schema(
     )
 
 
+async def _find_neurons_by_tags(
+    storage: NeuralStorage,
+    tags: set[str],
+    *,
+    min_matches: int = 0,
+    max_results: int = 500,
+) -> list[Neuron]:
+    """Paginated fetch of neurons matching any of the given tags.
+
+    Fetches in pages of 1000 to avoid loading entire brain into memory,
+    stops when we have enough matches or exhaust the brain.
+    """
+    page_size = 1000
+    offset = 0
+    matched: list[Neuron] = []
+
+    while True:
+        batch = await storage.find_neurons(limit=page_size, offset=offset)
+        if not batch:
+            break
+
+        for n in batch:
+            ntags = n.metadata.get("tags", []) if n.metadata else []
+            if set(ntags) & tags:
+                matched.append(n)
+                if len(matched) >= max_results:
+                    return matched
+
+        # Early stop: we have enough matches and no minimum target
+        if min_matches > 0 and len(matched) >= min_matches:
+            return matched
+
+        # If batch was smaller than page_size, we've exhausted the brain
+        if len(batch) < page_size:
+            break
+
+        offset += page_size
+
+    return matched
+
+
 def _extract_shared_entities(contents: list[str]) -> list[str]:
     """Extract frequently occurring capitalized terms across contents."""
     word_counts: Counter[str] = Counter()
@@ -281,16 +319,24 @@ async def batch_schema_assimilation(
     for s in existing_schemas:
         covered_tags.update(s.metadata.get("tags", []) if s.metadata else [])
 
-    # Find popular tags that don't have schemas yet
-    all_neurons = await storage.find_neurons(limit=2000)
+    # Find popular tags that don't have schemas yet (paginated to handle large brains)
     tag_counts: Counter[str] = Counter()
     tag_neurons: dict[str, list[Neuron]] = {}
-    for n in all_neurons:
-        ntags = n.metadata.get("tags", []) if n.metadata else []
-        for t in ntags:
-            if t not in covered_tags:
-                tag_counts[t] += 1
-                tag_neurons.setdefault(t, []).append(n)
+    page_size = 1000
+    offset = 0
+    while True:
+        batch = await storage.find_neurons(limit=page_size, offset=offset)
+        if not batch:
+            break
+        for n in batch:
+            ntags = n.metadata.get("tags", []) if n.metadata else []
+            for t in ntags:
+                if t not in covered_tags:
+                    tag_counts[t] += 1
+                    tag_neurons.setdefault(t, []).append(n)
+        if len(batch) < page_size:
+            break
+        offset += page_size
 
     schemas_created = 0
     for tag, count in tag_counts.most_common(20):

@@ -58,6 +58,10 @@ async def hippocampal_replay(
     Returns:
         ReplayResult with counts
     """
+    replay_enabled = getattr(config, "replay_enabled", True)
+    if isinstance(replay_enabled, bool) and not replay_enabled:
+        return ReplayResult()
+
     ltp_factor = getattr(config, "replay_ltp_factor", 1.1)
     ltd_factor = getattr(config, "replay_ltd_factor", 0.98)
     ltp_factor = float(ltp_factor) if isinstance(ltp_factor, (int, float)) else 1.1
