@@ -39,6 +39,59 @@ class TestDetectsReversal:
         assert _detects_reversal("the service is stable", "the service is unstable")
 
 
+class TestVietnameseReversal:
+    """Vietnamese reversal detection tests (issue #119)."""
+
+    def test_vietnamese_negation_khong(self) -> None:
+        """Vietnamese 'không' negation flip → reversal detected."""
+        assert _detects_reversal(
+            "Service hoạt động tốt",
+            "Service không hoạt động tốt",
+        )
+
+    def test_vietnamese_opposite_nhanh_cham(self) -> None:
+        """Vietnamese 'nhanh/chậm' (fast/slow) → reversal detected."""
+        assert _detects_reversal(
+            "Query chạy nhanh trên PostgreSQL",
+            "Query chạy chậm trên PostgreSQL",
+        )
+
+    def test_vietnamese_opposite_tot_xau(self) -> None:
+        """Vietnamese 'tốt/xấu' (good/bad) → reversal detected."""
+        assert _detects_reversal(
+            "Kết quả tốt sau khi deploy",
+            "Kết quả xấu sau khi deploy",
+        )
+
+    def test_vietnamese_thanh_cong_that_bai(self) -> None:
+        """Vietnamese 'thành công/thất bại' (success/failure) → reversal."""
+        assert _detects_reversal(
+            "Deploy thành công lên staging",
+            "Deploy thất bại trên staging",
+        )
+
+    def test_vietnamese_no_reversal(self) -> None:
+        """Different Vietnamese topics → no reversal."""
+        assert not _detects_reversal(
+            "Database hoạt động ổn định",
+            "Frontend cần thêm responsive design",
+        )
+
+    def test_mixed_vi_en_reversal(self) -> None:
+        """Mixed Vietnamese/English with English 'works/broken' → reversal."""
+        assert _detects_reversal(
+            "API works tốt trên staging environment",
+            "API broken trên staging environment",
+        )
+
+    def test_vietnamese_negation_chua(self) -> None:
+        """Vietnamese 'chưa' (not yet) negation → reversal detected."""
+        assert _detects_reversal(
+            "Migration đã hoàn thành rồi",
+            "Migration chưa hoàn thành rồi",
+        )
+
+
 class TestComputeSurpriseBonus:
     """Test surprise bonus computation."""
 

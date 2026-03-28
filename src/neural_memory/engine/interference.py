@@ -111,7 +111,7 @@ async def detect_interference(
         if candidate.id == new_neuron.id:
             continue
 
-        cand_hash = simhash(candidate.content)
+        cand_hash = candidate.content_hash or simhash(candidate.content)
         dist = hamming_distance(new_hash, cand_hash)
 
         # Skip near-duplicates (handled by dedup pipeline)

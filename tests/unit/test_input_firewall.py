@@ -9,6 +9,7 @@ from neural_memory.safety.input_firewall import (
     _char_entropy,
     _is_highly_repetitive,
     check_content,
+    strip_nm_context_noise,
 )
 
 
@@ -198,6 +199,56 @@ class TestIsHighlyRepetitive:
     def test_repeated_phrase_is_repetitive(self) -> None:
         text = "the quick fox " * 100
         assert _is_highly_repetitive(text) is True
+
+
+class TestNmContextNoiseStripping:
+    """Tests for NeuralMemory context noise removal (issue #118)."""
+
+    def test_strip_relevant_memories_header(self) -> None:
+        text = "## Relevant Memories\n- [concept] some old context\n- [error] another noise\nActual user content that should survive this filtering process."
+        result = check_content(text)
+        assert result.blocked is False
+        assert "## Relevant Memories" not in result.sanitized
+
+    def test_strip_nm_wrapper_line(self) -> None:
+        text = "[NeuralMemory — relevant context]\nSome actual content that the user typed for this memory storage."
+        result = check_content(text)
+        assert result.blocked is False
+        assert "[NeuralMemory" not in result.sanitized
+
+    def test_strip_neuron_type_bullets(self) -> None:
+        text = "- [concept] noise from recall\n- [error] more noise\nDecided to use Redis for caching instead of Memcached for better data structures."
+        result = check_content(text)
+        assert result.blocked is False
+        assert "- [concept]" not in result.sanitized
+
+    def test_strip_metadata_labels(self) -> None:
+        text = "Conversation info (untrusted metadata): some json data\nThe actual important memory content about the architecture decision goes here."
+        result = check_content(text)
+        assert result.blocked is False
+        assert "untrusted metadata" not in result.sanitized
+
+    def test_only_nm_noise_blocked(self) -> None:
+        """If content is ONLY NM noise, block after sanitization."""
+        text = "## Relevant Memories\n- [concept] old recall\n- [error] more recall"
+        result = check_content(text)
+        assert result.blocked is True
+        assert "too short" in result.reason
+
+    def test_strip_nm_context_noise_function(self) -> None:
+        """Test the standalone strip_nm_context_noise utility."""
+        text = "[NeuralMemory — relevant context]\n## Relevant Memories\n- [concept] noise\nActual content here"
+        cleaned = strip_nm_context_noise(text)
+        assert "[NeuralMemory" not in cleaned
+        assert "## Relevant Memories" not in cleaned
+        assert "- [concept]" not in cleaned
+        assert "Actual content here" in cleaned
+
+    def test_strip_nm_noise_none_passthrough(self) -> None:
+        assert strip_nm_context_noise(None) is None  # type: ignore[arg-type]
+
+    def test_strip_nm_noise_empty(self) -> None:
+        assert strip_nm_context_noise("") == ""
 
 
 class TestFirewallResult:

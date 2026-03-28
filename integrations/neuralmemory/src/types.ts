@@ -37,6 +37,18 @@ export type BeforeAgentStartResult = {
   providerOverride?: string; // Override provider for this run — first defined wins
 };
 
+// New hook types — preferred over legacy before_agent_start
+export type BeforePromptBuildEvent = {
+  prompt: string;
+  messages?: unknown[];
+  systemPrompt?: string;
+};
+
+export type BeforePromptBuildResult = {
+  systemPrompt?: string;     // Appended to system prompt
+  prependContext?: string;   // Prepended to conversation context
+};
+
 export type AgentEndEvent = {
   messages: unknown[];
   success: boolean;

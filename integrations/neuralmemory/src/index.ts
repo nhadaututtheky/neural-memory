@@ -28,7 +28,7 @@
  * Registers:
  *   N tools    — dynamically from MCP server (fallback: 5 core + 2 compat)
  *   1 service  — MCP process lifecycle (start/stop)
- *   6 hooks    — before_agent_start (auto-context), agent_end (auto-capture),
+ *   6 hooks    — before_prompt_build (auto-context), agent_end (auto-capture),
  *                session:compact:before (flush), command:new/reset (flush),
  *                gateway:startup (consolidation)
  */
@@ -36,8 +36,8 @@
 import type {
   OpenClawPluginDefinition,
   OpenClawPluginApi,
-  BeforeAgentStartEvent,
-  BeforeAgentStartResult,
+  BeforePromptBuildEvent,
+  BeforePromptBuildResult,
   AgentEndEvent,
   SessionCompactEvent,
   CommandEvent,
@@ -101,6 +101,54 @@ export function stripPromptMetadata(raw: string): string {
     const lines = raw.split("\n").filter((l) => l.trim());
     cleaned = lines[lines.length - 1]?.trim() ?? raw.trim();
   }
+
+  return cleaned;
+}
+
+// ── Auto-capture sanitization ─────────────────────────────
+
+/**
+ * Strip NeuralMemory context noise and metadata from auto-capture text.
+ *
+ * When agent_end forwards assistant messages to nmem_auto, those messages
+ * may contain NM context wrappers that were injected by before_prompt_build.
+ * Re-ingesting these creates junk neurons like "[concept] json message id".
+ *
+ * This is defense-in-depth — the Python input_firewall also strips these,
+ * but catching them here avoids wasting network round-trips.
+ */
+export function sanitizeAutoCapture(raw: string): string {
+  let cleaned = raw;
+
+  // Strip NM context section headers
+  cleaned = cleaned.replace(
+    /^#{1,3}\s*(?:Relevant Memories|Related Information|Relevant Context|Neural Memory)\b.*$/gim,
+    "",
+  );
+
+  // Strip [NeuralMemory — ...] wrapper lines
+  cleaned = cleaned.replace(/^\[NeuralMemory\s*[—–-].*\]$/gm, "");
+
+  // Strip neuron-type bullet lines (- [concept] ..., - [error] ...)
+  cleaned = cleaned.replace(
+    /^-\s*\[(?:concept|entity|decision|error|preference|insight|memory|fact|workflow|instruction|pattern)\]\s.*$/gim,
+    "",
+  );
+
+  // Strip metadata labels
+  cleaned = cleaned.replace(
+    /^(?:Conversation info|Sender|Context)\s*\(.*?\)\s*:?\s*$/gim,
+    "",
+  );
+
+  // Strip short acknowledgement lines (< 20 chars, common filler)
+  cleaned = cleaned.replace(
+    /^(?:OK|Sure|Done|Got it|Understood|Noted|Alright|I see|Thanks|Thank you|Okay)\.?\s*$/gim,
+    "",
+  );
+
+  // Collapse whitespace
+  cleaned = cleaned.replace(/\n{3,}/g, "\n\n").trim();
 
   return cleaned;
 }
@@ -340,20 +388,22 @@ const plugin: OpenClawPluginDefinition = {
       },
     });
 
-    // ── Hook: tool awareness + auto-context before agent start ───
+    // ── Hook: tool awareness + auto-context before prompt build ──
+    // Migrated from legacy before_agent_start to before_prompt_build
+    // per OpenClaw compatibility guidance (issue #116).
 
     api.on(
-      "before_agent_start",
+      "before_prompt_build",
       async (
         event: unknown,
         _ctx: unknown,
-      ): Promise<BeforeAgentStartResult | void> => {
-        const result: BeforeAgentStartResult = {
+      ): Promise<BeforePromptBuildResult | void> => {
+        const result: BeforePromptBuildResult = {
           systemPrompt: buildToolInstructions(registeredTools),
         };
 
         if (cfg.autoContext && mcp.connected) {
-          const ev = event as BeforeAgentStartEvent;
+          const ev = event as BeforePromptBuildEvent;
 
           try {
             const query = stripPromptMetadata(ev.prompt);
@@ -396,7 +446,7 @@ const plugin: OpenClawPluginDefinition = {
 
           try {
             const messages = ev.messages?.slice(-5) ?? [];
-            const text = messages
+            const rawText = messages
               .filter(
                 (m: unknown): m is { role: string; content: string } =>
                   typeof m === "object" &&
@@ -407,6 +457,9 @@ const plugin: OpenClawPluginDefinition = {
               .map((m) => m.content)
               .join("\n")
               .slice(0, MAX_AUTO_CAPTURE_CHARS);
+
+            // Strip NM context noise and short acknowledgements before re-ingest
+            const text = sanitizeAutoCapture(rawText);
 
             if (text.length > 50) {
               await mcp.callTool("nmem_auto", {

@@ -63,6 +63,16 @@ _METADATA_INJECTION_RE = re.compile(
 # Base64-like blocks (>100 chars of base64 alphabet without spaces)
 _BASE64_BLOCK_RE = re.compile(r"[A-Za-z0-9+/=]{100,}")
 
+# NeuralMemory context noise — self-referential metadata that gets re-ingested
+# and creates junk neurons like "[concept] json message id"
+_NM_CONTEXT_NOISE_RE = re.compile(
+    r"^#{1,3}\s*(?:Relevant Memories|Related Information|Relevant Context|Neural Memory)\b.*$"
+    r"|^\[NeuralMemory\s*[\u2014\u2013\-].*\]$"  # em-dash, en-dash, hyphen
+    r"|^-\s*\[(?:concept|entity|decision|error|preference|insight|memory|fact|workflow|instruction|pattern)\]\s"
+    r"|^(?:Conversation info|Sender|Context)\s*\((?:untrusted\s+)?metadata\).*$",
+    re.MULTILINE | re.IGNORECASE,
+)
+
 
 @dataclass(frozen=True)
 class FirewallResult:
@@ -156,15 +166,47 @@ def check_content(text: str) -> FirewallResult:
             reason=f"content entropy too low ({entropy:.2f}, min {_MIN_ENTROPY_THRESHOLD})",
         )
 
+    # --- Sanitize: strip NM context noise (self-referential re-ingest) ---
+    sanitized = _NM_CONTEXT_NOISE_RE.sub("", text)
+
     # --- Sanitize: strip any remaining single control sequences ---
-    sanitized = _CONTROL_SEQ_RE.sub("", text)
+    sanitized = _CONTROL_SEQ_RE.sub("", sanitized)
     # Collapse multiple whitespace from removals
-    sanitized = re.sub(r"\n{3,}", "\n\n", sanitized)
+    sanitized = re.sub(r"\n{3,}", "\n\n", sanitized).strip()
 
     if sanitized != text:
-        logger.debug("Input firewall: sanitized %d control chars", len(text) - len(sanitized))
+        stripped_chars = len(text) - len(sanitized)
+        logger.debug("Input firewall: sanitized %d chars (control + NM noise)", stripped_chars)
+
+    # Re-check length after sanitization — if only noise remained, block
+    if len(sanitized.strip()) < MIN_CONTENT_CHARS:
+        return FirewallResult(blocked=True, reason="content too short after noise removal")
 
     return FirewallResult(blocked=False, sanitized=sanitized)
+
+
+def strip_nm_context_noise(text: str) -> str:
+    """Strip NeuralMemory context wrappers and metadata noise from text.
+
+    Use this to clean text that may contain re-ingested NM output before
+    feeding it back into auto-capture. Removes:
+    - ## Relevant Memories / ## Neural Memory section headers
+    - [NeuralMemory — ...] wrapper lines
+    - Neuron-type bullet lines (- [concept] ..., - [error] ...)
+    - Metadata labels (Conversation info, Sender)
+
+    Args:
+        text: Raw text potentially containing NM context noise.
+
+    Returns:
+        Cleaned text with NM noise removed.
+    """
+    if not text or not isinstance(text, str):
+        return text
+
+    cleaned = _NM_CONTEXT_NOISE_RE.sub("", text)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    return cleaned
 
 
 def sanitize_explicit_content(text: str) -> str:

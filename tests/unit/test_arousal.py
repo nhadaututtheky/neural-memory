@@ -66,6 +66,59 @@ class TestComputeArousal:
         assert score > 0.3
 
 
+class TestVietnameseArousal:
+    """Vietnamese language arousal detection tests (issue #119)."""
+
+    def test_vietnamese_positive_thanh_cong(self) -> None:
+        """Vietnamese 'thành công' (success) → positive arousal."""
+        score = compute_arousal("Deploy thành công lên production rồi")
+        assert score > 0.0
+
+    def test_vietnamese_negative_loi(self) -> None:
+        """Vietnamese 'lỗi' (error) → negative arousal."""
+        score = compute_arousal("Phát hiện lỗi nghiêm trọng trong module auth")
+        assert score > 0.3
+
+    def test_vietnamese_high_arousal_su_co(self) -> None:
+        """Vietnamese 'SỰ CỐ' (incident) → high arousal."""
+        score = compute_arousal("SỰ CỐ NGHIÊM TRỌNG: mất dữ liệu production!!")
+        assert score >= 0.5
+
+    def test_vietnamese_breakthrough(self) -> None:
+        """Vietnamese 'đột phá' (breakthrough) → positive arousal."""
+        score = compute_arousal("Giải pháp đột phá cho bài toán tối ưu hiệu suất")
+        assert score > 0.0
+
+    def test_vietnamese_neutral(self) -> None:
+        """Vietnamese neutral content → zero or near-zero arousal."""
+        score = compute_arousal("Cập nhật file readme cho dự án")
+        assert score < 0.2
+
+    def test_mixed_vi_en_crash(self) -> None:
+        """Mixed Vietnamese/English with borrowed 'crash' → arousal detected."""
+        score = compute_arousal("Server bị crash liên tục, sự cố nghiêm trọng")
+        assert score > 0.3
+
+
+class TestLanguageAgnosticArousal:
+    """Language-agnostic heuristics tests (issue #119)."""
+
+    def test_exclamation_clusters(self) -> None:
+        """Multiple exclamation marks → arousal detected."""
+        score = compute_arousal("Ceci est très important!!!")
+        assert score > 0.0
+
+    def test_caps_heavy_content(self) -> None:
+        """ALL CAPS heavy content → arousal detected."""
+        score = compute_arousal("THIS IS ABSOLUTELY TERRIBLE AND COMPLETELY BROKEN BEYOND REPAIR")
+        assert score > 0.0
+
+    def test_punctuation_only_no_keywords(self) -> None:
+        """Non-English with exclamation clusters → agnostic arousal."""
+        score = compute_arousal("これは大変です!!! 問題が発生しました!!")
+        assert score > 0.0
+
+
 class TestArousalStep:
     """Pipeline step integration tests."""
 
