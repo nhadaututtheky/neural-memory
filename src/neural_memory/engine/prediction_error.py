@@ -74,7 +74,9 @@ _OPPOSITE_PAIRS_REGISTRY: dict[str, list[tuple[str, str]]] = {
 }
 
 # Vietnamese diacritics detection
-_VIETNAMESE_RE = re.compile(r"[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]")
+_VIETNAMESE_RE = re.compile(
+    r"[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]"
+)
 
 
 def _detect_language(content: str) -> str:

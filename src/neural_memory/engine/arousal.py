@@ -105,7 +105,9 @@ _PATTERNS: dict[str, dict[str, list[str]]] = {
 }
 
 # Vietnamese diacritics detection (reused from auto_capture.py pattern)
-_VIETNAMESE_RE = re.compile(r"[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]")
+_VIETNAMESE_RE = re.compile(
+    r"[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]"
+)
 
 
 def _detect_language(content: str) -> str:
