@@ -24,6 +24,7 @@ from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from neural_memory.engine.pipeline import PipelineContext
+from neural_memory.extraction.parser import detect_language
 
 if TYPE_CHECKING:
     from neural_memory.core.brain import BrainConfig
@@ -32,6 +33,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # ── Language-specific pattern registries ────────────────────
+# To add a new language: add a key to _PATTERNS with "positive", "negative",
+# and "high_arousal" regex lists. detect_language() in extraction/parser.py
+# must also be updated to detect the new language.
+# Unsupported languages fall back to language-agnostic heuristics.
 
 _PATTERNS: dict[str, dict[str, list[str]]] = {
     "en": {
@@ -104,25 +109,6 @@ _PATTERNS: dict[str, dict[str, list[str]]] = {
     },
 }
 
-# Vietnamese diacritics detection (reused from auto_capture.py pattern)
-_VIETNAMESE_RE = re.compile(
-    r"[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]"
-)
-
-
-def _detect_language(content: str) -> str:
-    """Detect content language for pattern selection.
-
-    Returns 'vi' for Vietnamese, 'en' for English/default.
-    """
-    # Sample first 500 chars for detection
-    sample = content[:500].lower()
-    vi_chars = len(_VIETNAMESE_RE.findall(sample))
-    # If >2% Vietnamese diacritics, treat as Vietnamese
-    if len(sample) > 0 and vi_chars / max(len(sample), 1) > 0.02:
-        return "vi"
-    return "en"
-
 
 @lru_cache(maxsize=4)
 def _compiled_patterns(lang: str, category: str) -> list[re.Pattern[str]]:
@@ -184,7 +170,7 @@ def compute_arousal(content: str) -> float:
     if not content:
         return 0.0
 
-    lang = _detect_language(content)
+    lang = detect_language(content)
 
     # Keyword-based scoring for supported languages
     pos = sum(1 for p in _compiled_patterns(lang, "positive") if p.search(content))

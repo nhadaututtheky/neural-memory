@@ -234,6 +234,7 @@ async def format_context_budgeted(
     encryptor: MemoryEncryptor | None = None,
     brain_id: str = "",
     budget_config: BudgetConfig | None = None,
+    clean_for_prompt: bool = False,
 ) -> tuple[str, int, BudgetAllocation]:
     """Format memories with budget-aware fiber selection.
 
@@ -325,6 +326,7 @@ async def format_context_budgeted(
         max_tokens=max_tokens,
         encryptor=encryptor,
         brain_id=brain_id,
+        clean_for_prompt=clean_for_prompt,
     )
 
     return formatted, token_estimate, allocation
@@ -337,8 +339,14 @@ async def format_context(
     max_tokens: int,
     encryptor: MemoryEncryptor | None = None,
     brain_id: str = "",
+    clean_for_prompt: bool = False,
 ) -> tuple[str, int]:
     """Format activated memories into context for agent injection.
+
+    Args:
+        clean_for_prompt: If True, emit clean bullet-point text without
+            section headers or neuron-type tags. Prevents self-referential
+            noise when output is re-ingested by auto-capture.
 
     Returns:
         Tuple of (formatted_context, token_estimate).
@@ -355,7 +363,8 @@ async def format_context(
 
     # Add fiber summaries first (batch fetch anchors)
     if fibers:
-        lines.append("## Relevant Memories\n")
+        if not clean_for_prompt:
+            lines.append("## Relevant Memories\n")
 
         anchor_ids = list({f.anchor_neuron_id for f in fibers[:5] if not f.summary})
         anchor_map = await storage.get_neurons_batch(anchor_ids) if anchor_ids else {}
@@ -400,7 +409,8 @@ async def format_context(
 
     # Add individual activated neurons (batch fetch)
     if token_estimate < max_tokens:
-        lines.append("\n## Related Information\n")
+        if not clean_for_prompt:
+            lines.append("\n## Related Information\n")
 
         sorted_activations = sorted(
             activations.values(),
@@ -420,7 +430,10 @@ async def format_context(
             if neuron.type == NeuronType.TIME:
                 continue
 
-            line = f"- [{neuron.type.value}] {neuron.content}"
+            if clean_for_prompt:
+                line = f"- {neuron.content}"
+            else:
+                line = f"- [{neuron.type.value}] {neuron.content}"
             token_estimate += _estimate_tokens(line)
 
             if token_estimate > max_tokens:

@@ -342,6 +342,10 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "type": "boolean",
                     "description": "Exclude ephemeral (session-scoped) memories from results. Default: false (include all).",
                 },
+                "clean_for_prompt": {
+                    "type": "boolean",
+                    "description": "Return clean bullet-point text without section headers or neuron-type tags. Use when injecting recall output into prompts to prevent self-referential noise on re-ingest. Default: false.",
+                },
             },
             "required": ["query"],
         },

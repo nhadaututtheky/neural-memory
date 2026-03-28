@@ -203,6 +203,7 @@ class RecallHandler:
             return {"error": f"Invalid mode: {recall_mode}. Must be 'associative' or 'exact'."}
         tags = _parse_tags(args)
         include_citations = args.get("include_citations", True)
+        clean_for_prompt = bool(args.get("clean_for_prompt", False))
         min_trust: float | None = None
         raw_min_trust = args.get("min_trust")
         if raw_min_trust is not None:
@@ -339,6 +340,7 @@ class RecallHandler:
                         encryptor=encryptor_obj,
                         brain_id=brain_id,
                         budget_config=budget_cfg,
+                        clean_for_prompt=clean_for_prompt,
                     )
 
                     from dataclasses import replace as _dc_replace

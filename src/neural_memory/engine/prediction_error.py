@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from neural_memory.engine.pipeline import PipelineContext
+from neural_memory.extraction.parser import detect_language
 from neural_memory.utils.simhash import hamming_distance, simhash
 
 if TYPE_CHECKING:
@@ -29,6 +30,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # ── Multilingual reversal detection patterns ──────────────
+# To add a new language: add entries to _NEGATION_PATTERNS,
+# _NEGATION_STOPWORDS, and _OPPOSITE_PAIRS_REGISTRY.
+# detect_language() in extraction/parser.py handles language detection.
 
 _NEGATION_PATTERNS: dict[str, re.Pattern[str]] = {
     "en": re.compile(
@@ -73,20 +77,6 @@ _OPPOSITE_PAIRS_REGISTRY: dict[str, list[tuple[str, str]]] = {
     ],
 }
 
-# Vietnamese diacritics detection
-_VIETNAMESE_RE = re.compile(
-    r"[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]"
-)
-
-
-def _detect_language(content: str) -> str:
-    """Detect content language for pattern selection."""
-    sample = content[:500].lower()
-    vi_chars = len(_VIETNAMESE_RE.findall(sample))
-    if len(sample) > 0 and vi_chars / max(len(sample), 1) > 0.02:
-        return "vi"
-    return "en"
-
 
 def _detects_reversal(content_a: str, content_b: str) -> bool:
     """Detect if two texts express opposite claims about the same topic.
@@ -100,7 +90,7 @@ def _detects_reversal(content_a: str, content_b: str) -> bool:
     b_lower = content_b.lower()
 
     # Detect language from combined content
-    lang = _detect_language(content_a + " " + content_b)
+    lang = detect_language(content_a + " " + content_b)
 
     # Get patterns for detected language (fall back to English)
     neg_pattern = _NEGATION_PATTERNS.get(lang, _NEGATION_PATTERNS["en"])

@@ -28,9 +28,9 @@
  * Registers:
  *   N tools    — dynamically from MCP server (fallback: 5 core + 2 compat)
  *   1 service  — MCP process lifecycle (start/stop)
- *   6 hooks    — before_prompt_build (auto-context), agent_end (auto-capture),
- *                session:compact:before (flush), command:new/reset (flush),
- *                gateway:startup (consolidation)
+ *   5 hooks    — before_prompt_build (auto-context), agent_end (auto-capture),
+ *                before_compaction (flush), before_reset (flush),
+ *                gateway_start (consolidation)
  */
 
 import type {
@@ -322,7 +322,7 @@ const plugin: OpenClawPluginDefinition = {
   name: "NeuralMemory",
   description:
     "Brain-inspired persistent memory for AI agents — neurons, synapses, and fibers",
-  version: "1.15.0",
+  version: "1.16.0",
   kind: "memory",
 
   register(api: OpenClawPluginApi): void {
@@ -411,6 +411,7 @@ const plugin: OpenClawPluginDefinition = {
               query,
               depth: cfg.contextDepth,
               max_tokens: cfg.maxContextTokens,
+              clean_for_prompt: true,
             });
 
             const data = JSON.parse(raw) as {
@@ -478,10 +479,11 @@ const plugin: OpenClawPluginDefinition = {
     }
 
     // ── Hook: flush memories before context compaction ──
+    // Migrated from legacy session:compact:before to before_compaction
 
     if (cfg.autoFlush) {
       api.on(
-        "session:compact:before",
+        "before_compaction",
         async (_event: unknown, _ctx: unknown): Promise<void> => {
           if (!mcp.connected) return;
 
@@ -500,16 +502,17 @@ const plugin: OpenClawPluginDefinition = {
         { priority: 5 },
       );
 
-      // Flush on session boundary (new/reset commands)
+      // Flush on session boundary (/new and /reset)
+      // Migrated from legacy command:new + command:reset to before_reset
       api.on(
-        "command:new",
+        "before_reset",
         async (_event: unknown, _ctx: unknown): Promise<void> => {
           if (!mcp.connected) return;
 
           try {
             await mcp.callTool("nmem_auto", {
               action: "process",
-              text: "[session boundary — command:new]",
+              text: "[session boundary — reset]",
             });
           } catch (err) {
             api.logger.warn(
@@ -519,32 +522,14 @@ const plugin: OpenClawPluginDefinition = {
         },
         { priority: 10 },
       );
-
-      api.on(
-        "command:reset",
-        async (_event: unknown, _ctx: unknown): Promise<void> => {
-          if (!mcp.connected) return;
-
-          try {
-            await mcp.callTool("nmem_auto", {
-              action: "process",
-              text: "[session boundary — command:reset]",
-            });
-          } catch (err) {
-            api.logger.warn(
-              `Session reset flush failed: ${(err as Error).message}`,
-            );
-          }
-        },
-        { priority: 10 },
-      );
     }
 
-    // ── Hook: consolidation on gateway startup ───────────
+    // ── Hook: consolidation on gateway start ─────────────
+    // Migrated from legacy gateway:startup to gateway_start
 
     if (cfg.autoConsolidate) {
       api.on(
-        "gateway:startup",
+        "gateway_start",
         async (_event: unknown, _ctx: unknown): Promise<void> => {
           if (!mcp.connected) {
             try {
