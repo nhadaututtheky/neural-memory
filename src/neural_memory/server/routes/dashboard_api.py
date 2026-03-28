@@ -1,11 +1,13 @@
-"""Dashboard API routes — brain stats, health, brain management, timeline, diagrams, brain files."""
+"""Dashboard API routes — brain stats, health, brain management, timeline, diagrams, brain files, storage migration."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -1551,3 +1553,412 @@ async def activate_license(body: ActivateLicenseRequest) -> dict[str, Any]:
     except Exception:
         logger.error("License activation failed", exc_info=True)
         raise HTTPException(status_code=502, detail="Could not reach activation server")
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Storage Management — backend status, migration, backend switch
+# ═══════════════════════════════════════════════════════════════════
+
+
+class MigrationJobStatus(BaseModel):
+    """Status of a storage migration job.
+
+    NOTE: Fields are mutated in-place by ``_run_migration_task`` while the
+    GET poll endpoint reads the same object.  This is safe under CPython's GIL
+    (attribute assignments are atomic), but would require a lock if ever moved
+    to threads.
+    """
+
+    job_id: str
+    state: Literal["running", "done", "error"] = "running"
+    direction: Literal["to_infinitydb", "to_sqlite"]
+    brain: str
+    neurons_total: int = 0
+    neurons_done: int = 0
+    synapses_total: int = 0
+    synapses_done: int = 0
+    fibers_total: int = 0
+    fibers_done: int = 0
+    error: str | None = None
+    started_at: str = ""
+    finished_at: str | None = None
+
+
+class StorageStatusResponse(BaseModel):
+    """Current storage backend status."""
+
+    current_backend: Literal["sqlite", "infinitydb"]
+    pro_installed: bool
+    is_pro_license: bool
+    sqlite_exists: bool
+    sqlite_size_bytes: int = 0
+    infinitydb_exists: bool
+    migration_job: MigrationJobStatus | None = None
+
+
+class StartMigrationRequest(BaseModel):
+    """Request to start a storage migration."""
+
+    direction: Literal["to_infinitydb", "to_sqlite"]
+    brain: str | None = None
+
+
+class SetBackendRequest(BaseModel):
+    """Request to switch active storage backend."""
+
+    backend: Literal["sqlite", "infinitydb"]
+
+
+# In-memory job store — capped at _MAX_JOBS_PER_BRAIN to prevent unbounded growth
+_MAX_JOBS_PER_BRAIN = 20
+_migration_jobs: dict[str, MigrationJobStatus] = {}
+_migration_tasks: set[asyncio.Task[None]] = set()
+
+
+def _utcnow_iso() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _evict_old_jobs(brain_name: str) -> None:
+    """Keep at most _MAX_JOBS_PER_BRAIN completed jobs per brain."""
+    brain_jobs = [
+        (jid, j)
+        for jid, j in _migration_jobs.items()
+        if j.brain == brain_name and j.state != "running"
+    ]
+    if len(brain_jobs) <= _MAX_JOBS_PER_BRAIN:
+        return
+    # Sort by started_at ascending, evict oldest
+    brain_jobs.sort(key=lambda x: x[1].started_at)
+    for jid, _ in brain_jobs[: len(brain_jobs) - _MAX_JOBS_PER_BRAIN]:
+        _migration_jobs.pop(jid, None)
+
+
+@router.get(
+    "/storage/status",
+    response_model=StorageStatusResponse,
+    summary="Get storage backend status",
+)
+async def get_storage_status() -> StorageStatusResponse:
+    """Return current storage backend, Pro status, and active migration job."""
+    from neural_memory.plugins import has_pro
+    from neural_memory.unified_config import get_config
+
+    cfg = get_config()
+    brain_name = cfg.current_brain
+    brains_dir = Path(cfg.data_dir) / "brains"
+
+    sqlite_path = brains_dir / f"{brain_name}.db"
+    sqlite_exists = sqlite_path.exists()
+    sqlite_size = sqlite_path.stat().st_size if sqlite_exists else 0
+
+    infinity_marker = brains_dir / brain_name / "brain.inf"
+    infinitydb_exists = infinity_marker.exists()
+
+    # Find most recent migration job for this brain
+    active_job: MigrationJobStatus | None = None
+    for job in reversed(list(_migration_jobs.values())):
+        if job.brain == brain_name:
+            active_job = job
+            break
+
+    return StorageStatusResponse(
+        current_backend=cfg.storage_backend,
+        pro_installed=has_pro(),
+        is_pro_license=cfg.is_pro(),
+        sqlite_exists=sqlite_exists,
+        sqlite_size_bytes=sqlite_size,
+        infinitydb_exists=infinitydb_exists,
+        migration_job=active_job,
+    )
+
+
+@router.post(
+    "/storage/migrate",
+    summary="Start storage migration",
+)
+async def start_migration(body: StartMigrationRequest) -> dict[str, str]:
+    """Trigger async migration between SQLite and InfinityDB."""
+    from neural_memory.plugins import has_pro
+    from neural_memory.unified_config import get_config
+
+    cfg = get_config()
+    brain_name = body.brain or cfg.current_brain
+    direction = body.direction
+
+    # Pre-flight: Pro check for InfinityDB
+    if direction == "to_infinitydb":
+        if not has_pro():
+            raise HTTPException(status_code=403, detail="Neural Memory Pro package not installed")
+        if not cfg.is_pro():
+            raise HTTPException(
+                status_code=403, detail="Pro license not active. Activate via 'nmem pro activate'"
+            )
+
+    # Pre-flight: source exists
+    brains_dir = Path(cfg.data_dir) / "brains"
+    if direction == "to_infinitydb":
+        sqlite_path = brains_dir / f"{brain_name}.db"
+        if not sqlite_path.exists():
+            raise HTTPException(
+                status_code=404, detail=f"No SQLite database found for brain '{brain_name}'"
+            )
+    else:
+        infinity_marker = brains_dir / brain_name / "brain.inf"
+        if not infinity_marker.exists():
+            raise HTTPException(
+                status_code=404, detail=f"No InfinityDB data found for brain '{brain_name}'"
+            )
+
+    # Pre-flight: no running job for same brain
+    for job in _migration_jobs.values():
+        if job.brain == brain_name and job.state == "running":
+            raise HTTPException(
+                status_code=409, detail=f"Migration already running for brain '{brain_name}'"
+            )
+
+    # Pre-flight: disk space estimate (non-blocking warning in response)
+    disk_warning: str | None = None
+    if direction == "to_infinitydb":
+        import shutil
+
+        source_size = sqlite_path.stat().st_size
+        estimated_need = int(source_size * 1.5)
+        disk_usage = shutil.disk_usage(str(brains_dir))
+        if disk_usage.free < estimated_need:
+            disk_warning = (
+                f"Low disk space: need ~{estimated_need // (1024 * 1024)}MB, "
+                f"only {disk_usage.free // (1024 * 1024)}MB free"
+            )
+            logger.warning(
+                "Migration disk space warning for brain '%s': %s", brain_name, disk_warning
+            )
+
+    job_id = str(uuid4())
+    job = MigrationJobStatus(
+        job_id=job_id,
+        state="running",
+        direction=direction,
+        brain=brain_name,
+        started_at=_utcnow_iso(),
+    )
+    _migration_jobs[job_id] = job
+    _evict_old_jobs(brain_name)
+
+    # Launch background task — stored in set to prevent GC
+    task = asyncio.create_task(_run_migration_task(job_id, direction, brain_name))
+    _migration_tasks.add(task)
+    task.add_done_callback(_migration_tasks.discard)
+
+    result: dict[str, str] = {"job_id": job_id, "brain": brain_name, "message": "Migration started"}
+    if disk_warning:
+        result["disk_warning"] = disk_warning
+    return result
+
+
+@router.get(
+    "/storage/migrate/{job_id}",
+    response_model=MigrationJobStatus,
+    summary="Get migration job progress",
+)
+async def get_migration_progress(job_id: str) -> MigrationJobStatus:
+    """Poll for migration job status and progress."""
+    job = _migration_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Migration job '{job_id}' not found")
+    return job
+
+
+@router.post(
+    "/storage/backend",
+    summary="Switch active storage backend",
+)
+async def set_storage_backend(body: SetBackendRequest) -> dict[str, str]:
+    """Switch storage_backend in config.toml. Requires migration to be complete first."""
+    from dataclasses import replace as dc_replace
+
+    from neural_memory.unified_config import get_config, set_config
+
+    backend = body.backend
+    cfg = get_config()
+
+    if cfg.storage_backend == backend:
+        return {"status": "unchanged", "backend": backend}
+
+    brain_name = cfg.current_brain
+    brains_dir = Path(cfg.data_dir) / "brains"
+
+    # Guard: target must exist
+    if backend == "infinitydb":
+        from neural_memory.plugins import has_pro
+
+        if not has_pro():
+            raise HTTPException(status_code=403, detail="Neural Memory Pro package not installed")
+        infinity_marker = brains_dir / brain_name / "brain.inf"
+        if not infinity_marker.exists():
+            raise HTTPException(
+                status_code=400,
+                detail="InfinityDB data not found. Run migration first.",
+            )
+    elif backend == "sqlite":
+        sqlite_path = brains_dir / f"{brain_name}.db"
+        if not sqlite_path.exists():
+            raise HTTPException(
+                status_code=400,
+                detail="SQLite database not found for this brain.",
+            )
+
+    # Update config and clear storage cache
+    new_cfg = dc_replace(cfg, storage_backend=backend)
+    new_cfg.save()
+    set_config(new_cfg)
+
+    # Clear storage cache so next request picks up new backend
+    from neural_memory.unified_config import _storage_cache
+
+    _storage_cache.clear()
+
+    return {"status": "switched", "backend": backend, "brain": brain_name}
+
+
+async def _run_migration_task(
+    job_id: str,
+    direction: str,
+    brain_name: str,
+) -> None:
+    """Background task: migrate brain data between SQLite and InfinityDB."""
+    job = _migration_jobs[job_id]
+    try:
+        from neural_memory.unified_config import get_config
+
+        cfg = get_config()
+
+        # Open source storage
+        if direction == "to_infinitydb":
+            source = await _open_sqlite_storage(cfg, brain_name)
+        else:
+            source = await _open_infinitydb_storage(cfg, brain_name)
+
+        # Find brain_id — exact match only, no silent fallback
+        brains = await source.list_brains()
+        brain_id: str | None = None
+        for b in brains:
+            if b.get("name") == brain_name:
+                brain_id = b.get("id") or b.get("name")
+                break
+
+        if not brain_id:
+            if brains:
+                # Single-brain storage: use the only available brain
+                brain_id = brains[0].get("id") or brains[0].get("name") or brain_name
+            else:
+                raise RuntimeError(f"No brain '{brain_name}' found in source storage")
+
+        # Count totals
+        stats = await source.get_stats(brain_id)
+        job.neurons_total = stats.get("neuron_count", 0)
+        job.synapses_total = stats.get("synapse_count", 0)
+        job.fibers_total = stats.get("fiber_count", 0)
+
+        # Export snapshot from source
+        snapshot = await source.export_brain(brain_id)
+        job.neurons_done = len(snapshot.neurons)
+        job.synapses_done = len(snapshot.synapses)
+
+        # Open target storage
+        if direction == "to_infinitydb":
+            target = await _open_infinitydb_storage(cfg, brain_name)
+        else:
+            target = await _open_sqlite_storage(cfg, brain_name, fresh=True)
+
+        # Import into target
+        await target.import_brain(snapshot)
+        job.fibers_done = len(snapshot.fibers)
+
+        # Verify counts match
+        target_stats = await target.get_stats(brain_id)
+        target_neurons = target_stats.get("neuron_count", 0)
+        source_neurons = job.neurons_total
+
+        if source_neurons > 0 and abs(target_neurons - source_neurons) / source_neurons > 0.005:
+            job.state = "error"
+            job.error = (
+                f"Verification failed: source has {source_neurons} neurons, "
+                f"target has {target_neurons} (>{0.5}% mismatch)"
+            )
+        else:
+            # For to_sqlite: promote temp file to real .db path
+            if direction == "to_sqlite":
+                brains_dir = Path(cfg.data_dir) / "brains"
+                tmp_path = brains_dir / f"{brain_name}_migrating.db"
+                real_path = brains_dir / f"{brain_name}.db"
+                if tmp_path.exists():
+                    import shutil as _shutil
+
+                    _shutil.move(str(tmp_path), str(real_path))
+            job.state = "done"
+
+        job.finished_at = _utcnow_iso()
+
+    except Exception as e:
+        logger.error("Migration task failed for brain '%s': %s", brain_name, e, exc_info=True)
+        job.state = "error"
+        # Sanitize: don't leak internal paths or exception class names
+        job.error = "Migration failed. Check server logs for details."
+        job.finished_at = _utcnow_iso()
+
+
+async def _open_sqlite_storage(
+    cfg: Any,
+    brain_name: str,
+    *,
+    fresh: bool = False,
+) -> Any:
+    """Open a SQLite storage instance for the given brain."""
+    from neural_memory.storage.sqlite import SQLiteStorage
+
+    brains_dir = Path(cfg.data_dir) / "brains"
+    db_path = brains_dir / f"{brain_name}.db"
+
+    if fresh:
+        # Write to temp file, will be renamed on success
+        tmp_path = brains_dir / f"{brain_name}_migrating.db"
+        storage = SQLiteStorage(str(tmp_path))
+    else:
+        storage = SQLiteStorage(str(db_path))
+
+    await storage.initialize()
+
+    # Set brain context
+    brain_list = await storage.list_brains()
+    if brain_list:
+        brain_id = brain_list[0].get("id") or brain_list[0].get("name")
+        storage.set_brain(brain_id)
+
+    return storage
+
+
+async def _open_infinitydb_storage(
+    cfg: Any,
+    brain_name: str,
+) -> Any:
+    """Open an InfinityDB storage instance for the given brain (Pro plugin)."""
+    from neural_memory.plugins import get_storage_class
+
+    storage_cls = get_storage_class()
+    if storage_cls is None:
+        raise RuntimeError("InfinityDB storage class not available — Pro plugin not installed")
+
+    brains_dir = Path(cfg.data_dir) / "brains"
+    brain_dir = brains_dir / brain_name
+    brain_dir.mkdir(parents=True, exist_ok=True)
+
+    storage = storage_cls(str(brain_dir))
+    await storage.initialize()
+
+    brain_list = await storage.list_brains()
+    if brain_list:
+        brain_id = brain_list[0].get("id") or brain_list[0].get("name")
+        storage.set_brain(brain_id)
+
+    return storage
