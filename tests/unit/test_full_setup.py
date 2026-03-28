@@ -32,7 +32,7 @@ class TestDetectEmbeddingProvider:
         with (
             patch(
                 "neural_memory.cli.full_setup._is_module_available",
-                side_effect=lambda m: m == "google.generativeai",
+                side_effect=lambda m: m == "google.genai",
             ),
             patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"}),
         ):
@@ -44,7 +44,7 @@ class TestDetectEmbeddingProvider:
         with (
             patch(
                 "neural_memory.cli.full_setup._is_module_available",
-                side_effect=lambda m: m == "google.generativeai",
+                side_effect=lambda m: m == "google.genai",
             ),
             patch.dict("os.environ", {}, clear=True),
         ):

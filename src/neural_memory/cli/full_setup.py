@@ -35,8 +35,8 @@ _PROVIDER_PRIORITY: list[dict[str, str]] = [
     },
     {
         "key": "gemini",
-        "module": "google.generativeai",
-        "model": "models/text-embedding-004",
+        "module": "google.genai",
+        "model": "gemini-embedding-001",
         "label": "Google Gemini (free tier)",
         "env_key": "GEMINI_API_KEY",
     },
