@@ -186,6 +186,13 @@ def row_to_typed_memory(row: aiosqlite.Row) -> TypedMemory:
     except (IndexError, KeyError):
         pass
 
+    # tier added in schema v37 — default to "warm" for pre-migration rows
+    tier = "warm"
+    try:
+        tier = row["tier"] or "warm"
+    except (IndexError, KeyError):
+        pass
+
     return TypedMemory(
         fiber_id=row["fiber_id"],
         memory_type=MemoryType(row["memory_type"]),
@@ -198,6 +205,7 @@ def row_to_typed_memory(row: aiosqlite.Row) -> TypedMemory:
         created_at=datetime.fromisoformat(row["created_at"]),
         trust_score=trust_score,
         source=source,
+        tier=tier,
     )
 
 

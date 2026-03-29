@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 36
+SCHEMA_VERSION = 37
 
 # â”€â”€ Migrations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Each entry maps (from_version -> to_version) with a list of SQL statements.
@@ -627,6 +627,11 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
         )""",
         "CREATE INDEX IF NOT EXISTS idx_merkle_hashes_brain ON merkle_hashes(brain_id, entity_type)",
     ],
+    (36, 37): [
+        # Tiered Memory Loading (A6): HOT/WARM/COLD access tiers
+        "ALTER TABLE typed_memories ADD COLUMN tier TEXT DEFAULT 'warm'",
+        "CREATE INDEX IF NOT EXISTS idx_typed_memories_tier ON typed_memories(brain_id, tier)",
+    ],
 }
 
 
@@ -878,6 +883,7 @@ CREATE TABLE IF NOT EXISTS typed_memories (
     created_at TEXT NOT NULL,
     trust_score REAL DEFAULT NULL,
     source TEXT DEFAULT NULL,
+    tier TEXT DEFAULT 'warm',
     PRIMARY KEY (brain_id, fiber_id),
     FOREIGN KEY (brain_id, fiber_id) REFERENCES fibers(brain_id, id) ON DELETE CASCADE,
     FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE,
@@ -887,6 +893,7 @@ CREATE INDEX IF NOT EXISTS idx_typed_memories_type ON typed_memories(brain_id, m
 CREATE INDEX IF NOT EXISTS idx_typed_memories_project ON typed_memories(brain_id, project_id);
 CREATE INDEX IF NOT EXISTS idx_typed_memories_expires ON typed_memories(brain_id, expires_at);
 CREATE INDEX IF NOT EXISTS idx_typed_memories_trust ON typed_memories(brain_id, trust_score);
+CREATE INDEX IF NOT EXISTS idx_typed_memories_tier ON typed_memories(brain_id, tier);
 
 -- Projects table
 CREATE TABLE IF NOT EXISTS projects (

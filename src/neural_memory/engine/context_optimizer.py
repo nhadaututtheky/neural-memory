@@ -304,9 +304,7 @@ async def optimize_context(
         try:
             typed_mem = await storage.get_typed_memory(fiber.id)
             if typed_mem:
-                if hasattr(typed_mem, "priority") and isinstance(
-                    typed_mem.priority, (int, float)
-                ):
+                if hasattr(typed_mem, "priority") and isinstance(typed_mem.priority, (int, float)):
                     priority_norm = typed_mem.priority / 10.0
                 raw_tier = getattr(typed_mem, "tier", "warm") or "warm"
                 fiber_tier = str(raw_tier).lower()

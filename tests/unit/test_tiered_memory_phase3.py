@@ -126,9 +126,7 @@ class TestContextOptimizerExcludeCold:
 
         def get_typed_mem(fid):
             tier = tier_map.get(fid, "warm")
-            return TypedMemory.create(
-                fiber_id=fid, memory_type=MemoryType.FACT, tier=tier
-            )
+            return TypedMemory.create(fiber_id=fid, memory_type=MemoryType.FACT, tier=tier)
 
         mock_storage.get_typed_memory = AsyncMock(side_effect=get_typed_mem)
 
@@ -141,9 +139,7 @@ class TestContextOptimizerExcludeCold:
         state_mock.activation_level = 0.5
         mock_storage.get_neuron_state = AsyncMock(return_value=state_mock)
 
-        plan = await optimize_context(
-            mock_storage, fibers, max_tokens=10000, exclude_cold=True
-        )
+        plan = await optimize_context(mock_storage, fibers, max_tokens=10000, exclude_cold=True)
 
         result_fiber_ids = {item.fiber_id for item in plan.items}
         assert "f0" not in result_fiber_ids
@@ -159,9 +155,7 @@ class TestContextOptimizerExcludeCold:
 
         def get_typed_mem(fid):
             tier = tier_map.get(fid, "warm")
-            return TypedMemory.create(
-                fiber_id=fid, memory_type=MemoryType.FACT, tier=tier
-            )
+            return TypedMemory.create(fiber_id=fid, memory_type=MemoryType.FACT, tier=tier)
 
         mock_storage.get_typed_memory = AsyncMock(side_effect=get_typed_mem)
 
@@ -195,9 +189,7 @@ class TestContextOptimizerExcludeCold:
 
         def get_typed_mem(fid):
             tier = tier_map.get(fid, "warm")
-            return TypedMemory.create(
-                fiber_id=fid, memory_type=MemoryType.FACT, tier=tier
-            )
+            return TypedMemory.create(fiber_id=fid, memory_type=MemoryType.FACT, tier=tier)
 
         mock_storage.get_typed_memory = AsyncMock(side_effect=get_typed_mem)
 
@@ -217,9 +209,7 @@ class TestContextOptimizerExcludeCold:
         state_mock.activation_level = 0.5
         mock_storage.get_neuron_state = AsyncMock(return_value=state_mock)
 
-        plan = await optimize_context(
-            mock_storage, fibers, max_tokens=10000, exclude_cold=True
-        )
+        plan = await optimize_context(mock_storage, fibers, max_tokens=10000, exclude_cold=True)
 
         if len(plan.items) >= 2:
             scores = {item.fiber_id: item.score for item in plan.items}
@@ -275,9 +265,7 @@ class TestLifecycleDecay:
         storage.get_all_synapses = AsyncMock(return_value=[])
         storage.update_neuron_state = AsyncMock()
 
-        hot_tm = TypedMemory.create(
-            fiber_id="f1", memory_type=MemoryType.FACT, tier="hot"
-        )
+        hot_tm = TypedMemory.create(fiber_id="f1", memory_type=MemoryType.FACT, tier="hot")
         fiber_mock = MagicMock()
         fiber_mock.neuron_ids = {"n1"}
 

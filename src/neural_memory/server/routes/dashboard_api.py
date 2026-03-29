@@ -176,7 +176,9 @@ async def get_tier_stats(
         logger.debug("Tier stats query failed", exc_info=True)
 
     total = counts["hot"] + counts["warm"] + counts["cold"]
-    return TierDistribution(hot=counts["hot"], warm=counts["warm"], cold=counts["cold"], total=total)
+    return TierDistribution(
+        hot=counts["hot"], warm=counts["warm"], cold=counts["cold"], total=total
+    )
 
 
 @router.get(

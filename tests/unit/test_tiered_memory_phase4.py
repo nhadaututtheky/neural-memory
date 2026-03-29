@@ -48,15 +48,17 @@ class TestStatsTierDistribution:
         storage.get_brain = AsyncMock(return_value=brain)
         storage.brain_id = "test-brain"
 
-        storage.get_enhanced_stats = AsyncMock(return_value={
-            "neuron_count": 100,
-            "synapse_count": 200,
-            "fiber_count": 50,
-            "db_size_bytes": 1024,
-            "today_fibers_count": 5,
-            "hot_neurons": [],
-            "newest_memory": None,
-        })
+        storage.get_enhanced_stats = AsyncMock(
+            return_value={
+                "neuron_count": 100,
+                "synapse_count": 200,
+                "fiber_count": 50,
+                "db_size_bytes": 1024,
+                "today_fibers_count": 5,
+                "hot_neurons": [],
+                "newest_memory": None,
+            }
+        )
         storage.get_synapses = AsyncMock(return_value=[])
 
         # Mock find_typed_memories for tier counts
@@ -73,7 +75,9 @@ class TestStatsTierDistribution:
             for i in range(2)
         ]
 
-        async def find_by_tier(tier: str | None = None, limit: int = 1000, **kw: object) -> list[TypedMemory]:
+        async def find_by_tier(
+            tier: str | None = None, limit: int = 1000, **kw: object
+        ) -> list[TypedMemory]:
             if tier == "hot":
                 return hot_mems
             if tier == "warm":
@@ -119,11 +123,13 @@ class TestStatsTierDistribution:
         storage.get_brain = AsyncMock(return_value=brain)
         storage.brain_id = "test-brain"
 
-        storage.get_enhanced_stats = AsyncMock(return_value={
-            "neuron_count": 0,
-            "synapse_count": 0,
-            "fiber_count": 0,
-        })
+        storage.get_enhanced_stats = AsyncMock(
+            return_value={
+                "neuron_count": 0,
+                "synapse_count": 0,
+                "fiber_count": 0,
+            }
+        )
         storage.get_synapses = AsyncMock(return_value=[])
         storage.find_typed_memories = AsyncMock(side_effect=Exception("db error"))
 
@@ -158,7 +164,9 @@ class TestDashboardTierStatsEndpoint:
         ]
         cold_mems = []
 
-        async def find_by_tier(tier: str | None = None, limit: int = 1000, **kw: object) -> list[TypedMemory]:
+        async def find_by_tier(
+            tier: str | None = None, limit: int = 1000, **kw: object
+        ) -> list[TypedMemory]:
             if tier == "hot":
                 return hot_mems
             if tier == "warm":
@@ -210,7 +218,5 @@ class TestTierDistributionAccuracy:
 
     def test_boundary_type_always_hot(self) -> None:
         """Boundary memories should always have HOT tier."""
-        tm = TypedMemory.create(
-            fiber_id="f1", memory_type=MemoryType.BOUNDARY, tier="cold"
-        )
+        tm = TypedMemory.create(fiber_id="f1", memory_type=MemoryType.BOUNDARY, tier="cold")
         assert tm.tier == MemoryTier.HOT

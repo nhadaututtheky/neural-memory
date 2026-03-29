@@ -83,13 +83,13 @@ class MemoryTier(StrEnum):
 
 # Tier-aware decay constants
 TIER_DECAY_FLOORS: dict[str, float] = {
-    "hot": 0.5,   # HOT memories never decay below 50% activation
+    "hot": 0.5,  # HOT memories never decay below 50% activation
     "warm": 0.0,  # WARM has no floor (existing behavior)
     "cold": 0.0,  # COLD has no floor
 }
 
 TIER_DECAY_MULTIPLIERS: dict[str, float] = {
-    "hot": 0.5,   # HOT decays at half speed
+    "hot": 0.5,  # HOT decays at half speed
     "warm": 1.0,  # WARM decays normally
     "cold": 2.0,  # COLD decays at double speed
 }

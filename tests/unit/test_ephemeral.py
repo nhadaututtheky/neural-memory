@@ -22,7 +22,7 @@ from neural_memory.utils.timeutils import utcnow
 
 class TestSchemaVersion:
     def test_schema_version_is_33(self) -> None:
-        assert SCHEMA_VERSION == 36
+        assert SCHEMA_VERSION == 37
 
 
 # ── Neuron dataclass ────────────────────────────────────────────────

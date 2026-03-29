@@ -290,9 +290,7 @@ class TestSqliteTierCrud:
     async def test_migration_creates_tier_column(self, storage) -> None:
         """Integration: verify tier column exists + default after migration."""
         conn = storage._conn
-        async with conn.execute(
-            "PRAGMA table_info(typed_memories)"
-        ) as cursor:
+        async with conn.execute("PRAGMA table_info(typed_memories)") as cursor:
             columns = await cursor.fetchall()
             col_names = [c[1] for c in columns]
             assert "tier" in col_names

@@ -9,7 +9,6 @@ Covers:
 
 from __future__ import annotations
 
-from dataclasses import replace as dc_replace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -19,7 +18,6 @@ from neural_memory.core.memory_types import (
     MemoryType,
     TypedMemory,
 )
-
 
 # ── Schema tests ─────────────────────────────────────────
 
@@ -143,9 +141,7 @@ class TestEditTierWiring:
     @pytest.mark.asyncio
     async def test_edit_tier_to_cold(self) -> None:
         handler, storage = self._make_handler()
-        mock_tm = TypedMemory.create(
-            fiber_id="f1", memory_type=MemoryType.FACT, tier="warm"
-        )
+        mock_tm = TypedMemory.create(fiber_id="f1", memory_type=MemoryType.FACT, tier="warm")
         mock_fiber = MagicMock()
         mock_fiber.metadata = {}
         mock_fiber.anchor_neuron_id = "n1"
@@ -164,9 +160,7 @@ class TestEditTierWiring:
     @pytest.mark.asyncio
     async def test_edit_tier_to_hot(self) -> None:
         handler, storage = self._make_handler()
-        mock_tm = TypedMemory.create(
-            fiber_id="f1", memory_type=MemoryType.FACT, tier="warm"
-        )
+        mock_tm = TypedMemory.create(fiber_id="f1", memory_type=MemoryType.FACT, tier="warm")
         mock_fiber = MagicMock()
         mock_fiber.metadata = {}
         mock_fiber.anchor_neuron_id = "n1"
@@ -190,9 +184,7 @@ class TestEditTierWiring:
     async def test_edit_tier_only_no_other_fields(self) -> None:
         """Editing only tier (no type/content/priority) should work."""
         handler, storage = self._make_handler()
-        mock_tm = TypedMemory.create(
-            fiber_id="f1", memory_type=MemoryType.FACT, tier="warm"
-        )
+        mock_tm = TypedMemory.create(fiber_id="f1", memory_type=MemoryType.FACT, tier="warm")
         mock_fiber = MagicMock()
         mock_fiber.metadata = {}
         mock_fiber.anchor_neuron_id = "n1"
@@ -210,9 +202,7 @@ class TestEditTierWiring:
         from neural_memory.core.fiber import Fiber
 
         handler, storage = self._make_handler()
-        mock_tm = TypedMemory.create(
-            fiber_id="f1", memory_type=MemoryType.FACT, tier="cold"
-        )
+        mock_tm = TypedMemory.create(fiber_id="f1", memory_type=MemoryType.FACT, tier="cold")
         mock_fiber = Fiber(
             id="f1",
             neuron_ids=set(),
@@ -265,9 +255,7 @@ class TestPinTierPromotion:
     @pytest.mark.asyncio
     async def test_pin_promotes_to_hot(self) -> None:
         handler, storage = self._make_handler()
-        mock_tm = TypedMemory.create(
-            fiber_id="f1", memory_type=MemoryType.FACT, tier="warm"
-        )
+        mock_tm = TypedMemory.create(fiber_id="f1", memory_type=MemoryType.FACT, tier="warm")
         storage.get_typed_memory = AsyncMock(return_value=mock_tm)
         storage.update_typed_memory = AsyncMock()
 
@@ -281,9 +269,7 @@ class TestPinTierPromotion:
     @pytest.mark.asyncio
     async def test_pin_already_hot_no_promotion(self) -> None:
         handler, storage = self._make_handler()
-        mock_tm = TypedMemory.create(
-            fiber_id="f1", memory_type=MemoryType.FACT, tier="hot"
-        )
+        mock_tm = TypedMemory.create(fiber_id="f1", memory_type=MemoryType.FACT, tier="hot")
         storage.get_typed_memory = AsyncMock(return_value=mock_tm)
         storage.update_typed_memory = AsyncMock()
 
