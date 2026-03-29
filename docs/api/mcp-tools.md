@@ -82,7 +82,8 @@ Store a memory. Auto-detects type if not specified. Error resolution: when a new
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `content` | string | Yes | — | The content to remember |
-| `type` | string (`fact`, `decision`, `preference`, `todo`, `insight`, `context`, `instruction`, `error`, `workflow`, `reference`) | No | — | Memory type (auto-detected if not specified) |
+| `type` | string (`fact`, `decision`, `preference`, `todo`, `insight`, `context`, `instruction`, `error`, `workflow`, `reference`, `boundary`) | No | — | Memory type (auto-detected if not specified) |
+| `tier` | string (`hot`, `warm`, `cold`) | No | — | Memory tier: hot (always in context, slow decay), warm (default, semantic match), cold (explicit recall only, fast de... |
 | `priority` | integer | No | — | Priority 0-10 (5=normal, 10=critical) |
 | `tags` | array[string] | No | — | Tags for categorization |
 | `expires_days` | integer | No | — | Days until memory expires |
@@ -126,6 +127,7 @@ Query memories by semantic search with confidence ranking.
 | `recall_token_budget` | integer | No | — | When set, activates budget-aware fiber selection: ranks fibers by value-per-token and selects the most efficient ones... |
 | `permanent_only` | boolean | No | — | Exclude ephemeral (session-scoped) memories from results. Default: false (include all). |
 | `clean_for_prompt` | boolean | No | — | Return clean bullet-point text without section headers or neuron-type tags. Use when injecting recall output into pro... |
+| `tier` | string (`hot`, `warm`, `cold`) | No | — | Filter results by memory tier. Only return memories matching this tier. |
 | `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
 | `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
@@ -507,9 +509,10 @@ Edit an existing memory's type, content, or priority. Use when a memory was auto
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `memory_id` | string | Yes | — | The fiber ID or neuron ID of the memory to edit |
-| `type` | string (`fact`, `decision`, `preference`, `todo`, `insight`, `context`, `instruction`, `error`, `workflow`, `reference`) | No | — | New memory type |
+| `type` | string (`fact`, `decision`, `preference`, `todo`, `insight`, `context`, `instruction`, `error`, `workflow`, `reference`, `boundary`) | No | — | New memory type |
 | `content` | string | No | — | New content for the anchor neuron |
 | `priority` | integer | No | — | New priority (0-10) |
+| `tier` | string (`hot`, `warm`, `cold`) | No | — | New memory tier: hot, warm, or cold |
 | `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
 | `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
