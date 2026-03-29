@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from neural_memory import __version__
 from neural_memory.core.memory_types import (
+    MemoryTier,
     MemoryType,
     Priority,
 )
@@ -229,6 +230,15 @@ class ToolHandler(RememberHandler, RecallHandler):
         except Exception:
             logger.debug("Conflict count failed (non-critical)", exc_info=True)
 
+        # Tier distribution counts
+        tier_distribution = {"hot": 0, "warm": 0, "cold": 0}
+        try:
+            for tier_name in ("hot", "warm", "cold"):
+                tier_mems = await storage.find_typed_memories(tier=tier_name, limit=1000)
+                tier_distribution[tier_name] = len(tier_mems)
+        except Exception:
+            logger.debug("Tier distribution count failed (non-critical)", exc_info=True)
+
         response = {
             "version": __version__,
             "brain": brain.name,
@@ -240,6 +250,7 @@ class ToolHandler(RememberHandler, RecallHandler):
             "hot_neurons": stats.get("hot_neurons", []),
             "newest_memory": stats.get("newest_memory"),
             "conflicts_active": conflicts_active,
+            "tier_distribution": tier_distribution,
         }
 
         # Actionable hints based on brain state
@@ -1226,7 +1237,7 @@ class ToolHandler(RememberHandler, RecallHandler):
         return {"error": "Memory not found"}
 
     async def _edit(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Edit an existing memory's type, content, or priority."""
+        """Edit an existing memory's type, content, priority, or tier."""
         memory_id = args.get("memory_id")
         if not memory_id or not isinstance(memory_id, str):
             return {"error": "memory_id is required"}
@@ -1234,15 +1245,22 @@ class ToolHandler(RememberHandler, RecallHandler):
         new_type = args.get("type")
         new_content = args.get("content")
         new_priority = args.get("priority")
+        new_tier = args.get("tier")
 
-        if new_type is None and new_content is None and new_priority is None:
-            return {"error": "At least one of type, content, or priority must be provided"}
+        if new_type is None and new_content is None and new_priority is None and new_tier is None:
+            return {"error": "At least one of type, content, priority, or tier must be provided"}
 
         if new_type is not None:
             try:
                 MemoryType(new_type)
             except ValueError:
                 return {"error": f"Invalid memory type: {new_type}"}
+
+        if new_tier is not None:
+            try:
+                MemoryTier(new_tier)
+            except ValueError:
+                return {"error": f"Invalid tier: {new_tier}. Must be hot, warm, or cold."}
 
         if new_content is not None and len(new_content) > MAX_CONTENT_LENGTH:
             return {
@@ -1264,8 +1282,8 @@ class ToolHandler(RememberHandler, RecallHandler):
             # Edit via fiber path
             changes: list[str] = []
 
-            # Update typed_memory (type, priority)
-            if new_type is not None or new_priority is not None:
+            # Update typed_memory (type, priority, tier)
+            if new_type is not None or new_priority is not None or new_tier is not None:
                 from dataclasses import replace as dc_replace
 
                 updated_tm = typed_mem
@@ -1279,6 +1297,20 @@ class ToolHandler(RememberHandler, RecallHandler):
                 if new_priority is not None:
                     updated_tm = dc_replace(updated_tm, priority=Priority.from_int(new_priority))
                     changes.append(f"priority: {typed_mem.priority.value} → {new_priority}")
+                if new_tier is not None:
+                    old_tier = updated_tm.tier
+                    updated_tm = updated_tm.with_tier(new_tier)
+                    if updated_tm.tier != old_tier:
+                        changes.append(f"tier: {old_tier} → {updated_tm.tier}")
+                # Enforce boundary invariant when type changed to boundary
+                if (
+                    new_type is not None
+                    and updated_tm.memory_type == MemoryType.BOUNDARY
+                    and updated_tm.tier != MemoryTier.HOT
+                ):
+                    old_tier = updated_tm.tier
+                    updated_tm = updated_tm.with_tier(MemoryTier.HOT)
+                    changes.append(f"tier: {old_tier} → hot (boundary auto-promote)")
                 await storage.update_typed_memory(updated_tm)
 
             # Update anchor neuron content

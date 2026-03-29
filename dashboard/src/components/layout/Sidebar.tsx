@@ -7,6 +7,7 @@ import {
   TrendingUp,
   Share2,
   Cloud,
+  HardDrive,
   Settings,
   Brain,
   Sparkles,
@@ -28,6 +29,7 @@ const navItems = [
   { to: "/oracle", icon: Sparkles, labelKey: "nav.oracle" },
   { to: "/tool-stats", icon: BarChart3, labelKey: "nav.toolStats" },
   { to: "/visualize", icon: LineChart, labelKey: "nav.visualize" },
+  { to: "/storage", icon: HardDrive, labelKey: "nav.storage" },
   { to: "/settings", icon: Settings, labelKey: "nav.settings" },
 ] as const
 

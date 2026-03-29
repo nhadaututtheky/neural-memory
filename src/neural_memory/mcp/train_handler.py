@@ -196,7 +196,23 @@ class TrainHandler:
 
         pinned = action == "pin"
         count = await storage.pin_fibers(fiber_ids, pinned=pinned)
-        return {
+
+        # Auto-promote tier to HOT when pinning
+        promoted = 0
+        if pinned:
+            from neural_memory.core.memory_types import MemoryTier
+
+            for fid in fiber_ids:
+                tm = await storage.get_typed_memory(fid)
+                if tm and tm.tier != MemoryTier.HOT:
+                    await storage.update_typed_memory(tm.with_tier(MemoryTier.HOT))
+                    promoted += 1
+
+        result: dict[str, Any] = {
             "updated": count,
             "message": f"{action}ned {count} fiber(s)",
         }
+        if promoted:
+            result["tier_promoted"] = promoted
+            result["message"] += f", promoted {promoted} to HOT tier"
+        return result

@@ -435,6 +435,14 @@ class RememberHandler:
                 except (TypeError, ValueError):
                     return {"error": f"Invalid trust_score: {raw_trust}"}
 
+            raw_tier = args.get("tier", "warm")
+            try:
+                from neural_memory.core.memory_types import MemoryTier
+
+                MemoryTier(raw_tier)
+            except ValueError:
+                return {"error": f"Invalid tier: {raw_tier}. Must be hot, warm, or cold."}
+
             typed_mem = TypedMemory.create(
                 fiber_id=result.fiber.id,
                 memory_type=mem_type,
@@ -443,6 +451,7 @@ class RememberHandler:
                 expires_in_days=expiry_days,
                 tags=tags if tags else None,
                 trust_score=trust_score,
+                tier=raw_tier,
             )
             await storage.add_typed_memory(typed_mem)
 
@@ -555,6 +564,7 @@ class RememberHandler:
             "success": True,
             "fiber_id": result.fiber.id,
             "memory_type": mem_type.value,
+            "tier": typed_mem.tier,
             "priority": priority.value,
             "auto_importance": raw_priority is None,
             "neurons_created": len(result.neurons_created),
@@ -738,6 +748,7 @@ class RememberHandler:
                 "encrypted",
                 "event_at",
                 "ephemeral",
+                "tier",
             ):
                 if key in item:
                     single_args[key] = item[key]

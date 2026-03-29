@@ -10,6 +10,7 @@
     "oracle": "Oracle",
     "toolStats": "Tool Stats",
     "visualize": "Visualize",
+    "storage": "Storage",
     "settings": "Settings"
   },
   "common": {
@@ -322,6 +323,37 @@
   "visualize": {
     "title": "Memory Visualizer",
     "description": "Query your memories and generate charts from stored data."
+  },
+  "storage": {
+    "title": "Storage",
+    "currentBackend": "Current Backend",
+    "brain": "Brain",
+    "sqliteFile": "SQLite database file",
+    "infinitydbDir": "InfinityDB directory",
+    "migration": "Migration",
+    "whyUpgrade": "Why InfinityDB?",
+    "whyBullet1": "Semantic cone queries — recall by meaning, not just keywords",
+    "whyBullet2": "Directional compression — smarter memory consolidation",
+    "whyBullet3": "Smart merge — cross-encoder reranking for precise recall",
+    "enableInfinitydb": "Enable InfinityDB",
+    "rollbackSqlite": "Rollback to SQLite",
+    "migrationStarted": "Migration started",
+    "migrationFailed": "Failed to start migration",
+    "migrationDone": "Migration complete!",
+    "migrationError": "Migration failed",
+    "switchBackend": "Switch to {{backend}}",
+    "backendSwitched": "Switched to {{backend}}",
+    "switchFailed": "Failed to switch backend",
+    "retry": "Try Again",
+    "migrating": "Migrating...",
+    "neurons": "Neurons",
+    "synapses": "Synapses",
+    "fibers": "Fibers",
+    "tierDistribution": "Memory Tiers",
+    "tierHot": "HOT — Always in context",
+    "tierWarm": "WARM — Semantic match",
+    "tierCold": "COLD — Explicit recall only",
+    "totalMemories": "Total typed memories"
   },
   "license": {
     "tier": "License",

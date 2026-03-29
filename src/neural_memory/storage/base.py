@@ -754,6 +754,7 @@ class NeuralStorage(ABC):
         project_id: str | None = None,
         tags: set[str] | None = None,
         limit: int = 100,
+        tier: str | None = None,
     ) -> list[TypedMemory]:
         """Find typed memories matching criteria.
 
@@ -764,6 +765,7 @@ class NeuralStorage(ABC):
             project_id: Filter by project ID
             tags: Filter by having all these tags
             limit: Maximum results to return
+            tier: Filter by loading tier ("hot", "warm", "cold")
 
         Returns:
             List of matching typed memories

@@ -220,6 +220,7 @@ async def optimize_context(
     decay_rate: float = 0.1,
     decay_floor: float = 0.05,
     embed_fn: Callable[[str], Coroutine[None, None, list[float]]] | None = None,
+    exclude_cold: bool = True,
 ) -> ContextPlan:
     """Optimize context selection and token allocation.
 
@@ -238,6 +239,9 @@ async def optimize_context(
         fidelity_essence_threshold: Score threshold for ESSENCE fidelity
         decay_rate: Lambda for fidelity decay formula
         decay_floor: Minimum fidelity score (ghost floor)
+        embed_fn: Optional embedding function for semantic deduplication
+        exclude_cold: Whether to exclude COLD-tier memories (default: True).
+            HOT-tier memories get a +0.3 score boost.
 
     Returns:
         ContextPlan with ordered, budget-constrained items + fidelity stats
@@ -294,16 +298,18 @@ async def optimize_context(
             pass
         activation_map[fiber.id] = activation
 
-        # Get priority from typed memory
+        # Get priority + tier from typed memory
         priority_norm = 0.5
+        fiber_tier = "warm"
         try:
             typed_mem = await storage.get_typed_memory(fiber.id)
-            if (
-                typed_mem
-                and hasattr(typed_mem, "priority")
-                and isinstance(typed_mem.priority, (int, float))
-            ):
-                priority_norm = typed_mem.priority / 10.0
+            if typed_mem:
+                if hasattr(typed_mem, "priority") and isinstance(
+                    typed_mem.priority, (int, float)
+                ):
+                    priority_norm = typed_mem.priority / 10.0
+                raw_tier = getattr(typed_mem, "tier", "warm") or "warm"
+                fiber_tier = str(raw_tier).lower()
         except (TypeError, ValueError, AttributeError):
             pass
         priority_map[fiber.id] = priority_norm
@@ -325,6 +331,10 @@ async def optimize_context(
         if not isinstance(conductivity, (int, float)):
             conductivity = 0.5
 
+        # Skip COLD memories in context (unless explicitly requested)
+        if fiber_tier == "cold" and exclude_cold:
+            continue
+
         # Composite score
         score = compute_composite_score(
             activation=activation,
@@ -333,6 +343,10 @@ async def optimize_context(
             conductivity=conductivity,
             freshness=freshness_result.score,
         )
+
+        # Tier-aware score boost: HOT gets +0.3 to ensure top placement
+        if fiber_tier == "hot":
+            score = min(1.0, score + 0.3)
 
         scored_items.append(
             ContextItem(

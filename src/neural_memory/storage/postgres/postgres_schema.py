@@ -163,6 +163,7 @@ _INIT_SQL_TEMPLATE = [
         created_at TIMESTAMPTZ NOT NULL,
         trust_score DOUBLE PRECISION DEFAULT NULL,
         source TEXT DEFAULT NULL,
+        tier TEXT DEFAULT 'warm',
         PRIMARY KEY (brain_id, fiber_id),
         FOREIGN KEY (brain_id, fiber_id) REFERENCES fibers(brain_id, id) ON DELETE CASCADE,
         FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
@@ -172,6 +173,7 @@ _INIT_SQL_TEMPLATE = [
     "CREATE INDEX IF NOT EXISTS idx_typed_memories_project ON typed_memories(brain_id, project_id)",
     "CREATE INDEX IF NOT EXISTS idx_typed_memories_expires ON typed_memories(brain_id, expires_at)",
     "CREATE INDEX IF NOT EXISTS idx_typed_memories_trust ON typed_memories(brain_id, trust_score)",
+    "CREATE INDEX IF NOT EXISTS idx_typed_memories_tier ON typed_memories(brain_id, tier)",
     # Projects
     """
     CREATE TABLE IF NOT EXISTS projects (
@@ -243,6 +245,12 @@ _INIT_SQL_TEMPLATE = [
     "CREATE INDEX IF NOT EXISTS idx_gaps_priority ON knowledge_gaps(brain_id, priority)",
 ]
 
+# Migration statements for existing databases (ALTER TABLE ... ADD COLUMN IF NOT EXISTS)
+_MIGRATIONS = [
+    "ALTER TABLE typed_memories ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'warm'",
+    "CREATE INDEX IF NOT EXISTS idx_typed_memories_tier ON typed_memories(brain_id, tier)",
+]
+
 
 async def ensure_schema(pool: Any, embedding_dim: int = 384) -> None:
     """Create pgvector extension and all tables if they don't exist."""
@@ -257,5 +265,13 @@ async def ensure_schema(pool: Any, embedding_dim: int = 384) -> None:
                     await conn.execute(stmt)
                 except asyncpg.exceptions.DuplicateObjectError:
                     pass  # Index/table already exists
+        # Run incremental migrations for existing databases
+        for sql in _MIGRATIONS:
+            stmt = sql.strip()
+            if stmt:
+                try:
+                    await conn.execute(stmt)
+                except asyncpg.exceptions.DuplicateObjectError:
+                    pass  # Index already exists
     finally:
         await pool.release(conn)

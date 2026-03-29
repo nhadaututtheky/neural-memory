@@ -11,7 +11,7 @@ import math
 from dataclasses import dataclass, field
 from dataclasses import replace as dc_replace
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from neural_memory.core.neuron import NeuronState
 from neural_memory.core.synapse import Synapse, SynapseType
@@ -101,6 +101,44 @@ class DecayManager:
         if hasattr(storage, "get_pinned_neuron_ids"):
             pinned_neuron_ids = await storage.get_pinned_neuron_ids()
 
+        # Preload neuron→tier mapping for tier-aware decay
+        from neural_memory.core.memory_types import TIER_DECAY_FLOORS, TIER_DECAY_MULTIPLIERS
+
+        neuron_tier_map: dict[str, str] = {}
+        try:
+            if hasattr(storage, "find_typed_memories"):
+                # Collect fiber_id → tier mapping, then batch-resolve fibers
+                fiber_tier_pairs: list[tuple[str, str]] = []
+                for tier_val in ("hot", "cold"):
+                    tier_mems = await storage.find_typed_memories(tier=tier_val, limit=1000)
+                    for tm in tier_mems:
+                        fiber_tier_pairs.append((tm.fiber_id, tier_val))
+
+                # Enforce BOUNDARY invariant: boundary memories always get HOT floor
+                # even if stored pre-Phase3 with default tier="warm"
+                from neural_memory.core.memory_types import MemoryType
+
+                boundary_mems = await storage.find_typed_memories(
+                    memory_type=MemoryType.BOUNDARY, limit=1000
+                )
+                for tm in boundary_mems:
+                    fiber_tier_pairs.append((tm.fiber_id, "hot"))
+
+                # Deduplicate fiber IDs and resolve fibers
+                unique_fids = {fid for fid, _ in fiber_tier_pairs}
+                fiber_cache: dict[str, Any] = {}
+                for fid in unique_fids:
+                    fiber_cache[fid] = await storage.get_fiber(fid)
+
+                # Build neuron→tier map (boundary "hot" entries added last → override)
+                for fid, tier_val in fiber_tier_pairs:
+                    fiber = fiber_cache.get(fid)
+                    if fiber:
+                        for nid in fiber.neuron_ids:
+                            neuron_tier_map[nid] = tier_val
+        except (TypeError, AttributeError):
+            logger.debug("Tier map build failed (non-critical)", exc_info=True)
+
         # Get all neuron states
         states = await storage.get_all_neuron_states()
         report.neurons_processed = len(states)
@@ -125,9 +163,13 @@ class DecayManager:
             if days_elapsed < self.min_age_days:
                 continue
 
-            # Calculate decay using per-neuron rate (type-aware)
-            decay_factor = math.exp(-state.decay_rate * days_elapsed)
-            new_level = state.activation_level * decay_factor
+            # Calculate decay using per-neuron rate (type-aware + tier-aware)
+            neuron_tier = neuron_tier_map.get(state.neuron_id, "warm")
+            tier_multiplier = TIER_DECAY_MULTIPLIERS.get(neuron_tier, 1.0)
+            tier_floor = TIER_DECAY_FLOORS.get(neuron_tier, 0.0)
+            effective_rate = state.decay_rate * tier_multiplier
+            decay_factor = math.exp(-effective_rate * days_elapsed)
+            new_level = max(tier_floor, state.activation_level * decay_factor)
 
             if new_level < state.activation_level:
                 report.neurons_decayed += 1
@@ -137,10 +179,14 @@ class DecayManager:
                     report.neurons_pruned += 1
 
                 if not dry_run:
-                    decayed_state = state.decay(time_diff.total_seconds())
-                    if pruned:
-                        # Override to zero for pruned neurons
-                        decayed_state = dc_replace(decayed_state, activation_level=0.0)
+                    # Apply tier-aware level directly (skip state.decay() to avoid
+                    # double-computing — we already have the correct new_level)
+                    final_level = 0.0 if (pruned and tier_floor == 0.0) else new_level
+                    decayed_state = dc_replace(
+                        state,
+                        activation_level=final_level,
+                        last_activated=reference_time,
+                    )
                     await storage.update_neuron_state(decayed_state)
 
         # Get all synapses and apply decay

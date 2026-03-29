@@ -36,8 +36,8 @@ class PostgresTypedMemoryMixin(PostgresBaseMixin):
             """INSERT INTO typed_memories
                (fiber_id, brain_id, memory_type, priority, provenance,
                 expires_at, project_id, tags, metadata, created_at,
-                trust_score, source)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                trust_score, source, tier)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                ON CONFLICT (brain_id, fiber_id) DO UPDATE SET
                  memory_type = EXCLUDED.memory_type,
                  priority = EXCLUDED.priority,
@@ -47,7 +47,8 @@ class PostgresTypedMemoryMixin(PostgresBaseMixin):
                  tags = EXCLUDED.tags,
                  metadata = EXCLUDED.metadata,
                  trust_score = EXCLUDED.trust_score,
-                 source = EXCLUDED.source""",
+                 source = EXCLUDED.source,
+                 tier = EXCLUDED.tier""",
             typed_memory.fiber_id,
             brain_id,
             typed_memory.memory_type.value,
@@ -60,6 +61,7 @@ class PostgresTypedMemoryMixin(PostgresBaseMixin):
             typed_memory.created_at,
             typed_memory.trust_score,
             typed_memory.source,
+            typed_memory.tier,
         )
         return typed_memory.fiber_id
 
@@ -82,6 +84,7 @@ class PostgresTypedMemoryMixin(PostgresBaseMixin):
         project_id: str | None = None,
         tags: set[str] | None = None,
         limit: int = 100,
+        tier: str | None = None,
     ) -> list[TypedMemory]:
         limit = min(limit, 1000)
         brain_id = self._get_brain_id()
@@ -105,6 +108,10 @@ class PostgresTypedMemoryMixin(PostgresBaseMixin):
             params.append(project_id)
             query += f" AND project_id = ${len(params)}"
 
+        if tier is not None:
+            params.append(tier)
+            query += f" AND tier = ${len(params)}"
+
         params.append(limit)
         query += f" ORDER BY priority DESC, created_at DESC LIMIT ${len(params)}"
 
@@ -121,8 +128,9 @@ class PostgresTypedMemoryMixin(PostgresBaseMixin):
         result = await self._query(
             """UPDATE typed_memories SET memory_type = $1, priority = $2,
                provenance = $3, expires_at = $4, project_id = $5,
-               tags = $6, metadata = $7, trust_score = $8, source = $9
-               WHERE fiber_id = $10 AND brain_id = $11""",
+               tags = $6, metadata = $7, trust_score = $8, source = $9,
+               tier = $10
+               WHERE fiber_id = $11 AND brain_id = $12""",
             typed_memory.memory_type.value,
             typed_memory.priority.value,
             json.dumps(provenance_to_dict(typed_memory.provenance)),
@@ -132,6 +140,7 @@ class PostgresTypedMemoryMixin(PostgresBaseMixin):
             json.dumps(typed_memory.metadata),
             typed_memory.trust_score,
             typed_memory.source,
+            typed_memory.tier,
             typed_memory.fiber_id,
             brain_id,
         )

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from neural_memory.engine.hooks import HookEvent
 from neural_memory.engine.retrieval import DepthLevel
-from neural_memory.mcp.constants import MAX_TOKEN_BUDGET
+from neural_memory.mcp.constants import MAX_HOT_CONTEXT_MEMORIES, MAX_TOKEN_BUDGET
 from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
@@ -363,26 +363,42 @@ class RecallHandler:
                 "confidence": result.confidence,
             }
 
-        # Post-filter by trust_score if min_trust is specified
-        if min_trust is not None and result.fibers_matched:
+        # Post-filter by trust_score and/or tier (single pass to avoid redundant DB lookups).
+        # Tier semantics: fibers without a typed_memory row are treated as "warm" (the default).
+        # - tier="warm" → includes un-typed fibers (they default to warm)
+        # - tier="hot"/"cold" → excludes un-typed fibers (only explicit tier matches)
+        recall_tier = args.get("tier")
+        needs_post_filter = (min_trust is not None or recall_tier) and result.fibers_matched
+        if needs_post_filter:
             try:
-                trusted_fiber_ids: set[str] = set()
+                passing_ids: set[str] = set()
                 for fid in result.fibers_matched:
                     tm = await storage.get_typed_memory(fid)
-                    if tm is None:
-                        trusted_fiber_ids.add(fid)  # No typed_memory = include by default
-                    elif tm.trust_score is None:
-                        trusted_fiber_ids.add(fid)  # Unscored = include by default
-                    elif tm.trust_score >= min_trust:
-                        trusted_fiber_ids.add(fid)
-                filtered_fibers = [f for f in result.fibers_matched if f in trusted_fiber_ids]
+
+                    # Trust filter
+                    if min_trust is not None:
+                        if tm is not None and tm.trust_score is not None:
+                            if tm.trust_score < min_trust:
+                                continue
+
+                    # Tier filter
+                    if recall_tier:
+                        if tm is None:
+                            if recall_tier != "warm":
+                                continue
+                        elif getattr(tm, "tier", "warm") != recall_tier:
+                            continue
+
+                    passing_ids.add(fid)
+
+                filtered_fibers = [f for f in result.fibers_matched if f in passing_ids]
                 result = (
                     result._replace(fibers_matched=filtered_fibers)
                     if hasattr(result, "_replace")
                     else result
                 )
             except Exception:
-                logger.debug("Trust filter failed (non-critical)", exc_info=True)
+                logger.debug("Post-filter (trust/tier) failed (non-critical)", exc_info=True)
 
         # Exact mode: return raw neuron contents without truncation
         if recall_mode == "exact" and result.fibers_matched:
@@ -708,7 +724,12 @@ class RecallHandler:
         }
 
     async def _context(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Get recent context."""
+        """Get recent context.
+
+        Note: HOT-tier memories are always injected regardless of fresh_only.
+        This is intentional — HOT memories represent always-in-context data
+        (safety boundaries, pinned knowledge) that should never be excluded.
+        """
         storage = await self.get_storage()
 
         limit = min(args.get("limit", 10), 200)
@@ -733,6 +754,26 @@ class RecallHandler:
                 in (FreshnessLevel.FRESH, FreshnessLevel.RECENT)
             ]
             fibers = fresh_fibers[:limit]
+
+        # Inject HOT tier memories — always in context regardless of recency
+        existing_ids = {f.id for f in fibers}
+        try:
+            hot_memories = await storage.find_typed_memories(
+                tier="hot", limit=MAX_HOT_CONTEXT_MEMORIES
+            )
+            for tm in hot_memories:
+                if tm.fiber_id not in existing_ids:
+                    hot_fiber = await storage.get_fiber(tm.fiber_id)
+                    if hot_fiber:
+                        fibers.append(hot_fiber)
+                        existing_ids.add(tm.fiber_id)
+            if len(hot_memories) >= MAX_HOT_CONTEXT_MEMORIES:
+                logger.warning(
+                    "HOT memory limit reached (%d) — some HOT memories may be excluded from context",
+                    MAX_HOT_CONTEXT_MEMORIES,
+                )
+        except (TypeError, AttributeError) as e:
+            logger.warning("HOT memory injection failed — tier filter unavailable: %s", e)
 
         # Smart context optimization: score, dedup, budget
         from neural_memory.engine.context_optimizer import optimize_context

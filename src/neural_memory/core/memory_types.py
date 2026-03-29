@@ -39,6 +39,9 @@ class MemoryType(StrEnum):
     PREDICTION = "prediction"  # Falsifiable claims about future observations
     SCHEMA = "schema"  # Mental model versions (explicit knowledge structures)
 
+    # Safety layer
+    BOUNDARY = "boundary"  # Safety rules: "Always ask before sending emails"
+
 
 class Priority(IntEnum):
     """Memory priority levels (0-10 scale)."""
@@ -62,6 +65,34 @@ class Priority(IntEnum):
             return cls.HIGH
         else:
             return cls.CRITICAL
+
+
+class MemoryTier(StrEnum):
+    """Loading tier for memory access patterns.
+
+    Controls how memories participate in context building and decay.
+    HOT = always loaded in context, slow decay (safety rules, preferences).
+    WARM = default, semantic match only, normal decay.
+    COLD = explicit recall only, aggressive decay (archive).
+    """
+
+    HOT = "hot"
+    WARM = "warm"
+    COLD = "cold"
+
+
+# Tier-aware decay constants
+TIER_DECAY_FLOORS: dict[str, float] = {
+    "hot": 0.5,   # HOT memories never decay below 50% activation
+    "warm": 0.0,  # WARM has no floor (existing behavior)
+    "cold": 0.0,  # COLD has no floor
+}
+
+TIER_DECAY_MULTIPLIERS: dict[str, float] = {
+    "hot": 0.5,   # HOT decays at half speed
+    "warm": 1.0,  # WARM decays normally
+    "cold": 2.0,  # COLD decays at double speed
+}
 
 
 class Confidence(StrEnum):
@@ -183,6 +214,7 @@ class TypedMemory:
     created_at: datetime = field(default_factory=utcnow)
     trust_score: float | None = None
     source: str | None = None
+    tier: str = MemoryTier.WARM
 
     @classmethod
     def create(
@@ -197,6 +229,7 @@ class TypedMemory:
         tags: set[str] | None = None,
         metadata: dict[str, Any] | None = None,
         trust_score: float | None = None,
+        tier: str = MemoryTier.WARM,
     ) -> TypedMemory:
         """Factory method to create a TypedMemory.
 
@@ -211,6 +244,7 @@ class TypedMemory:
             tags: Optional tags
             metadata: Optional metadata
             trust_score: Trust level 0.0-1.0 (None = unscored)
+            tier: Loading tier ("hot", "warm", "cold")
 
         Returns:
             A new TypedMemory instance
@@ -225,6 +259,9 @@ class TypedMemory:
         # Cap trust_score by source ceiling
         capped_trust = _cap_trust_score(trust_score, source)
 
+        # Boundary type auto-promotes to HOT
+        effective_tier = MemoryTier.HOT if memory_type == MemoryType.BOUNDARY else tier
+
         return cls(
             fiber_id=fiber_id,
             memory_type=memory_type,
@@ -237,6 +274,7 @@ class TypedMemory:
             created_at=utcnow(),
             trust_score=capped_trust,
             source=source,
+            tier=effective_tier,
         )
 
     @property
@@ -268,6 +306,28 @@ class TypedMemory:
             tags=self.tags,
             metadata=self.metadata,
             created_at=self.created_at,
+            tier=self.tier,
+        )
+
+    def with_tier(self, tier: str) -> TypedMemory:
+        """Create a new TypedMemory with updated loading tier.
+
+        Boundary memories are always HOT — the invariant is enforced here.
+        """
+        effective_tier = MemoryTier.HOT if self.memory_type == MemoryType.BOUNDARY else tier
+        return TypedMemory(
+            fiber_id=self.fiber_id,
+            memory_type=self.memory_type,
+            priority=self.priority,
+            provenance=self.provenance,
+            expires_at=self.expires_at,
+            project_id=self.project_id,
+            tags=self.tags,
+            metadata=self.metadata,
+            created_at=self.created_at,
+            trust_score=self.trust_score,
+            source=self.source,
+            tier=effective_tier,
         )
 
     def verify(self) -> TypedMemory:
@@ -282,6 +342,7 @@ class TypedMemory:
             tags=self.tags,
             metadata=self.metadata,
             created_at=self.created_at,
+            tier=self.tier,
         )
 
     def extend_expiry(self, days: int) -> TypedMemory:
@@ -297,6 +358,7 @@ class TypedMemory:
             tags=self.tags,
             metadata=self.metadata,
             created_at=self.created_at,
+            tier=self.tier,
         )
 
 
@@ -316,6 +378,7 @@ DEFAULT_EXPIRY_DAYS: dict[MemoryType, int | None] = {
     MemoryType.HYPOTHESIS: 180,  # Hypotheses may be resolved or abandoned
     MemoryType.PREDICTION: 30,  # Predictions should be verified soon
     MemoryType.SCHEMA: None,  # Schemas persist (superseded, not expired)
+    MemoryType.BOUNDARY: None,  # Boundaries never expire (safety rules)
 }
 
 
@@ -336,6 +399,7 @@ DEFAULT_DECAY_RATES: dict[MemoryType, float] = {
     MemoryType.HYPOTHESIS: 0.03,  # Hypotheses decay slowly (evidence keeps them alive)
     MemoryType.PREDICTION: 0.10,  # Predictions decay fast (resolve or forget)
     MemoryType.SCHEMA: 0.01,  # Schemas are the most persistent memories
+    MemoryType.BOUNDARY: 0.01,  # Boundaries decay slowest (safety-critical)
 }
 
 

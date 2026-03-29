@@ -229,6 +229,7 @@ def pg_row_to_typed_memory(record: Any) -> TypedMemory:
 
     trust_score: float | None = None
     source: str | None = None
+    tier: str = "warm"
     try:
         ts = record["trust_score"]
         if ts is not None:
@@ -237,6 +238,12 @@ def pg_row_to_typed_memory(record: Any) -> TypedMemory:
         pass
     try:
         source = record["source"]
+    except (KeyError, TypeError):
+        pass
+    try:
+        t = record["tier"]
+        if t is not None:
+            tier = str(t)
     except (KeyError, TypeError):
         pass
 
@@ -261,4 +268,5 @@ def pg_row_to_typed_memory(record: Any) -> TypedMemory:
         ),
         trust_score=trust_score,
         source=source,
+        tier=tier,
     )

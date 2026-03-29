@@ -10,6 +10,7 @@
     "toolStats": "Thống kê công cụ",
     "visualize": "Trực quan",
     "sync": "Đồng bộ",
+    "storage": "Lưu trữ",
     "settings": "Cài đặt"
   },
   "common": {
@@ -322,6 +323,37 @@
   "visualize": {
     "title": "Trực quan hóa",
     "description": "Truy vấn bộ nhớ và tạo biểu đồ từ dữ liệu đã lưu."
+  },
+  "storage": {
+    "title": "Lưu trữ",
+    "currentBackend": "Backend hiện tại",
+    "brain": "Bộ não",
+    "sqliteFile": "Tệp cơ sở dữ liệu SQLite",
+    "infinitydbDir": "Thư mục InfinityDB",
+    "migration": "Di chuyển dữ liệu",
+    "whyUpgrade": "Tại sao InfinityDB?",
+    "whyBullet1": "Truy vấn cone ngữ nghĩa — nhớ lại theo ý nghĩa, không chỉ từ khóa",
+    "whyBullet2": "Nén hướng — tổng hợp bộ nhớ thông minh hơn",
+    "whyBullet3": "Hợp nhất thông minh — xếp hạng chéo để nhớ lại chính xác",
+    "enableInfinitydb": "Bật InfinityDB",
+    "rollbackSqlite": "Quay lại SQLite",
+    "migrationStarted": "Đã bắt đầu di chuyển",
+    "migrationFailed": "Bắt đầu di chuyển thất bại",
+    "migrationDone": "Di chuyển hoàn tất!",
+    "migrationError": "Di chuyển thất bại",
+    "switchBackend": "Chuyển sang {{backend}}",
+    "backendSwitched": "Đã chuyển sang {{backend}}",
+    "switchFailed": "Chuyển backend thất bại",
+    "retry": "Thử lại",
+    "migrating": "Đang di chuyển...",
+    "neurons": "Neuron",
+    "synapses": "Synapse",
+    "fibers": "Fiber",
+    "tierDistribution": "Phân tầng bộ nhớ",
+    "tierHot": "HOT — Luôn trong ngữ cảnh",
+    "tierWarm": "WARM — Khớp ngữ nghĩa",
+    "tierCold": "COLD — Chỉ gọi lại thủ công",
+    "totalMemories": "Tổng bộ nhớ có kiểu"
   },
   "license": {
     "tier": "Giấy phép",

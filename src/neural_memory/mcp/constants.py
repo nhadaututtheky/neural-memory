@@ -9,3 +9,6 @@ MAX_TOKEN_BUDGET = 100_000
 # Batch remember limits.
 MAX_BATCH_SIZE = 20
 MAX_BATCH_TOTAL_CHARS = 500_000
+
+# Maximum HOT-tier memories injected into context.
+MAX_HOT_CONTEXT_MEMORIES = 50

@@ -126,8 +126,16 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                         "error",
                         "workflow",
                         "reference",
+                        "boundary",
                     ],
                     "description": "Memory type (auto-detected if not specified)",
+                },
+                "tier": {
+                    "type": "string",
+                    "enum": ["hot", "warm", "cold"],
+                    "description": "Memory tier: hot (always in context, slow decay), "
+                    "warm (default, semantic match), cold (explicit recall only, fast decay). "
+                    "Boundary type auto-promotes to hot.",
                 },
                 "priority": {
                     "type": "integer",
@@ -345,6 +353,11 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "clean_for_prompt": {
                     "type": "boolean",
                     "description": "Return clean bullet-point text without section headers or neuron-type tags. Use when injecting recall output into prompts to prevent self-referential noise on re-ingest. Default: false.",
+                },
+                "tier": {
+                    "type": "string",
+                    "enum": ["hot", "warm", "cold"],
+                    "description": "Filter results by memory tier. Only return memories matching this tier.",
                 },
             },
             "required": ["query"],
@@ -1594,6 +1607,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                         "error",
                         "workflow",
                         "reference",
+                        "boundary",
                     ],
                     "description": "New memory type",
                 },
@@ -1606,6 +1620,11 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "minimum": 0,
                     "maximum": 10,
                     "description": "New priority (0-10)",
+                },
+                "tier": {
+                    "type": "string",
+                    "enum": ["hot", "warm", "cold"],
+                    "description": "New memory tier: hot, warm, or cold",
                 },
             },
             "required": ["memory_id"],

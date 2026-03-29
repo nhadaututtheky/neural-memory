@@ -151,6 +151,7 @@ class InMemoryCollectionsMixin:
         project_id: str | None = None,
         tags: set[str] | None = None,
         limit: int = 100,
+        tier: str | None = None,
     ) -> list[TypedMemory]:
         limit = min(limit, 1000)
         brain_id = self._get_brain_id()
@@ -166,6 +167,8 @@ class InMemoryCollectionsMixin:
             if project_id is not None and tm.project_id != project_id:
                 continue
             if tags is not None and not tags.issubset(tm.tags):
+                continue
+            if tier is not None and tm.tier != tier:
                 continue
 
             results.append(tm)

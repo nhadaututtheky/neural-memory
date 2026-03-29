@@ -42,8 +42,8 @@ class SQLiteTypedMemoryMixin:
             """INSERT OR REPLACE INTO typed_memories
                (fiber_id, brain_id, memory_type, priority, provenance,
                 expires_at, project_id, tags, metadata, created_at,
-                trust_score, source)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                trust_score, source, tier)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 typed_memory.fiber_id,
                 brain_id,
@@ -57,6 +57,7 @@ class SQLiteTypedMemoryMixin:
                 typed_memory.created_at.isoformat(),
                 typed_memory.trust_score,
                 typed_memory.source,
+                typed_memory.tier,
             ),
         )
         await conn.commit()
@@ -83,6 +84,7 @@ class SQLiteTypedMemoryMixin:
         project_id: str | None = None,
         tags: set[str] | None = None,
         limit: int = 100,
+        tier: str | None = None,
     ) -> list[TypedMemory]:
         limit = min(limit, 1000)
         conn = self._ensure_conn()
@@ -107,6 +109,10 @@ class SQLiteTypedMemoryMixin:
             query += " AND project_id = ?"
             params.append(project_id)
 
+        if tier is not None:
+            query += " AND tier = ?"
+            params.append(tier)
+
         query += " ORDER BY priority DESC, created_at DESC LIMIT ?"
         params.append(limit)
 
@@ -127,7 +133,7 @@ class SQLiteTypedMemoryMixin:
         cursor = await conn.execute(
             """UPDATE typed_memories SET memory_type = ?, priority = ?,
                provenance = ?, expires_at = ?, project_id = ?,
-               tags = ?, metadata = ?, trust_score = ?, source = ?
+               tags = ?, metadata = ?, trust_score = ?, source = ?, tier = ?
                WHERE fiber_id = ? AND brain_id = ?""",
             (
                 typed_memory.memory_type.value,
@@ -139,6 +145,7 @@ class SQLiteTypedMemoryMixin:
                 json.dumps(typed_memory.metadata),
                 typed_memory.trust_score,
                 typed_memory.source,
+                typed_memory.tier,
                 typed_memory.fiber_id,
                 brain_id,
             ),

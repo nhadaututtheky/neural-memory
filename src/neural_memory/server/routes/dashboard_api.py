@@ -149,6 +149,36 @@ async def get_stats() -> DashboardStats:
     )
 
 
+class TierDistribution(BaseModel):
+    """Memory tier distribution for the active brain."""
+
+    hot: int = 0
+    warm: int = 0
+    cold: int = 0
+    total: int = 0
+
+
+@router.get(
+    "/tier-stats",
+    response_model=TierDistribution,
+    summary="Get memory tier distribution",
+)
+async def get_tier_stats(
+    storage: Annotated[NeuralStorage, Depends(get_storage)],
+) -> TierDistribution:
+    """Get HOT/WARM/COLD tier distribution for the active brain."""
+    counts = {"hot": 0, "warm": 0, "cold": 0}
+    try:
+        for tier_name in ("hot", "warm", "cold"):
+            mems = await storage.find_typed_memories(tier=tier_name, limit=1000)
+            counts[tier_name] = len(mems)
+    except Exception:
+        logger.debug("Tier stats query failed", exc_info=True)
+
+    total = counts["hot"] + counts["warm"] + counts["cold"]
+    return TierDistribution(hot=counts["hot"], warm=counts["warm"], cold=counts["cold"], total=total)
+
+
 @router.get(
     "/brains",
     response_model=list[BrainSummary],
