@@ -354,7 +354,7 @@ Yes. After you enable InfinityDB (`storage_backend = "infinitydb"` in config.tom
 Your agent falls back to free SQLite storage. InfinityDB files remain on disk (in case you resubscribe). No data loss.
 
 **Is Pro open source?**
-The Pro plugin is source-available on GitHub (private repo, visible to subscribers). InfinityDB engine code is included — no black boxes.
+Yes. The Pro plugin is open source on GitHub. InfinityDB engine code is included — no black boxes. A license key unlocks Pro features.
 
 **Can I self-host the sync hub?**
 Team plan includes a Docker image for self-hosted deployment. Pro plan uses the managed Cloudflare hub.

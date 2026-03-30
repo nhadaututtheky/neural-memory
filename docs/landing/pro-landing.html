@@ -665,7 +665,7 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
       <h3 id="checkout-title">Get Neural Memory Pro</h3>
-      <p class="subtitle" id="checkout-subtitle">License key + private repo access</p>
+      <p class="subtitle" id="checkout-subtitle">License key activates Pro features</p>
       <form id="checkout-form" onsubmit="return submitCheckout(event)">
         <input type="hidden" id="checkout-product" value="">
         <label for="checkout-email">Email (for license delivery)</label>
@@ -1391,7 +1391,7 @@
       const info = PRODUCTS[product];
       document.getElementById('checkout-product').value = product;
       document.getElementById('checkout-title').textContent = info.name;
-      document.getElementById('checkout-subtitle').textContent = info.priceUSD + ' — License key + private repo access';
+      document.getElementById('checkout-subtitle').textContent = info.priceUSD + ' — License key activates Pro features';
       document.getElementById('checkout-error').style.display = 'none';
       document.getElementById('checkout-modal').style.display = 'flex';
     }
