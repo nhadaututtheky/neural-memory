@@ -1,0 +1,72 @@
+name: Telegram Release Notification
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get release info
+        id: release
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          PREV_TAG=$(git tag --sort=-v:refname | grep '^v' | sed -n '2p')
+
+          if [ -n "$PREV_TAG" ]; then
+            CHANGELOG=$(git log "${PREV_TAG}..${TAG}" --pretty=format:"• %s" --no-merges | head -15)
+          else
+            CHANGELOG=$(git log --pretty=format:"• %s" --no-merges -10)
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          {
+            echo "changelog<<CHANGELOG_EOF"
+            echo "$CHANGELOG"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Send Telegram notification
+        run: |
+          TAG="${{ steps.release.outputs.tag }}"
+          CHANGELOG="${{ steps.release.outputs.changelog }}"
+
+          python3 -c "
+          import json, urllib.request, os
+
+          tag = os.environ['TAG']
+          changelog = os.environ['CHANGELOG']
+
+          text = f'''🧠 <b>Neural Memory {tag}</b>
+
+          {changelog}
+
+          📦 <a href=\"https://github.com/nhadaututtheky/neural-memory/releases/tag/{tag}\">GitHub Release</a> | <a href=\"https://pypi.org/project/neural-memory/\">PyPI</a>
+          ⬆️ <code>pip install -U neural-memory</code>'''
+
+          data = json.dumps({
+              'chat_id': os.environ['CHAT_ID'],
+              'parse_mode': 'HTML',
+              'text': text,
+              'disable_web_page_preview': True
+          }).encode('utf-8')
+
+          req = urllib.request.Request(
+              f'https://api.telegram.org/bot{os.environ[\"BOT_TOKEN\"]}/sendMessage',
+              data=data,
+              headers={'Content-Type': 'application/json'}
+          )
+          urllib.request.urlopen(req)
+          print(f'Notification sent for {tag}')
+          "
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          CHANGELOG: ${{ steps.release.outputs.changelog }}
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
