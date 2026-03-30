@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.23.4] — 2026-03-30
+
+### Fixed
+
+- **macOS SSL cert failures** (#120): Added `ssl_helper.py` with certifi-based SSL context, patched all 11 aiohttp session locations
+- **`nmem init --full` hang** (#121): Added `--skip-embeddings` flag and non-interactive terminal guard to prevent hang in pipes/CI
+- **`find_spec` crash** (#122): Handle `ImportError` from namespace packages (e.g. `google-cloud-storage`) in `_is_module_available`
+
+### Tests
+
+- 11 new tests: `_is_module_available` edge cases (6), SSL helper (4), skip-embeddings (1)
+
 ## [4.23.3] — 2026-03-30
 
 ### Improved
