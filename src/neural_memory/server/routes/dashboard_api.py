@@ -1493,12 +1493,17 @@ async def get_license() -> dict[str, Any]:
     from neural_memory.unified_config import get_config
 
     cfg = get_config(reload=True)
-    return {
+    result: dict[str, Any] = {
         "tier": cfg.license.tier,
         "is_pro": cfg.is_pro(),
         "activated_at": cfg.license.activated_at,
         "expires_at": cfg.license.expires_at,
     }
+    if not cfg.is_pro():
+        from neural_memory.mcp.sync_handler import PRO_LANDING_URL
+
+        result["upgrade_url"] = PRO_LANDING_URL
+    return result
 
 
 class ActivateLicenseRequest(BaseModel):

@@ -18,6 +18,9 @@ DEFAULT_HUB_URL = ""
 # Pay-hub for license verification (always available, no sync config needed)
 DEFAULT_PAY_URL = "https://pay.theio.vn"
 
+# Landing page for Pro upgrade
+PRO_LANDING_URL = "https://neuralmemory.theio.vn/"
+
 
 def _mask_key(api_key: str) -> str:
     """Mask API key for display: nmk_a1b2****."""

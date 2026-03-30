@@ -268,6 +268,12 @@ class ToolHandler(RememberHandler, RecallHandler):
             "tier_distribution": tier_distribution,
         }
 
+        # Upgrade URL for free users — agents use this to guide purchase
+        if not storage_info["is_pro"]:
+            from neural_memory.mcp.sync_handler import PRO_LANDING_URL
+
+            response["upgrade_url"] = PRO_LANDING_URL
+
         # Actionable hints based on brain state
         hints = await self._generate_stats_hints(storage, brain.id, stats)
         if hints:

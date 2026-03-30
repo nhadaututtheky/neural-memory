@@ -102,6 +102,21 @@ def shared_status(
         typer.echo(f"API Key: {'configured' if config.shared.api_key else 'not set'}")
         typer.echo(f"Timeout: {config.shared.timeout}s")
 
+        # License info
+        from neural_memory.unified_config import get_config as get_unified_config
+
+        uconfig = get_unified_config()
+        typer.echo()
+        typer.secho("License", bold=True)
+        if uconfig.is_pro():
+            typer.echo(f"  Tier:     {uconfig.license.tier}")
+            typer.echo(f"  Expires:  {uconfig.license.expires_at or 'perpetual'}")
+        else:
+            from neural_memory.mcp.sync_handler import PRO_LANDING_URL
+
+            typer.echo("  Tier:     free")
+            typer.echo(f"  Upgrade:  {PRO_LANDING_URL}")
+
 
 @shared_app.command("test")
 def shared_test() -> None:
