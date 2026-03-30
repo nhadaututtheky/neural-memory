@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.22.2] — 2026-03-30
+
+### Fixed
+
+- **Pro activation**: Decoupled license activation from sync config — no longer requires hub_url + api_key
+- **Pro activation**: Both MCP tool and CLI now call pay-hub directly with just the license key
+- **Config**: ISO datetime sanitizer now accepts space-separated timestamps (pay-hub format)
+- **Pro activation**: `activated_at` now populated with actual activation timestamp
+
 ## [4.22.1] — 2026-03-30
 
 ### Fixed

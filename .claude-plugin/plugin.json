@@ -1,6 +1,6 @@
 {
   "name": "neural-memory",
-  "version": "4.22.1",
+  "version": "4.22.2",
   "description": "Reflex-based memory system for AI agents — stores experiences as interconnected neurons and recalls them through spreading activation, mimicking how the human brain works.",
   "author": {
     "name": "NeuralMemory Contributors"
