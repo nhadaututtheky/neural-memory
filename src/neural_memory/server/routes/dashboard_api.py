@@ -1492,7 +1492,7 @@ async def get_license() -> dict[str, Any]:
     """Return the current license tier and expiry."""
     from neural_memory.unified_config import get_config
 
-    cfg = get_config()
+    cfg = get_config(reload=True)
     return {
         "tier": cfg.license.tier,
         "is_pro": cfg.is_pro(),
@@ -1509,63 +1509,43 @@ class ActivateLicenseRequest(BaseModel):
 
 @router.post("/license/activate", tags=["dashboard"], summary="Activate a license key")
 async def activate_license(body: ActivateLicenseRequest) -> dict[str, Any]:
-    """Activate a license key via the Sync Hub."""
+    """Activate a license key via pay-hub (no sync config required)."""
     from dataclasses import replace as _dc_replace
 
+    from neural_memory.mcp.sync_handler import DEFAULT_PAY_URL
     from neural_memory.unified_config import LicenseConfig, get_config, set_config
+    from neural_memory.utils.timeutils import utcnow
 
     cfg = get_config(reload=True)
 
-    # Normalize key format
-    key = body.license_key.strip()
-    if key.startswith("NM-"):
-        key = key.replace("-", "_").lower()
-    if not key.startswith("nm_"):
-        raise HTTPException(
-            status_code=400, detail="Invalid key format. Expected NM-PRO-XXXX or nm_pro_*"
-        )
+    original_key = body.license_key.strip()
+    if not original_key:
+        raise HTTPException(status_code=400, detail="License key is required")
 
-    hub_url = cfg.sync.hub_url
-    api_key = cfg.sync.api_key
-    if not hub_url or not api_key:
-        raise HTTPException(
-            status_code=400,
-            detail="Sync not configured. Run: nmem sync setup",
-        )
-
-    # Call Sync Hub to verify + activate
+    # Call pay-hub directly — no sync config needed
     try:
         import aiohttp
 
-        base = hub_url.rstrip("/")
-        if "localhost" in base or "127.0.0.1" in base:
-            url = f"{base}/hub/activate"
-        else:
-            url = f"{base}/v1/hub/activate"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        }
+        pay_url = f"{DEFAULT_PAY_URL}/verify"
+        headers: dict[str, str] = {"Content-Type": "application/json"}
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                url,
-                json={"license_key": key},
+                pay_url,
+                json={"key": original_key},
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=15),
             ) as resp:
                 data = await resp.json()
-                if resp.status != 200:
-                    raise HTTPException(
-                        status_code=resp.status,
-                        detail=data.get("error", "Activation failed"),
-                    )
+                if resp.status != 200 or not data.get("valid"):
+                    detail = data.get("error", "Invalid or expired license key")
+                    raise HTTPException(status_code=400, detail=detail)
 
                 # Persist to config
                 activated_tier = str(data.get("tier", "pro")).lower()
                 new_license = LicenseConfig.from_dict(
                     {
                         "tier": activated_tier,
-                        "activated_at": data.get("activated_at", ""),
+                        "activated_at": utcnow().isoformat(),
                         "expires_at": data.get("expires_at", ""),
                     }
                 )
@@ -1573,12 +1553,23 @@ async def activate_license(body: ActivateLicenseRequest) -> dict[str, Any]:
                 new_cfg.save()
                 set_config(new_cfg)
 
-                return {
+                result: dict[str, Any] = {
                     "success": True,
                     "tier": activated_tier,
-                    "activated_at": data.get("activated_at", ""),
+                    "activated_at": new_license.activated_at,
                     "expires_at": data.get("expires_at", ""),
                 }
+
+                # Hint about InfinityDB if on SQLite
+                if new_cfg.storage_backend == "sqlite":
+                    result["next_step"] = (
+                        "Pro activated! To unlock InfinityDB (HNSW indexing, "
+                        "tiered compression, cone queries), run: "
+                        "nmem storage status → nmem migrate infinitydb "
+                        "→ nmem storage switch infinitydb"
+                    )
+
+                return result
     except HTTPException:
         raise
     except Exception:
@@ -1675,7 +1666,8 @@ async def get_storage_status() -> StorageStatusResponse:
     from neural_memory.plugins import has_pro
     from neural_memory.unified_config import get_config
 
-    cfg = get_config()
+    # Reload from disk so CLI changes (e.g. license activation) are picked up
+    cfg = get_config(reload=True)
     brain_name = cfg.current_brain
     brains_dir = Path(cfg.data_dir) / "brains"
 
@@ -1811,7 +1803,7 @@ async def set_storage_backend(body: SetBackendRequest) -> dict[str, str]:
     from neural_memory.unified_config import get_config, set_config
 
     backend = body.backend
-    cfg = get_config()
+    cfg = get_config(reload=True)
 
     if cfg.storage_backend == backend:
         return {"status": "unchanged", "backend": backend}
