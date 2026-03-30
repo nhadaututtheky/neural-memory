@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.23.2] — 2026-03-30
+
+### Added
+
+- **Pro upgrade URL**: Free users see `upgrade_url` in MCP stats, CLI status, and dashboard license API — agents and UI can guide users to purchase page
+- **CLI license info**: `nmem shared status` now shows license tier and upgrade link for free users
+
 ## [4.23.1] — 2026-03-30
 
 ### Fixed
