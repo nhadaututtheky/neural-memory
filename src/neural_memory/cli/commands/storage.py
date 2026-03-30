@@ -141,8 +141,7 @@ def storage_switch(
         infinity_marker = brains_dir / brain_name / "brain.inf"
         if not infinity_marker.exists():
             typer.secho(
-                f"No InfinityDB data for brain '{brain_name}'. "
-                "Run: nmem migrate infinitydb",
+                f"No InfinityDB data for brain '{brain_name}'. Run: nmem migrate infinitydb",
                 fg=typer.colors.RED,
             )
             raise typer.Exit(1)
