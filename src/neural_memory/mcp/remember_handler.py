@@ -16,6 +16,7 @@ from neural_memory.core.memory_types import (
 from neural_memory.engine.encoder import MemoryEncoder
 from neural_memory.engine.hooks import HookEvent
 from neural_memory.mcp.constants import MAX_CONTENT_LENGTH
+from neural_memory.mcp.tool_handler_utils import _get_brain_or_error, _require_brain_id
 from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
@@ -25,28 +26,6 @@ if TYPE_CHECKING:
     from neural_memory.unified_config import UnifiedConfig
 
 logger = logging.getLogger(__name__)
-
-
-def _require_brain_id(storage: NeuralStorage) -> str:
-    """Return the current brain ID or raise ValueError if not set."""
-    brain_id = storage.brain_id
-    if not brain_id:
-        raise ValueError("No brain context set")
-    return brain_id
-
-
-async def _get_brain_or_error(
-    storage: NeuralStorage,
-) -> tuple[Any, dict[str, Any] | None]:
-    """Get brain object or return (None, error_dict)."""
-    try:
-        brain_id = _require_brain_id(storage)
-    except ValueError:
-        return None, {"error": "No brain configured"}
-    brain = await storage.get_brain(brain_id)
-    if not brain:
-        return None, {"error": "No brain configured"}
-    return brain, None
 
 
 class RememberHandler:
@@ -243,7 +222,7 @@ class RememberHandler:
                     check_sensitive_content as _check_sensitive,
                 )
 
-                original_matches = _check_sensitive(args["content"], min_severity=2)
+                original_matches = _check_sensitive(content, min_severity=2)
                 if original_matches:
                     should_encrypt = True
 

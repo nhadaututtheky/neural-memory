@@ -301,7 +301,7 @@ class TestMCPToolCalls:
 
         with (
             patch.object(server, "get_storage", return_value=mock_storage),
-            patch("neural_memory.mcp.tool_handlers.ReflexPipeline", return_value=mock_pipeline),
+            patch("neural_memory.engine.retrieval.ReflexPipeline", return_value=mock_pipeline),
         ):
             result = await server.call_tool("nmem_recall", {"query": "test query"})
 
@@ -337,7 +337,7 @@ class TestMCPToolCalls:
 
         with (
             patch.object(server, "get_storage", return_value=mock_storage),
-            patch("neural_memory.mcp.tool_handlers.ReflexPipeline", return_value=mock_pipeline),
+            patch("neural_memory.engine.retrieval.ReflexPipeline", return_value=mock_pipeline),
         ):
             result = await server.call_tool("nmem_recall", {"query": "test", "min_confidence": 0.5})
 
@@ -999,7 +999,7 @@ class TestMCPErrorPaths:
 
         with (
             patch.object(server, "get_storage", return_value=mock_storage),
-            patch("neural_memory.mcp.tool_handlers.ReflexPipeline", return_value=mock_pipeline),
+            patch("neural_memory.engine.retrieval.ReflexPipeline", return_value=mock_pipeline),
         ):
             await server.call_tool(
                 "nmem_recall",
@@ -1506,7 +1506,7 @@ class TestPassiveCapture:
 
         with (
             patch.object(server, "get_storage", return_value=mock_storage),
-            patch("neural_memory.mcp.tool_handlers.ReflexPipeline", return_value=mock_pipeline),
+            patch("neural_memory.engine.retrieval.ReflexPipeline", return_value=mock_pipeline),
             patch.object(server, "_passive_capture", new_callable=AsyncMock) as mock_capture,
         ):
             long_query = (
@@ -1524,7 +1524,7 @@ class TestPassiveCapture:
 
         with (
             patch.object(server, "get_storage", return_value=mock_storage),
-            patch("neural_memory.mcp.tool_handlers.ReflexPipeline", return_value=mock_pipeline),
+            patch("neural_memory.engine.retrieval.ReflexPipeline", return_value=mock_pipeline),
             patch.object(server, "_passive_capture", new_callable=AsyncMock) as mock_capture,
         ):
             await server.call_tool("nmem_recall", {"query": "auth setup"})
@@ -1539,7 +1539,7 @@ class TestPassiveCapture:
 
         with (
             patch.object(server, "get_storage", return_value=mock_storage),
-            patch("neural_memory.mcp.tool_handlers.ReflexPipeline", return_value=mock_pipeline),
+            patch("neural_memory.engine.retrieval.ReflexPipeline", return_value=mock_pipeline),
             patch.object(server, "_passive_capture", new_callable=AsyncMock) as mock_capture,
         ):
             long_query = (
@@ -1570,7 +1570,7 @@ class TestPassiveCapture:
 
         with (
             patch.object(server, "get_storage", return_value=mock_storage),
-            patch("neural_memory.mcp.tool_handlers.ReflexPipeline", return_value=mock_pipeline),
+            patch("neural_memory.engine.retrieval.ReflexPipeline", return_value=mock_pipeline),
             patch(
                 "neural_memory.mcp.auto_handler.analyze_text_for_memories",
                 side_effect=RuntimeError("boom"),
@@ -2363,7 +2363,7 @@ class TestMCPRecallExtended:
 
         with (
             patch.object(server, "get_storage", return_value=mock_storage),
-            patch("neural_memory.mcp.tool_handlers.ReflexPipeline", return_value=mock_pipeline),
+            patch("neural_memory.engine.retrieval.ReflexPipeline", return_value=mock_pipeline),
         ):
             result = await server.call_tool("nmem_recall", {"query": "how it works"})
 

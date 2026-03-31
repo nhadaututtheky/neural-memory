@@ -249,20 +249,20 @@ class LifecycleHandler:
         strategies = [strategy]
         dry_run = bool(args.get("dry_run", False))
 
-        # Build config with optional overrides
+        # Build config with optional overrides (bounded to valid ranges)
         config_kwargs: dict[str, Any] = {}
         if "prune_weight_threshold" in args:
             val = args["prune_weight_threshold"]
             if isinstance(val, (int, float)):
-                config_kwargs["prune_weight_threshold"] = float(val)
+                config_kwargs["prune_weight_threshold"] = max(0.0, min(float(val), 1.0))
         if "merge_overlap_threshold" in args:
             val = args["merge_overlap_threshold"]
             if isinstance(val, (int, float)):
-                config_kwargs["merge_overlap_threshold"] = float(val)
+                config_kwargs["merge_overlap_threshold"] = max(0.0, min(float(val), 1.0))
         if "prune_min_inactive_days" in args:
             val = args["prune_min_inactive_days"]
             if isinstance(val, (int, float)):
-                config_kwargs["prune_min_inactive_days"] = float(val)
+                config_kwargs["prune_min_inactive_days"] = max(0, int(val))
 
         config = ConsolidationConfig(**config_kwargs) if config_kwargs else None
 
@@ -295,8 +295,11 @@ class LifecycleHandler:
             return err
 
         action = args.get("action", "summary")
-        days = args.get("days", 30)
-        limit = args.get("limit", 20)
+        try:
+            days = max(1, min(int(args.get("days", 30)), 365))
+            limit = max(1, min(int(args.get("limit", 20)), 200))
+        except (TypeError, ValueError):
+            return {"error": "days and limit must be integers"}
 
         if action == "summary":
             result: dict[str, Any] = await storage.get_tool_stats(brain.id)  # type: ignore[attr-defined]

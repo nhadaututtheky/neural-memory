@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from neural_memory.mcp.tool_handler_utils import _get_brain_or_error
@@ -133,7 +134,7 @@ class EvolutionHandler:
             idle_states = [s for s in states if s.access_frequency == 0]
 
             # Sort by creation time ascending (oldest first)
-            idle_states.sort(key=lambda s: s.created_at or "")
+            idle_states.sort(key=lambda s: s.created_at or datetime.min)
 
             suggestions = []
             for state in idle_states[:limit]:

@@ -46,14 +46,19 @@ class ProvenanceHandler:
 
             from neural_memory.core.source import Source
 
+            version = str(args.get("version", ""))[:255]
+            file_hash = str(args.get("file_hash", ""))[:255]
+            raw_metadata = args.get("metadata")
+            metadata = raw_metadata if isinstance(raw_metadata, dict) else {}
+
             try:
                 source = Source.create(
                     brain_id=brain_id,
                     name=name,
                     source_type=args.get("source_type", "document"),
-                    version=args.get("version", ""),
-                    file_hash=args.get("file_hash", ""),
-                    metadata=args.get("metadata") or {},
+                    version=version,
+                    file_hash=file_hash,
+                    metadata=metadata,
                 )
             except ValueError:
                 return {"error": f"Invalid source_type: {args.get('source_type')}"}

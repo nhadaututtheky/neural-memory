@@ -239,7 +239,7 @@ class StatsHandler:
         storage = await self.get_storage()
         brain, err = await _get_brain_or_error(storage)
         if err:
-            return {"error": "No brain configured"}
+            return err
 
         from neural_memory.engine.diagnostics import DiagnosticsEngine
 

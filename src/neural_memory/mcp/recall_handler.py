@@ -139,7 +139,7 @@ class RecallHandler:
 
     async def _recall(self, args: dict[str, Any]) -> dict[str, Any]:
         """Query memories via spreading activation."""
-        from neural_memory.mcp.tool_handlers import (
+        from neural_memory.mcp.tool_handler_utils import (
             _build_citation_audit,
             _parse_tags,
             _require_brain_id,
@@ -257,7 +257,7 @@ class RecallHandler:
 
         permanent_only = bool(args.get("permanent_only", False))
 
-        from neural_memory.mcp.tool_handlers import ReflexPipeline  # type: ignore[attr-defined]
+        from neural_memory.engine.retrieval import ReflexPipeline
 
         pipeline = ReflexPipeline(storage, brain.config)
         result = await pipeline.query(
@@ -672,7 +672,7 @@ class RecallHandler:
     ) -> dict[str, Any]:
         """Handle cross-brain recall by querying multiple brains in parallel."""
         from neural_memory.engine.cross_brain import cross_brain_recall
-        from neural_memory.mcp.tool_handlers import _parse_tags
+        from neural_memory.mcp.tool_handler_utils import _parse_tags
 
         query = args.get("query", "")
         if not query:
