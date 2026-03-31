@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from neural_memory.core.memory_types import MemoryTier
 from neural_memory.mcp.tool_handler_utils import _get_brain_or_error
 
 if TYPE_CHECKING:
@@ -54,8 +55,8 @@ class TierHandler:
         if err:
             return err
 
-        distribution = {"hot": 0, "warm": 0, "cold": 0}
-        for tier_name in ("hot", "warm", "cold"):
+        distribution = {MemoryTier.HOT: 0, MemoryTier.WARM: 0, MemoryTier.COLD: 0}
+        for tier_name in (MemoryTier.HOT, MemoryTier.WARM, MemoryTier.COLD):
             distribution[tier_name] = await storage.count_typed_memories(tier=tier_name)
 
         return {

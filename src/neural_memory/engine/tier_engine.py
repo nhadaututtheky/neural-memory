@@ -101,6 +101,13 @@ class TierEngine:
 
     async def _run(self, brain_id: str, *, dry_run: bool) -> TierReport:
         """Core tier evaluation logic."""
+        # Verify storage brain context matches requested brain_id
+        if self._storage.brain_id and self._storage.brain_id != brain_id:
+            logger.warning(
+                "TierEngine brain_id mismatch: requested=%s, storage=%s",
+                brain_id,
+                self._storage.brain_id,
+            )
         now = utcnow()
         promoted: list[TierChange] = []
         demoted: list[TierChange] = []

@@ -1115,6 +1115,9 @@ class TierConfig:
             object.__setattr__(self, "cold_archive_days", 1)
         if self.max_hot_memories < 1:
             object.__setattr__(self, "max_hot_memories", 1)
+        # Invariant: cold_archive_days must be >= demote_inactive_days
+        if self.cold_archive_days < self.demote_inactive_days:
+            object.__setattr__(self, "cold_archive_days", self.demote_inactive_days)
 
     def to_dict(self) -> dict[str, Any]:
         return {

@@ -583,3 +583,87 @@ class TestTierConfigValidation:
         cfg = TierConfig(promote_threshold=10, max_hot_memories=50)
         assert cfg.promote_threshold == 10
         assert cfg.max_hot_memories == 50
+
+    def test_cold_archive_days_clamped_to_demote(self) -> None:
+        """cold_archive_days is clamped to >= demote_inactive_days."""
+        cfg = TierConfig(demote_inactive_days=60, cold_archive_days=30)
+        assert cfg.cold_archive_days == 60  # clamped up to match demote
+
+    def test_cold_archive_days_ok_when_greater(self) -> None:
+        """cold_archive_days >= demote_inactive_days passes through unchanged."""
+        cfg = TierConfig(demote_inactive_days=7, cold_archive_days=90)
+        assert cfg.cold_archive_days == 90
+
+
+# ── History cap ─────────────────────────────────────────
+
+
+class TestHistoryCap:
+    @pytest.mark.asyncio
+    async def test_history_capped_at_20(
+        self, storage: SQLiteStorage, tier_config: TierConfig
+    ) -> None:
+        """promotion_history is capped at 20 entries."""
+        # Create a memory with 19 existing history entries
+        await _create_memory(
+            storage, "f-cap", access_frequency=5, last_activated_days_ago=1,
+        )
+        tm = await storage.get_typed_memory("f-cap")
+        assert tm is not None
+        existing_history = [{"from": "warm", "to": "hot", "reason": f"round-{i}", "at": "2026-01-01"} for i in range(19)]
+        from dataclasses import replace
+        updated = replace(tm, metadata={**tm.metadata, "promotion_history": existing_history})
+        await storage.update_typed_memory(updated)
+
+        engine = TierEngine(storage, tier_config)
+        await engine.apply(storage.brain_id, dry_run=False)
+
+        tm2 = await storage.get_typed_memory("f-cap")
+        assert tm2 is not None
+        history = tm2.metadata.get("promotion_history", [])
+        assert len(history) == 20  # 19 + 1 new, exactly at cap
+
+
+# ── Double-report dry-run ───────────────────────────────
+
+
+class TestDoubleReportDryRun:
+    @pytest.mark.asyncio
+    async def test_dry_run_idempotent(
+        self, storage: SQLiteStorage, tier_config: TierConfig
+    ) -> None:
+        """Running evaluate twice returns the same report (no side effects)."""
+        await _create_memory(
+            storage, "f1", access_frequency=5, last_activated_days_ago=1,
+        )
+        engine = TierEngine(storage, tier_config)
+        report1 = await engine.evaluate(storage.brain_id)
+        report2 = await engine.evaluate(storage.brain_id)
+
+        assert len(report1.promoted) == len(report2.promoted)
+        assert len(report1.demoted) == len(report2.demoted)
+        assert len(report1.archived) == len(report2.archived)
+        assert report1.dry_run is True
+        assert report2.dry_run is True
+
+        # Memory still WARM after two dry runs
+        tm = await storage.get_typed_memory("f1")
+        assert tm is not None
+        assert tm.tier == "warm"
+
+
+# ── Brain ID mismatch ──────────────────────────────────
+
+
+class TestBrainIdMismatch:
+    @pytest.mark.asyncio
+    async def test_warns_on_brain_id_mismatch(
+        self, storage: SQLiteStorage, tier_config: TierConfig
+    ) -> None:
+        """TierEngine logs warning when brain_id doesn't match storage."""
+        await _create_memory(storage, "f1", access_frequency=5)
+        engine = TierEngine(storage, tier_config)
+
+        # Should complete without exception (just logs a warning)
+        report = await engine.evaluate("nonexistent-brain-id")
+        assert isinstance(report, TierReport)

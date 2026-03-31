@@ -6,6 +6,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from neural_memory import __version__
+from neural_memory.core.memory_types import MemoryTier
 from neural_memory.mcp.tool_handler_utils import _get_brain_or_error
 from neural_memory.utils.timeutils import utcnow
 
@@ -83,9 +84,9 @@ class StatsHandler:
             logger.debug("Conflict count failed (non-critical)", exc_info=True)
 
         # Tier distribution counts
-        tier_distribution = {"hot": 0, "warm": 0, "cold": 0}
+        tier_distribution = {MemoryTier.HOT: 0, MemoryTier.WARM: 0, MemoryTier.COLD: 0}
         try:
-            for tier_name in ("hot", "warm", "cold"):
+            for tier_name in (MemoryTier.HOT, MemoryTier.WARM, MemoryTier.COLD):
                 tier_distribution[tier_name] = await storage.count_typed_memories(tier=tier_name)
         except Exception:
             logger.debug("Tier distribution count failed (non-critical)", exc_info=True)

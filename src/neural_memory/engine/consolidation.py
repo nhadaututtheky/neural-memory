@@ -412,6 +412,15 @@ class ConsolidationEngine:
         if self._tier_config is None or not self._tier_config.auto_enabled:
             return
 
+        # Pro gate: auto-tier requires Pro license
+        try:
+            from neural_memory.plugins import has_pro
+
+            if not has_pro():
+                return
+        except ImportError:
+            return
+
         brain_id = self._storage.current_brain_id
         if not brain_id:
             return
@@ -422,8 +431,8 @@ class ConsolidationEngine:
             engine = TierEngine(self._storage, self._tier_config)
             tier_report = await engine.apply(brain_id, dry_run=dry_run)
             report.extra["auto_tier"] = tier_report.to_dict()
-        except Exception:
-            logger.error("Auto-tier failed during consolidation", exc_info=True)
+        except Exception as e:
+            logger.error("Auto-tier failed during consolidation: %s", e, exc_info=True)
             report.extra["auto_tier"] = {"error": "auto-tier failed"}
 
     async def _prune(
