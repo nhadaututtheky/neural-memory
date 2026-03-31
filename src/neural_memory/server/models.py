@@ -41,8 +41,13 @@ class QueryRequest(BaseModel):
     )
     tags: list[str] | None = Field(
         None,
-        description="Filter by tags (AND — all must match). Checks tags, auto_tags, and agent_tags.",
+        description="Filter by tags. Checks tags, auto_tags, and agent_tags.",
         json_schema_extra={"maxItems": 20, "items": {"type": "string", "maxLength": 100}},
+    )
+    tag_mode: str = Field(
+        "and",
+        pattern=r"^(and|or)$",
+        description="Tag matching mode: 'and' (all tags must match, default) or 'or' (any tag matches)",
     )
 
 

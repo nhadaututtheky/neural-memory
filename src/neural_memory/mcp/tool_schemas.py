@@ -327,7 +327,12 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "type": "array",
                     "items": {"type": "string", "maxLength": 100},
                     "maxItems": 20,
-                    "description": "Filter by tags (AND — all must match). Checks tags, auto_tags, and agent_tags columns.",
+                    "description": "Filter by tags. Checks tags, auto_tags, and agent_tags columns.",
+                },
+                "tag_mode": {
+                    "type": "string",
+                    "enum": ["and", "or"],
+                    "description": "Tag matching mode: 'and' (default, all tags must match) or 'or' (any tag matches).",
                 },
                 "mode": {
                     "type": "string",

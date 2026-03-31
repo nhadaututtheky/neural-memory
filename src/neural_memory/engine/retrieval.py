@@ -207,6 +207,7 @@ class ReflexPipeline:
         tags: set[str] | None = None,
         session_id: str | None = None,
         exclude_ephemeral: bool = False,
+        tag_mode: str = "and",
     ) -> RetrievalResult:
         """
         Execute the retrieval pipeline.
@@ -559,7 +560,7 @@ class ReflexPipeline:
         # 5. Find matching fibers
         query_tokens = set(query.lower().split())
         fibers_matched = await self._find_matching_fibers(
-            activations, valid_at=valid_at, tags=tags, query_tokens=query_tokens
+            activations, valid_at=valid_at, tags=tags, query_tokens=query_tokens, tag_mode=tag_mode
         )
 
         # 6. Extract subgraph
@@ -1735,6 +1736,7 @@ class ReflexPipeline:
         valid_at: datetime | None = None,
         tags: set[str] | None = None,
         query_tokens: set[str] | None = None,
+        tag_mode: str = "and",
     ) -> list[Fiber]:
         """Find fibers that contain activated neurons (batch query)."""
         # Get highly activated neurons
@@ -1746,7 +1748,7 @@ class ReflexPipeline:
 
         top_neuron_ids = [a.neuron_id for a in top_neurons]
         fibers = await self._storage.find_fibers_batch(
-            top_neuron_ids, limit_per_neuron=3, tags=tags
+            top_neuron_ids, limit_per_neuron=3, tags=tags, tag_mode=tag_mode
         )
 
         # Apply point-in-time temporal filter

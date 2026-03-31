@@ -108,6 +108,7 @@ class FalkorDBFiberMixin(FalkorDBBaseMixin):
         min_salience: float | None = None,
         metadata_key: str | None = None,
         limit: int = 100,
+        tag_mode: str = "and",
     ) -> list[Fiber]:
         limit = min(limit, 1000)
 
@@ -160,7 +161,10 @@ class FalkorDBFiberMixin(FalkorDBBaseMixin):
 
         # Post-filter tags (FalkorDB stores as CSV, complex matching in Cypher)
         if tags:
-            fibers = [f for f in fibers if tags <= f.tags]
+            if tag_mode == "or":
+                fibers = [f for f in fibers if tags & f.tags]
+            else:
+                fibers = [f for f in fibers if tags <= f.tags]
 
         # Post-filter metadata key (FalkorDB metadata stored as JSON string)
         if metadata_key is not None:
@@ -173,6 +177,7 @@ class FalkorDBFiberMixin(FalkorDBBaseMixin):
         neuron_ids: list[str],
         limit_per_neuron: int = 10,
         tags: set[str] | None = None,
+        tag_mode: str = "and",
     ) -> list[Fiber]:
         if not neuron_ids:
             return []
@@ -201,7 +206,10 @@ class FalkorDBFiberMixin(FalkorDBBaseMixin):
         fibers = [self._row_to_fiber(r) for r in rows]
         # fiber.tags property = auto_tags | agent_tags (union)
         if tags:
-            fibers = [f for f in fibers if tags.issubset(f.tags)]
+            if tag_mode == "or":
+                fibers = [f for f in fibers if tags & f.tags]
+            else:
+                fibers = [f for f in fibers if tags.issubset(f.tags)]
         return fibers
 
     async def update_fiber(self, fiber: Fiber) -> None:

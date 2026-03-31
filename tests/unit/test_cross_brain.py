@@ -162,7 +162,7 @@ class TestCrossBrainRecall:
         fiber1 = CrossBrainFiber("f1", "brain1", "memory from brain1", 0.9)
         fiber2 = CrossBrainFiber("f2", "brain2", "memory from brain2", 0.7)
 
-        async def mock_query(db_path, name, query, depth, max_tokens, tags=None):
+        async def mock_query(db_path, name, query, depth, max_tokens, tags=None, tag_mode="and"):
             if name == "brain1":
                 return ("brain1", [fiber1], 10, "[brain1] context")
             return ("brain2", [fiber2], 5, "[brain2] context")
@@ -212,7 +212,9 @@ class TestCrossBrainRecall:
         mock_path.exists.return_value = True
         config.get_brain_db_path.return_value = mock_path
 
-        async def mock_query_fail(db_path, name, query, depth, max_tokens, tags=None):
+        async def mock_query_fail(
+            db_path, name, query, depth, max_tokens, tags=None, tag_mode="and"
+        ):
             raise RuntimeError("DB corrupted")
 
         with patch(

@@ -82,6 +82,7 @@ class PostgresFiberMixin(PostgresBaseMixin):
         min_salience: float | None = None,
         metadata_key: str | None = None,
         limit: int = 100,
+        tag_mode: str = "and",
     ) -> list[Fiber]:
         brain_id = self._get_brain_id()
         limit = min(limit, 1000)
@@ -108,8 +109,15 @@ class PostgresFiberMixin(PostgresBaseMixin):
             query += f" AND metadata ? ${len(params)}"
 
         if tags is not None and tags:
-            params.append(json.dumps(list(tags)))
-            query += f" AND tags @> ${len(params)}::jsonb"
+            if tag_mode == "or":
+                # ?| checks if ANY key in the array exists in the jsonb
+                # asyncpg auto-coerces Python list to PostgreSQL text[]
+                params.append(list(tags))
+                query += f" AND tags ?| ${len(params)}::text[]"
+            else:
+                # @> checks containment (all must match)
+                params.append(json.dumps(list(tags)))
+                query += f" AND tags @> ${len(params)}::jsonb"
 
         params.append(limit)
         query += f" ORDER BY salience DESC LIMIT ${len(params)}"

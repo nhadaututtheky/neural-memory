@@ -161,6 +161,7 @@ class SQLiteFiberMixin:
         min_salience: float | None = None,
         metadata_key: str | None = None,
         limit: int = 100,
+        tag_mode: str = "and",
     ) -> list[Fiber]:
         limit = min(limit, 1000)
         conn = self._ensure_read_conn()
@@ -201,7 +202,10 @@ class SQLiteFiberMixin:
 
         # Filter by tags in Python (JSON array doesn't support efficient set operations)
         if tags is not None:
-            fibers = [f for f in fibers if tags.issubset(f.tags)]
+            if tag_mode == "or":
+                fibers = [f for f in fibers if tags & f.tags]
+            else:
+                fibers = [f for f in fibers if tags.issubset(f.tags)]
 
         return fibers[:limit]
 
@@ -210,6 +214,7 @@ class SQLiteFiberMixin:
         neuron_ids: list[str],
         limit_per_neuron: int = 10,
         tags: set[str] | None = None,
+        tag_mode: str = "and",
     ) -> list[Fiber]:
         """Find fibers containing any of the given neurons in a single SQL query."""
         if not neuron_ids:
@@ -228,12 +233,12 @@ class SQLiteFiberMixin:
         )
         params: list[Any] = [brain_id, *neuron_ids]
 
-        # Tag filter: f.tags column stores the union of auto_tags + agent_tags,
-        # so checking only f.tags is sufficient (AND semantics — all must match)
+        # Tag filter: f.tags column stores the union of auto_tags + agent_tags
         if tags:
-            for tag in tags:
-                sql += " AND EXISTS (SELECT 1 FROM json_each(f.tags) WHERE value = ?)"
-                params.append(tag)
+            tag_clauses = ["EXISTS (SELECT 1 FROM json_each(f.tags) WHERE value = ?)" for _ in tags]
+            joiner = " OR " if tag_mode == "or" else " AND "
+            sql += f" AND ({joiner.join(tag_clauses)})"
+            params.extend(tags)
 
         sql += " ORDER BY f.salience DESC LIMIT ?"
         params.append(total_limit)

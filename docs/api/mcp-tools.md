@@ -121,7 +121,8 @@ Query memories by semantic search with confidence ranking.
 | `warn_expiry_days` | integer | No | — | If set, warn about memories expiring within this many days. Adds expiry_warnings to response. |
 | `brains` | array[string] | No | — | Optional list of brain names to query across (max 5). When provided, runs parallel recall across all specified brains... |
 | `min_trust` | number | No | — | Filter: only return memories with trust_score >= this value. Unscored memories (NULL) are always included. |
-| `tags` | array[string] | No | — | Filter by tags (AND — all must match). Checks tags, auto_tags, and agent_tags columns. |
+| `tags` | array[string] | No | — | Filter by tags. Checks tags, auto_tags, and agent_tags columns. |
+| `tag_mode` | string (`and`, `or`) | No | — | Tag matching mode: 'and' (default, all tags must match) or 'or' (any tag matches). |
 | `mode` | string (`associative`, `exact`) | No | — | Recall mode: 'associative' (default) returns formatted context, 'exact' returns raw neuron contents verbatim without ... |
 | `include_citations` | boolean | No | default: true | Include citation and audit trail in exact recall results (default: true). |
 | `recall_token_budget` | integer | No | — | When set, activates budget-aware fiber selection: ranks fibers by value-per-token and selects the most efficient ones... |

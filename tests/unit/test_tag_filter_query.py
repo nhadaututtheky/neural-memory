@@ -406,6 +406,110 @@ class TestTagFilterEdgeCases:
         assert len(result) == 1
 
 
+class TestTagFilterORMode:
+    """Test OR semantics: fiber must have ANY of the requested tags."""
+
+    @pytest.mark.asyncio
+    async def test_find_fibers_batch_or_mode_returns_any_match(
+        self, storage: SQLiteStorage
+    ) -> None:
+        """OR mode should return fibers matching ANY requested tag."""
+        n1 = Neuron.create(type=NeuronType.CONCEPT, content="Node A")
+        n2 = Neuron.create(type=NeuronType.CONCEPT, content="Node B")
+        n3 = Neuron.create(type=NeuronType.CONCEPT, content="Node C")
+        await storage.add_neuron(n1)
+        await storage.add_neuron(n2)
+        await storage.add_neuron(n3)
+
+        # f1: only "python" tag
+        f1 = Fiber.create(
+            neuron_ids={n1.id},
+            synapse_ids=set(),
+            anchor_neuron_id=n1.id,
+            agent_tags={"python"},
+        )
+        # f2: only "react" tag
+        f2 = Fiber.create(
+            neuron_ids={n2.id},
+            synapse_ids=set(),
+            anchor_neuron_id=n2.id,
+            agent_tags={"react"},
+        )
+        # f3: unrelated "go" tag
+        f3 = Fiber.create(
+            neuron_ids={n3.id},
+            synapse_ids=set(),
+            anchor_neuron_id=n3.id,
+            agent_tags={"go"},
+        )
+        await storage.add_fiber(f1)
+        await storage.add_fiber(f2)
+        await storage.add_fiber(f3)
+
+        # OR mode: python OR react → f1 + f2
+        result = await storage.find_fibers_batch(
+            [n1.id, n2.id, n3.id], tags={"python", "react"}, tag_mode="or"
+        )
+        result_ids = {f.id for f in result}
+        assert f1.id in result_ids
+        assert f2.id in result_ids
+        assert f3.id not in result_ids
+
+        # AND mode with same tags → neither has both → empty
+        result_and = await storage.find_fibers_batch(
+            [n1.id, n2.id, n3.id], tags={"python", "react"}, tag_mode="and"
+        )
+        assert len(result_and) == 0
+
+    @pytest.mark.asyncio
+    async def test_find_fibers_or_mode(self, storage: SQLiteStorage) -> None:
+        """find_fibers() OR mode should also work."""
+        n1 = Neuron.create(type=NeuronType.CONCEPT, content="X")
+        await storage.add_neuron(n1)
+
+        f1 = Fiber.create(
+            neuron_ids={n1.id},
+            synapse_ids=set(),
+            anchor_neuron_id=n1.id,
+            agent_tags={"alpha"},
+        )
+        f2 = Fiber.create(
+            neuron_ids={n1.id},
+            synapse_ids=set(),
+            anchor_neuron_id=n1.id,
+            agent_tags={"beta"},
+        )
+        await storage.add_fiber(f1)
+        await storage.add_fiber(f2)
+
+        # OR: alpha OR gamma → only f1
+        result = await storage.find_fibers(tags={"alpha", "gamma"}, tag_mode="or")
+        assert len(result) == 1
+        assert result[0].id == f1.id
+
+        # AND: alpha AND gamma → none
+        result = await storage.find_fibers(tags={"alpha", "gamma"}, tag_mode="and")
+        assert len(result) == 0
+
+    @pytest.mark.asyncio
+    async def test_find_fibers_batch_or_default_is_and(self, storage: SQLiteStorage) -> None:
+        """Default tag_mode should be AND (backward compatible)."""
+        n1 = Neuron.create(type=NeuronType.CONCEPT, content="Y")
+        await storage.add_neuron(n1)
+
+        f1 = Fiber.create(
+            neuron_ids={n1.id},
+            synapse_ids=set(),
+            anchor_neuron_id=n1.id,
+            agent_tags={"one"},
+        )
+        await storage.add_fiber(f1)
+
+        # Default (no tag_mode) with tag "one" AND "two" → f1 has only "one" → empty
+        result = await storage.find_fibers_batch([n1.id], tags={"one", "two"})
+        assert len(result) == 0
+
+
 class TestTagFilterIntegration:
     """Integration tests combining multiple features."""
 

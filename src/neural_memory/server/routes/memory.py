@@ -111,6 +111,7 @@ async def query_memory(
         max_tokens=request.max_tokens,
         reference_time=request.reference_time,
         tags=tags,
+        tag_mode=request.tag_mode,
     )
 
     subgraph = None

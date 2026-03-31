@@ -202,6 +202,9 @@ class RecallHandler:
         if recall_mode not in ("associative", "exact"):
             return {"error": f"Invalid mode: {recall_mode}. Must be 'associative' or 'exact'."}
         tags = _parse_tags(args)
+        tag_mode = args.get("tag_mode", "and")
+        if tag_mode not in ("and", "or"):
+            return {"error": f"Invalid tag_mode: {tag_mode}. Must be 'and' or 'or'."}
         include_citations = args.get("include_citations", True)
         clean_for_prompt = bool(args.get("clean_for_prompt", False))
         min_trust: float | None = None
@@ -269,6 +272,7 @@ class RecallHandler:
             tags=tags,
             session_id=f"mcp-{id(self)}",
             exclude_ephemeral=permanent_only,
+            tag_mode=tag_mode,
         )
 
         # Passive auto-capture on long queries
@@ -693,6 +697,9 @@ class RecallHandler:
         max_tokens = min(int(args.get("max_tokens", 500)), 10_000)
 
         tags = _parse_tags(args)
+        tag_mode = args.get("tag_mode", "and")
+        if tag_mode not in ("and", "or"):
+            return {"error": f"Invalid tag_mode: {tag_mode}. Must be 'and' or 'or'."}
 
         try:
             result = await cross_brain_recall(
@@ -702,6 +709,7 @@ class RecallHandler:
                 depth=depth,
                 max_tokens=max_tokens,
                 tags=tags,
+                tag_mode=tag_mode,
             )
         except Exception:
             logger.error("Cross-brain recall failed", exc_info=True)

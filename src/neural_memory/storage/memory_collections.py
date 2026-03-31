@@ -44,6 +44,7 @@ class InMemoryCollectionsMixin:
         min_salience: float | None = None,
         metadata_key: str | None = None,
         limit: int = 100,
+        tag_mode: str = "and",
     ) -> list[Fiber]:
         limit = min(limit, 1000)
         brain_id = self._get_brain_id()
@@ -56,8 +57,12 @@ class InMemoryCollectionsMixin:
                 start, end = time_overlaps
                 if not fiber.overlaps_time(start, end):
                     continue
-            if tags is not None and not tags.issubset(fiber.tags):
-                continue
+            if tags is not None:
+                if tag_mode == "or":
+                    if not (tags & fiber.tags):
+                        continue
+                elif not tags.issubset(fiber.tags):
+                    continue
             if min_salience is not None and fiber.salience < min_salience:
                 continue
             if metadata_key is not None and metadata_key not in fiber.metadata:
@@ -73,6 +78,7 @@ class InMemoryCollectionsMixin:
         neuron_ids: list[str],
         limit_per_neuron: int = 10,
         tags: set[str] | None = None,
+        tag_mode: str = "and",
     ) -> list[Fiber]:
         """Find fibers containing any of the given neurons from in-memory store."""
         brain_id = self._get_brain_id()
@@ -86,8 +92,12 @@ class InMemoryCollectionsMixin:
             if not (fiber.neuron_ids & nid_set):
                 continue
             # fiber.tags property = auto_tags | agent_tags (union)
-            if tags is not None and not tags.issubset(fiber.tags):
-                continue
+            if tags is not None:
+                if tag_mode == "or":
+                    if not (tags & fiber.tags):
+                        continue
+                elif not tags.issubset(fiber.tags):
+                    continue
             seen.add(fiber.id)
             result.append(fiber)
 

@@ -486,6 +486,7 @@ class NeuralStorage(ABC):
         min_salience: float | None = None,
         metadata_key: str | None = None,
         limit: int = 100,
+        tag_mode: str = "and",
     ) -> list[Fiber]:
         """
         Find fibers matching criteria.
@@ -493,10 +494,11 @@ class NeuralStorage(ABC):
         Args:
             contains_neuron: Filter by containing this neuron ID
             time_overlaps: Filter by time range overlap
-            tags: Filter by having all these tags
+            tags: Filter by tags ("and" = all must match, "or" = any matches)
             min_salience: Filter by minimum salience
             metadata_key: Filter by metadata containing this key (non-null value)
             limit: Maximum results
+            tag_mode: "and" (all tags must match) or "or" (any tag matches)
 
         Returns:
             List of matching fibers
@@ -565,6 +567,7 @@ class NeuralStorage(ABC):
         neuron_ids: list[str],
         limit_per_neuron: int = 10,
         tags: set[str] | None = None,
+        tag_mode: str = "and",
     ) -> list[Fiber]:
         """Find fibers containing ANY of the given neurons, deduplicated.
 
@@ -574,7 +577,8 @@ class NeuralStorage(ABC):
         Args:
             neuron_ids: List of neuron IDs to search for
             limit_per_neuron: Max fibers per neuron in fallback
-            tags: Optional set of tags to filter by (AND — all must match)
+            tags: Optional set of tags to filter by
+            tag_mode: "and" (all tags must match) or "or" (any tag matches)
 
         Returns:
             Deduplicated list of fibers containing any of the neurons
@@ -582,7 +586,9 @@ class NeuralStorage(ABC):
         seen: set[str] = set()
         result: list[Fiber] = []
         for nid in neuron_ids:
-            for f in await self.find_fibers(contains_neuron=nid, limit=limit_per_neuron, tags=tags):
+            for f in await self.find_fibers(
+                contains_neuron=nid, limit=limit_per_neuron, tags=tags, tag_mode=tag_mode
+            ):
                 if f.id not in seen:
                     seen.add(f.id)
                     result.append(f)

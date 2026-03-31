@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`tag_mode` parameter for recall** — filter by tags using AND (all must match, default) or OR (any tag matches). Available in REST API, MCP `nmem_recall`, and cross-brain recall. Backward-compatible: default behavior unchanged.
+
+### Fixed
+
+- **FalkorDB `find_fibers` missing tag filter** — `find_fibers()` accepted `tags` parameter but never filtered by it (only `find_fibers_batch` did). Now both methods filter correctly.
+
 ## [4.23.4] — 2026-03-30
 
 ### Fixed

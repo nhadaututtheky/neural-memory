@@ -75,6 +75,7 @@ class SharedFiberBrainMixin:
         min_salience: float | None = None,
         metadata_key: str | None = None,
         limit: int = 100,
+        tag_mode: str = "and",
     ) -> list[Fiber]:
         """Find fibers matching criteria."""
         params: dict[str, Any] = {"limit": min(limit, 1000)}
@@ -85,6 +86,8 @@ class SharedFiberBrainMixin:
             params["time_end"] = time_overlaps[1].isoformat()
         if tags:
             params["tags"] = ",".join(tags)
+        if tag_mode != "and":
+            params["tag_mode"] = tag_mode
         if min_salience is not None:
             params["min_salience"] = min_salience
         if metadata_key is not None:
