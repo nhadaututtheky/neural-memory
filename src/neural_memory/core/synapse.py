@@ -85,6 +85,9 @@ class SynapseType(StrEnum):
     SUPERSEDES = "supersedes"  # Schema_v2 -> Schema_v1 (model evolution)
     DERIVED_FROM = "derived_from"  # Hypothesis/Prediction -> Schema (reasoning origin)
 
+    # Decision intelligence — evolution tracking
+    EVOLVES_FROM = "evolves_from"  # New decision -> Prior decision (same domain)
+
 
 class Direction(StrEnum):
     """Direction of synapse connection."""

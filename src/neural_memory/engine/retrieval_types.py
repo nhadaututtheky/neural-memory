@@ -57,7 +57,8 @@ class ScoreBreakdown:
     freshness_boost: float
     frequency_boost: float
     emotional_resonance: float
-    raw_total: float
+    decision_domain_boost: float = 0.0
+    raw_total: float = 0.0
 
 
 @dataclass

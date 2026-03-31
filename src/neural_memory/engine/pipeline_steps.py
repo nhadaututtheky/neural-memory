@@ -600,6 +600,49 @@ class StructuredDataEncoderStep:
                 ctx.synapses_created.append(synapse)
 
 
+# ── Step 3.7: Decision Component Extraction ──
+
+
+@dataclass
+class DecisionComponentStep:
+    """Extract structured decision components from DECISION-type memories.
+
+    Reads content and context to extract chosen/rejected/reasoning fields,
+    stores as ``_decision`` metadata on the anchor neuron. Adds searchable
+    tags like ``_decision:chosen:X``.
+    """
+
+    @property
+    def name(self) -> str:
+        return "decision_component"
+
+    async def execute(
+        self,
+        ctx: PipelineContext,
+        storage: NeuralStorage,
+        config: BrainConfig,
+    ) -> PipelineContext:
+        mem_type = ctx.metadata.get("type", "")
+        if mem_type != "decision":
+            return ctx
+
+        from neural_memory.engine.decision_intel import extract_decision_components
+
+        context_dict = ctx.metadata.get("_raw_context") or {}
+        components = extract_decision_components(ctx.content, context_dict)
+        if components is None:
+            return ctx
+
+        ctx.metadata["_decision"] = components.to_dict()
+
+        # Add searchable tag for chosen option
+        if components.chosen:
+            chosen_tag = components.chosen.lower().strip()[:50]
+            ctx.tags.add(f"_decision:chosen:{chosen_tag}")
+
+        return ctx
+
+
 # ── Step 4: Auto-Tag + Metadata ──
 
 

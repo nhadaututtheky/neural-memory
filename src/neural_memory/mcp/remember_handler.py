@@ -508,6 +508,37 @@ class RememberHandler:
             except Exception:
                 logger.debug("STORED_BY synapse creation failed (non-critical)", exc_info=True)
 
+            # Decision intelligence: detect overlapping prior decisions
+            decision_overlaps_out: list[dict[str, Any]] = []
+            if mem_type == MemoryType.DECISION:
+                try:
+                    from neural_memory.engine.decision_intel import (
+                        extract_decision_components,
+                        find_overlapping_decisions,
+                    )
+
+                    raw_context = args.get("context") or {}
+                    components = extract_decision_components(content, raw_context if isinstance(raw_context, dict) else None)
+                    if components is not None:
+                        overlaps = await find_overlapping_decisions(
+                            storage, components, tags,
+                        )
+                        for ov in overlaps:
+                            decision_overlaps_out.append(ov.to_dict())
+                            # Create EVOLVES_FROM synapse
+                            ov_fiber = await storage.get_fiber(ov.fiber_id)
+                            if ov_fiber and ov_fiber.anchor_neuron_id:
+                                evo_syn = Synapse.create(
+                                    source_id=result.fiber.anchor_neuron_id,
+                                    target_id=ov_fiber.anchor_neuron_id,
+                                    type=SynapseType.EVOLVES_FROM,
+                                    weight=ov.overlap_score,
+                                    metadata={"relationship": ov.relationship},
+                                )
+                                await storage.add_synapse(evo_syn)
+                except Exception:
+                    logger.debug("Decision overlap detection failed (non-critical)", exc_info=True)
+
             await storage.batch_save()
         finally:
             storage.enable_auto_save()
@@ -606,6 +637,10 @@ class RememberHandler:
                 "similar_existing": dedup_alias_of,
                 "message": "Similar memory already exists. Created alias link.",
             }
+
+        # Decision overlap results
+        if decision_overlaps_out:
+            response["decision_overlaps"] = decision_overlaps_out
 
         try:
             conflicts_detected = int(result.conflicts_detected)
