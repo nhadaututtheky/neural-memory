@@ -40,6 +40,7 @@ from neural_memory.mcp.expiry_cleanup_handler import ExpiryCleanupHandler
 from neural_memory.mcp.index_handler import IndexHandler
 from neural_memory.mcp.maintenance_handler import MaintenanceHandler
 from neural_memory.mcp.mem0_sync_handler import Mem0SyncHandler
+from neural_memory.mcp.milestone_handler import MilestoneHandler
 from neural_memory.mcp.narrative_handler import NarrativeHandler
 from neural_memory.mcp.onboarding_handler import OnboardingHandler
 from neural_memory.mcp.prompt import get_mcp_instructions, get_system_prompt
@@ -105,6 +106,7 @@ class MCPServer(
     SyncToolHandler,
     TelegramHandler,
     DriftHandler,
+    MilestoneHandler,
 ):
     """MCP server that exposes NeuralMemory tools.
 
@@ -134,6 +136,7 @@ class MCPServer(
         TelegramHandler      — _telegram_backup (send brain to Telegram)
         SurfaceHandler       — _surface (knowledge surface generate/show)
         DriftHandler         — _drift (semantic drift detection + resolution)
+        MilestoneHandler     — _milestone (growth milestones + reports)
     """
 
     def __init__(self) -> None:
@@ -278,6 +281,7 @@ class MCPServer(
             "nmem_report_outcome": self._report_outcome,
             "nmem_budget": self._budget,
             "nmem_tier": self._tier,
+            "nmem_milestone": self._milestone,
         }
         handler = dispatch.get(name)
         if handler:

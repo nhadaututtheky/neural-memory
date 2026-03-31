@@ -1937,4 +1937,23 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "required": ["action"],
         },
     },
+    {
+        "name": "nmem_milestone",
+        "description": "Brain growth milestones — track neuron-count achievements (100, 250, 500, 1000, 2500, 5000, 10000) "
+        "and generate growth reports with health snapshots, velocity, and achievements. "
+        "Actions: check (detect+record new milestones), progress (distance to next), "
+        "history (all recorded milestones), report (force-generate current state report).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["check", "progress", "history", "report"],
+                    "description": "check=detect+record new milestones, progress=distance to next milestone, "
+                    "history=all recorded milestones, report=generate growth report for current state",
+                },
+            },
+            "required": ["action"],
+        },
+    },
 ]
