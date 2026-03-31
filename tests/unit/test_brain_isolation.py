@@ -232,7 +232,7 @@ class TestCLIEnvVarBrainPinning:
 
             from neural_memory.cli._helpers import get_storage
 
-            result = await get_storage(mock_cli_config)
+            await get_storage(mock_cli_config)
 
             mock_get_shared.assert_awaited_once_with("long-form-brain")
 
@@ -259,7 +259,7 @@ class TestCLIEnvVarBrainPinning:
 
             from neural_memory.cli._helpers import get_storage
 
-            result = await get_storage(mock_cli_config)
+            await get_storage(mock_cli_config)
 
             mock_get_shared.assert_awaited_once_with("config-brain")
 
@@ -283,6 +283,6 @@ class TestCLIEnvVarBrainPinning:
         ):
             from neural_memory.cli._helpers import get_storage
 
-            result = await get_storage(mock_cli_config, brain_name="explicit-brain")
+            await get_storage(mock_cli_config, brain_name="explicit-brain")
 
             mock_get_shared.assert_awaited_once_with("explicit-brain")

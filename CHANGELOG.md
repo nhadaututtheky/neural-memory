@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.24.0] — 2026-03-31
+
+### Added
+
+- **Auto-tier engine** (B5 Phase 1, Pro): Automatic WARM→HOT promotion, HOT→WARM demotion, WARM→COLD archival based on access patterns. Protection for BOUNDARY types and pinned fibers. Oscillation prevention. `nmem_tier` MCP tool with status/evaluate/apply/history/config actions.
+- **Decision intelligence** (B5 Phase 2): Extract structured decision components (chosen, alternatives, reasoning, confidence) from DECISION-type memories. Detect overlapping prior decisions, classify relationships (confirms/contradicts/evolves), create EVOLVES_FROM synapses, boost recall scores for domain-relevant decisions.
+- **Dashboard Phosphor icons**: Migrated all 19 component files from Lucide to Phosphor Icons (`@phosphor-icons/react`). Added Playwright E2E smoke tests (8 tests).
+
+### Fixed
+
+- **CLI ignores `NMEM_BRAIN` env var** (#123): CLI `get_storage()` now respects `NMEM_BRAIN`/`NEURALMEMORY_BRAIN` env vars. Priority: explicit arg > env var > config file. `brain list` shows effective brain from env var.
+- **Handler monolith split**: Split `tool_handlers.py` (2030 LOC) into 7 domain-specific handler modules. Fixed circular imports, removed duplicate utility functions.
+- **Input firewall hardening**: Added bounds validation, type checks, and range clamping across handler modules (lifecycle, provenance, evolution, stats).
+
+### Improved
+
+- Auto-tier config: `cold_archive_days` invariant (must be ≥ `demote_inactive_days`), Pro gate in consolidation engine
+- MemoryTier constants used consistently (no string literals in handlers)
+- MCP tool count: 52 → 53
+
+### Tests
+
+- 50+ new tests across tier engine, decision intelligence, brain isolation, E2E smoke tests
+- Fixed stale `ReflexPipeline` patch targets and MagicMock config attrs in test fixtures
+
 ## [4.23.4] — 2026-03-30
 
 ### Fixed
