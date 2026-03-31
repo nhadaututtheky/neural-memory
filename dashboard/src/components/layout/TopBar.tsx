@@ -100,6 +100,7 @@ export function TopBar() {
         onClick={cycleTheme}
         aria-label={t(themeKeys[theme])}
         title={t(themeKeys[theme])}
+        data-testid="theme-toggle"
       >
         <ThemeIcon className="size-4" />
       </Button>
