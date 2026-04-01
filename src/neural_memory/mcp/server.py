@@ -281,6 +281,7 @@ class MCPServer(
             "nmem_report_outcome": self._report_outcome,
             "nmem_budget": self._budget,
             "nmem_tier": self._tier,
+            "nmem_boundaries": self._boundaries,
             "nmem_milestone": self._milestone,
         }
         handler = dispatch.get(name)

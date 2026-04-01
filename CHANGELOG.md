@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.25.0] — 2026-04-01
+
+### Added
+
+- **Domain boundaries** (B5 Phase 3): Scope boundary memories to specific domains (e.g. `financial`, `security`, `code-review`). Boundaries without a domain remain global. Uses existing tag system with `domain:` prefix convention — zero schema migration.
+  - `nmem_remember(content="...", type="boundary", domain="financial")` → auto-adds `domain:financial` tag
+  - `nmem_recall(domain="financial")` → HOT context injection filters boundaries by domain, keeps global (unscoped) boundaries
+  - `nmem_boundaries` tool — list boundaries grouped by domain, list unique domains with counts
+- **Brain milestone tool** (`nmem_milestone`): Track neuron-count achievements and generate growth reports
+
+### Improved
+
+- MCP tool count: 53 → 55 (added `nmem_boundaries`, `nmem_milestone`)
+
+### Tests
+
+- 15 new domain boundary tests (tag creation, filtered context, boundaries tool, remember injection)
+- Updated tool count assertions across test suite
+
 ## [4.24.0] — 2026-03-31
 
 ### Added

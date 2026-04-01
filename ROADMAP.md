@@ -4,7 +4,7 @@
 > Every item passes the VISION.md 4-question test + brain test.
 > ZERO LLM dependency — pure algorithmic, regex, graph-based.
 
-**Current state**: v4.22.1 — 53 MCP tools, 5500+ tests, schema v38, SQLite + PostgreSQL + InfinityDB backends, neuroscience engine (10 brain-inspired algorithms), tiered memory loading (HOT/WARM/COLD).
+**Current state**: v4.25.0 — 55 MCP tools, 5300+ tests, schema v38, SQLite + PostgreSQL + InfinityDB backends, neuroscience engine (10 brain-inspired algorithms), tiered memory (HOT/WARM/COLD + auto-tier + domain boundaries), decision intelligence, 7-module handler architecture.
 **Architecture**: Spreading activation reflex engine, biological memory model, MCP standard.
 
 ---
@@ -185,15 +185,15 @@
 - [ ] Free tier: publish up to 3 brains. Premium: unlimited + featured listing
 - **Brain test**: Humans learn from books/teachers (external knowledge) → Yes
 
-### B5. Pro: Smart Tiers & Decision Intelligence — Issue #112
+### B5. Pro: Smart Tiers & Decision Intelligence — Issue #112 (P1-P3 ✅, P4 pending)
 
 **Problem**: Free tier gives manual HOT/WARM/COLD control (#111). Pro makes it intelligent — auto-promote/demote by usage, structured decision matching, domain-scoped safety boundaries.
 
-**Scope**: Requires #111 (A6) first
-- [ ] Auto-tier promotion/demotion: access patterns → auto WARM↔HOT, configurable thresholds
-- [ ] Decision component matching: structured `components` metadata on decisions, overlap scoring
-- [ ] Domain-filtered boundaries: `boundary:financial`, `boundary:external`, `nmem_boundaries(domain=...)`
-- [ ] Tier analytics dashboard: distribution chart, decay curves, coverage gap detection, promotion history
+**Scope**: Requires #111 (A6) first — plan: `.rune/plan-smart-tiers.md`
+- [x] Phase 1: Auto-tier Engine — promote/demote by access patterns, Pro-gated, TierEngine + MCP tool (v4.24.0)
+- [x] Phase 2: Decision Intelligence — structured components, overlap scoring, EVOLVES_FROM synapse (v4.24.0)
+- [x] Phase 3: Domain Boundaries — `domain:` tag convention, domain-filtered HOT context, `nmem_boundaries` tool (v4.25.0)
+- [ ] Phase 4: Tier Analytics — dashboard API, distribution charts, promotion history
 - **Foundation**: A5 hippocampal replay (LTP/LTD) already provides strengthen/weaken mechanism
 - **Monetization gate**: Intelligence, not data access — users always see all memories, Pro makes management smarter
 - **Brain test**: Não tự điều chỉnh độ ưu tiên theo thói quen → Yes
@@ -402,4 +402,4 @@ Every roadmap item must pass:
 ---
 
 *See [VISION.md](VISION.md) for the north star guiding all decisions.*
-*Last updated: 2026-03-28*
+*Last updated: 2026-04-01*

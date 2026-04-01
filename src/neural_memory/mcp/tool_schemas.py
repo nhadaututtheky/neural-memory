@@ -137,6 +137,13 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "warm (default, semantic match), cold (explicit recall only, fast decay). "
                     "Boundary type auto-promotes to hot.",
                 },
+                "domain": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "description": "Domain scope for boundary memories (e.g. 'financial', 'security', 'code-review'). "
+                    "Adds a domain:{value} tag. Boundaries without domain are global (apply everywhere). "
+                    "Only meaningful for type=boundary; ignored for other types.",
+                },
                 "priority": {
                     "type": "integer",
                     "minimum": 0,
@@ -360,6 +367,13 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "type": "string",
                     "enum": ["hot", "warm", "cold"],
                     "description": "Filter results by memory tier. Only return memories matching this tier.",
+                },
+                "domain": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "description": "Domain scope filter. When set, HOT context injection only includes boundaries "
+                    "tagged with this domain (plus unscoped global boundaries). "
+                    "Example: domain='financial' filters out security boundaries from context.",
                 },
             },
             "required": ["query"],
@@ -1935,6 +1949,30 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 },
             },
             "required": ["action"],
+        },
+    },
+    {
+        "name": "nmem_boundaries",
+        "description": "List and manage domain-scoped boundaries. "
+        "Boundaries are safety rules (type=boundary) that are always HOT. "
+        "Use 'list' to see all boundaries grouped by domain. "
+        "Use 'domains' to see unique domains with counts.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["list", "domains"],
+                    "description": "Action: list (show boundaries, optionally filtered by domain), "
+                    "domains (list unique domains with boundary counts). Default: list.",
+                },
+                "domain": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "description": "Filter boundaries by domain (e.g. 'financial', 'security'). "
+                    "Only used with action=list.",
+                },
+            },
         },
     },
     {

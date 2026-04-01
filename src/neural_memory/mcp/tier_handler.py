@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from neural_memory.core.memory_types import MemoryTier
+from neural_memory.core.memory_types import MemoryTier, MemoryType
 from neural_memory.mcp.tool_handler_utils import _get_brain_or_error
 
 if TYPE_CHECKING:
@@ -150,4 +150,86 @@ class TierHandler:
             "cold_archive_days": self.config.tiers.cold_archive_days,
             "max_hot_memories": self.config.tiers.max_hot_memories,
             "hint": "Edit ~/.neuralmemory/config.toml [tiers] section to change thresholds.",
+        }
+
+    async def _boundaries(self, args: dict[str, Any]) -> dict[str, Any]:
+        """List and manage domain-scoped boundaries."""
+        action = args.get("action", "list")
+        domain_filter = args.get("domain")
+        if domain_filter and isinstance(domain_filter, str):
+            domain_filter = domain_filter.lower().strip()[:50]
+
+        storage = await self.get_storage()
+        brain, err = await _get_brain_or_error(storage)
+        if err:
+            return err
+
+        # Fetch all boundary memories
+        boundaries = await storage.find_typed_memories(memory_type=MemoryType.BOUNDARY, limit=1000)
+
+        if action == "domains":
+            return self._boundaries_domains(boundaries)
+
+        return await self._boundaries_list(storage, boundaries, domain_filter)
+
+    def _boundaries_domains(self, boundaries: list[Any]) -> dict[str, Any]:
+        """List unique domains with boundary counts."""
+        domain_counts: dict[str, int] = {}
+        unscoped = 0
+        for tm in boundaries:
+            domain_tags = {t[7:] for t in tm.tags if t.startswith("domain:")}
+            if domain_tags:
+                for d in domain_tags:
+                    domain_counts[d] = domain_counts.get(d, 0) + 1
+            else:
+                unscoped += 1
+
+        domains = [{"domain": d, "count": c} for d, c in sorted(domain_counts.items())]
+        return {
+            "domains": domains,
+            "unscoped_count": unscoped,
+            "total_boundaries": len(boundaries),
+        }
+
+    async def _boundaries_list(
+        self,
+        storage: Any,
+        boundaries: list[Any],
+        domain_filter: str | None,
+    ) -> dict[str, Any]:
+        """List boundaries, optionally filtered by domain."""
+        items: list[dict[str, Any]] = []
+        for tm in boundaries:
+            domain_tags = {t[7:] for t in tm.tags if t.startswith("domain:")}
+
+            # Filter by domain if specified
+            if domain_filter:
+                if domain_tags and domain_filter not in domain_tags:
+                    continue
+                # If no domain_filter match needed for unscoped, include them
+                # (unscoped = global boundaries, always visible)
+
+            fiber = await storage.get_fiber(tm.fiber_id)
+            content = ""
+            if fiber and fiber.anchor_neuron_id:
+                neuron = await storage.get_neuron(fiber.anchor_neuron_id)
+                if neuron:
+                    content = neuron.content[:200]
+
+            items.append(
+                {
+                    "fiber_id": tm.fiber_id,
+                    "content": content,
+                    "domains": sorted(domain_tags) if domain_tags else ["(global)"],
+                    "tier": tm.tier,
+                    "priority": tm.priority.value if hasattr(tm.priority, "value") else tm.priority,
+                    "tags": sorted(t for t in tm.tags if not t.startswith("domain:")),
+                    "created_at": tm.created_at.isoformat() if tm.created_at else None,
+                }
+            )
+
+        return {
+            "boundaries": items,
+            "count": len(items),
+            "domain_filter": domain_filter,
         }

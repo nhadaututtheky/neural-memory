@@ -355,6 +355,12 @@ class RememberHandler:
             agent_id = getattr(self, "_agent_id", "")
             if agent_id:
                 tags.add(f"agent:{agent_id}")
+            # Domain scope for boundary memories
+            raw_domain = args.get("domain")
+            if raw_domain and isinstance(raw_domain, str):
+                raw_domain = raw_domain.lower().strip()[:50]
+                if mem_type == MemoryType.BOUNDARY and raw_domain:
+                    tags.add(f"domain:{raw_domain}")
             # Parse event_at for original event timestamp
             event_timestamp = utcnow()
             raw_event_at = args.get("event_at")
@@ -767,6 +773,7 @@ class RememberHandler:
                 "event_at",
                 "ephemeral",
                 "tier",
+                "domain",
             ):
                 if key in item:
                     single_args[key] = item[key]

@@ -6,6 +6,7 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from neural_memory.core.memory_types import MemoryType
 from neural_memory.engine.hooks import HookEvent
 from neural_memory.engine.retrieval import DepthLevel
 from neural_memory.mcp.constants import MAX_HOT_CONTEXT_MEMORIES, MAX_TOKEN_BUDGET
@@ -758,17 +759,31 @@ class RecallHandler:
             fibers = fresh_fibers[:limit]
 
         # Inject HOT tier memories — always in context regardless of recency
+        # When domain is specified, boundary memories are filtered:
+        # - Boundaries with matching domain:{value} tag → included
+        # - Boundaries with NO domain: tag (global) → included
+        # - Boundaries with a DIFFERENT domain: tag → excluded
+        # Non-boundary HOT memories are always included regardless of domain.
         existing_ids = {f.id for f in fibers}
+        context_domain = args.get("domain")
+        if context_domain and isinstance(context_domain, str):
+            context_domain = context_domain.lower().strip()[:50]
         try:
             hot_memories = await storage.find_typed_memories(
                 tier="hot", limit=MAX_HOT_CONTEXT_MEMORIES
             )
             for tm in hot_memories:
-                if tm.fiber_id not in existing_ids:
-                    hot_fiber = await storage.get_fiber(tm.fiber_id)
-                    if hot_fiber:
-                        fibers.append(hot_fiber)
-                        existing_ids.add(tm.fiber_id)
+                if tm.fiber_id in existing_ids:
+                    continue
+                # Domain filter: only applies to boundary memories
+                if context_domain and tm.memory_type == MemoryType.BOUNDARY:
+                    domain_tags = {t for t in tm.tags if t.startswith("domain:")}
+                    if domain_tags and f"domain:{context_domain}" not in domain_tags:
+                        continue  # has domain tags but none match → skip
+                hot_fiber = await storage.get_fiber(tm.fiber_id)
+                if hot_fiber:
+                    fibers.append(hot_fiber)
+                    existing_ids.add(tm.fiber_id)
             if len(hot_memories) >= MAX_HOT_CONTEXT_MEMORIES:
                 logger.warning(
                     "HOT memory limit reached (%d) — some HOT memories may be excluded from context",
