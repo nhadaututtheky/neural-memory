@@ -122,7 +122,7 @@ If you prefer MCP over the plugin, add to `~/.openclaw/mcp.json`:
 }
 ```
 
-On Windows, use `"python"` (not `"python3"`). This gives you all 53 MCP tools but without the auto-context/auto-capture hooks.
+On Windows, use `"python"` (not `"python3"`). This gives you all 55 MCP tools but without the auto-context/auto-capture hooks.
 
 ### 3. Verify
 

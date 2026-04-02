@@ -64,7 +64,7 @@ The difference isn't speed. It's **recall quality**. Your agent remembers by mea
 | **Consolidation** | O(N²) brute-force | O(N×k) HNSW neighbor clustering |
 | **Graph traversal** | SQL JOINs per hop | Native adjacency BFS, <1ms |
 | **Crash recovery** | SQLite WAL | Custom WAL + idempotent replay |
-| **MCP tools** | 53 tools | 52 + 3 Pro-exclusive |
+| **MCP tools** | 55 tools | 52 + 3 Pro-exclusive |
 | **Storage per 1M neurons** | ~5 GB | **~1 GB** (with tier compression) |
 
 ---
@@ -268,7 +268,7 @@ One command. No config changes needed.
 pip install neural-memory-pro
 ```
 
-Pro auto-registers via Python entry points. Your existing 53 MCP tools keep working unchanged. Three new tools appear automatically.
+Pro auto-registers via Python entry points. Your existing 55 MCP tools keep working unchanged. Three new tools appear automatically.
 
 To enable InfinityDB (semantic search engine), set `storage_backend = "infinitydb"` in your `config.toml`. On next startup, existing memories are auto-migrated from SQLite. Both databases coexist — downgrade is safe.
 
@@ -295,7 +295,7 @@ To enable InfinityDB (semantic search engine), set `storage_backend = "infinityd
 
 ### Free — $0 forever
 
-Everything you have today. 53 MCP tools, SQLite storage, spreading activation, 14 consolidation strategies, FTS5 search, cloud sync (100 neurons). **No features removed, ever.**
+Everything you have today. 55 MCP tools, SQLite storage, spreading activation, 14 consolidation strategies, FTS5 search, cloud sync (100 neurons). **No features removed, ever.**
 
 ### Pro — $9/month (219,000 VND)
 

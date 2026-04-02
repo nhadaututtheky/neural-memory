@@ -617,7 +617,7 @@ NeuralMemory is lightweight — it won't slow down your editor.
 
 **3 tools you need. 42 the agent handles automatically.**
 
-53 tools are available, but most users only interact with three:
+55 tools are available, but most users only interact with three:
 
 ### Essential (You Use These)
 
@@ -697,7 +697,7 @@ These tools fire automatically via MCP instructions and hooks — you don't need
 
 ## Tool Tiers
 
-By default all 53 tools are exposed on every API turn. If you want to reduce token overhead, configure a **tool tier** in `~/.neuralmemory/config.toml`:
+By default all 55 tools are exposed on every API turn. If you want to reduce token overhead, configure a **tool tier** in `~/.neuralmemory/config.toml`:
 
 ```toml
 [tool_tier]
@@ -722,7 +722,7 @@ nmem config tier full         # reset to full
 
 - **minimal** — `remember`, `recall`, `context`, `recap`
 - **standard** — minimal + `todo`, `session`, `auto`, `eternal`
-- **full** — all 53 tools
+- **full** — all 55 tools
 
 > Hidden tools remain callable — only the schema listing changes. If the AI model already knows a tool name, it can still call it even when the tool is not exposed in `tools/list`.
 

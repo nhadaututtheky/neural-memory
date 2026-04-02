@@ -797,11 +797,11 @@ Token budget analysis for recall — estimate, analyze, or optimize context wind
 
 ### `nmem_tier`
 
-Auto-tier management — promote/demote memories between HOT/WARM/COLD based on access patterns. Pro feature: free users keep manual tiers only. Use 'status' to see tier distribution. 'evaluate' for dry-run. 'apply' to execute changes. 'history' to see a memory's tier change log. 'config' to view thresholds.
+Auto-tier management — promote/demote memories between HOT/WARM/COLD based on access patterns. Pro feature: free users keep manual tiers only. Use 'status' to see tier distribution. 'evaluate' for dry-run. 'apply' to execute changes. 'history' to see a memory's tier change log. 'config' to view thresholds. 'analytics' for breakdown by memory type + velocity metrics + recent tier changes.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `action` | string (`status`, `evaluate`, `apply`, `history`, `config`) | Yes | — | Action: 'status' (distribution), 'evaluate' (dry-run), 'apply' (execute), 'history' (fiber tier log), 'config' (thres... |
+| `action` | string (`status`, `evaluate`, `apply`, `history`, `config`, `analytics`) | Yes | — | Action: 'status' (distribution), 'evaluate' (dry-run), 'apply' (execute), 'history' (fiber tier log), 'config' (thres... |
 | `fiber_id` | string | No | — | Fiber ID for 'history' action. |
 | `dry_run` | boolean | No | default: false | If true with action='apply', show changes without applying (default: false). |
 | `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |

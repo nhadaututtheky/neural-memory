@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.26.0] — 2026-04-02
+
+### Added
+
+- **Tier analytics** (B5 Phase 4): MCP `nmem_tier action="analytics"` returns memory type x tier breakdown, 7d/30d velocity metrics (promoted/demoted/archived), and recent tier changes (capped at 50 events).
+  - REST API: `GET /api/dashboard/tier-analytics` (breakdown + velocity), `GET /api/dashboard/tier-history?limit=20&offset=0` (paginated events)
+  - Dashboard: Tier Analytics page with velocity KPI cards, grouped bar chart (recharts), and recent changes table
+  - `_classify_change()` helper classifies tier transitions as promoted/demoted/archived
+
+### Improved
+
+- Brain Quality C4 (Agent Visualization) marked complete — `nmem_visualize` tool fully shipped with Vega-Lite, markdown table, and ASCII chart formats
+- B5 Smart Tiers track fully complete (4/4 phases: Auto-Tier, Decision Intelligence, Domain Boundaries, Tier Analytics)
+
+### Tests
+
+- 11 new tier analytics tests (classify change, breakdown by type, velocity windows, recent changes)
+
 ## [4.25.0] — 2026-04-01
 
 ### Added
