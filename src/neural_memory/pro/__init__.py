@@ -42,7 +42,7 @@ def get_missing_deps() -> list[str]:
     return missing
 
 
-PRO_INSTALL_HINT = 'pip install neural-memory  # Pro deps are bundled'
+PRO_INSTALL_HINT = "pip install neural-memory  # Pro deps are bundled"
 
 __all__ = [
     "PRO_VERSION",
