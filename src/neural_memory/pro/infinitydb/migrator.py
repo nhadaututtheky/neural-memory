@@ -316,7 +316,9 @@ class SQLiteToInfinityMigrator:
                     last_id = str(row_dict.get(id_col, last_id))
                 source = row_dict.get("source_id", "")
                 target = row_dict.get("target_id", "")
-                syn_type = row_dict.get("type", row_dict.get("synapse_type", "related")) or "related"
+                syn_type = (
+                    row_dict.get("type", row_dict.get("synapse_type", "related")) or "related"
+                )
                 weight = float(row_dict.get("weight", 1.0))
                 edge_id = row_dict.get("id") or row_dict.get("synapse_id")
 
@@ -389,7 +391,9 @@ class SQLiteToInfinityMigrator:
                 if id_col:
                     last_id = str(row_dict.get(id_col, last_id))
                 name = row_dict.get("name", "")
-                fiber_type = row_dict.get("type", row_dict.get("fiber_type", "cluster")) or "cluster"
+                fiber_type = (
+                    row_dict.get("type", row_dict.get("fiber_type", "cluster")) or "cluster"
+                )
                 description = row_dict.get("description", "")
 
                 if not fid or not name:

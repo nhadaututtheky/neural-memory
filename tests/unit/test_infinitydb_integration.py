@@ -136,9 +136,7 @@ class TestGetInfinityDBStorage:
         mock_storage.return_value._db = None
 
         with (
-            patch(
-                "neural_memory.pro.storage_adapter.InfinityDBStorage", mock_storage
-            ),
+            patch("neural_memory.pro.storage_adapter.InfinityDBStorage", mock_storage),
             patch(
                 "neural_memory.unified_config._get_sqlite_storage", new_callable=AsyncMock
             ) as mock_sqlite,
@@ -176,9 +174,7 @@ class TestGetInfinityDBStorage:
         _storage_cache.pop("inf:brain-a", None)
         _storage_cache.pop("inf:brain-b", None)
 
-        with patch(
-            "neural_memory.pro.storage_adapter.InfinityDBStorage", mock_cls
-        ):
+        with patch("neural_memory.pro.storage_adapter.InfinityDBStorage", mock_cls):
             storage_a = await _get_infinitydb_storage(cfg, "brain-a")
             storage_b = await _get_infinitydb_storage(cfg, "brain-b")
 
@@ -217,9 +213,7 @@ class TestGetInfinityDBStorage:
         import logging
 
         with (
-            patch(
-                "neural_memory.pro.storage_adapter.InfinityDBStorage", mock_storage
-            ),
+            patch("neural_memory.pro.storage_adapter.InfinityDBStorage", mock_storage),
             caplog.at_level(logging.INFO),
         ):
             await _get_infinitydb_storage(cfg, "my-brain")
