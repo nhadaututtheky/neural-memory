@@ -452,7 +452,7 @@ def _check_pro_plugin() -> dict[str, Any]:
                 "name": "Pro features",
                 "status": WARN,
                 "detail": "License active but Pro deps not installed",
-                "fix": 'Run: pip install "neural-memory[pro]"',
+                "fix": "Run: pip install neural-memory",
             }
 
         return {

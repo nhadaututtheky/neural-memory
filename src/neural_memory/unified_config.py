@@ -1998,8 +1998,8 @@ async def _get_infinitydb_storage(config: UnifiedConfig, name: str) -> NeuralSto
         storage_cls = get_storage_class()
     if storage_cls is None:
         logger.warning(
-            "InfinityDB backend requested but Pro deps not installed. "
-            'Install with: pip install "neural-memory[pro]"  — falling back to SQLite'
+            "InfinityDB backend requested but Pro deps not available. "
+            "Reinstall with: pip install neural-memory  — falling back to SQLite"
         )
         return await _get_sqlite_storage(config, name, None)
 

@@ -7,8 +7,8 @@ Free Neural Memory is a complete, production-ready memory system — **you never
 **One command. No migration. No breaking changes.**
 
 ```bash
-pip install "neural-memory[pro]"    # install Pro dependencies
-nmem pro activate YOUR_LICENSE_KEY  # activate license
+pip install neural-memory              # Pro features included
+nmem pro activate YOUR_LICENSE_KEY    # activate with your key
 ```
 
 All 52 free tools keep working. Your existing memories are preserved. Pro adds 3 new tools and upgrades the engine underneath.
@@ -266,11 +266,11 @@ Smart consolidation with preview mode.
 One command. No config changes needed.
 
 ```bash
-pip install "neural-memory[pro]"
+pip install neural-memory
 nmem pro activate YOUR_LICENSE_KEY
 ```
 
-Pro features are bundled in the main package. Install the optional `[pro]` dependencies (numpy, hnswlib, msgpack) and activate your license key. Your existing 55 MCP tools keep working unchanged. Three new tools appear automatically.
+Pro features are bundled in the main package — all dependencies included. Just activate your license key. Your existing 55 MCP tools keep working unchanged. Three new tools appear automatically.
 
 To enable InfinityDB (semantic search engine), set `storage_backend = "infinitydb"` in your `config.toml`. On next startup, existing memories are auto-migrated from SQLite. Both databases coexist — downgrade is safe.
 

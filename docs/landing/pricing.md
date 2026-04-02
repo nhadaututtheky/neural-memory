@@ -117,7 +117,7 @@ Transfer syntax: NMPRO <email>
 ## How Licensing Works
 
 ```
-pip install "neural-memory[pro]"
+pip install neural-memory
 nmem pro activate <license-key>
 ```
 

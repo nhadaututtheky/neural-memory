@@ -7,7 +7,7 @@ You installed Pro. Here's how to make it work for you in 5 minutes.
 ## 1. Install and activate
 
 ```bash
-pip install "neural-memory[pro]"
+pip install neural-memory
 nmem pro activate YOUR_LICENSE_KEY
 ```
 

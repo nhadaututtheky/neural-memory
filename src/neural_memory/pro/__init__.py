@@ -1,9 +1,7 @@
 """Neural Memory Pro — Advanced features bundled in the main package.
 
-Pro features require optional dependencies: numpy, hnswlib, msgpack.
-Install with: pip install neural-memory[pro]
-
-All features are gated behind config.is_pro() — license key required.
+Pro features are included with neural-memory. Activate with a license key.
+All Pro dependencies (numpy, hnswlib, msgpack) are bundled in the main install.
 """
 
 from __future__ import annotations
@@ -11,8 +9,23 @@ from __future__ import annotations
 PRO_VERSION = "0.3.0"
 
 
-def _check_deps() -> tuple[bool, list[str]]:
-    """Check if Pro optional dependencies are available."""
+def is_pro_deps_installed() -> bool:
+    """Return True if all Pro dependencies are installed.
+
+    Since Pro deps are now bundled in main dependencies, this always returns True
+    unless the user manually uninstalled numpy/hnswlib/msgpack.
+    """
+    try:
+        import hnswlib as _hnswlib  # noqa: F401
+        import msgpack as _msgpack  # noqa: F401
+        import numpy as _np  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def get_missing_deps() -> list[str]:
+    """Return list of missing Pro dependencies (should be empty after install)."""
     missing: list[str] = []
     try:
         import numpy as _np  # noqa: F401
@@ -26,22 +39,10 @@ def _check_deps() -> tuple[bool, list[str]]:
         import msgpack as _msgpack  # noqa: F401
     except ImportError:
         missing.append("msgpack")
-    return len(missing) == 0, missing
-
-
-def is_pro_deps_installed() -> bool:
-    """Return True if all Pro optional dependencies are installed."""
-    available, _ = _check_deps()
-    return available
-
-
-def get_missing_deps() -> list[str]:
-    """Return list of missing Pro dependencies."""
-    _, missing = _check_deps()
     return missing
 
 
-PRO_INSTALL_HINT = 'pip install "neural-memory[pro]"'
+PRO_INSTALL_HINT = 'pip install neural-memory  # Pro deps are bundled'
 
 __all__ = [
     "PRO_VERSION",

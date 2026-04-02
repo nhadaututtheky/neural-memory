@@ -3,7 +3,7 @@
 Multi-dimensional vector storage with HNSW indexing, graph-native synapses,
 tiered compression, and crash-safe WAL. Designed for 1M+ neurons at <100ms recall.
 
-Requires: numpy, hnswlib, msgpack (install via `pip install neural-memory[pro]`)
+Requires: numpy, hnswlib, msgpack (bundled with neural-memory)
 """
 
 from __future__ import annotations

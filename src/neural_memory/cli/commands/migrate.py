@@ -171,7 +171,7 @@ async def _migrate_to_infinitydb(brain_name: str | None) -> None:
     # Pre-flight: Pro checks
     if not is_pro_deps_installed():
         typer.secho(
-            'Pro dependencies not installed. Run: pip install "neural-memory[pro]"',
+            "Pro dependencies not installed. Run: pip install neural-memory",
             fg=typer.colors.RED,
         )
         raise typer.Exit(1)
@@ -233,7 +233,7 @@ async def _migrate_to_infinitydb(brain_name: str | None) -> None:
         storage_cls: type = InfinityDBStorage
     except ImportError:
         typer.secho(
-            'InfinityDB not available. Run: pip install "neural-memory[pro]"',
+            "InfinityDB not available. Run: pip install neural-memory",
             fg=typer.colors.RED,
         )
         raise typer.Exit(1) from None
