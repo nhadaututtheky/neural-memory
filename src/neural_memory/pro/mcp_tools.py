@@ -7,12 +7,10 @@ by the free tier's MCP server when Pro is installed.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
-if TYPE_CHECKING:
-    pass
 
 
 # ── Tool Schemas ──────────────────────────────────────────
@@ -172,7 +170,6 @@ async def handle_tier_info(server: Any, arguments: dict[str, Any]) -> dict[str, 
                 "pro": True,
             }
 
-        # Default: stats
         stats = await storage.get_tier_stats()
         return {
             "action": "stats",

@@ -135,9 +135,9 @@ class GraphStore:
             direction: "outgoing", "incoming", or "both"
             edge_type: filter by edge type (optional)
         """
-        _VALID_DIRECTIONS = {"outgoing", "incoming", "both"}
-        if direction not in _VALID_DIRECTIONS:
-            msg = f"Invalid direction: {direction!r}, must be one of {_VALID_DIRECTIONS}"
+        valid_directions = {"outgoing", "incoming", "both"}
+        if direction not in valid_directions:
+            msg = f"Invalid direction: {direction!r}, must be one of {valid_directions}"
             raise ValueError(msg)
 
         neighbors: set[str] = set()
@@ -278,8 +278,8 @@ class GraphStore:
 
     def update_edge(self, edge_id: str, updates: dict[str, Any]) -> bool:
         """Update edge fields (weight, type, metadata)."""
-        _UPDATABLE = {"weight", "type", "metadata"}
-        filtered = {k: v for k, v in updates.items() if k in _UPDATABLE}
+        updatable = {"weight", "type", "metadata"}
+        filtered = {k: v for k, v in updates.items() if k in updatable}
         if not filtered:
             return False
 

@@ -187,7 +187,7 @@ class SQLiteToInfinityMigrator:
         migrated_in_phase = 0
         while migrated_in_phase < total:
             cursor.execute(
-                f"SELECT * FROM neurons WHERE {id_col} > ? ORDER BY {id_col} LIMIT ?",  # noqa: S608
+                f"SELECT * FROM neurons WHERE {id_col} > ? ORDER BY {id_col} LIMIT ?",
                 (last_id, self._batch_size),
             )
             rows = cursor.fetchall()
@@ -297,7 +297,7 @@ class SQLiteToInfinityMigrator:
         while migrated_in_phase < total:
             if id_col:
                 cursor.execute(
-                    f"SELECT * FROM synapses WHERE {id_col} > ? ORDER BY {id_col} LIMIT ?",  # noqa: S608
+                    f"SELECT * FROM synapses WHERE {id_col} > ? ORDER BY {id_col} LIMIT ?",
                     (last_id, self._batch_size),
                 )
             else:
@@ -371,7 +371,7 @@ class SQLiteToInfinityMigrator:
         while migrated_in_phase < total:
             if id_col:
                 cursor.execute(
-                    f"SELECT * FROM fibers WHERE {id_col} > ? ORDER BY {id_col} LIMIT ?",  # noqa: S608
+                    f"SELECT * FROM fibers WHERE {id_col} > ? ORDER BY {id_col} LIMIT ?",
                     (last_id, self._batch_size),
                 )
             else:

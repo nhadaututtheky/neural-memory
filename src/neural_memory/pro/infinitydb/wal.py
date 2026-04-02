@@ -18,7 +18,6 @@ Recovery protocol:
 from __future__ import annotations
 
 import io
-
 import logging
 import struct
 from datetime import UTC, datetime
@@ -54,7 +53,7 @@ class WALOp(IntEnum):
 class WALEntry:
     """A single WAL entry."""
 
-    __slots__ = ("seq", "op", "timestamp", "payload")
+    __slots__ = ("op", "payload", "seq", "timestamp")
 
     def __init__(
         self,

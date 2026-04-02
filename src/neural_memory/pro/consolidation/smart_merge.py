@@ -110,7 +110,7 @@ async def smart_merge(
 
     # 3. Plan merge actions
     actions: list[MergeAction] = []
-    for _anchor_id, member_ids in clusters.items():
+    for member_ids in clusters.values():
         if len(actions) >= max_merges:
             break
 

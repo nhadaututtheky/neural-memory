@@ -169,7 +169,7 @@ class TierManager:
 
     def compute_stats(self, neurons: list[dict[str, Any]]) -> TierStats:
         """Compute tier distribution stats for a set of neurons."""
-        counts = {tier: 0 for tier in CompressionTier}
+        counts = dict.fromkeys(CompressionTier, 0)
         for meta in neurons:
             current = meta.get("tier", CompressionTier.ACTIVE)
             if isinstance(current, int):

@@ -195,9 +195,9 @@ class FiberStore:
         fiber = self._fibers.get(fiber_id)
         if fiber is None:
             return False
-        _UPDATABLE = {"name", "type", "description", "metadata"}
+        updatable = {"name", "type", "description", "metadata"}
         for key, val in updates.items():
-            if key in _UPDATABLE:
+            if key in updatable:
                 fiber[key] = val
         self._dirty = True
         return True

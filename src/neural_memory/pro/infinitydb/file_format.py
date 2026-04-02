@@ -2,7 +2,7 @@
 
 File layout per brain directory:
   brain.inf   — Header (this module)
-  brain.vec   — Memory-mapped float32 vectors (N × D)
+  brain.vec   — Memory-mapped float32 vectors (N x D)
   brain.idx   — HNSW index (hnswlib binary)
   brain.graph — Synapse adjacency (msgpack)
   brain.meta  — Neuron metadata (msgpack)
@@ -18,8 +18,7 @@ from pathlib import Path
 
 # Magic bytes: "INFDB" + version
 MAGIC = b"INFDB\x01"
-# magic(6) + version(4) + dims(4) + tier_config(4) + flags(4) + neuron_count(8) + synapse_count(8)
-HEADER_FORMAT = "<6sIIIIQQ"
+HEADER_FORMAT = "<6sIIIIQQ"  # magic(6)+ver(4)+dims(4)+tier(4)+flags(4)+neurons(8)+synapses(8)
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 
 # File extensions
