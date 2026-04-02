@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "neural-memory"
 version = "4.27.1"
-description = "Reflex-based memory system for AI agents - retrieval through activation, not search"
+description = "Persistent memory for AI agents — 55 MCP tools, spreading activation recall, neuroscience-inspired consolidation. Works with Claude, GPT, Gemini."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
@@ -20,6 +20,17 @@ keywords = [
     "graph",
     "retrieval",
     "llm",
+    "mcp",
+    "model-context-protocol",
+    "spreading-activation",
+    "knowledge-graph",
+    "persistent-memory",
+    "ai-memory",
+    "claude",
+    "rag",
+    "neuroscience",
+    "consolidation",
+    "recall",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -29,7 +40,11 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Database",
+    "Framework :: FastAPI",
     "Typing :: Typed",
 ]
 dependencies = [
@@ -139,10 +154,12 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/nhadaututtheky/neural-memory"
+Homepage = "https://neuralmemory.theio.vn"
 Documentation = "https://nhadaututtheky.github.io/neural-memory"
 Repository = "https://github.com/nhadaututtheky/neural-memory"
 Issues = "https://github.com/nhadaututtheky/neural-memory/issues"
+Changelog = "https://github.com/nhadaututtheky/neural-memory/blob/main/CHANGELOG.md"
+"Get Pro" = "https://neuralmemory.theio.vn/landing/pro-landing.html"
 
 [project.scripts]
 neural-memory = "neural_memory.cli:main"

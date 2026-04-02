@@ -4,7 +4,7 @@
 > Every item passes the VISION.md 4-question test + brain test.
 > ZERO LLM dependency — pure algorithmic, regex, graph-based.
 
-**Current state**: v4.25.0 — 55 MCP tools, 5800+ tests, schema v38, SQLite + PostgreSQL + InfinityDB backends, neuroscience engine (10 brain-inspired algorithms), tiered memory (HOT/WARM/COLD + auto-tier + domain boundaries), decision intelligence, 7-module handler architecture.
+**Current state**: v4.27.1 — 55 MCP tools, 5800+ tests, schema v38, SQLite + PostgreSQL + InfinityDB backends, neuroscience engine (10 brain-inspired algorithms), tiered memory (HOT/WARM/COLD + auto-tier + domain boundaries), decision intelligence, 7-module handler architecture, Pro bundled in main package (license-gated).
 **Architecture**: Spreading activation reflex engine, biological memory model, MCP standard.
 
 ---
@@ -52,6 +52,15 @@
 | IDE rules generator (Cursor, Windsurf, Cline, Gemini, AGENTS.md) | v4.6 | — |
 | Cascading retrieval with fiber summary tier | v4.3 | — |
 | HuggingFace Spaces chatbot (ReflexPipeline, no LLM) | v4.3 | — |
+| Auto-tier engine, decision intelligence, domain boundaries | v4.24–v4.25 | Intelligent memory management |
+| Milestone analysis (`nmem_milestone`) | v4.25 | Brain growth tracking |
+| Pro merged into main package (license-gated, zero-friction install) | v4.27 | One install, key unlocks |
+| Pay-hub (Cloudflare Workers + D1, SePay + Polar) | v4.27 | Payment infrastructure |
+| File watcher ingestion (`nmem_watch` MCP + CLI) | v4.14 | Environmental learning |
+| Agent visualization (`nmem_visualize` Vega-Lite/ASCII) | v4.15 | Brain introspection |
+| Brain Oracle (card-based memory fortune teller, 3 modes) | v4.16 | Playful brain exploration |
+| Markdown brain export (`snapshot_to_markdown`) | v4.17 | Human-readable export |
+| OpenClaw plugin (v1.16.0, ClawHub marketplace) | v4.6 | IDE integration |
 
 ---
 
@@ -86,7 +95,7 @@
 **Scope**: 3 sub-phases (plan: `.rune/plan-brain-quality.md`)
 - [ ] C1+C2: Domain entity types + structured data encoding (regex-based, no LLM)
 - [ ] C3: Cross-encoder reranking (optional `bge-reranker` post-SA refinement)
-- [ ] C4: Agent visualization (`nmem_visualize` → Vega-Lite/markdown/ASCII charts)
+- [x] C4: Agent visualization (`nmem_visualize` → Vega-Lite/markdown/ASCII charts) — shipped
 - **Brain test**: Kế toán nhớ "ROE" khác "Paris" → Yes
 
 ### A4. Stability & Polish
@@ -139,16 +148,18 @@
 
 > From open-source tool to sustainable product. Revenue enables long-term development.
 
-### B1. Sync Hub: Landing + Payment (plan: `.rune/plan-sync-hub-phase3.md`)
+### B1. Sync Hub: Landing + Payment ✅ (plan: `.rune/plan-sync-hub-phase3.md`)
 
 **Problem**: Cloud sync works but has no billing. Need landing page + payment flow.
 
-**Scope**:
-- [ ] Landing page (Cloudflare Pages) — features, pricing, signup
-- [ ] SePay integration (Vietnam, 0% fee) for domestic users
-- [ ] Stripe integration for global users
-- [ ] Free tier (100 neurons synced) → Pro tier ($5/mo, unlimited)
-- [ ] Usage dashboard: sync history, storage used, device count
+**Scope**: **Shipped** — landing at `neuralmemory.theio.vn`, pay-hub at `pay.theio.vn`
+- [x] Landing page (GitHub Pages) — features, pricing, pro-landing.html
+- [x] SePay integration (Vietnam, 0% fee) — VietQR checkout
+- [x] Polar integration (international) — Card/PayPal checkout
+- [x] Pro tier ($9/mo or $89/yr, 219k VND/tháng)
+- [x] Dashboard UpgradeModal — purchase + license activation
+- [x] Pay-hub D1 orders table, webhook fulfillment, /verify endpoint
+- [ ] Usage dashboard: sync history, storage used, device count (deferred)
 
 ### B2. Sync Hub: Team Sharing (plan: `.rune/plan-sync-hub-phase4.md`)
 
@@ -169,7 +180,7 @@
 - [ ] MCP Registry listing (modelcontextprotocol.io)
 - [ ] awesome-mcp-servers PR (punkpeye/awesome-mcp-servers)
 - [ ] PyPI package optimization (description, classifiers, keywords)
-- [ ] npm package for OpenClaw plugin
+- [x] npm package for OpenClaw plugin (v1.16.0, ClawHub marketplace)
 - [ ] Blog posts: "NeuralMemory vs Mem0", "Why spreading activation beats RAG"
 - [ ] HuggingFace Spaces demo polished + promoted
 
@@ -185,7 +196,7 @@
 - [ ] Free tier: publish up to 3 brains. Premium: unlimited + featured listing
 - **Brain test**: Humans learn from books/teachers (external knowledge) → Yes
 
-### B5. Pro: Smart Tiers & Decision Intelligence — Issue #112 (P1-P3 ✅, P4 pending)
+### B5. Pro: Smart Tiers & Decision Intelligence ✅ — Issue #112
 
 **Problem**: Free tier gives manual HOT/WARM/COLD control (#111). Pro makes it intelligent — auto-promote/demote by usage, structured decision matching, domain-scoped safety boundaries.
 
@@ -193,7 +204,7 @@
 - [x] Phase 1: Auto-tier Engine — promote/demote by access patterns, Pro-gated, TierEngine + MCP tool (v4.24.0)
 - [x] Phase 2: Decision Intelligence — structured components, overlap scoring, EVOLVES_FROM synapse (v4.24.0)
 - [x] Phase 3: Domain Boundaries — `domain:` tag convention, domain-filtered HOT context, `nmem_boundaries` tool (v4.25.0)
-- [ ] Phase 4: Tier Analytics — dashboard API, distribution charts, promotion history
+- [x] Phase 4: Tier Analytics — dashboard API, distribution charts, promotion history (v4.26.0)
 - **Foundation**: A5 hippocampal replay (LTP/LTD) already provides strengthen/weaken mechanism
 - **Monetization gate**: Intelligence, not data access — users always see all memories, Pro makes management smarter
 - **Brain test**: Não tự điều chỉnh độ ưu tiên theo thói quen → Yes
@@ -402,4 +413,4 @@ Every roadmap item must pass:
 ---
 
 *See [VISION.md](VISION.md) for the north star guiding all decisions.*
-*Last updated: 2026-04-01*
+*Last updated: 2026-04-02*
