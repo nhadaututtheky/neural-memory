@@ -87,7 +87,9 @@ class TestBasicCRUD:
         assert any(s.target_id == n2 for s in synapses)
 
     async def test_add_get_fiber(self, storage: InfinityDBStorage) -> None:
-        n1 = await storage.add_neuron(Neuron.create(type=NeuronType.CONCEPT, content="Fiber neuron"))
+        n1 = await storage.add_neuron(
+            Neuron.create(type=NeuronType.CONCEPT, content="Fiber neuron")
+        )
         fiber = Fiber(
             id="",
             summary="Test fiber",

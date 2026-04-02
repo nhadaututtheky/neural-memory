@@ -227,3 +227,6 @@ AGENTS.md
 AUDIT-REPORT.md
 lefthook.yml
 integrations/neuralmemory/coverage/
+npm-package/.mcpregistry_github_token
+npm-package/.mcpregistry_registry_token
+mcp-publisher.exe

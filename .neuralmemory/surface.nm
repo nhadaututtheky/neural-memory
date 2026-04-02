@@ -1,0 +1,99 @@
+# ═══════════════════════════════════════════════════
+# .neuralmemory/surface.nm
+# Neural Memory Knowledge Surface v1
+# Auto-generated from brain.db | Editable by human
+# ═══════════════════════════════════════════════════
+---
+brain: my-brain.v2
+updated: 2026-03-31T09:29:32
+neurons: 4312
+synapses: 35732
+token_budget: 1200
+depth_available: [surface, detail, deep]
+---
+
+# ── GRAPH ──────────────────────────────────────────
+# Nodes = key concepts. Edges = causal/decisional links.
+# Agent: scan this section to understand the knowledge landscape.
+# Format: [id] content (type) {p:N} →edge→ [target_id_or_text]
+
+[c29] Suggested action: auto-reply:telegram:8576604515 (confidence: 0.85) — blocked… (concept) {p:5}
+  →alias→ "Suggested action: auto-reply:telegram:8576604515…"
+  →alias→ "Suggested action: auto-reply:telegram:8576604515…"
+  →alias→ "Suggested action: auto-reply:telegram:8576604515…"
+  →alias→ "Suggested action: auto-reply:telegram:8576604515…"
+  →alias→ "Suggested action: auto-reply:telegram:8576604515…"
+
+[c1] SHIP FIRST
+Brainstorm session 2026-03-01: Analyzed memU (11.6k stars) vs NM.… (concept) {p:6}
+  →involves→ "SHIP FIRST"
+  →related_to→ "SHIP FIRST"
+  →related_to→ "SHIP FIRST"
+  →related_to→ "SHIP FIRST"
+  →involves→ "output"
+
+[c2] [SESSION] Project: Neural Memory
+Turns: 11 | Cost: $42.618 | Duration:… (concept) {p:6}
+  →has_value→ "Cost = $42.618"
+  →involves→ "Cost = $42.618"
+  →involves→ "$42.618"
+  →involves→ "Frontend"
+  →involves→ "với debug output"
+
+[c3] [RESEARCH] VoltAgent/awesome-codex-subagents
+
+URL:… (concept) {p:6}
+  →related_to→ "codex subagents"
+  →related_to→ "voltagent awesome"
+  →related_to→ "research voltagent"
+  →related_to→ "research voltagent"
+  →related_to→ "awesome codex"
+
+[c4] Suggested action: auto-reply:telegram:8576604515 (confidence: 0.90) — blocked… (concept) {p:6}
+  →alias→ "Suggested action: auto-reply:telegram:8576604515…"
+  →alias→ "Suggested action: auto-reply:telegram:8576604515…"
+  →alias→ "Suggested action: auto-reply:telegram:8576604515…"
+  →alias→ "Suggested action: auto-reply:telegram:8576604515…"
+  →alias→ "Suggested action: auto-reply:telegram:8576604515…"
+
+# ── CLUSTERS ───────────────────────────────────────
+# Auto-detected topic groups from brain.db entity co-occurrence.
+# Agent: use clusters to scope recall queries.
+
+@ship: [00a0abe8-fd25-4045-967c-af10d9f9285b, 0128c028-f8f8-4b04-96ba-f5a71595b663] "SHIP FIRST, SHIP FIRST
+Brainstorm session 2026-03-01"
+@suggested: [04eff891-f62a-4c6e-8c5f-a01b2ac0668b, 07104f8a-45e5-4a9a-bf09-be4984e80743, 08fa5c17-e064-4fb3-88e6-54e1703c0627] "Suggested action: auto-reply:telegram:80"
+
+# ── SIGNALS ────────────────────────────────────────
+# Active alerts, unresolved items, pending decisions.
+# Agent: check this FIRST each session for urgent context.
+
+~ [agent:claude-code, auto tier, engine hot, features, features auto]
+~ [agent:claude-code, decision, decision intelligence, decision tracking, intelligence structured]
+~ [_structured:key_value, agent:claude-code, decisions, get_storage_class, integration]
+! [agent:claude-code, coffee project, io coffee, io-coffee, mvp]
+~ [agent:claude-code, coffee project, io coffee, io-coffee, momo]
+~ [agent:claude-code, business cafe, coffee project, dual, dual business]
+~ [agent:claude-code, brand color, branding, coffee project, design-system]
+~ [agent:claude-code, architecture, chose vercel, coffee project, hosting]
+~ [agent:claude-code, error, error missing, lint config, missing]
+! [$30.374, _structured:key_value, auto-summary, cost duration, numbers]
+
+# ── DEPTH MAP ──────────────────────────────────────
+# When surface isn't enough, this tells agent WHERE to dig.
+# Format: [id] → depth_hint (context)
+
+[c1] → NEEDS_DEEP (68 synapses in brain.db, recall "SHIP FIRST
+Brainstorm session…")
+[c2] → NEEDS_DEEP (19 synapses in brain.db, recall "[SESSION] Project: Neural…")
+[c3] → NEEDS_DETAIL (12 total synapses, recall "[RESEARCH] VoltAgent/awesome-codex-suba…")
+[c4] → NEEDS_DEEP (19 synapses in brain.db, recall "Suggested action: auto-reply:telegram:8…")
+[c29] → NEEDS_DEEP (19 synapses in brain.db, recall "Suggested action: auto-reply:telegram:8…")
+
+# ── META ───────────────────────────────────────────
+# Stats for agent to gauge brain richness
+
+coverage: 0.01
+staleness: 0.08
+last_consolidation: 2026-03-31T09:29:32
+top_entities: [SHIP, [SESSION], [RESEARCH], Suggested, SHIP]

@@ -24,6 +24,9 @@ from neural_memory.core.neuron import Neuron, NeuronState, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.pro.infinitydb.engine import InfinityDB
 from neural_memory.pro.infinitydb.tier_manager import TierConfig
+from neural_memory.pro.storage_adapter_extras import InfinityDBExtrasMixin
+from neural_memory.pro.storage_adapter_sync import InfinityDBSyncMixin
+from neural_memory.pro.storage_adapter_typed import InfinityDBTypedMixin
 from neural_memory.storage.base import NeuralStorage
 from neural_memory.utils.timeutils import utcnow
 
@@ -114,7 +117,9 @@ def _meta_to_fiber(fdict: dict[str, Any]) -> Fiber:
     )
 
 
-class InfinityDBStorage(NeuralStorage):
+class InfinityDBStorage(
+    InfinityDBTypedMixin, InfinityDBSyncMixin, InfinityDBExtrasMixin, NeuralStorage
+):
     """NeuralStorage adapter wrapping InfinityDB.
 
     Provides the standard NeuralStorage interface backed by InfinityDB's
@@ -134,6 +139,13 @@ class InfinityDBStorage(NeuralStorage):
         self._tier_config = tier_config
         self._db: InfinityDB | None = None
         self._neuron_states: dict[str, NeuronState] = {}
+        # Initialize mixin stores
+        self._init_typed_stores()
+        self._init_lifecycle_stores()
+        self._init_keyword_stores()
+        self._init_entity_stores()
+        self._init_sync_stores()
+        self._init_extras_stores()
 
     @property
     def db(self) -> InfinityDB:

@@ -2072,9 +2072,7 @@ async def _open_infinitydb_storage(
     try:
         from neural_memory.pro.storage_adapter import InfinityDBStorage
     except ImportError:
-        raise RuntimeError(  # noqa: B904
-            "InfinityDB storage not available — Pro dependencies not installed"
-        )
+        raise RuntimeError("InfinityDB storage not available — Pro dependencies not installed")
 
     brains_dir = Path(cfg.data_dir) / "brains"
 
