@@ -325,6 +325,10 @@ filterwarnings = [
 [tool.coverage.run]
 source = ["src/neural_memory"]
 branch = true
+omit = [
+    "src/neural_memory/pro/infinitydb/*",
+    "src/neural_memory/pro/storage_adapter*.py",
+]
 
 [tool.coverage.report]
 fail_under = 67

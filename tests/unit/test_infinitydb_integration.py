@@ -16,6 +16,12 @@ import pytest
 
 from neural_memory.unified_config import UnifiedConfig, _get_infinitydb_storage
 
+_pro_deps_available = True
+try:
+    import numpy  # noqa: F401
+except ImportError:
+    _pro_deps_available = False
+
 
 def _make_config(data_dir: Path, brain: str = "default") -> UnifiedConfig:
     """Build a UnifiedConfig pointing at *data_dir*."""
@@ -125,6 +131,7 @@ class TestGetInfinityDBStorage:
             mock_sqlite.assert_called_once_with(cfg, "test-brain", None)
 
     @pytest.mark.asyncio
+    @pytest.mark.skipif(not _pro_deps_available, reason="Pro deps (numpy/hnswlib) not installed")
     async def test_falls_back_to_sqlite_when_open_fails(self, tmp_path: Path) -> None:
         """When InfinityDB open() raises, should fall back to SQLite."""
         cfg = _make_config(tmp_path, brain="broken-brain")
@@ -151,6 +158,7 @@ class TestGetInfinityDBStorage:
             mock_sqlite.assert_called_once()
 
     @pytest.mark.asyncio
+    @pytest.mark.skipif(not _pro_deps_available, reason="Pro deps (numpy/hnswlib) not installed")
     async def test_per_brain_caching(self, tmp_path: Path) -> None:
         """Each brain should get its own cached InfinityDB instance."""
         cfg = _make_config(tmp_path)
@@ -192,6 +200,7 @@ class TestGetInfinityDBStorage:
         _storage_cache.pop("inf:brain-b", None)
 
     @pytest.mark.asyncio
+    @pytest.mark.skipif(not _pro_deps_available, reason="Pro deps (numpy/hnswlib) not installed")
     async def test_migration_hint_logged(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:

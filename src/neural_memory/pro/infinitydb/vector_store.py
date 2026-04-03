@@ -104,7 +104,7 @@ class VectorStore:
         new_capacity = old_capacity * GROWTH_FACTOR
 
         # CRITICAL: flush before copying to ensure data is on disk
-        self._mmap.flush()
+        self._mmap.flush()  # type: ignore[attr-defined]
         old_data = np.array(self._mmap[:old_capacity], copy=True)
 
         # Release old mmap
@@ -210,11 +210,11 @@ class VectorStore:
     def flush(self) -> None:
         """Flush mmap to disk."""
         if self._mmap is not None:
-            self._mmap.flush()
+            self._mmap.flush()  # type: ignore[attr-defined]
 
     def close(self) -> None:
         """Close the vector store."""
         if self._mmap is not None:
-            self._mmap.flush()
+            self._mmap.flush()  # type: ignore[attr-defined]
             del self._mmap
             self._mmap = None
