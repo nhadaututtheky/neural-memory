@@ -37,7 +37,7 @@ Add to your `.mcp.json`:
 - **Tiered memory** — HOT/WARM/COLD with auto-tier promotion
 - **3 storage backends** — SQLite, PostgreSQL, InfinityDB (Pro)
 - **Cloud sync** — Cloudflare Workers hub with encryption
-- **5800+ tests**, Python 3.11+, MIT licensed
+- **5900+ tests**, Python 3.11+, MIT licensed
 
 ## Links
 

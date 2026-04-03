@@ -323,7 +323,7 @@ Zero LLM calls, zero API cost. [Full benchmarks →](docs/benchmarks.md)
 ```bash
 git clone https://github.com/nhadaututtheky/neural-memory
 cd neural-memory && pip install -e ".[dev]"
-pytest tests/ -v          # 5800+ tests
+pytest tests/ -v          # 5900+ tests
 ruff check src/ tests/    # Lint
 ```
 
