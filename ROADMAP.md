@@ -4,7 +4,7 @@
 > Every item passes the VISION.md 4-question test + brain test.
 > ZERO LLM dependency — pure algorithmic, regex, graph-based.
 
-**Current state**: v4.27.1 — 55 MCP tools, 5800+ tests, schema v38, SQLite + PostgreSQL + InfinityDB backends, neuroscience engine (10 brain-inspired algorithms), tiered memory (HOT/WARM/COLD + auto-tier + domain boundaries), decision intelligence, 7-module handler architecture, Pro bundled in main package (license-gated).
+**Current state**: v4.27.1 — 55 MCP tools, 5900+ tests, schema v38, SQLite + PostgreSQL + InfinityDB backends, neuroscience engine (10 brain-inspired algorithms), tiered memory (HOT/WARM/COLD + auto-tier + domain boundaries), decision intelligence, 7-module handler architecture, Pro bundled in main package (license-gated).
 **Architecture**: Spreading activation reflex engine, biological memory model, MCP standard.
 
 ---
@@ -88,14 +88,14 @@
 - [x] Phase 3: `nmem serve` integration, debounce (2s), metrics
 - **Brain test**: Não tự hấp thụ thông tin từ môi trường → Yes
 
-### A3. Brain Quality Track C — Vertical Intelligence
+### A3. Brain Quality Track C — Vertical Intelligence ✅
 
 **Problem**: Brain treats all content the same. Domain-specific entities (financial amounts, legal references) deserve specialized extraction and encoding.
 
-**Scope**: 3 sub-phases (plan: `.rune/plan-brain-quality.md`)
-- [ ] C1+C2: Domain entity types + structured data encoding (regex-based, no LLM)
-- [ ] C3: Cross-encoder reranking (optional `bge-reranker` post-SA refinement)
-- [x] C4: Agent visualization (`nmem_visualize` → Vega-Lite/markdown/ASCII charts) — shipped
+**Scope**: 3 sub-phases (plan: `.rune/plan-brain-quality.md`) — **all shipped**
+- [x] C1+C2: Domain entity types + structured data encoding (regex-based, no LLM) — shipped v4.25
+- [x] C3: Cross-encoder reranking (optional `bge-reranker` post-SA refinement) — shipped v4.25
+- [x] C4: Agent visualization (`nmem_visualize` → Vega-Lite/markdown/ASCII charts) — shipped v4.25
 - **Brain test**: Kế toán nhớ "ROE" khác "Paris" → Yes
 
 ### A4. Stability & Polish
@@ -140,6 +140,45 @@
 - **Brain test**: Não có working memory (nhanh) vs long-term memory (chậm) → Yes
 - **Backward compatible**: default `warm` → existing memories unchanged
 
+### A7. Recall Intelligence — Smarter Context, Fewer Mistakes
+
+**Problem**: Brain stores both mistakes and corrections, but recall doesn't know which supersedes which. Agents repeat old wrong approaches because:
+1. RESOLVED_BY/EVOLVES_FROM synapses are stored but **ignored during recall ranking**
+2. Error demotion only reduces activation 50-75% — errors still appear in context
+3. Workflow habits (BEFORE synapses) don't boost recall — treated like any other synapse
+4. `report_outcome` updates metadata but creates no synapses → outcomes don't feed back into retrieval
+5. No "follow the correction chain" logic — agent sees the bug, not the fix
+
+**Scope**: 4 phases (plan: `.rune/plan-recall-intelligence.md`)
+
+#### Phase 1: Supersession-Aware Recall
+- [ ] During activation spread, if neuron has `_resolved_by` → auto-inject the resolver with boosted score
+- [ ] Superseded neurons demoted to ghost-level (show as "outdated: see X" hint, not full content)
+- [ ] EVOLVES_FROM chain following: always surface the LATEST version of a decision/workflow
+- [ ] "Correction chain" metadata: when recalling error, append "Fixed by: {resolver content}"
+- **Brain test**: Não nhớ cách sửa chứ không lặp lại lỗi → Yes
+
+#### Phase 2: Outcome-Driven Learning
+- [ ] `report_outcome` creates VERIFIED_BY (success) or FALSIFIED_BY (failure) synapses → feeds back into graph
+- [ ] Success rate affects recall ranking: high success_rate → boost, low → demote
+- [ ] Failure modes stored as synapses (LEADS_TO error type) → agent warned before repeating
+- [ ] "Confidence score" per memory: `success_count / execution_count` visible in context
+- **Brain test**: Não học từ kết quả, không chỉ từ kinh nghiệm → Yes
+
+#### Phase 3: Workflow Recall Boost
+- [ ] Habit synapses (BEFORE) get activation boost proportional to `_habit_frequency`
+- [ ] When recalling step N of a workflow, auto-prime step N+1 (predictive priming v2)
+- [ ] Workflow version tracking: old workflow → new workflow via EVOLVES_FROM → recall latest
+- [ ] "Workflow context" mode: recall all steps of a detected workflow, not just keyword matches
+- **Brain test**: Thói quen lặp đi lặp lại trở thành phản xạ → Yes
+
+#### Phase 4: Cross-Session Context Bridge
+- [ ] Session-end auto-summary: corrections made, decisions taken, patterns discovered
+- [ ] Session-start injection: most recent corrections/decisions for the active domain
+- [ ] "Correction memory" type: explicitly stores "old way → new way" with RESOLVED_BY
+- [ ] Inter-session learning: if Agent A fixes bug X, Agent B's next session recalls the fix
+- **Brain test**: Ngủ dậy nhớ bài học hôm qua, không lặp sai → Yes
+
 **Target**: v5.0 = "production-ready for teams" release.
 
 ---
@@ -177,9 +216,9 @@
 **Problem**: Users don't know NeuralMemory exists. Need to be where they search.
 
 **Scope**:
-- [ ] MCP Registry listing (modelcontextprotocol.io)
-- [ ] awesome-mcp-servers PR (punkpeye/awesome-mcp-servers)
-- [ ] PyPI package optimization (description, classifiers, keywords)
+- [x] MCP Registry listing (modelcontextprotocol.io)
+- [x] awesome-mcp-servers PR (punkpeye/awesome-mcp-servers)
+- [x] PyPI package optimization (description, classifiers, keywords)
 - [x] npm package for OpenClaw plugin (v1.16.0, ClawHub marketplace)
 - [ ] Blog posts: "NeuralMemory vs Mem0", "Why spreading activation beats RAG"
 - [ ] HuggingFace Spaces demo polished + promoted
@@ -413,4 +452,4 @@ Every roadmap item must pass:
 ---
 
 *See [VISION.md](VISION.md) for the north star guiding all decisions.*
-*Last updated: 2026-04-02*
+*Last updated: 2026-04-03*
