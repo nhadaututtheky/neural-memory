@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import UTC
+
 import pytest
 
-from neural_memory.storage.sql.dialect import Dialect
-from neural_memory.storage.sql.sqlite_dialect import SQLiteDialect
 from neural_memory.storage.sql.postgres_dialect import PostgresDialect
-
+from neural_memory.storage.sql.sqlite_dialect import SQLiteDialect
 
 # ── SQLiteDialect ───────────────────────────────────────────────────
 
@@ -198,16 +198,16 @@ class TestPostgresDialectFeatures:
 
 class TestPostgresDialectDatetime:
     def test_serialize_naive(self):
-        from datetime import datetime, timezone
+        from datetime import datetime
         d = PostgresDialect()
         dt = datetime(2026, 1, 1, 12, 0, 0)
         result = d.serialize_dt(dt)
-        assert result.tzinfo == timezone.utc
+        assert result.tzinfo == UTC
 
     def test_serialize_aware(self):
-        from datetime import datetime, timezone
+        from datetime import datetime
         d = PostgresDialect()
-        dt = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        dt = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
         result = d.serialize_dt(dt)
         assert result is dt
 

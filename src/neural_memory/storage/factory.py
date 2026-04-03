@@ -8,12 +8,12 @@ from typing import TYPE_CHECKING, Any
 from neural_memory.core.brain_mode import BrainMode, BrainModeConfig
 from neural_memory.storage.memory_store import InMemoryStorage
 from neural_memory.storage.shared_store import SharedStorage
-from neural_memory.storage.sqlite_store import SQLiteStorage
 
 # Unified SQL adapter (new)
-from neural_memory.storage.sql import SQLStorage, Dialect
-from neural_memory.storage.sql.sqlite_dialect import SQLiteDialect
+from neural_memory.storage.sql import SQLStorage
 from neural_memory.storage.sql.postgres_dialect import PostgresDialect
+from neural_memory.storage.sql.sqlite_dialect import SQLiteDialect
+from neural_memory.storage.sqlite_store import SQLiteStorage
 
 logger = logging.getLogger(__name__)
 
@@ -80,8 +80,8 @@ async def create_storage(
                 # Expects local_path to be unused; connection params come
                 # from environment or a future config extension.  For now
                 # provide sensible defaults that can be overridden.
-                dialect = PostgresDialect()
-                unified = SQLStorage(dialect)
+                pg_dialect = PostgresDialect()
+                unified = SQLStorage(pg_dialect)
                 await unified.initialize()
                 unified.set_brain(brain_id)
                 logger.info("Using unified SQLStorage with PostgresDialect")
