@@ -116,6 +116,17 @@ export default function SettingsPage() {
                 )}
               </div>
             </div>
+            {license?.is_pro && license?.pro_deps_missing && (
+              <div className="mt-3 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm">
+                <p className="font-medium text-yellow-400">Pro dependencies missing</p>
+                <p className="text-muted-foreground mt-1">
+                  Missing: {license.pro_deps_missing.join(", ")}
+                </p>
+                <code className="mt-2 block rounded bg-muted px-2 py-1 text-xs select-all">
+                  pip install neural-memory[pro]
+                </code>
+              </div>
+            )}
           </CardContent>
         </Card>
 

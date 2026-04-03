@@ -1,7 +1,7 @@
-"""Neural Memory Pro — Advanced features bundled in the main package.
+"""Neural Memory Pro — Advanced features unlocked with a license key.
 
-Pro features are included with neural-memory. Activate with a license key.
-All Pro dependencies (numpy, hnswlib, msgpack) are bundled in the main install.
+Pro features are included with neural-memory but require optional dependencies.
+Install with: pip install neural-memory[pro]
 """
 
 from __future__ import annotations
@@ -12,8 +12,8 @@ PRO_VERSION = "0.3.0"
 def is_pro_deps_installed() -> bool:
     """Return True if all Pro dependencies are installed.
 
-    Since Pro deps are now bundled in main dependencies, this always returns True
-    unless the user manually uninstalled numpy/hnswlib/msgpack.
+    Pro deps (numpy, hnswlib, msgpack) are optional — install with:
+    pip install neural-memory[pro]
     """
     try:
         import hnswlib as _hnswlib  # noqa: F401
@@ -42,7 +42,7 @@ def get_missing_deps() -> list[str]:
     return missing
 
 
-PRO_INSTALL_HINT = "pip install neural-memory  # Pro deps are bundled"
+PRO_INSTALL_HINT = "pip install neural-memory[pro]"
 
 __all__ = [
     "PRO_VERSION",

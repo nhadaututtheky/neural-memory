@@ -1589,12 +1589,18 @@ async def get_license() -> dict[str, Any]:
     from neural_memory.unified_config import get_config
 
     cfg = get_config(reload=True)
+    from neural_memory.pro import get_missing_deps, is_pro_deps_installed
+
     result: dict[str, Any] = {
         "tier": cfg.license.tier,
         "is_pro": cfg.is_pro(),
         "activated_at": cfg.license.activated_at,
         "expires_at": cfg.license.expires_at,
+        "pro_deps_installed": is_pro_deps_installed(),
     }
+    if cfg.is_pro() and not is_pro_deps_installed():
+        result["pro_deps_missing"] = get_missing_deps()
+        result["pro_deps_install_hint"] = "pip install neural-memory[pro]"
     if not cfg.is_pro():
         from neural_memory.mcp.sync_handler import PRO_LANDING_URL
 

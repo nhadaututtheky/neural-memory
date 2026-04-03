@@ -279,6 +279,35 @@ def shared_activate(
         typer.echo("    nmem storage switch infinitydb")
         typer.echo()
 
+    # Check if Pro deps are installed, offer to install if missing
+    from neural_memory.pro import get_missing_deps
+
+    missing = get_missing_deps()
+    if missing:
+        typer.secho(
+            f"  Pro dependencies missing: {', '.join(missing)}",
+            fg=typer.colors.YELLOW,
+        )
+        install_now = typer.confirm("  Install them now? (pip install neural-memory[pro])")
+        if install_now:
+            import subprocess
+            import sys
+
+            typer.echo("  Installing Pro dependencies...")
+            result_pip = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "neural-memory[pro]"],
+                capture_output=True,
+                text=True,
+            )
+            if result_pip.returncode == 0:
+                typer.secho("  [OK] Pro dependencies installed!", fg=typer.colors.GREEN)
+            else:
+                typer.secho("  [FAILED] Install failed. Run manually:", fg=typer.colors.RED)
+                typer.echo("    pip install neural-memory[pro]")
+        else:
+            typer.echo("  Run later: pip install neural-memory[pro]")
+        typer.echo()
+
     typer.secho("Restart your AI tool to apply Pro features.", fg=typer.colors.BRIGHT_BLACK)
 
 

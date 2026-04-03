@@ -443,4 +443,7 @@ export interface LicenseResponse {
   is_pro: boolean
   activated_at: string
   expires_at: string
+  pro_deps_installed?: boolean
+  pro_deps_missing?: string[]
+  pro_deps_install_hint?: string
 }
