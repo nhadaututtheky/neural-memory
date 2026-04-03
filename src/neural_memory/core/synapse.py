@@ -98,6 +98,114 @@ class SynapseType(StrEnum):
     RAISES = "raises"  # Function -> Exception (error contract)
 
 
+class SynapseRole(StrEnum):
+    """Causal role of a synapse — determines recall behavior.
+
+    Instead of special-casing each synapse type during recall, classify
+    all types into causal roles. One post-activation pass handles all roles.
+    """
+
+    SUPERSESSION = "supersession"  # old→new: demote source, boost target
+    REINFORCEMENT = "reinforcement"  # evidence strengthens belief
+    WEAKENING = "weakening"  # counter-evidence weakens belief
+    SEQUENTIAL = "sequential"  # step N primes step N+1
+    STRUCTURAL = "structural"  # context/hierarchy — standard traversal
+    LATERAL = "lateral"  # co-occurrence, bidirectional
+    PASSIVE = "passive"  # audit trail — skip during recall
+
+
+# Mapping of every synapse type to its causal role.
+# This drives recall behavior: _apply_causal_semantics() uses roles,
+# not individual type checks.
+SYNAPSE_ROLES: dict[SynapseType, SynapseRole] = {
+    # ── Supersession: recall prefers target over source ───────────
+    SynapseType.RESOLVED_BY: SynapseRole.SUPERSESSION,
+    SynapseType.SUPERSEDES: SynapseRole.SUPERSESSION,
+    SynapseType.EVOLVES_FROM: SynapseRole.SUPERSESSION,
+    SynapseType.FALSIFIED_BY: SynapseRole.SUPERSESSION,
+    # ── Reinforcement: evidence boosts hypothesis ─────────────────
+    SynapseType.EVIDENCE_FOR: SynapseRole.REINFORCEMENT,
+    SynapseType.VERIFIED_BY: SynapseRole.REINFORCEMENT,
+    SynapseType.EFFECTIVE_FOR: SynapseRole.REINFORCEMENT,
+    # ── Weakening: counter-evidence demotes hypothesis ────────────
+    SynapseType.EVIDENCE_AGAINST: SynapseRole.WEAKENING,
+    SynapseType.CONTRADICTS: SynapseRole.WEAKENING,
+    SynapseType.PREVENTS: SynapseRole.WEAKENING,
+    # ── Sequential: step N primes step N+1 ────────────────────────
+    SynapseType.BEFORE: SynapseRole.SEQUENTIAL,
+    SynapseType.AFTER: SynapseRole.SEQUENTIAL,
+    SynapseType.LEADS_TO: SynapseRole.SEQUENTIAL,
+    SynapseType.CALLS: SynapseRole.SEQUENTIAL,
+    SynapseType.ENABLES: SynapseRole.SEQUENTIAL,
+    SynapseType.CAUSED_BY: SynapseRole.SEQUENTIAL,
+    # ── Structural: context/hierarchy — standard weight traversal ─
+    SynapseType.IS_A: SynapseRole.STRUCTURAL,
+    SynapseType.HAS_PROPERTY: SynapseRole.STRUCTURAL,
+    SynapseType.INVOLVES: SynapseRole.STRUCTURAL,
+    SynapseType.CONTAINS: SynapseRole.STRUCTURAL,
+    SynapseType.AT_LOCATION: SynapseRole.STRUCTURAL,
+    SynapseType.NEAR: SynapseRole.STRUCTURAL,
+    SynapseType.INHERITS: SynapseRole.STRUCTURAL,
+    SynapseType.IMPLEMENTS: SynapseRole.STRUCTURAL,
+    SynapseType.DEFINED_IN: SynapseRole.STRUCTURAL,
+    SynapseType.IMPORTS: SynapseRole.STRUCTURAL,
+    SynapseType.DEPENDS_ON: SynapseRole.STRUCTURAL,
+    SynapseType.RAISES: SynapseRole.STRUCTURAL,
+    SynapseType.HAS_VALUE: SynapseRole.STRUCTURAL,
+    SynapseType.IN_ROW: SynapseRole.STRUCTURAL,
+    SynapseType.IN_COLUMN: SynapseRole.STRUCTURAL,
+    SynapseType.SOURCE_OF: SynapseRole.STRUCTURAL,
+    SynapseType.PREDICTED: SynapseRole.STRUCTURAL,
+    SynapseType.DERIVED_FROM: SynapseRole.STRUCTURAL,
+    SynapseType.REGULATES: SynapseRole.STRUCTURAL,
+    # ── Lateral: bidirectional co-occurrence ───────────────────────
+    SynapseType.CO_OCCURS: SynapseRole.LATERAL,
+    SynapseType.RELATED_TO: SynapseRole.LATERAL,
+    SynapseType.SIMILAR_TO: SynapseRole.LATERAL,
+    SynapseType.USED_WITH: SynapseRole.LATERAL,
+    # ── Passive: audit/metadata — skip during recall ──────────────
+    SynapseType.STORED_BY: SynapseRole.PASSIVE,
+    SynapseType.VERIFIED_AT: SynapseRole.PASSIVE,
+    SynapseType.APPROVED_BY: SynapseRole.PASSIVE,
+    SynapseType.ALIAS: SynapseRole.PASSIVE,
+    SynapseType.FELT: SynapseRole.PASSIVE,
+    SynapseType.EVOKES: SynapseRole.PASSIVE,
+    SynapseType.HAPPENED_AT: SynapseRole.PASSIVE,
+    SynapseType.DURING: SynapseRole.PASSIVE,
+    SynapseType.MEASURED_AT: SynapseRole.PASSIVE,
+}
+
+# Convenience frozensets for fast membership checks
+SUPERSESSION_TYPES: frozenset[SynapseType] = frozenset(
+    st for st, role in SYNAPSE_ROLES.items() if role == SynapseRole.SUPERSESSION
+)
+REINFORCEMENT_TYPES: frozenset[SynapseType] = frozenset(
+    st for st, role in SYNAPSE_ROLES.items() if role == SynapseRole.REINFORCEMENT
+)
+WEAKENING_TYPES: frozenset[SynapseType] = frozenset(
+    st for st, role in SYNAPSE_ROLES.items() if role == SynapseRole.WEAKENING
+)
+SEQUENTIAL_TYPES: frozenset[SynapseType] = frozenset(
+    st for st, role in SYNAPSE_ROLES.items() if role == SynapseRole.SEQUENTIAL
+)
+PASSIVE_TYPES: frozenset[SynapseType] = frozenset(
+    st for st, role in SYNAPSE_ROLES.items() if role == SynapseRole.PASSIVE
+)
+# Active roles = types that should be fetched for causal processing
+ACTIVE_ROLE_TYPES: frozenset[SynapseType] = (
+    SUPERSESSION_TYPES | REINFORCEMENT_TYPES | WEAKENING_TYPES | SEQUENTIAL_TYPES
+)
+
+# Supersession types where source=NEW, target=OLD (inverted directionality).
+# For these, the SOURCE is the latest version and should be BOOSTED (not demoted).
+# SUPERSEDES: "new_schema SUPERSEDES old_schema" → source=new, target=old
+# EVOLVES_FROM: "new_decision EVOLVES_FROM old_decision" → source=new, target=old
+SUPERSESSION_SOURCE_IS_NEWER: frozenset[SynapseType] = frozenset({
+    SynapseType.SUPERSEDES,
+    SynapseType.EVOLVES_FROM,
+})
+
+
 class Direction(StrEnum):
     """Direction of synapse connection."""
 
