@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from neural_memory.core.project import Project
 from neural_memory.storage.sql.dialect import Dialect
 from neural_memory.utils.timeutils import utcnow
-
-if TYPE_CHECKING:
-    pass
 
 
 class ProjectsMixin:
@@ -156,7 +153,7 @@ def _dialect_row_to_project(row: dict[str, object]) -> Project:
         start_date=_safe_dt(row["start_date"]) or utcnow(),
         end_date=_safe_dt(row["end_date"]),
         tags=frozenset(json.loads(str(row["tags"]))),
-        priority=int(row["priority"]),
+        priority=int(str(row["priority"])),
         metadata=json.loads(str(row["metadata"])) if row["metadata"] else {},
         created_at=_safe_dt(row["created_at"]) or utcnow(),
     )

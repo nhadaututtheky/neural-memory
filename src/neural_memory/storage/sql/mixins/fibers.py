@@ -63,6 +63,9 @@ class FiberMixin:
 
     _dialect: Dialect
 
+    def _get_brain_id(self) -> str:
+        raise NotImplementedError
+
     # ------------------------------------------------------------------ add
     # ------------------------------------------------------------------
 

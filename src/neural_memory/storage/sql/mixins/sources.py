@@ -5,14 +5,11 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from neural_memory.core.source import Source, SourceStatus, SourceType
 from neural_memory.storage.sql.dialect import Dialect
 from neural_memory.utils.timeutils import utcnow
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 

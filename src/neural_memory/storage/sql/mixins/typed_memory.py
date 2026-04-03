@@ -317,8 +317,6 @@ class TypedMemoryMixin:
         return int(row["cnt"]) if row else 0
 
     # ------------------------------------------------------------------
-    # expiring (soon)
-    # ------------------------------------------------------------------
 
     async def get_expiring_memories_for_fibers(
         self,

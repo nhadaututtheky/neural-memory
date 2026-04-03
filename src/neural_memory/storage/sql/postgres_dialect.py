@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Sequence
+from collections.abc import Sequence
+from datetime import UTC, datetime
+from typing import Any
 
 from neural_memory.storage.sql.dialect import Dialect
 
@@ -197,8 +198,6 @@ class PostgresDialect(Dialect):
         return f"INSERT INTO {table} ({cols}) VALUES ({phs}) ON CONFLICT ({conflict}) DO NOTHING"
 
     # ------------------------------------------------------------------
-    # FTS (tsvector)
-    # ------------------------------------------------------------------
 
     def fts_neuron_query(
         self, term_param: int, brain_id_param: int
@@ -242,7 +241,7 @@ class PostgresDialect(Dialect):
             return None
         # asyncpg accepts datetime objects directly
         if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
+            return dt.replace(tzinfo=UTC)
         return dt
 
     def normalize_dt(self, value: Any) -> datetime | None:
@@ -250,7 +249,7 @@ class PostgresDialect(Dialect):
             return None
         if isinstance(value, datetime):
             if value.tzinfo is None:
-                return value.replace(tzinfo=timezone.utc)
+                return value.replace(tzinfo=UTC)
             return value
         return datetime.fromisoformat(str(value))
 

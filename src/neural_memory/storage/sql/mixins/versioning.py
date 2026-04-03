@@ -7,13 +7,9 @@ import binascii
 import json
 import zlib
 from datetime import datetime
-from typing import TYPE_CHECKING
 
 from neural_memory.engine.brain_versioning import BrainVersion
 from neural_memory.storage.sql.dialect import Dialect
-
-if TYPE_CHECKING:
-    pass
 
 
 class VersioningMixin:
@@ -120,31 +116,35 @@ class VersioningMixin:
         return count > 0
 
 
-def _decompress_snapshot(raw_data: str) -> str:
+def _decompress_snapshot(raw_data: object) -> str:
     """Decompress snapshot data, with fallback for uncompressed legacy data."""
+    raw_str = str(raw_data)
     try:
-        compressed_bytes = base64.b64decode(raw_data)
+        compressed_bytes = base64.b64decode(raw_str)
         return zlib.decompress(compressed_bytes).decode("utf-8")
     except (zlib.error, binascii.Error):
         # Legacy uncompressed data - return as-is
-        return raw_data
+        return raw_str
 
 
 def _row_to_version(row: dict[str, object]) -> BrainVersion:
     """Convert a database row dict to a BrainVersion."""
     metadata_raw = row.get("metadata")
-    metadata = json.loads(metadata_raw) if metadata_raw else {}
+    metadata = json.loads(str(metadata_raw)) if metadata_raw else {}
+
+    created = row["created_at"]
+    created_dt = created if isinstance(created, datetime) else datetime.fromisoformat(str(created))
 
     return BrainVersion(
-        id=row["id"],
-        brain_id=row["brain_id"],
-        version_name=row["version_name"],
-        version_number=row["version_number"],
-        description=row["description"] or "",
-        neuron_count=row["neuron_count"],
-        synapse_count=row["synapse_count"],
-        fiber_count=row["fiber_count"],
-        snapshot_hash=row["snapshot_hash"],
-        created_at=row["created_at"] if isinstance(row["created_at"], datetime) else datetime.fromisoformat(str(row["created_at"])),
+        id=str(row["id"]),
+        brain_id=str(row["brain_id"]),
+        version_name=str(row["version_name"]),
+        version_number=int(str(row["version_number"])),
+        description=str(row["description"] or ""),
+        neuron_count=int(str(row["neuron_count"])),
+        synapse_count=int(str(row["synapse_count"])),
+        fiber_count=int(str(row["fiber_count"])),
+        snapshot_hash=str(row["snapshot_hash"]),
+        created_at=created_dt,
         metadata=metadata,
     )

@@ -240,6 +240,7 @@ ignore = [
 "src/neural_memory/utils/config.py" = ["S104"]   # configurable bind address
 "src/neural_memory/utils/simhash.py" = ["S324"]  # MD5 for fingerprint, not crypto
 "src/neural_memory/storage/sqlite_*.py" = ["S608"] # SQL with hardcoded column names
+"src/neural_memory/storage/sql/**" = ["S608"]      # parameterized SQL via dialect placeholders
 "src/neural_memory/cli/**" = ["T201", "S603", "S607", "S310"]  # CLI: print, subprocess, url open
 "src/neural_memory/storage/falkordb/**" = ["DTZ901"]  # naive UTC datetimes by design
 "src/neural_memory/safety/sensitive.py" = ["S105"] # pattern names, not actual secrets
@@ -308,6 +309,10 @@ module = "neural_memory.pro.infinitydb.vector_store"
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
+module = "neural_memory.storage.sql.*"
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
 module = "neural_memory.engine.doc_extractor"
 disallow_untyped_calls = false
 
@@ -332,6 +337,7 @@ branch = true
 omit = [
     "src/neural_memory/pro/infinitydb/*",
     "src/neural_memory/pro/storage_adapter*.py",
+    "src/neural_memory/storage/sql/*",
 ]
 
 [tool.coverage.report]

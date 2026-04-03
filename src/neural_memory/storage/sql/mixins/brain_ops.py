@@ -80,7 +80,7 @@ class BrainOpsMixin:
     def _get_brain_id(self) -> str:
         raise NotImplementedError
 
-    def set_brain(self, brain_id: str) -> None: ...  # noqa: E704
+    def set_brain(self, brain_id: str) -> None: ...
 
     # Protocol stubs for methods provided by other mixins
     async def add_project(self, project: Project) -> str:
@@ -189,16 +189,11 @@ class BrainOpsMixin:
             },
         )
 
-    # ================================================================
-    # import_brain
-    # ================================================================
-
     async def import_brain(
         self,
         snapshot: BrainSnapshot,
         target_brain_id: str | None = None,
     ) -> str:
-        d = self._dialect
         brain_id = target_brain_id or snapshot.brain_id
         config = BrainConfig(**snapshot.config)
         brain = Brain.create(
@@ -365,7 +360,7 @@ class BrainOpsMixin:
             "neurons",
         ):
             await d.execute(
-                f"DELETE FROM {table} WHERE brain_id = {d.ph(1)}",  # noqa: S608
+                f"DELETE FROM {table} WHERE brain_id = {d.ph(1)}",
                 [brain_id],
             )
         await d.execute(

@@ -18,7 +18,7 @@ from collections import deque
 from typing import TYPE_CHECKING, Any, Literal
 
 from neural_memory.core.neuron import Neuron
-from neural_memory.core.synapse import Direction, Synapse, SynapseType
+from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.storage.sql.row_mappers import (
     _row_to_joined_synapse,
     row_to_neuron,

@@ -6,13 +6,10 @@ import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from neural_memory.storage.sql.dialect import Dialect
 from neural_memory.utils.timeutils import utcnow
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 

@@ -16,39 +16,38 @@ Usage::
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from neural_memory.storage.base import NeuralStorage
 from neural_memory.storage.sql.dialect import Dialect
 
-# -- Core mixins (neurons, synapses, fibers, brain ops, typed memory, cognitive) --
-from neural_memory.storage.sql.mixins.neurons import NeuronMixin
-from neural_memory.storage.sql.mixins.synapses import SynapseMixin
-from neural_memory.storage.sql.mixins.fibers import FiberMixin
-from neural_memory.storage.sql.mixins.brain_ops import BrainOpsMixin
-from neural_memory.storage.sql.mixins.typed_memory import TypedMemoryMixin
-from neural_memory.storage.sql.mixins.cognitive import CognitiveMixin
-
 # -- Domain mixins (19 simple mixins) --
 from neural_memory.storage.sql.mixins.action_log import ActionLogMixin
 from neural_memory.storage.sql.mixins.alerts import AlertsMixin
+from neural_memory.storage.sql.mixins.brain_ops import BrainOpsMixin
 from neural_memory.storage.sql.mixins.calibration import CalibrationMixin
 from neural_memory.storage.sql.mixins.change_log import ChangeLogMixin
 from neural_memory.storage.sql.mixins.coactivation import CoActivationMixin
+from neural_memory.storage.sql.mixins.cognitive import CognitiveMixin
 from neural_memory.storage.sql.mixins.compression import CompressionMixin
 from neural_memory.storage.sql.mixins.depth_priors import DepthPriorsMixin
 from neural_memory.storage.sql.mixins.devices import DevicesMixin
 from neural_memory.storage.sql.mixins.drift import DriftMixin
 from neural_memory.storage.sql.mixins.entity_refs import EntityRefsMixin
+from neural_memory.storage.sql.mixins.fibers import FiberMixin
 from neural_memory.storage.sql.mixins.maturation import MaturationMixin
 from neural_memory.storage.sql.mixins.merkle import MerkleMixin
+
+# -- Core mixins (neurons, synapses, fibers, brain ops, typed memory, cognitive) --
+from neural_memory.storage.sql.mixins.neurons import NeuronMixin
 from neural_memory.storage.sql.mixins.projects import ProjectsMixin
 from neural_memory.storage.sql.mixins.reviews import ReviewsMixin
 from neural_memory.storage.sql.mixins.sessions import SessionsMixin
 from neural_memory.storage.sql.mixins.sources import SourcesMixin
+from neural_memory.storage.sql.mixins.synapses import SynapseMixin
 from neural_memory.storage.sql.mixins.sync_state import SyncStateMixin
 from neural_memory.storage.sql.mixins.tool_events import ToolEventsMixin
 from neural_memory.storage.sql.mixins.training_files import TrainingFilesMixin
+from neural_memory.storage.sql.mixins.typed_memory import TypedMemoryMixin
 from neural_memory.storage.sql.mixins.versioning import VersioningMixin
 
 # -- Schema DDL --

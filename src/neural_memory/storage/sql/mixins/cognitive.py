@@ -28,7 +28,8 @@ _MAX_HOT_SLOTS = 20
 def _parse_related_neuron_ids(raw: Any) -> list[str]:
     """Safely parse a JSON-encoded list of neuron IDs."""
     try:
-        return json.loads(raw or "[]")
+        result: list[str] = json.loads(raw or "[]")
+        return result
     except (json.JSONDecodeError, TypeError):
         return []
 

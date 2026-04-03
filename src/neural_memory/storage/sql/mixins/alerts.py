@@ -4,15 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import timedelta
-from typing import TYPE_CHECKING, Any
+from datetime import datetime, timedelta
 
 from neural_memory.core.alert import Alert, AlertStatus, AlertType
 from neural_memory.storage.sql.dialect import Dialect
 from neural_memory.utils.timeutils import utcnow
-
-if TYPE_CHECKING:
-    from neural_memory.core.alert import AlertStatus, AlertType
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +16,8 @@ logger = logging.getLogger(__name__)
 _DEDUP_COOLDOWN = timedelta(hours=6)
 
 
-def _safe_parse_dt(val: object) -> "datetime | None":
+def _safe_parse_dt(val: object) -> datetime | None:
     """Parse a datetime value safely (works with both str and native datetime)."""
-    from datetime import datetime
-
     if val is None:
         return None
     if isinstance(val, datetime):

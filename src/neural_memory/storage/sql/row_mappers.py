@@ -12,7 +12,7 @@ normalization, but default to auto-detection so callers don't need changes:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from neural_memory.core.brain import Brain, BrainConfig
@@ -25,8 +25,8 @@ from neural_memory.core.memory_types import (
     TypedMemory,
 )
 from neural_memory.core.neuron import Neuron, NeuronState, NeuronType
-from neural_memory.core.project import Project
 from neural_memory.core.synapse import Direction, Synapse, SynapseType
+from neural_memory.utils.timeutils import utcnow
 
 
 def _get(row: Any, key: str, default: Any = None) -> Any:
@@ -49,7 +49,7 @@ def _normalize_dt(value: Any) -> datetime | None:
         return None
     if isinstance(value, datetime):
         if value.tzinfo is not None:
-            return value.astimezone(timezone.utc).replace(tzinfo=None)
+            return value.astimezone(UTC).replace(tzinfo=None)
         return value
     return datetime.fromisoformat(str(value))
 
@@ -71,7 +71,7 @@ def row_to_neuron(row: Any, dialect: Any = None) -> Neuron:
         content=str(row["content"]),
         metadata=json.loads(row["metadata"]) if row["metadata"] else {},
         content_hash=int(_get(row, "content_hash", 0)),
-        created_at=_normalize_dt(row["created_at"]),
+        created_at=_normalize_dt(row["created_at"]) or utcnow(),
         ephemeral=bool(_get(row, "ephemeral", False)),
     )
 
@@ -84,7 +84,7 @@ def row_to_neuron_state(row: Any, dialect: Any = None) -> NeuronState:
         access_frequency=int(_get(row, "access_frequency", 0)),
         last_activated=_normalize_dt(_get(row, "last_activated")),
         decay_rate=float(_get(row, "decay_rate", 0.1)),
-        created_at=_normalize_dt(row["created_at"]),
+        created_at=_normalize_dt(row["created_at"]) or utcnow(),
         firing_threshold=float(_get(row, "firing_threshold", 0.3)),
         refractory_until=_normalize_dt(_get(row, "refractory_until")),
         refractory_period_ms=float(_get(row, "refractory_period_ms", 500.0)),
@@ -104,7 +104,7 @@ def row_to_synapse(row: Any, dialect: Any = None) -> Synapse:
         metadata=json.loads(row["metadata"]) if row["metadata"] else {},
         reinforced_count=int(_get(row, "reinforced_count", 0)),
         last_activated=_normalize_dt(_get(row, "last_activated")),
-        created_at=_normalize_dt(row["created_at"]),
+        created_at=_normalize_dt(row["created_at"]) or utcnow(),
     )
 
 
@@ -141,7 +141,7 @@ def row_to_fiber(row: Any, dialect: Any = None) -> Fiber:
         metadata=metadata,
         compression_tier=int(_get(row, "compression_tier", 0)),
         pinned=bool(_get(row, "pinned", False)),
-        created_at=_normalize_dt(row["created_at"]),
+        created_at=_normalize_dt(row["created_at"]) or utcnow(),
     )
 
 
@@ -190,8 +190,8 @@ def row_to_brain(row: Any, dialect: Any = None) -> Brain:
         owner_id=row["owner_id"],
         is_public=bool(_get(row, "is_public", False)),
         shared_with=shared_with,
-        created_at=_normalize_dt(row["created_at"]),
-        updated_at=_normalize_dt(_get(row, "updated_at")),
+        created_at=_normalize_dt(row["created_at"]) or utcnow(),
+        updated_at=_normalize_dt(_get(row, "updated_at")) or utcnow(),
     )
 
 
@@ -269,7 +269,7 @@ def row_to_typed_memory(row: Any, dialect: Any = None) -> TypedMemory:
         project_id=_get(row, "project_id"),
         tags=frozenset(tags_list),
         metadata=metadata,
-        created_at=_normalize_dt(row["created_at"]),
+        created_at=_normalize_dt(row["created_at"]) or utcnow(),
         trust_score=trust_score,
         source=source,
         tier=tier,
@@ -293,5 +293,5 @@ def _row_to_joined_synapse(row: Any, dialect: Any = None) -> Synapse:
         metadata=_parse_json_field(_get(row, "s_metadata")) or {},
         reinforced_count=int(_get(row, "reinforced_count", 0)),
         last_activated=_normalize_dt(_get(row, "s_last_activated")),
-        created_at=created or datetime.utcnow(),
+        created_at=created or utcnow(),
     )

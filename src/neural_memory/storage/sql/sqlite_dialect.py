@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 import aiosqlite
 
@@ -92,7 +93,7 @@ class SQLiteDialect(Dialect):
             if not rows:
                 return []
             columns = [desc[0] for desc in cursor.description]
-            return [dict(zip(columns, row)) for row in rows]
+            return [dict(zip(columns, row, strict=False)) for row in rows]
 
     async def fetch_one(self, sql: str, params: Sequence[Any] = ()) -> dict[str, Any] | None:
         conn = self._ensure_conn()
@@ -101,7 +102,7 @@ class SQLiteDialect(Dialect):
             if row is None:
                 return None
             columns = [desc[0] for desc in cursor.description]
-            return dict(zip(columns, row))
+            return dict(zip(columns, row, strict=False))
 
     async def execute_many(self, sql: str, args_list: Sequence[Sequence[Any]]) -> None:
         conn = self._ensure_conn()
@@ -174,8 +175,6 @@ class SQLiteDialect(Dialect):
         return f"INSERT INTO {table} ({cols}) VALUES ({phs}) ON CONFLICT ({conflict}) DO NOTHING"
 
     # ------------------------------------------------------------------
-    # FTS (FTS5)
-    # ------------------------------------------------------------------
 
     def fts_neuron_query(
         self, term_param: int, brain_id_param: int
@@ -183,7 +182,7 @@ class SQLiteDialect(Dialect):
         if not self._has_fts:
             raise NotImplementedError("FTS5 not available on this SQLite database")
         from_clause = "neurons n JOIN neurons_fts fts ON n.rowid = fts.rowid"
-        where_clause = f"fts.neurons_fts MATCH ? AND fts.brain_id = ?"
+        where_clause = "fts.neurons_fts MATCH ? AND fts.brain_id = ?"
         return from_clause, where_clause
 
     def fts_fiber_query(
@@ -192,7 +191,7 @@ class SQLiteDialect(Dialect):
         if not self._has_fts:
             raise NotImplementedError("FTS5 not available on this SQLite database")
         from_clause = "fibers f JOIN fibers_fts fts ON f.rowid = fts.rowid"
-        where_clause = f"fts.fibers_fts MATCH ? AND fts.brain_id = ?"
+        where_clause = "fts.fibers_fts MATCH ? AND fts.brain_id = ?"
         return from_clause, where_clause
 
     # ------------------------------------------------------------------

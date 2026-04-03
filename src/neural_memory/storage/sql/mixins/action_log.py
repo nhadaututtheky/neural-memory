@@ -4,15 +4,12 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import uuid4
 
 from neural_memory.core.action_event import ActionEvent
 from neural_memory.storage.sql.dialect import Dialect
 from neural_memory.utils.timeutils import utcnow
-
-if TYPE_CHECKING:
-    pass
 
 
 class ActionLogMixin:
