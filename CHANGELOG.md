@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.28.0] — 2026-04-03
+
+### Fixed
+
+- **Pro deps now optional** (#125): numpy, hnswlib, msgpack moved to `[pro]` extra. Free users on Python 3.14+ were blocked by hnswlib C++ build failure. Now `pip install neural-memory` works everywhere; `pip install neural-memory[pro]` adds Pro deps.
+- **CLI activate auto-installs**: after activating a Pro key, CLI detects missing deps and offers to install them automatically.
+- **Dashboard Pro deps banner**: Settings page shows yellow warning with install command when Pro is activated but deps are missing.
+- **ClawHub display name**: fixed ".Claude Plugin" → "Neural Memory" via `--name` flag on publish.
+- **CI test fix**: mock `detect_project_root` in surface path test to prevent `.neuralmemory/` dir interference on CI runner.
+
+### Added
+
+- **InfinityDB mixin refactor**: split InfinityDBStorage into 3 mixins (typed, sync, extras) for maintainability, with dedicated test files.
+- **Pay-hub license grant**: new `/admin/license/grant` endpoint for direct D1 key insertion; `/admin/license/sync` now auto-inserts into D1.
+- **GitHub stars + download badges** on README.
+- **Distribution**: published to MCP Registry, submitted to awesome-mcp-servers lists.
+
 ## [4.27.1] — 2026-04-02
 
 ### Changed
