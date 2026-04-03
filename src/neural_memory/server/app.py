@@ -10,13 +10,13 @@ from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
-from neural_memory.server.auth import APIKeyMiddleware
-from neural_memory.server.rate_limit import RateLimitMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from neural_memory import __version__
+from neural_memory.server.auth import APIKeyMiddleware
 from neural_memory.server.models import HealthResponse, ReadyResponse
+from neural_memory.server.rate_limit import RateLimitMiddleware
 from neural_memory.server.routes import (
     brain_router,
     consolidation_router,

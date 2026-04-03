@@ -13,12 +13,11 @@ import logging
 import os
 import time
 from collections import deque
-from typing import Deque
+from typing import Any
 
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.requests import Request
+from starlette.requests import Request  # noqa: TC002
 from starlette.responses import JSONResponse, Response
-from starlette.types import ASGIApp
+from starlette.types import ASGIApp  # noqa: TC002
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +46,20 @@ def _client_ip(request: Request) -> str:
         # Take the leftmost (originating) IP
         return forwarded.split(",")[0].strip()
     if request.client:
-        return request.client.host
+        return str(request.client.host)
     return "unknown"
 
 
-class RateLimitMiddleware(BaseHTTPMiddleware):
+# BaseHTTPMiddleware is typed as Any in starlette stubs, suppress mypy
+_Base: Any = None
+try:
+    from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+    _Base = BaseHTTPMiddleware
+except ImportError:
+    pass
+
+
+class RateLimitMiddleware(_Base):  # type: ignore[misc]
     """Per-IP sliding-window rate limiter.
 
     Uses an in-memory deque per IP to track request timestamps within
@@ -62,7 +70,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp) -> None:
         super().__init__(app)
         # ip → deque of request timestamps within current window
-        self._counters: dict[str, Deque[float]] = {}
+        self._counters: dict[str, deque[float]] = {}
         self._lock = asyncio.Lock()
         limit = _get_limit()
         window = _get_window()

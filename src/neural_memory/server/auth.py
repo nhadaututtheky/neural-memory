@@ -13,12 +13,11 @@ from __future__ import annotations
 import hmac
 import logging
 import os
-from typing import Sequence
+from typing import Any
 
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.requests import Request
+from starlette.requests import Request  # noqa: TC002
 from starlette.responses import JSONResponse, Response
-from starlette.types import ASGIApp
+from starlette.types import ASGIApp  # noqa: TC002
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +59,16 @@ def _extract_key(request: Request) -> str | None:
     return None
 
 
-class APIKeyMiddleware(BaseHTTPMiddleware):
+# BaseHTTPMiddleware is typed as Any in starlette stubs, suppress mypy
+_Base: Any = None
+try:
+    from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+    _Base = BaseHTTPMiddleware
+except ImportError:
+    pass
+
+
+class APIKeyMiddleware(_Base):  # type: ignore[misc]
     """Middleware that enforces API key authentication when configured.
 
     If NEURAL_MEMORY_API_KEY is not set, all requests are allowed through
