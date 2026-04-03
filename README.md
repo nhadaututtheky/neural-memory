@@ -1,6 +1,8 @@
 # NeuralMemory
 
+[![GitHub stars](https://img.shields.io/github/stars/nhadaututtheky/neural-memory?style=social)](https://github.com/nhadaututtheky/neural-memory/stargazers)
 [![PyPI](https://img.shields.io/pypi/v/neural-memory.svg)](https://pypi.org/project/neural-memory/)
+[![Downloads](https://img.shields.io/pypi/dm/neural-memory)](https://pypi.org/project/neural-memory/)
 [![CI](https://github.com/nhadaututtheky/neural-memory/workflows/CI/badge.svg)](https://github.com/nhadaututtheky/neural-memory/actions)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
@@ -329,7 +331,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Support
 
-If NeuralMemory is useful to you, consider [sponsoring](https://github.com/sponsors/nhadaututtheky) or starring the repo.
+If Neural Memory helps your AI agent remember, please consider giving it a star — it helps others discover the project and keeps development going.
+
+<a href="https://github.com/nhadaututtheky/neural-memory/stargazers">
+  <img src="https://img.shields.io/github/stars/nhadaututtheky/neural-memory?style=social" alt="Star on GitHub"/>
+</a>
+
+You can also [sponsor](https://github.com/sponsors/nhadaututtheky) the project.
 
 ## License
 
