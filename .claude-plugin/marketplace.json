@@ -1,5 +1,6 @@
 {
   "name": "neural-memory",
+  "displayName": "Neural Memory",
   "owner": {
     "name": "NeuralMemory Contributors",
     "email": ""
@@ -11,6 +12,7 @@
   "plugins": [
     {
       "name": "neural-memory",
+      "displayName": "Neural Memory",
       "source": {
         "source": "github",
         "repo": "nhadaututtheky/neural-memory"
