@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -411,16 +412,83 @@ class EvolutionHandler:
         }
 
     async def _record_tool_action(self, action_type: str, context: str = "") -> None:
-        """Record an action event for habit learning (fire-and-forget)."""
+        """Record an action event for habit learning (fire-and-forget).
+
+        Also feeds extracted topics from context into session EMA (A8 T2.3),
+        so tool activity influences topic affinity in future recalls.
+        """
         try:
             import os
 
             source = os.environ.get("NEURALMEMORY_SOURCE", "mcp")[:256]
+            session_id = f"{source}-{id(self)}"
             storage = await self.get_storage()
             await storage.record_action(
                 action_type=action_type,
                 action_context=context[:200] if context else "",
-                session_id=f"{source}-{id(self)}",
+                session_id=session_id,
             )
+
+            # A8 T2.3: Feed tool context into session EMA as supplementary signal
+            if context:
+                self._feed_tool_topics_to_ema(session_id, context, action_type)
         except Exception:
             logger.debug("Action recording failed (non-critical)", exc_info=True)
+
+    @staticmethod
+    def _feed_tool_topics_to_ema(
+        session_id: str, context: str, action_type: str
+    ) -> None:
+        """Extract topic keywords from tool context and feed into session EMA.
+
+        Uses half-weight alpha (0.15 vs default 0.3) so tool activity is a
+        supplementary signal — not as strong as explicit queries.
+
+        A8 Phase 2, Task 2.3.
+        """
+        try:
+            from neural_memory.engine.session_state import SessionManager
+            from neural_memory.extraction.keywords import extract_keywords
+
+            session_state = SessionManager.get_instance().get(session_id)
+            if session_state is None:
+                return
+
+            # Extract keywords from context (query text, content snippets)
+            keywords = extract_keywords(context)
+            if not keywords:
+                return
+
+            # Also extract file stems from paths (e.g., "retrieval.py" → "retrieval")
+            path_stems = re.findall(r"(\w+)\.(?:py|ts|js|tsx|jsx|rs|go)\b", context)
+
+            # H1 fix: split multi-word keywords into individual words
+            # so "auth middleware" → ["auth", "middleware"] matches cluster word-level split
+            word_topics: list[str] = []
+            for kw in keywords:
+                for word in kw.lower().split():
+                    if len(word) > 2:
+                        word_topics.append(word)
+            for stem in path_stems:
+                if len(stem) > 2:
+                    word_topics.append(stem.lower())
+
+            if not word_topics:
+                return
+
+            # Feed at half weight: decay existing then boost with alpha * 0.5
+            half_alpha = 0.15  # Half of default EMA alpha (0.3)
+            decayed: dict[str, float] = {}
+            for topic, score in session_state.topic_ema.items():
+                new_score = score * (1 - half_alpha)
+                if new_score >= 0.01:
+                    decayed[topic] = new_score
+
+            for topic in word_topics:
+                normalized = topic.strip()
+                if normalized:
+                    decayed[normalized] = decayed.get(normalized, 0.0) + half_alpha
+
+            session_state.topic_ema = decayed
+        except Exception:
+            logger.debug("EMA topic feed failed (non-critical)", exc_info=True)

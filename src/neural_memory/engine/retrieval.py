@@ -13,7 +13,18 @@ from typing import TYPE_CHECKING, Any
 
 from neural_memory.core.fiber import Fiber
 from neural_memory.core.neuron import NeuronType
-from neural_memory.core.synapse import Synapse, SynapseType
+from neural_memory.core.synapse import (
+    ACTIVE_ROLE_TYPES,
+    REINFORCEMENT_TYPES,
+    SEQUENTIAL_TYPES,
+    SUPERSESSION_SOURCE_IS_NEWER,
+    SUPERSESSION_TYPES,
+    SYNAPSE_ROLES,
+    WEAKENING_TYPES,
+    Synapse,
+    SynapseRole,
+    SynapseType,
+)
 from neural_memory.engine.activation import ActivationResult, SpreadingActivation
 from neural_memory.engine.causal_traversal import (
     trace_causal_chain,
@@ -149,6 +160,7 @@ class ReflexPipeline:
         )
         self._write_queue = DeferredWriteQueue()
         self._query_router = QueryRouter()
+        self._supersession_map: dict[str, str] = {}
         self._cached_encryptor: Any = _UNSET
         self._encryptor_cached_at: float = 0.0
         self._encryptor_ttl: float = 300.0  # Re-check encryption config every 5 min
@@ -459,6 +471,9 @@ class ReflexPipeline:
         # 4.7 Deprioritize disputed neurons (conflict resolution)
         activations, disputed_ids = await self._deprioritize_disputed(activations)
 
+        # 4.75 Apply causal semantics: role-aware post-processing
+        activations = await self._apply_causal_semantics(activations)
+
         # 4.8 Sufficiency check: early exit if signal is too weak
         from neural_memory.engine.sufficiency import GateCalibration, check_sufficiency
 
@@ -565,8 +580,20 @@ class ReflexPipeline:
 
         # 5. Find matching fibers
         query_tokens = set(query.lower().split())
+        # Pass session topics for affinity scoring (A8 Phase 1)
+        _session_topics: set[str] = set()
+        if _session_state is not None:
+            try:
+                top_topics = _session_state.get_topic_weights(limit=5)
+                _session_topics = {t for t, w in top_topics.items() if w > 0.3}
+            except Exception:
+                pass
         fibers_matched = await self._find_matching_fibers(
-            activations, valid_at=valid_at, tags=tags, query_tokens=query_tokens
+            activations,
+            valid_at=valid_at,
+            tags=tags,
+            query_tokens=query_tokens,
+            session_topics=_session_topics,
         )
 
         # 6. Extract subgraph
@@ -823,9 +850,9 @@ class ReflexPipeline:
                     keywords=list(stimulus.keywords) if stimulus.keywords else [],
                 )
                 # Attach session context to result metadata
-                top_topics = session.get_top_topics()
-                if top_topics:
-                    result.metadata["session_topics"] = top_topics
+                session_top_topics = session.get_top_topics()
+                if session_top_topics:
+                    result.metadata["session_topics"] = session_top_topics
                     result.metadata["session_query_count"] = session.query_count
 
                 # Periodic session summary persist
@@ -1425,6 +1452,311 @@ class ReflexPipeline:
 
         return result, disputed_ids
 
+    async def _apply_causal_semantics(
+        self,
+        activations: dict[str, ActivationResult],
+    ) -> dict[str, ActivationResult]:
+        """Apply causal role semantics to post-activation scores.
+
+        After spreading activation computes raw scores, this method adjusts
+        them based on synapse ROLES — not just weights. Each role has distinct
+        behavior:
+
+        - SUPERSESSION: follow chain to latest version, demote outdated
+        - REINFORCEMENT: boost target activation additively
+        - WEAKENING: halve target activation (capped, supersession-protected)
+        - SEQUENTIAL: light priming boost to next step
+        - PASSIVE/STRUCTURAL/LATERAL: no special handling (skipped)
+
+        Directionality matters for SUPERSESSION:
+        - RESOLVED_BY/FALSIFIED_BY: source=old → target=new (demote source)
+        - SUPERSEDES/EVOLVES_FROM: source=new → target=old (demote target)
+
+        Args:
+            activations: Current activation results from spreading activation
+
+        Returns:
+            New activations dict with causal adjustments applied.
+            Populates self._supersession_map for context formatting.
+        """
+        if not activations:
+            return activations
+
+        # Batch-fetch outgoing synapses for all activated neurons
+        neuron_ids = list(activations.keys())
+        synapses_by_source = await self._storage.get_synapses_for_neurons(
+            neuron_ids, direction="out"
+        )
+
+        # Filter to only active-role synapses
+        active_synapses: dict[str, list[Synapse]] = {}
+        for nid, synapses in synapses_by_source.items():
+            filtered = [s for s in synapses if s.type in ACTIVE_ROLE_TYPES]
+            if filtered:
+                active_synapses[nid] = filtered
+
+        result = dict(activations)
+
+        # No causal synapses → skip synapse processing but still apply habit boost
+        has_active_synapses = bool(active_synapses)
+
+        # Track supersession: outdated_id → latest_id
+        supersession_map: dict[str, str] = {}
+
+        if not has_active_synapses:
+            # No synapse-role processing needed, jump to habit boost
+            self._supersession_map = supersession_map
+            return await self._apply_habit_boost(result)
+
+        # --- SUPERSESSION: determine outdated vs latest, follow chains ---
+        # First pass: collect all chain targets for batch prefetch
+        chain_targets: set[str] = set()
+        for source_id, synapses in active_synapses.items():
+            for syn in synapses:
+                if syn.type in SUPERSESSION_TYPES:
+                    chain_targets.add(syn.target_id)
+
+        # Batch-prefetch chain node synapses to avoid N+1
+        chain_synapses_cache: dict[str, list[Synapse]] = {}
+        if chain_targets:
+            unfetched = [t for t in chain_targets if t not in synapses_by_source]
+            if unfetched:
+                chain_synapses_cache = await self._storage.get_synapses_for_neurons(
+                    unfetched, direction="out"
+                )
+
+        def _get_outgoing_supersession(nid: str) -> list[Synapse]:
+            """Get outgoing supersession synapses from cache."""
+            syns = (
+                synapses_by_source.get(nid)
+                or chain_synapses_cache.get(nid)
+                or []
+            )
+            return [s for s in syns if s.type in SUPERSESSION_TYPES]
+
+        # Shared visited set across all supersession edges (H2 fix)
+        chain_visited: set[str] = set()
+
+        for source_id, synapses in active_synapses.items():
+            supersession_synapses = [
+                s for s in synapses if s.type in SUPERSESSION_TYPES
+            ]
+            if not supersession_synapses:
+                continue
+
+            source_activation = result.get(source_id)
+            if source_activation is None:
+                continue
+
+            for syn in supersession_synapses:
+                # Determine directionality: who is outdated, who is latest?
+                if syn.type in SUPERSESSION_SOURCE_IS_NEWER:
+                    # SUPERSEDES/EVOLVES_FROM: source=NEW, target=OLD
+                    outdated_id = syn.target_id
+                    latest_id = source_id
+                else:
+                    # RESOLVED_BY/FALSIFIED_BY: source=OLD, target=NEW
+                    outdated_id = source_id
+                    latest_id = syn.target_id
+
+                # Follow chain from latest to find the ULTIMATE latest (max depth 5)
+                chain_depth = 0
+                current = latest_id
+                if current in chain_visited:
+                    continue
+                local_visited: set[str] = {outdated_id, current}
+
+                while chain_depth < 5:
+                    chain_depth += 1
+                    next_syns = _get_outgoing_supersession(current)
+                    next_hop = None
+                    for ns in next_syns:
+                        candidate = ns.target_id
+                        if ns.type in SUPERSESSION_SOURCE_IS_NEWER:
+                            # source=current is newer, target is older — wrong direction
+                            continue
+                        # RESOLVED_BY direction: target is newer
+                        if candidate not in local_visited:
+                            next_hop = candidate
+                            break
+
+                    # Also check: is current pointed TO by a SUPERSEDES?
+                    if next_hop is None:
+                        # Check if any node SUPERSEDES current (making current outdated)
+                        for ns in next_syns:
+                            if ns.type in SUPERSESSION_SOURCE_IS_NEWER:
+                                # current SUPERSEDES ns.target → current IS the newer
+                                continue
+                        break  # current is the ultimate latest
+
+                    if next_hop in local_visited:
+                        break  # cycle detected
+                    local_visited.add(next_hop)
+
+                    # Prefetch if not cached
+                    if next_hop not in synapses_by_source and next_hop not in chain_synapses_cache:
+                        hop_syns = await self._storage.get_synapses(source_id=next_hop)
+                        chain_synapses_cache[next_hop] = hop_syns
+
+                    current = next_hop
+
+                ultimate_latest = current
+                chain_visited.update(local_visited)
+
+                # Boost the latest version
+                base_score = source_activation.activation_level
+                boosted_score = min(base_score * 1.2, 1.0)
+
+                if ultimate_latest not in result or result[ultimate_latest].activation_level < boosted_score:
+                    result[ultimate_latest] = ActivationResult(
+                        neuron_id=ultimate_latest,
+                        activation_level=boosted_score,
+                        hop_distance=source_activation.hop_distance,
+                        path=[*source_activation.path, ultimate_latest],
+                        source_anchor=source_activation.source_anchor,
+                    )
+
+                # Demote the outdated version to ghost level
+                outdated_activation = result.get(outdated_id)
+                if outdated_activation is not None:
+                    ghost_level = outdated_activation.activation_level * 0.1
+                    if ghost_level >= self._config.activation_threshold:
+                        result[outdated_id] = ActivationResult(
+                            neuron_id=outdated_id,
+                            activation_level=ghost_level,
+                            hop_distance=outdated_activation.hop_distance,
+                            path=outdated_activation.path,
+                            source_anchor=outdated_activation.source_anchor,
+                        )
+                    else:
+                        result.pop(outdated_id, None)
+
+                # Record for context formatting (H1 fix)
+                supersession_map[outdated_id] = ultimate_latest
+
+        # Store supersession map for context formatting
+        self._supersession_map = supersession_map
+
+        # Track which IDs are supersession-protected (cannot be weakened)
+        supersession_protected: set[str] = set(supersession_map.values())
+
+        # --- WEAKENING: demote target activation by 50% (capped, C2 fix) ---
+        weakening_counts: dict[str, int] = {}
+        for source_id, synapses in active_synapses.items():
+            for syn in synapses:
+                if syn.type not in WEAKENING_TYPES:
+                    continue
+                target_id = syn.target_id
+                if target_id in supersession_protected:
+                    continue  # C2: don't weaken supersession targets
+                activation = result.get(target_id)
+                if activation is None:
+                    continue
+                count = weakening_counts.get(target_id, 0)
+                if count >= 1:
+                    continue  # C2: cap at one weakening (×0.5 floor)
+                weakening_counts[target_id] = count + 1
+                demoted_level = activation.activation_level * 0.5
+                if demoted_level >= self._config.activation_threshold:
+                    result[target_id] = ActivationResult(
+                        neuron_id=target_id,
+                        activation_level=demoted_level,
+                        hop_distance=activation.hop_distance,
+                        path=activation.path,
+                        source_anchor=activation.source_anchor,
+                    )
+                else:
+                    result.pop(target_id, None)
+
+        # --- REINFORCEMENT: boost target activation additively ---
+        reinforcement_boosts: dict[str, float] = {}
+        for source_id, synapses in active_synapses.items():
+            for syn in synapses:
+                if syn.type not in REINFORCEMENT_TYPES:
+                    continue
+                target_id = syn.target_id
+                if target_id not in result:
+                    continue  # Only boost already-activated neurons
+                current_boost = reinforcement_boosts.get(target_id, 0.0)
+                reinforcement_boosts[target_id] = min(current_boost + 0.15, 0.3)
+
+        for target_id, boost in reinforcement_boosts.items():
+            activation = result.get(target_id)
+            if activation is None:
+                continue
+            new_level = min(activation.activation_level + boost, 1.0)
+            result[target_id] = ActivationResult(
+                neuron_id=target_id,
+                activation_level=new_level,
+                hop_distance=activation.hop_distance,
+                path=activation.path,
+                source_anchor=activation.source_anchor,
+            )
+
+        # --- SEQUENTIAL: light priming boost ---
+        for source_id, synapses in active_synapses.items():
+            for syn in synapses:
+                if syn.type not in SEQUENTIAL_TYPES:
+                    continue
+                target_id = syn.target_id
+                if target_id not in result:
+                    continue  # Only prime already-activated neurons
+                activation = result[target_id]
+                primed_level = min(activation.activation_level + 0.1, 1.0)
+                result[target_id] = ActivationResult(
+                    neuron_id=target_id,
+                    activation_level=primed_level,
+                    hop_distance=activation.hop_distance,
+                    path=activation.path,
+                    source_anchor=activation.source_anchor,
+                )
+
+        # Store supersession map for context formatting
+        self._supersession_map = supersession_map
+
+        return await self._apply_habit_boost(result)
+
+    async def _apply_habit_boost(
+        self,
+        activations: dict[str, ActivationResult],
+    ) -> dict[str, ActivationResult]:
+        """Boost activation of neurons with proven workflow frequency.
+
+        Neurons with `_habit_frequency` metadata get a proportional boost:
+        +0.05 per frequency unit, capped at +0.2 total.
+
+        Args:
+            activations: Current activation results
+
+        Returns:
+            Activations with habit boosts applied
+        """
+        result_ids = list(activations.keys())
+        if not result_ids:
+            return activations
+
+        result = dict(activations)
+        neurons_batch = await self._storage.get_neurons_batch(result_ids)
+        for nid, neuron in neurons_batch.items():
+            freq = neuron.metadata.get("_habit_frequency", 0)
+            if not isinstance(freq, (int, float)) or freq <= 0:
+                continue
+            activation = result.get(nid)
+            if activation is None:
+                continue
+            # Proportional boost: +0.05 per frequency unit, capped at +0.2
+            habit_boost = min(float(freq) * 0.05, 0.2)
+            boosted_level = min(activation.activation_level + habit_boost, 1.0)
+            result[nid] = ActivationResult(
+                neuron_id=nid,
+                activation_level=boosted_level,
+                hop_distance=activation.hop_distance,
+                path=activation.path,
+                source_anchor=activation.source_anchor,
+            )
+
+        return result
+
     def _expand_query_terms(self, keywords: list[str]) -> list[str]:
         """Expand query keywords with basic stemming and synonyms.
 
@@ -1742,8 +2074,16 @@ class ReflexPipeline:
         valid_at: datetime | None = None,
         tags: set[str] | None = None,
         query_tokens: set[str] | None = None,
+        session_topics: set[str] | None = None,
     ) -> list[Fiber]:
-        """Find fibers that contain activated neurons (batch query)."""
+        """Find fibers that contain activated neurons (batch query).
+
+        A8 Phase 1 enhancements:
+        - Topic affinity boost from session EMA (T1.2)
+        - Recent-access boost for active project memories (T1.5)
+        - MMR diversity re-ranking to reduce redundancy (T1.1)
+        - Early SimHash dedup before cap (T1.3)
+        """
         # Get highly activated neurons
         top_neurons = sorted(
             activations.values(),
@@ -1766,12 +2106,17 @@ class ReflexPipeline:
         fw = self._config.freshness_weight
         halflife = self._config.recency_halflife_hours
         tag_boost = self._config.tag_match_boost
+        _topic_affinity_boost = self._config.topic_affinity_boost
+        _recent_boost = self._config.recent_access_boost
+        _recent_window_hrs = self._config.recent_access_window_days * 24.0
+        _session_topics = session_topics or set()
+        _now = utcnow()
 
         def _fiber_score(fiber: Fiber) -> float:
             # --- Base quality: salience * recency * conductivity ---
             recency = 0.5
             if fiber.last_conducted:
-                hours_ago = (utcnow() - fiber.last_conducted).total_seconds() / 3600
+                hours_ago = (_now - fiber.last_conducted).total_seconds() / 3600
                 recency = max(0.1, 1.0 / (1.0 + math.exp((hours_ago - halflife) / (halflife / 2))))
 
             base_score = fiber.salience * recency * fiber.conductivity
@@ -1797,14 +2142,14 @@ class ReflexPipeline:
                 activation_signal = 0.05
 
             # --- Stage bonus: semantic memories are more consolidated/reliable ---
-            stage = getattr(fiber, "stage", None)
+            stage = getattr(fiber, "stage", None) or (fiber.metadata or {}).get("_stage")
             stage_multiplier = 1.1 if stage == "semantic" else 1.0
 
             score = base_score * activation_signal * stage_multiplier
 
             # --- Tag-aware scoring boost ---
+            fiber_tags = set(fiber.metadata.get("tags", [])) if fiber.metadata else set()
             if tags and tag_boost > 0:
-                fiber_tags = set(fiber.metadata.get("tags", [])) if fiber.metadata else set()
                 if fiber_tags:
                     tag_overlap = len(tags & fiber_tags)
                     if tag_overlap > 0:
@@ -1812,11 +2157,34 @@ class ReflexPipeline:
                     else:
                         score -= tag_boost * 0.5  # mild penalty for zero overlap
 
+            # --- T1.2: Topic affinity from session EMA ---
+            if _session_topics and _topic_affinity_boost > 0:
+                # Use fiber.tags property (auto_tags | agent_tags) + metadata tags
+                all_fiber_tags = fiber.tags | fiber_tags
+                if all_fiber_tags:
+                    topic_overlap = len(_session_topics & all_fiber_tags)
+                    if topic_overlap > 0:
+                        # Dice-style: normalize by the smaller set to avoid
+                        # penalizing well-tagged fibers (review fix M1)
+                        denom = min(len(_session_topics), len(all_fiber_tags))
+                        affinity = topic_overlap / max(denom, 1)
+                        score += affinity * _topic_affinity_boost
+
+            # --- T1.5: Recent-access boost (multiplicative, review fix M3) ---
+            if _recent_boost > 0 and fiber.last_conducted:
+                hours_since = (_now - fiber.last_conducted).total_seconds() / 3600
+                if hours_since <= _recent_window_hrs:
+                    score *= 1.0 + _recent_boost
+
             # --- Arousal boost: emotionally charged memories are more memorable ---
             fiber_meta = fiber.metadata or {}
             arousal = fiber_meta.get("_arousal", 0.0)
             if isinstance(arousal, (int, float)) and arousal > 0.0:
                 score *= 1.0 + float(arousal) * 0.2  # up to 20% boost at max arousal
+
+            # --- T4.2: Stale penalty for outdated version references ---
+            if fiber_meta.get("_stale"):
+                score *= 0.8  # -20% penalty for outdated version references
 
             # --- Context-dependent retrieval: match encoding vs query context ---
             if getattr(self._config, "context_retrieval_enabled", True):
@@ -1857,9 +2225,65 @@ class ReflexPipeline:
 
             return score
 
-        fibers.sort(key=_fiber_score, reverse=True)
+        # Score all fibers and cache scores
+        scored: list[tuple[float, Fiber]] = [(_fiber_score(f), f) for f in fibers]
+        scored.sort(key=lambda x: x[0], reverse=True)
+        score_cache: dict[str, float] = {f.id: s for s, f in scored}
 
-        return fibers[:10]
+        # --- T1.1 + T1.3: MMR diversity + SimHash dedup greedy selection ---
+        # Instead of naive top-10, select greedily: skip fibers too similar to
+        # already-selected ones (neuron overlap OR SimHash near-duplicate).
+        from neural_memory.utils.simhash import is_near_duplicate
+
+        overlap_threshold = self._config.diversity_overlap_threshold
+        penalty_factor = self._config.diversity_penalty_factor
+
+        # Batch-fetch anchor neurons for SimHash (T1.3)
+        anchor_ids = list(dict.fromkeys(
+            f.anchor_neuron_id for _, f in scored[:30]
+        ))
+        anchor_neurons = await self._storage.get_neurons_batch(anchor_ids) if anchor_ids else {}
+
+        selected: list[Fiber] = []
+        selected_neuron_sets: list[set[str]] = []
+        selected_hashes: list[int] = []
+
+        for raw_score, fiber in scored:
+            if len(selected) >= 10:
+                break
+
+            # T1.3: SimHash dedup — skip near-duplicate content
+            anchor = anchor_neurons.get(fiber.anchor_neuron_id)
+            fiber_hash = anchor.content_hash if anchor else 0
+            if fiber_hash != 0 and any(
+                h != 0 and is_near_duplicate(fiber_hash, h) for h in selected_hashes
+            ):
+                continue
+
+            # T1.1: MMR diversity — penalize high neuron overlap
+            if selected_neuron_sets:
+                max_overlap = 0.0
+                for sel_neurons in selected_neuron_sets:
+                    if not sel_neurons:
+                        continue
+                    intersection = len(fiber.neuron_ids & sel_neurons)
+                    union = len(fiber.neuron_ids | sel_neurons)
+                    if union > 0:
+                        overlap = intersection / union
+                        max_overlap = max(max_overlap, overlap)
+                if max_overlap > overlap_threshold:
+                    # Apply penalty — fiber may still be selected if score is high enough
+                    penalized_score = raw_score * (1.0 - max_overlap * penalty_factor)
+                    # Skip if penalized score is below 50% of the lowest selected score
+                    lowest_selected = score_cache.get(selected[-1].id, 0.0)
+                    if penalized_score < lowest_selected * 0.5:
+                        continue
+
+            selected.append(fiber)
+            selected_neuron_sets.append(set(fiber.neuron_ids))
+            selected_hashes.append(fiber_hash)
+
+        return selected
 
     async def query_with_stimulus(
         self,

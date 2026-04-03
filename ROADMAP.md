@@ -140,7 +140,7 @@
 - **Brain test**: Não có working memory (nhanh) vs long-term memory (chậm) → Yes
 - **Backward compatible**: default `warm` → existing memories unchanged
 
-### A7. Recall Intelligence — Smarter Context, Fewer Mistakes
+### A7. Recall Intelligence — Smarter Context, Fewer Mistakes ✅
 
 **Problem**: Brain stores both mistakes and corrections, but recall doesn't know which supersedes which. Agents repeat old wrong approaches because:
 1. RESOLVED_BY/EVOLVES_FROM synapses are stored but **ignored during recall ranking**
@@ -151,33 +151,79 @@
 
 **Scope**: 4 phases (plan: `.rune/plan-recall-intelligence.md`)
 
-#### Phase 1: Supersession-Aware Recall
-- [ ] During activation spread, if neuron has `_resolved_by` → auto-inject the resolver with boosted score
-- [ ] Superseded neurons demoted to ghost-level (show as "outdated: see X" hint, not full content)
-- [ ] EVOLVES_FROM chain following: always surface the LATEST version of a decision/workflow
-- [ ] "Correction chain" metadata: when recalling error, append "Fixed by: {resolver content}"
-- **Brain test**: Não nhớ cách sửa chứ không lặp lại lỗi → Yes
+#### Phase 1: Causal-Aware Recall ✅
+- [x] 7 synapse roles (SUPERSESSION, REINFORCEMENT, WEAKENING, SEQUENTIAL, STRUCTURAL, LATERAL, PASSIVE)
+- [x] `_apply_causal_semantics()` post-processing: chain following, directionality-aware, cycle-safe
+- [x] SUPERSESSION: error→fix chain → demote error to ghost, inject fix with 1.2× boost
+- [x] WEAKENING: capped at ×0.5, supersession-protected targets immune
+- [x] [OUTDATED] labels on superseded memories in context output
+- [x] 35 tests, 0 regressions
+- **Brain test**: Não nhớ cách sửa chứ không lặp lại lỗi → ✅ Yes
 
-#### Phase 2: Outcome-Driven Learning
-- [ ] `report_outcome` creates VERIFIED_BY (success) or FALSIFIED_BY (failure) synapses → feeds back into graph
-- [ ] Success rate affects recall ranking: high success_rate → boost, low → demote
-- [ ] Failure modes stored as synapses (LEADS_TO error type) → agent warned before repeating
-- [ ] "Confidence score" per memory: `success_count / execution_count` visible in context
-- **Brain test**: Não học từ kết quả, không chỉ từ kinh nghiệm → Yes
+#### Phase 2: Outcome-Driven Learning ✅
+- [x] Existing `success_rate` scoring leveraged (already in fiber ranking, ±0.15 boost)
+- [x] `confidence` field on ContextItem: `success_count / execution_count` visible in context
+- [x] `[UNRELIABLE]` label on memories with <30% success rate + ≥3 executions
+- [x] Confidence percentage shown in context: `(confidence: 85%)`
+- [x] 12 tests
+- **Brain test**: Não học từ kết quả, không chỉ từ kinh nghiệm → ✅ Yes
 
-#### Phase 3: Workflow Recall Boost
-- [ ] Habit synapses (BEFORE) get activation boost proportional to `_habit_frequency`
-- [ ] When recalling step N of a workflow, auto-prime step N+1 (predictive priming v2)
-- [ ] Workflow version tracking: old workflow → new workflow via EVOLVES_FROM → recall latest
-- [ ] "Workflow context" mode: recall all steps of a detected workflow, not just keyword matches
-- **Brain test**: Thói quen lặp đi lặp lại trở thành phản xạ → Yes
+#### Phase 3: Workflow Recall Boost ✅
+- [x] `_apply_habit_boost()`: +0.05 per `_habit_frequency` unit, capped at +0.2
+- [x] SEQUENTIAL role: step N → step N+1 auto-priming (+0.1 via BEFORE/AFTER/LEADS_TO/CALLS)
+- [x] Workflow version tracking: EVOLVES_FROM/SUPERSEDES handled by SUPERSESSION role
+- [x] 4 tests
+- **Brain test**: Thói quen lặp đi lặp lại trở thành phản xạ → ✅ Yes
 
-#### Phase 4: Cross-Session Context Bridge
-- [ ] Session-end auto-summary: corrections made, decisions taken, patterns discovered
-- [ ] Session-start injection: most recent corrections/decisions for the active domain
-- [ ] "Correction memory" type: explicitly stores "old way → new way" with RESOLVED_BY
-- [ ] Inter-session learning: if Agent A fixes bug X, Agent B's next session recalls the fix
-- **Brain test**: Ngủ dậy nhớ bài học hôm qua, không lặp sai → Yes
+#### Phase 4: Cross-Session Context Bridge ✅
+- [x] `_inject_recent_corrections()`: fetches RESOLVED_BY synapses from last 7 days
+- [x] Formats as "--- corrections from recent sessions ---" section in nmem_context
+- [x] Batch neuron fetch, recency sort, max 5 corrections, 100-char truncation
+- [x] Inter-agent learning: RESOLVED_BY synapses are brain-global → any agent sees all corrections
+- [x] 9 tests
+- **Brain test**: Ngủ dậy nhớ bài học hôm qua, không lặp sai → ✅ Yes
+
+### A8. Agent Intelligence — Smarter Memory for Smarter Agents
+
+**Problem**: NM stores well but recalls poorly. Agents get 15 memories when only 3 matter, must manually query, and depend on crafting perfect `nmem_remember` calls. The system should be intelligent enough to surface the right memory at the right time, warn about low-quality saves, and self-clean over time.
+
+**Design principle**: Reuse existing infrastructure (Surface.nm, session EMA, priming engine, tier system, lifecycle, DedupCheckStep). Zero new parallel systems — extend what works, connect what's disconnected.
+
+**Scope**: 4 phases (plan: `.rune/plan-agent-intelligence.md`)
+
+#### Phase 1: Precision Recall ✅
+- [x] MMR diversity re-ranking in `_find_matching_fibers()` — greedy selection with Jaccard overlap penalty
+- [x] Topic affinity boost from session EMA (Dice-normalized, +0.15 for matching tags)
+- [x] Early SimHash dedup before fiber cap (reuse `is_near_duplicate()`, batch anchor fetch)
+- [x] Recent-access boost (multiplicative ×1.1 for fibers accessed in last 7 days)
+- [x] T1.4 deferred — surface depth routing already handles NEEDS_DETAIL/NEEDS_DEEP via depth override
+- [x] 19 tests, 0 regressions (479 related tests passed)
+- **Brain test**: Não lọc nhiễu, chỉ nhớ cái liên quan → ✅ Yes
+
+#### Phase 2: Proactive Context ✅
+- [x] Surface CLUSTERS → topic-aware injection in `_context()` (match clusters to session EMA, cap 9 memories)
+- [x] Surface SIGNALS → proactive alerts (! URGENT, ~ WATCHING) in context output
+- [x] Tool event → topic EMA feed at half-weight alpha (file stems + keywords from action context)
+- [x] Session meta-summary in context header (query count, topics, surface coverage, staleness >50%)
+- [x] 22 tests, 0 regressions, mypy clean
+- **Brain test**: Não chủ động nhớ lại khi gặp bối cảnh quen → ✅ Yes
+
+#### Phase 3: Auto-Save Intelligence ✅
+- [x] Quality scorer enhanced: +specificity (file paths, versions, numbers), +structure markers (→), +brevity bonus (50-300 chars), wall-of-text penalty (>500 chars)
+- [x] DedupCheckStep feedback: similarity score, dedup tier, fiber_id of existing memory surfaced to agent
+- [x] AutoTagStep: confidence-based classification (0.0-1.0), type_hint when agent type mismatches content
+- [x] Importance scoring: +file paths (+1), +versions (+1), +error traces (+2), +security keywords (+2), surface gap bonus (+1 for sparse topics), cap at 9
+- [x] 28 tests, 0 regressions, mypy clean
+- **Brain test**: Não tự biết cái gì đáng nhớ → ✅ Yes
+
+#### Phase 4: Aggressive Consolidation ✅
+- [x] SimHash merge pass alongside existing Jaccard merge (reuse Union-Find + `is_near_duplicate`)
+- [x] Surface-driven stale detection (version patterns ≥2 major behind → `_stale`, -20% retrieval penalty)
+- [x] Access-based demotion (freq=0 + 30d → `_cold_demoted`, 90d → `_prune_candidate`, pinned exempt)
+- [x] Summary fiber creation from 5+ merged memories (`_stage: semantic`, originals preserved with `_demoted_by_merge`)
+- [x] Surface regeneration after consolidation (triggered on structural changes)
+- [x] 23 tests, 0 regressions, mypy clean
+- **Brain test**: Não nén ký ức thành tri thức, quên chi tiết giữ bản chất → ✅ Yes
 
 **Target**: v5.0 = "production-ready for teams" release.
 

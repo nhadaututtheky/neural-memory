@@ -35,6 +35,15 @@ _COMPARATIVE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# A8 Phase 3: Specificity patterns — concrete details that improve recall quality
+_FILE_PATH_PATTERN = re.compile(
+    r"[\w/\\]+\.\w{1,5}\b(?<!\.\w\.)"  # e.g. retrieval.py, src/auth/middleware.ts
+    # Excludes abbreviations like "e.g." or "i.e."
+)
+_VERSION_PATTERN = re.compile(r"\bv?\d+\.\d+(?:\.\d+)?\b")  # v1.2.3, 4.28.0
+_NUMBER_PATTERN = re.compile(r"\b\d{3,}\b")  # numbers with 3+ digits (skip 2-digit)
+_STRUCTURE_PATTERN = re.compile(r"→|⟶|=>|->|-->")
+
 # Generic filler patterns — content that is ONLY these words (no substance)
 _GENERIC_FILLER = frozenset(
     {
@@ -178,8 +187,32 @@ def score_memory(
             "Add reasoning: why (because...), when (after...), or comparison (over X, instead of Y)"
         )
 
+    # A8 Phase 3: Specificity bonus (+1 for file paths/versions/numbers)
+    has_specificity = (
+        bool(_FILE_PATH_PATTERN.search(content))
+        or bool(_VERSION_PATTERN.search(content))
+        or bool(_NUMBER_PATTERN.search(content))
+    )
+    if has_specificity:
+        points += 1
+
+    # A8 Phase 3: Structure markers (+1 for arrows, decision markers)
+    if _STRUCTURE_PATTERN.search(content):
+        points += 1
+
+    # A8 Phase 3: Brevity bonus (+1 for 50-300 chars — optimal recall range)
+    if 50 <= content_len <= 300:
+        points += 1
+
+    # A8 Phase 3: Wall-of-text penalty (-2 for >500 chars)
+    if content_len > 500:
+        points -= 2
+        hints.append(
+            f"Memory is {content_len} chars — split into focused pieces (<300 chars) for better recall"
+        )
+
     # Cap at 10
-    points = min(points, 10)
+    points = max(0, min(points, 10))
 
     # Determine quality label
     if points >= _HIGH_THRESHOLD:

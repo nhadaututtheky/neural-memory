@@ -645,6 +645,38 @@ class DecisionComponentStep:
 
 # ── Step 4: Auto-Tag + Metadata ──
 
+# A8 T3.3: Confidence patterns for type classification
+_TYPE_KEYWORDS: dict[str, list[str]] = {
+    "error": ["error", "bug", "crash", "exception", "traceback", "failed", "broken", "fix", "TypeError", "stack trace"],
+    "decision": ["chose", "decided", "picked", "selected", "opted", "rejected", "went with", "instead of", "over"],
+    "insight": ["discovered", "realized", "learned", "found that", "turns out", "root cause", "key insight", "pattern"],
+    "workflow": ["step 1", "step 2", "after that", "pipeline", "process", "deploy", "release", "sequence"],
+    "preference": ["prefer", "like", "favorite", "hate", "dislike", "always use", "never use"],
+    "instruction": ["always", "never", "must", "make sure", "don't forget", "remember to"],
+}
+
+
+def _classify_confidence(content: str, suggested_type: str) -> float:
+    """Score how well content matches its suggested type (0.0-1.0).
+
+    Counts how many type-specific keywords appear in content.
+    More matches = higher confidence.
+    """
+    keywords = _TYPE_KEYWORDS.get(suggested_type, [])
+    if not keywords:
+        return 0.5  # Unknown type — neutral confidence
+
+    content_lower = content.lower()
+    matches = sum(1 for kw in keywords if kw in content_lower)
+
+    if matches == 0:
+        return 0.2
+    if matches == 1:
+        return 0.6
+    if matches == 2:
+        return 0.8
+    return 0.95  # 3+ matches = high confidence
+
 
 @dataclass
 class AutoTagStep:
@@ -681,8 +713,29 @@ class AutoTagStep:
 
         # Effective metadata
         ctx.effective_metadata = dict(ctx.metadata)
-        if "type" not in ctx.effective_metadata or not ctx.effective_metadata["type"]:
-            ctx.effective_metadata["type"] = suggest_memory_type(ctx.content).value
+        agent_type = ctx.effective_metadata.get("type", "")
+        suggested = suggest_memory_type(ctx.content)
+
+        if not agent_type:
+            # A8 T3.3: Auto-classify with confidence check
+            confidence = _classify_confidence(ctx.content, suggested.value)
+            if confidence >= 0.7:
+                ctx.effective_metadata["type"] = suggested.value
+            else:
+                # Low confidence — default to fact, store hint for agent
+                ctx.effective_metadata["type"] = "fact"
+                ctx.effective_metadata["_type_hint"] = (
+                    f"Content may be '{suggested.value}' (confidence {confidence:.0%})"
+                )
+                ctx.effective_metadata["_type_confidence"] = round(confidence, 2)
+        else:
+            # Agent specified type — check for mismatch
+            if agent_type != suggested.value and agent_type != "fact":
+                confidence = _classify_confidence(ctx.content, agent_type)
+                if confidence < 0.3:
+                    ctx.effective_metadata["_type_hint"] = (
+                        f"Content looks more like '{suggested.value}' than '{agent_type}'"
+                    )
 
         # Content hash
         ctx.content_hash = simhash(ctx.content)
@@ -727,6 +780,9 @@ class DedupCheckStep:
             if existing_neuron is not None:
                 # Store reused anchor in metadata for CreateAnchorStep
                 ctx.effective_metadata["_dedup_reused_anchor"] = existing_neuron
+                # A8 T3.2: Propagate dedup details for agent-facing feedback
+                ctx.effective_metadata["_dedup_similarity"] = dedup_result.similarity_score
+                ctx.effective_metadata["_dedup_tier"] = dedup_result.tier
                 logger.debug(
                     "Dedup: reusing anchor %s (tier=%d, score=%.3f)",
                     dedup_result.existing_neuron_id,

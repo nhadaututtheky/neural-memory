@@ -19,10 +19,13 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+import re
+
 from neural_memory.core.fiber import Fiber
 from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.engine.clustering import UnionFind
+from neural_memory.utils.simhash import is_near_duplicate as _simhash_near_dup
 from neural_memory.utils.timeutils import ensure_naive_utc, utcnow
 
 if TYPE_CHECKING:
@@ -396,6 +399,15 @@ class ConsolidationEngine:
         # Auto-tier promotion/demotion (Pro feature, runs after standard strategies)
         await self._run_auto_tier(report, dry_run)
 
+        # T4.5: Regenerate surface after consolidation if structural changes occurred
+        if not dry_run and (
+            report.fibers_merged > 0
+            or report.fibers_removed > 0
+            or report.extra.get("stale_flagged", 0) > 0
+            or report.extra.get("cold_demoted", 0) > 0
+        ):
+            await self._regenerate_surface_after_consolidation()
+
         report.duration_ms = (time.perf_counter() - start) * 1000
         return report
 
@@ -434,6 +446,21 @@ class ConsolidationEngine:
         except Exception as e:
             logger.error("Auto-tier failed during consolidation: %s", e, exc_info=True)
             report.extra["auto_tier"] = {"error": "auto-tier failed"}
+
+    async def _regenerate_surface_after_consolidation(self) -> None:
+        """T4.5: Regenerate Knowledge Surface to reflect post-consolidation state."""
+        try:
+            from neural_memory.surface.lifecycle import regenerate_surface
+
+            brain_id = self._storage.current_brain_id
+            if not brain_id:
+                return
+            brain = await self._storage.get_brain(brain_id)
+            brain_name = brain.name if brain else "default"
+            await regenerate_surface(storage=self._storage, brain_name=brain_name)
+            logger.info("Surface regenerated after consolidation")
+        except Exception:
+            logger.warning("Surface regeneration after consolidation failed", exc_info=True)
 
     async def _prune(
         self,
@@ -728,6 +755,60 @@ class ConsolidationEngine:
                 if jaccard >= effective_threshold:
                     uf.union(i, j)
 
+        # --- T4.1: SimHash semantic merge pass ---
+        # Fetch anchor neuron content_hash for content-based similarity
+        simhash_roots: set[int] = set()  # C1 fix: track which roots got SimHash unions
+        anchor_ids_unique = list({
+            fiber_list[i].anchor_neuron_id
+            for i in range(n)
+            if len(fiber_list[i].neuron_ids) <= self._config.merge_max_fiber_size
+        })
+        if anchor_ids_unique:
+            anchor_neurons = await self._storage.get_neurons_batch(anchor_ids_unique)
+
+            # Build fiber index → content_hash map
+            fiber_content_hash: dict[int, int] = {}
+            for idx in range(n):
+                if len(fiber_list[idx].neuron_ids) > self._config.merge_max_fiber_size:
+                    continue
+                anchor = anchor_neurons.get(fiber_list[idx].anchor_neuron_id)
+                if anchor and anchor.content_hash and anchor.content_hash != 0:
+                    fiber_content_hash[idx] = anchor.content_hash
+
+            if not fiber_content_hash:
+                logger.debug(
+                    "SimHash pass: no anchor content hashes available"
+                )
+
+            # Pairwise SimHash comparison (capped to avoid O(n²) blowup)
+            hash_indices = sorted(fiber_content_hash.keys())
+            max_simhash_checks = 50_000
+            simhash_checked = 0
+            for i_pos in range(len(hash_indices)):
+                if simhash_checked >= max_simhash_checks:
+                    break
+                idx_a = hash_indices[i_pos]
+                for j_pos in range(i_pos + 1, len(hash_indices)):
+                    if simhash_checked >= max_simhash_checks:
+                        break
+                    idx_b = hash_indices[j_pos]
+                    simhash_checked += 1
+                    if simhash_checked % 1000 == 0:
+                        await asyncio.sleep(0)
+                    # Skip if already in same group (Jaccard already merged)
+                    if uf.find(idx_a) == uf.find(idx_b):
+                        continue
+                    # Domain guard: never merge verbatim with non-verbatim
+                    fi_verbatim = fiber_list[idx_a].metadata.get("_verbatim", False)
+                    fj_verbatim = fiber_list[idx_b].metadata.get("_verbatim", False)
+                    if fi_verbatim != fj_verbatim:
+                        continue
+                    if _simhash_near_dup(
+                        fiber_content_hash[idx_a], fiber_content_hash[idx_b]
+                    ):
+                        uf.union(idx_a, idx_b)
+                        simhash_roots.add(uf.find(idx_a))
+
         # Group fibers by root
         groups = uf.groups()
 
@@ -763,6 +844,16 @@ class ConsolidationEngine:
             for fiber in member_fibers:
                 merged_auto_tags |= fiber.auto_tags
                 merged_agent_tags |= fiber.agent_tags
+
+            # T4.4: Summary fiber for large groups (5+ members)
+            is_summary = len(member_fibers) >= 5
+            merge_metadata: dict[str, Any] = {
+                "merged_from": [f.id for f in member_fibers],
+            }
+            if is_summary:
+                merge_metadata["_stage"] = "semantic"
+                merge_metadata["_summary_fiber"] = True
+
             merged_fiber = Fiber(
                 id=merged_fiber_id,
                 neuron_ids=merged_neuron_ids,
@@ -774,10 +865,14 @@ class ConsolidationEngine:
                 auto_tags=merged_auto_tags,
                 agent_tags=merged_agent_tags,
                 summary=f"Merged from {len(member_fibers)} fibers",
-                metadata={"merged_from": [f.id for f in member_fibers]},
+                metadata=merge_metadata,
                 created_at=min(f.created_at for f in member_fibers),
             )
 
+            # C1 fix: attribute merge reason based on actual SimHash participation
+            group_root = uf.find(members[0])
+            has_simhash = group_root in simhash_roots
+            merge_reason = "simhash_content" if has_simhash else "neuron_overlap"
             report.fibers_merged += len(member_fibers)
             report.fibers_created += 1
             report.merge_details.append(
@@ -785,15 +880,24 @@ class ConsolidationEngine:
                     original_fiber_ids=tuple(f.id for f in member_fibers),
                     merged_fiber_id=merged_fiber_id,
                     neuron_count=len(merged_neuron_ids),
-                    reason="neuron_overlap",
+                    reason=merge_reason,
                 )
             )
 
             if not dry_run:
-                for fiber in member_fibers:
-                    await self._storage.delete_fiber(fiber.id)
-                    report.fibers_removed += 1
+                # H2 fix: add merged fiber FIRST, then modify originals
                 await self._storage.add_fiber(merged_fiber)
+                if is_summary:
+                    # T4.4: Demote originals to COLD instead of deleting
+                    for fiber in member_fibers:
+                        demoted_meta = {**fiber.metadata, "_demoted_by_merge": True}
+                        demoted = dc_replace(fiber, metadata=demoted_meta)
+                        await self._storage.update_fiber(demoted)
+                else:
+                    # Standard merge: delete originals
+                    for fiber in member_fibers:
+                        await self._storage.delete_fiber(fiber.id)
+                        report.fibers_removed += 1
 
     async def _summarize(
         self,
@@ -1711,6 +1815,108 @@ class ConsolidationEngine:
                 report.extra.get("lifecycle_states_updated", 0) + states_updated
             )
         _logger.info("LIFECYCLE: updated %d neuron lifecycle states", states_updated)
+
+        # --- T4.2 + T4.3: Fiber-level stale detection and access-based demotion ---
+        await self._lifecycle_fiber_pass(report, reference_time, dry_run)
+
+    _VERSION_PATTERN: re.Pattern[str] = re.compile(r"\bv(\d+)\.(\d+)(?:\.\d+)?\b")
+
+    async def _lifecycle_fiber_pass(
+        self,
+        report: ConsolidationReport,
+        reference_time: datetime,
+        dry_run: bool,
+    ) -> None:
+        """Fiber-level lifecycle: stale detection (T4.2) + access demotion (T4.3).
+
+        Scans fibers for:
+        - Version references ≥2 major versions behind → ``_stale: true``
+        - Never-recalled after 30 days → ``_cold_demoted: true``
+        - Never-recalled after 90 days + not pinned → ``_prune_candidate: true``
+        """
+        try:
+            fibers = await self._storage.get_fibers(limit=10000)
+        except Exception:
+            logger.error("LIFECYCLE fiber pass: failed to fetch fibers", exc_info=True)
+            return
+        if not fibers:
+            return
+
+        # --- T4.2: Stale version detection ---
+        # Batch-fetch anchor neurons to check content for version patterns
+        anchor_ids = list({f.anchor_neuron_id for f in fibers})
+        try:
+            anchor_neurons = await self._storage.get_neurons_batch(anchor_ids)
+        except Exception:
+            logger.error("LIFECYCLE fiber pass: failed to fetch anchors", exc_info=True)
+            anchor_neurons = {}
+
+        # Find highest major version across all anchor content
+        max_major = 0
+        for anchor in anchor_neurons.values():
+            for m in self._VERSION_PATTERN.finditer(anchor.content):
+                major = int(m.group(1))
+                if major > max_major:
+                    max_major = major
+
+        stale_count = 0
+        cold_demoted = 0
+        prune_candidates = 0
+
+        for fiber in fibers:
+            fiber_meta = fiber.metadata or {}
+            age_days = (reference_time - fiber.created_at).total_seconds() / 86400.0
+
+            # T4.2: Flag fibers with version references ≥2 major versions behind
+            if max_major >= 2 and not fiber_meta.get("_stale"):
+                fiber_anchor = anchor_neurons.get(fiber.anchor_neuron_id)
+                if fiber_anchor:
+                    versions = self._VERSION_PATTERN.findall(fiber_anchor.content)
+                    if versions:
+                        fiber_max_major = max(int(v[0]) for v in versions)
+                        if max_major - fiber_max_major >= 2:
+                            if not dry_run:
+                                await self._storage.update_fiber_metadata(
+                                    fiber.id, {"_stale": True}
+                                )
+                            stale_count += 1
+
+            # T4.3: Access-based demotion (M1 fix: batch metadata updates)
+            if fiber.pinned:
+                continue
+
+            demotion_updates: dict[str, Any] = {}
+            if fiber.frequency == 0 and age_days > 30:
+                if not fiber_meta.get("_cold_demoted"):
+                    demotion_updates["_cold_demoted"] = True
+                    cold_demoted += 1
+
+            if fiber.frequency == 0 and age_days > 90:
+                if not fiber_meta.get("_prune_candidate"):
+                    demotion_updates["_prune_candidate"] = True
+                    prune_candidates += 1
+
+            if demotion_updates and not dry_run:
+                await self._storage.update_fiber_metadata(fiber.id, demotion_updates)
+
+        if stale_count:
+            report.extra["stale_flagged"] = (
+                report.extra.get("stale_flagged", 0) + stale_count
+            )
+        if cold_demoted:
+            report.extra["cold_demoted"] = (
+                report.extra.get("cold_demoted", 0) + cold_demoted
+            )
+        if prune_candidates:
+            report.extra["prune_candidates"] = (
+                report.extra.get("prune_candidates", 0) + prune_candidates
+            )
+        logger.info(
+            "LIFECYCLE fibers: %d stale, %d cold-demoted, %d prune candidates",
+            stale_count,
+            cold_demoted,
+            prune_candidates,
+        )
 
     async def _process_tool_events(
         self,

@@ -300,6 +300,24 @@ class RememberHandler:
             from neural_memory.engine.importance import auto_importance_score
 
             auto_score = auto_importance_score(content, mem_type.value, args.get("tags", []))
+
+            # A8 T3.4: Surface gap bonus — sparse topic clusters get +1 importance
+            try:
+                if hasattr(self, "_surface_text") and self._surface_text:
+                    from neural_memory.surface.parser import parse as parse_surface
+
+                    surface = parse_surface(self._surface_text)
+                    if surface.meta and surface.meta.top_entities:
+                        # Check if content topics overlap with well-covered entities
+                        content_lower = content.lower()
+                        is_covered = any(
+                            e.lower() in content_lower for e in surface.meta.top_entities[:5]
+                        )
+                        if not is_covered and auto_score < 9:
+                            auto_score += 1  # Filling a knowledge gap
+            except Exception:
+                pass
+
             priority = Priority.from_int(auto_score)
 
         # Build dedup pipeline if enabled
@@ -502,9 +520,9 @@ class RememberHandler:
                         find_overlapping_decisions,
                     )
 
-                    raw_context = args.get("context") or {}
+                    decision_context = args.get("context") or {}
                     components = extract_decision_components(
-                        content, raw_context if isinstance(raw_context, dict) else None
+                        content, decision_context if isinstance(decision_context, dict) else None
                     )
                     if components is not None:
                         overlaps = await find_overlapping_decisions(
@@ -595,6 +613,14 @@ class RememberHandler:
         if source_id and isinstance(source_id, str):
             response["source_id"] = source_id
 
+        # A8 T3.3: Surface type classification hints
+        type_hint = result.fiber.metadata.get("_type_hint")
+        if type_hint:
+            response["type_hint"] = type_hint
+        type_confidence = result.fiber.metadata.get("_type_confidence")
+        if type_confidence is not None:
+            response["type_confidence"] = type_confidence
+
         if redacted_matches:
             response["auto_redacted"] = True
             response["auto_redacted_count"] = len(redacted_matches)
@@ -622,10 +648,28 @@ class RememberHandler:
                 if dedup_alias_of:
                     break
         if dedup_alias_of:
-            response["dedup_hint"] = {
+            # A8 T3.2: Enhanced dedup feedback with similarity score and fiber_id
+            dedup_hint: dict[str, Any] = {
                 "similar_existing": dedup_alias_of,
-                "message": "Similar memory already exists. Created alias link.",
+                "message": "Similar memory exists — consider nmem_edit to update instead",
             }
+            # Include similarity score if propagated from DedupCheckStep
+            dedup_sim = result.fiber.metadata.get("_dedup_similarity")
+            if dedup_sim is not None:
+                dedup_hint["similarity"] = round(float(dedup_sim), 3)
+            dedup_tier = result.fiber.metadata.get("_dedup_tier")
+            if dedup_tier is not None:
+                dedup_hint["dedup_tier"] = int(dedup_tier)
+            # Find the fiber_id for the existing anchor neuron
+            try:
+                existing_fibers = await storage.find_fibers(
+                    contains_neuron=dedup_alias_of, limit=1
+                )
+                if existing_fibers:
+                    dedup_hint["duplicate_of"] = existing_fibers[0].id
+            except Exception:
+                pass
+            response["dedup_hint"] = dedup_hint
 
         # Decision overlap results
         if decision_overlaps_out:

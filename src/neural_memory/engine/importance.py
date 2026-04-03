@@ -58,6 +58,19 @@ _COMPARATIVE_PATTERNS: list[re.Pattern[str]] = [
 # Entity detection: capitalized multi-word or known tech patterns
 _ENTITY_RE = re.compile(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b|\b[A-Z][a-zA-Z]*(?:SQL|DB|JS|API)\b")
 
+# A8 T3.4: Extended scoring patterns
+_FILE_PATH_RE = re.compile(r"[\w/\\]+\.\w{1,5}\b")  # file.py, src/auth.ts
+_VERSION_RE = re.compile(r"\bv?\d+\.\d+(?:\.\d+)?\b")  # v1.2.3, 4.28
+_ERROR_TRACE_RE = re.compile(
+    r"(Traceback \(most recent|(?:Error|Exception|CRITICAL|FATAL|panic|segfault)(?=\s*[:\(]))",
+    re.IGNORECASE,
+)
+_SECURITY_RE = re.compile(
+    r"\b(CVE-\d{4}|vulnerability|exploit|injection|XSS|CSRF|auth bypass|privilege escalation"
+    r"|secret|credential|token leak|data breach|zero.day)\b",
+    re.IGNORECASE,
+)
+
 
 def auto_importance_score(
     content: str,
@@ -96,4 +109,21 @@ def auto_importance_score(
     if len(content) < 20:
         score -= 1
 
-    return max(1, min(10, score))
+    # A8 T3.4: File path references (+1 — concrete, actionable)
+    if _FILE_PATH_RE.search(content):
+        score += 1
+
+    # A8 T3.4: Version numbers (+1 — time-sensitive context)
+    if _VERSION_RE.search(content):
+        score += 1
+
+    # A8 T3.4: Error traces (+2 — high-value debugging knowledge)
+    if _ERROR_TRACE_RE.search(content):
+        score += 2
+
+    # A8 T3.4: Security keywords (+2 — critical safety info)
+    if _SECURITY_RE.search(content):
+        score += 2
+
+    # Cap at 9 (10 reserved for explicit user override)
+    return max(1, min(9, score))
