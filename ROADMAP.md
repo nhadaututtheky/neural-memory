@@ -4,8 +4,9 @@
 > Every item passes the VISION.md 4-question test + brain test.
 > ZERO LLM dependency — pure algorithmic, regex, graph-based.
 
-**Current state**: v4.27.1 — 55 MCP tools, 6100+ tests, schema v38, SQLite + PostgreSQL + InfinityDB backends, neuroscience engine (10 brain-inspired algorithms), tiered memory (HOT/WARM/COLD + auto-tier + domain boundaries), decision intelligence, 7-module handler architecture, Pro bundled in main package (license-gated).
+**Current state**: v4.31.0 — 56 MCP tools, 6100+ tests, schema v38, SQLite + PostgreSQL + InfinityDB backends, neuroscience engine (10 brain-inspired algorithms), tiered memory (HOT/WARM/COLD + auto-tier + domain boundaries), decision intelligence, 7-module handler architecture, Pro bundled in main package (license-gated), Brain Store community marketplace (GitHub-backed).
 **Architecture**: Spreading activation reflex engine, biological memory model, MCP standard.
+**Direction**: Feature breadth is sufficient. Future focus shifts to **quality depth** — optimizing every fiber, synapse, and neuron interaction to produce the highest-quality memory graph possible.
 
 ---
 
@@ -269,16 +270,23 @@
 - [ ] Blog posts: "NeuralMemory vs Mem0", "Why spreading activation beats RAG"
 - [ ] HuggingFace Spaces demo polished + promoted
 
-### B4. Brain Marketplace v1
+### B4. Brain Marketplace v1 ✅
 
 **Problem**: Expert knowledge is siloed. A React expert's brain could help thousands of developers.
 
-**Scope**:
-- [ ] `nmem brain publish --name "react-19-patterns" --tags react,hooks,rsc`
-- [ ] `nmem brain install react-19-patterns --merge`
-- [ ] Brain packages: versioned, with metadata (description, tags, size, neuron count)
-- [ ] Discovery: browse/search on sync hub landing page
-- [ ] Free tier: publish up to 3 brains. Premium: unlimited + featured listing
+**Scope**: **Shipped v4.29.0** — Brain Store community marketplace
+- [x] `.brain` package format: manifest + snapshot + security scan (brain_package.py, brain_scanner.py)
+- [x] GitHub-backed registry: `nhadaututtheky/brain-store` (unlimited free storage)
+- [x] Hub thin proxy: browse (index + D1 ratings), fetch (GitHub raw), publish (creates PR), rate (D1)
+- [x] GitHub Actions: validate-brain.yml (PR scan + auto-merge), rebuild-index.yml (post-merge index rebuild)
+- [x] MCP tool: `nmem_store` (browse/preview/import/export/publish actions)
+- [x] FastAPI endpoints: /registry, /export, /import, /import-remote, /publish, /rate
+- [x] Dashboard: Store page with hero onboarding, search/filter, preview dialog, export+publish dialog
+- [x] 3 seed brains: Python Best Practices, Git Workflows, Docker Essentials
+- [x] Security: brain_scanner blocks high/critical risk, SSRF prevention, path validation
+- [ ] Download count tracking (no increment mechanism yet)
+- [ ] Brain update/versioning path (publish blocks if name exists)
+- [ ] Dashboard ratings bridge to Hub D1 (currently local-only)
 - **Brain test**: Humans learn from books/teachers (external knowledge) → Yes
 
 ### B5. Pro: Smart Tiers & Decision Intelligence ✅ — Issue #112
@@ -456,6 +464,76 @@ Lifecycle hooks:
 
 ---
 
+## Phase F: Quality Deep Dive (v8.0+)
+
+> Stop adding. Start perfecting. Every fiber, every synapse, every connection — optimized to its theoretical best.
+
+**Philosophy**: The feature map is complete. The difference between a good memory system and a great one is not more features — it's the quality of each individual memory operation. A brain with 1,000 perfectly-connected neurons outperforms one with 100,000 noisy ones.
+
+### F1. Synapse Quality Optimization
+
+**Problem**: Synapses are created but never refined. Weight stays static after initial creation. Real brains continuously adjust synapse strength based on co-activation patterns.
+
+**Scope**:
+- [ ] Dynamic weight adjustment: co-recalled synapses strengthen (Hebbian), unused weaken (decay)
+- [ ] Synapse pruning: zero-weight synapses removed during consolidation
+- [ ] Type accuracy audit: detect likely mis-typed synapses (e.g., RELATES_TO that should be CAUSES)
+- [ ] Synapse confidence scoring: weight × activation_count × recency → quality metric
+- [ ] Bidirectional balance: detect one-way connections that should be mutual
+- **Brain test**: Synaptic plasticity — connections strengthen with use, weaken without → Yes
+
+### F2. Fiber Precision & Density
+
+**Problem**: Fibers vary wildly in quality — some are 1-sentence gems, others are wall-of-text noise. The system stores everything equally without pushing toward optimal density.
+
+**Scope**:
+- [ ] Optimal fiber length analysis: measure recall precision vs fiber char length → find sweet spot
+- [ ] Auto-split: fibers >500 chars with multiple topics → split into focused fibers + synapses
+- [ ] Auto-merge: near-duplicate fibers with <80% overlap → merge preserving unique content
+- [ ] Fiber quality score: specificity × brevity × connectivity × access_frequency
+- [ ] Quality feedback loop: low-quality fibers flagged during `nmem_health`, suggest edits
+- [ ] Content density metric: information per character (entities, causal language, specificity markers)
+- **Brain test**: Memory engrams are optimally encoded — not too sparse, not too dense → Yes
+
+### F3. Graph Topology Optimization
+
+**Problem**: The neuron graph grows organically but develops structural problems — orphan clusters, hub bottlenecks, missing bridges between related domains.
+
+**Scope**:
+- [ ] Orphan detection: neurons with 0 synapses → suggest connections or flag for review
+- [ ] Hub analysis: neurons with >20 synapses → too generic, suggest splitting
+- [ ] Bridge detection: identify domain clusters that should be connected but aren't
+- [ ] Path optimization: detect redundant multi-hop paths (A→B→C when A→C exists)
+- [ ] Cluster coherence score: intra-cluster density vs inter-cluster sparsity
+- [ ] Graph health metrics in `nmem_health`: connectivity, clustering coefficient, diameter
+- **Brain test**: Neural networks self-organize into small-world topology → Yes
+
+### F4. Retrieval Calibration
+
+**Problem**: Spreading activation returns results, but are they the *best* results? No ground-truth calibration exists to measure recall precision vs an ideal.
+
+**Scope**:
+- [ ] Implicit feedback signals: which recalled memories does the agent actually use? (track via tool_events)
+- [ ] Precision@K tracking: of top 5 recalled, how many were referenced in agent output?
+- [ ] Activation parameter auto-tuning: depth, decay_factor, boost weights adjusted per brain
+- [ ] Per-domain calibration: different domains may need different activation parameters
+- [ ] Retrieval A/B testing: compare parameter sets, keep the one with better implicit feedback
+- **Brain test**: Brain continuously calibrates attention and recall based on outcomes → Yes
+
+### F5. Encoding Quality Gate
+
+**Problem**: Quality of recall depends on quality of encoding. Garbage in → garbage out. Need to ensure every memory entering the system is high-quality at write time, not just flagged later.
+
+**Scope**:
+- [ ] Pre-encode quality check: reject or warn on low-specificity content
+- [ ] Auto-enrichment: extract implicit entities, temporal markers, causal language from raw content
+- [ ] Synapse suggestion: at encode time, suggest connections to existing memories
+- [ ] Redundancy prevention: before storing, show similar existing memories with confidence score
+- [ ] Encoding templates: domain-specific encoding patterns (error → root cause + fix + prevention)
+- **Brain test**: Hippocampal encoding filters and enriches before long-term storage → Yes
+
+---
+
 ## Stretch Goals (Exploratory)
 
 > Ideas worth tracking. May never ship, but inform direction.
@@ -494,8 +572,9 @@ Every roadmap item must pass:
 | Phase C: Scale & Enterprise | v6.x → v7.0 | Medium | High — unlocks enterprise use cases |
 | Phase D: Platform & Ecosystem | v7.0+ | High | Transformative — memory standard for AI |
 | Phase E: Intelligence Frontier | v8.0+ | High | Moonshot — novel AI memory paradigm |
+| **Phase F: Quality Deep Dive** | **Ongoing** | **Low** | **Critical — quality > quantity, the real differentiator** |
 
 ---
 
 *See [VISION.md](VISION.md) for the north star guiding all decisions.*
-*Last updated: 2026-04-03*
+*Last updated: 2026-04-05*

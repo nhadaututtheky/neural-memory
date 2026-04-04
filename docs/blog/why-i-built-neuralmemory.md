@@ -112,7 +112,7 @@ Everything is async Python. Storage is pluggable (SQLite default, in-memory for 
 ### Numbers
 
 - **1,649 tests** passing
-- **55 MCP tools** (remember, recall, context, train, conflicts, health, habits, ...)
+- **56 MCP tools** (remember, recall, context, train, conflicts, health, habits, ...)
 - **Python 3.11+**, async-first
 - **No LLM API required by default** — encoding uses local NLP (optional LLM enhancement available)
 - **SQLite storage** — no infrastructure required

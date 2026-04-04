@@ -28,7 +28,7 @@ Restart your AI tool. Your agent now remembers.
 
 ## 3 Tools. That's It.
 
-55 MCP tools are available, but you only need three:
+56 MCP tools are available, but you only need three:
 
 | Tool | What it does |
 |------|-------------|
@@ -38,7 +38,7 @@ Restart your AI tool. Your agent now remembers.
 
 Everything else — sessions, context loading, habit tracking, maintenance — works transparently in the background.
 
-> [All 55 MCP tools →](https://nhadaututtheky.github.io/neural-memory/api/mcp-tools/)
+> [All 56 MCP tools →](https://nhadaututtheky.github.io/neural-memory/api/mcp-tools/)
 
 ---
 
@@ -104,8 +104,12 @@ Sync uses **Merkle delta** — only diffs travel, not the full brain. Fast, effi
 - **Compression tiers** — full → summary → essence → ghost → metadata (reclaim storage, keep meaning)
 - **Brain versioning** — snapshot, rollback, diff, transplant memories between brains
 
+#### Community
+- **Brain Store** — browse, import, and publish pre-built brains to the community marketplace
+- **3 seed brains** — Python Best Practices, Git Workflows, Docker Essentials (ready to import)
+
 #### Ecosystem
-- **Web dashboard** — 7-page React UI with graph visualization, health radar, timeline, mindmap
+- **Web dashboard** — 7-page React UI with graph visualization, health radar, timeline, mindmap, Brain Store
 - **VS Code extension** — memory tree, graph explorer, CodeLens, WebSocket sync ([Marketplace →](https://marketplace.visualstudio.com/items?itemName=neuralmem.neuralmemory))
 - **Safety** — Fernet encryption, sensitive content auto-detection, parameterized SQL, path validation
 - **Telegram backup** — send brain `.db` files to Telegram for offsite backup
@@ -312,7 +316,7 @@ Zero LLM calls, zero API cost. [Full benchmarks →](docs/benchmarks.md)
 | [Quickstart Guide](https://nhadaututtheky.github.io/neural-memory/guides/quickstart-guide/) | Interactive guide with animated demos |
 | [Pro Quickstart](https://nhadaututtheky.github.io/neural-memory/guides/pro-quickstart/) | Get started with Pro features |
 | [CLI Reference](https://nhadaututtheky.github.io/neural-memory/getting-started/cli-reference/) | All 66 CLI commands |
-| [MCP Tools Reference](https://nhadaututtheky.github.io/neural-memory/api/mcp-tools/) | All 55 MCP tools with parameters |
+| [MCP Tools Reference](https://nhadaututtheky.github.io/neural-memory/api/mcp-tools/) | All 56 MCP tools with parameters |
 | [Cloud Sync](https://nhadaututtheky.github.io/neural-memory/guides/cloud-sync/) | Multi-device sync setup |
 | [Brain Health Guide](https://nhadaututtheky.github.io/neural-memory/guides/brain-health/) | Understanding and improving brain health |
 | [Embedding Setup](https://nhadaututtheky.github.io/neural-memory/guides/embedding-setup/) | Configure embedding providers |

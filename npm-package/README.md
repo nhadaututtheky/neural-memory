@@ -1,6 +1,6 @@
 # neural-memory-mcp
 
-Persistent memory for AI agents — 55 MCP tools, spreading activation recall, neuroscience-inspired consolidation.
+Persistent memory for AI agents — 56 MCP tools, spreading activation recall, neuroscience-inspired consolidation.
 
 ## Install
 
@@ -31,7 +31,7 @@ Add to your `.mcp.json`:
 
 ## Features
 
-- **55 MCP tools** — remember, recall, consolidate, review, visualize, and more
+- **56 MCP tools** — remember, recall, consolidate, review, visualize, and more
 - **Spreading activation recall** — graph traversal, not vector similarity RAG
 - **10 neuroscience algorithms** — Hebbian learning, hippocampal replay, lateral inhibition
 - **Tiered memory** — HOT/WARM/COLD with auto-tier promotion

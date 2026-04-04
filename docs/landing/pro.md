@@ -270,7 +270,7 @@ pip install neural-memory
 nmem pro activate YOUR_LICENSE_KEY
 ```
 
-Pro features are bundled in the main package — all dependencies included. Just activate your license key. Your existing 55 MCP tools keep working unchanged. Three new tools appear automatically.
+Pro features are bundled in the main package — all dependencies included. Just activate your license key. Your existing 56 MCP tools keep working unchanged. Three new tools appear automatically.
 
 To enable InfinityDB (semantic search engine), set `storage_backend = "infinitydb"` in your `config.toml`. On next startup, existing memories are auto-migrated from SQLite. Both databases coexist — downgrade is safe.
 
@@ -297,7 +297,7 @@ To enable InfinityDB (semantic search engine), set `storage_backend = "infinityd
 
 ### Free — $0 forever
 
-Everything you have today. 55 MCP tools, SQLite storage, spreading activation, 14 consolidation strategies, FTS5 search, cloud sync (100 neurons). **No features removed, ever.**
+Everything you have today. 56 MCP tools, SQLite storage, spreading activation, 14 consolidation strategies, FTS5 search, cloud sync (100 neurons). **No features removed, ever.**
 
 ### Pro — $9/month (219,000 VND)
 
