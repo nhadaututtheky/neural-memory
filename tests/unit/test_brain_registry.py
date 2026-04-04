@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -14,7 +14,6 @@ from neural_memory.engine.brain_registry import (
     RegistryCache,
     _raw_url,
 )
-
 
 # ── URL Builder ─────────────────────────────────────────────────
 
@@ -188,9 +187,7 @@ class TestFilterIndex:
         assert len(result) == 3  # Only 3 items, but limit doesn't exceed 100
 
     def test_combined_filters(self) -> None:
-        result = self.client.filter_index(
-            _SAMPLE_MANIFESTS, tag="coding", search="security"
-        )
+        result = self.client.filter_index(_SAMPLE_MANIFESTS, tag="coding", search="security")
         assert len(result) == 1
         assert result[0]["name"] == "security-101"
 
@@ -224,7 +221,10 @@ class TestFetchIndex:
         """Network error with no cache should return empty list."""
         client = BrainRegistryClient()
 
-        with patch("neural_memory.engine.brain_registry.BrainRegistryClient._fallback_index", return_value=[]):
+        with patch(
+            "neural_memory.engine.brain_registry.BrainRegistryClient._fallback_index",
+            return_value=[],
+        ):
             # Force an import error to test error handling
             result = await client.fetch_index()
             # Should return empty or fallback

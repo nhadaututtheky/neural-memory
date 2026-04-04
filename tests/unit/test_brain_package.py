@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -52,7 +52,7 @@ def _make_snapshot(
         {
             "id": f"f{i}",
             "neuron_ids": [f"n{j}" for j in range(min(3, neuron_count))],
-            "synapse_ids": [f"s0"] if synapse_count > 0 else [],
+            "synapse_ids": ["s0"] if synapse_count > 0 else [],
             "anchor_neuron_id": "n0",
             "pathway": ["n0", "n1"],
             "conductivity": 0.9,
@@ -74,7 +74,7 @@ def _make_snapshot(
     return BrainSnapshot(
         brain_id="test-brain-id",
         brain_name="test-brain",
-        exported_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        exported_at=datetime(2026, 1, 1, tzinfo=UTC),
         version="1",
         neurons=neurons,
         synapses=synapses,
@@ -184,7 +184,7 @@ class TestCreateBrainPackage:
         snapshot = BrainSnapshot(
             brain_id="bad",
             brain_name="bad",
-            exported_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            exported_at=datetime(2026, 1, 1, tzinfo=UTC),
             version="1",
             neurons=neurons,
             synapses=[],
@@ -275,10 +275,19 @@ class TestValidateBrainPackage:
         assert valid is False
 
     def test_missing_snapshot(self) -> None:
-        valid, errors = validate_brain_package({
-            "nmem_brain_package": "1.0",
-            "manifest": {"id": "x", "name": "x", "display_name": "x", "description": "x", "author": "x", "content_hash": "sha256:abc"},
-        })
+        valid, errors = validate_brain_package(
+            {
+                "nmem_brain_package": "1.0",
+                "manifest": {
+                    "id": "x",
+                    "name": "x",
+                    "display_name": "x",
+                    "description": "x",
+                    "author": "x",
+                    "content_hash": "sha256:abc",
+                },
+            }
+        )
         assert valid is False
 
     def test_invalid_hash_detected(self) -> None:
@@ -296,11 +305,13 @@ class TestValidateBrainPackage:
         assert any("hash mismatch" in e.lower() for e in errors)
 
     def test_missing_required_manifest_fields(self) -> None:
-        valid, errors = validate_brain_package({
-            "nmem_brain_package": "1.0",
-            "manifest": {"id": "x"},  # Missing name, display_name, etc.
-            "snapshot": {"neurons": [], "synapses": [], "fibers": []},
-        })
+        valid, errors = validate_brain_package(
+            {
+                "nmem_brain_package": "1.0",
+                "manifest": {"id": "x"},  # Missing name, display_name, etc.
+                "snapshot": {"neurons": [], "synapses": [], "fibers": []},
+            }
+        )
         assert valid is False
         assert len(errors) >= 1
 
@@ -344,16 +355,18 @@ class TestPreviewBrainPackage:
         assert len(preview["sample_neurons"]) == 10  # Max 10
 
     def test_preview_truncates_content(self) -> None:
-        neurons = [{
-            "id": "n1",
-            "type": "fact",
-            "content": "x" * 500,
-            "metadata": {},
-        }]
+        neurons = [
+            {
+                "id": "n1",
+                "type": "fact",
+                "content": "x" * 500,
+                "metadata": {},
+            }
+        ]
         snapshot = BrainSnapshot(
             brain_id="t",
             brain_name="t",
-            exported_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            exported_at=datetime(2026, 1, 1, tzinfo=UTC),
             version="1",
             neurons=neurons,
             synapses=[],
