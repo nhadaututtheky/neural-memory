@@ -152,11 +152,13 @@ class StoreHandler:
         snapshot_data = data.get("snapshot", {})
         manifest = data.get("manifest", {})
 
+        import uuid
+
         from neural_memory.core.brain import BrainSnapshot
         from neural_memory.utils.timeutils import utcnow
 
         snapshot = BrainSnapshot(
-            brain_id="",
+            brain_id=str(uuid.uuid4()),
             brain_name=manifest.get("name", brain_name),
             exported_at=utcnow(),
             version=str(snapshot_data.get("version", "1")),

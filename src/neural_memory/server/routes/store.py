@@ -222,11 +222,13 @@ async def import_brain_package(
     brain_name = manifest.get("name", manifest.get("display_name", "imported"))
 
     try:
+        import uuid
+
         from neural_memory.core.brain import BrainSnapshot
         from neural_memory.utils.timeutils import utcnow
 
         snapshot = BrainSnapshot(
-            brain_id="",  # Will be assigned by storage
+            brain_id=str(uuid.uuid4()),
             brain_name=brain_name,
             exported_at=utcnow(),
             version=str(snapshot_data.get("version", "1")),
@@ -418,11 +420,13 @@ async def import_remote_brain(
     brain_name = manifest.get("name", manifest.get("display_name", "imported"))
 
     try:
+        import uuid as _uuid
+
         from neural_memory.core.brain import BrainSnapshot
         from neural_memory.utils.timeutils import utcnow
 
         snapshot = BrainSnapshot(
-            brain_id="",
+            brain_id=str(_uuid.uuid4()),
             brain_name=brain_name,
             exported_at=utcnow(),
             version=str(snapshot_data.get("version", "1")),
