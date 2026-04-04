@@ -357,15 +357,17 @@ class SpreadingActivation:
 
                 # Role-based multiplier: semantic synapses conduct stronger
                 syn_type = getattr(synapse, "type", None)
-                role = SYNAPSE_ROLES.get(syn_type, SynapseRole.STRUCTURAL) if syn_type else SynapseRole.STRUCTURAL
+                role = (
+                    SYNAPSE_ROLES.get(syn_type, SynapseRole.STRUCTURAL)
+                    if syn_type
+                    else SynapseRole.STRUCTURAL
+                )
                 role_mult = _ROLE_MULTIPLIERS.get(role, 1.0)
                 if role_mult == 0.0:
                     continue  # PASSIVE synapses skip entirely
 
                 # Calculate new activation with frequency boost + role weight
-                new_level = (
-                    current.level * decay_factor * synapse.weight * freq_factor * role_mult
-                )
+                new_level = current.level * decay_factor * synapse.weight * freq_factor * role_mult
 
                 # Skip if below threshold
                 if new_level < min_activation:

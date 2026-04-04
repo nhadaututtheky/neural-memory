@@ -185,9 +185,7 @@ class TestSpreadingActivation:
         assert results == {}
 
     @pytest.mark.asyncio
-    async def test_semantic_synapses_conduct_stronger(
-        self, config: BrainConfig
-    ) -> None:
+    async def test_semantic_synapses_conduct_stronger(self, config: BrainConfig) -> None:
         """CAUSED_BY (SEQUENTIAL role) should conduct stronger than CO_OCCURS (LATERAL)."""
         from neural_memory.core.brain import Brain
 
@@ -223,9 +221,7 @@ class TestSpreadingActivation:
         assert results["b"].activation_level > results["c"].activation_level
 
     @pytest.mark.asyncio
-    async def test_passive_synapses_skipped(
-        self, config: BrainConfig
-    ) -> None:
+    async def test_passive_synapses_skipped(self, config: BrainConfig) -> None:
         """PASSIVE role synapses (ALIAS, HAPPENED_AT) should not conduct activation."""
         from neural_memory.core.brain import Brain
 
