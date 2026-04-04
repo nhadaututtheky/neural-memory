@@ -248,7 +248,9 @@ class BrainRegistryClient:
                     if resp.status == 404:
                         return None
                     if resp.status != 200:
-                        logger.warning("GitHub brain fetch failed: HTTP %d for %s", resp.status, name)
+                        logger.warning(
+                            "GitHub brain fetch failed: HTTP %d for %s", resp.status, name
+                        )
                         return None
 
                     data: dict[str, Any] = await resp.json()
