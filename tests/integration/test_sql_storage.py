@@ -91,8 +91,16 @@ async def test_schema_creates_tables(storage: SQLStorage):
     table_names = {row["name"] for row in tables}
 
     # Core tables that must exist
-    for required in ("brains", "neurons", "neuron_states", "synapses", "fibers",
-                     "fiber_neurons", "typed_memories", "projects"):
+    for required in (
+        "brains",
+        "neurons",
+        "neuron_states",
+        "synapses",
+        "fibers",
+        "fiber_neurons",
+        "typed_memories",
+        "projects",
+    ):
         assert required in table_names, f"Missing table: {required}"
 
     # FTS virtual tables
