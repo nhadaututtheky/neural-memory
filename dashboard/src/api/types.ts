@@ -447,3 +447,87 @@ export interface LicenseResponse {
   pro_deps_missing?: string[]
   pro_deps_install_hint?: string
 }
+
+// ── Brain Store ────────────────────────────────────────────────
+
+export interface BrainManifest {
+  id: string
+  name: string
+  display_name: string
+  description: string
+  version: string
+  author: string
+  license: string
+  tags: string[]
+  category: string
+  created_at: string
+  exported_at: string
+  nmem_version: string
+  stats: { neuron_count: number; synapse_count: number; fiber_count: number }
+  size_bytes: number
+  size_tier: string
+  content_hash: string
+  scan_summary: { risk_level: string; finding_count: number; safe: boolean }
+  rating_avg: number
+  rating_count: number
+  download_count: number
+}
+
+export interface ScanFinding {
+  category: string
+  severity: string
+  description: string
+  location: string
+}
+
+// GET /api/dashboard/store/registry
+export interface StoreRegistryResponse {
+  brains: BrainManifest[]
+  total: number
+  cached: boolean
+}
+
+// GET /api/dashboard/store/registry/preview/:name
+export interface BrainPreview {
+  manifest: BrainManifest
+  sample_neurons: {
+    id: string
+    type: string
+    content: string
+    created_at: string
+  }[]
+  neuron_type_breakdown: Record<string, number>
+  top_tags: string[]
+  scan_result: {
+    safe: boolean
+    risk_level: string
+    finding_count: number
+    findings: ScanFinding[]
+  }
+}
+
+// POST /api/dashboard/store/import + /import-remote
+export interface StoreImportResponse {
+  brain_id: string
+  brain_name: string
+  neurons_imported: number
+  synapses_imported: number
+  fibers_imported: number
+  scan_result: { safe: boolean; risk_level: string; finding_count: number }
+  warnings: string[]
+}
+
+// POST /api/dashboard/store/export
+export interface StoreExportResponse {
+  manifest: Record<string, unknown>
+  scan_summary: Record<string, unknown>
+  package_size_bytes: number
+  size_tier: string
+}
+
+// POST /api/dashboard/store/rate
+export interface StoreRatingResponse {
+  brain_package_id: string
+  rating_avg: number
+  rating_count: number
+}

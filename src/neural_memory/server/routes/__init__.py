@@ -10,6 +10,7 @@ from neural_memory.server.routes.integration_status import (
 from neural_memory.server.routes.memory import router as memory_router
 from neural_memory.server.routes.oauth import router as oauth_router
 from neural_memory.server.routes.openclaw_api import router as openclaw_router
+from neural_memory.server.routes.store import router as store_router
 from neural_memory.server.routes.sync import router as sync_router
 
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     "memory_router",
     "oauth_router",
     "openclaw_router",
+    "store_router",
     "sync_router",
 ]

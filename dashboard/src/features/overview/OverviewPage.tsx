@@ -5,11 +5,12 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { Brain, Lightning, Link, Stack, Trash } from "@phosphor-icons/react"
+import { Brain, Lightning, Link, Stack, Trash, Export } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import QuickActionsCard from "./QuickActionsCard"
 import GuideCard from "./GuideCard"
+import { ExportDialog } from "@/features/store/ExportDialog"
 
 function KpiCard({
   label,
@@ -49,6 +50,7 @@ export default function OverviewPage() {
   const switchBrain = useSwitchBrain()
   const deleteBrain = useDeleteBrain()
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
+  const [exportTarget, setExportTarget] = useState<string | null>(null)
   const { t } = useTranslation()
 
   const handleSwitchBrain = (brainName: string) => {
@@ -187,20 +189,36 @@ export default function OverviewPage() {
                         )}
                       </td>
                       <td className="py-3">
-                        {!brain.is_active && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8 text-muted-foreground hover:text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setDeleteTarget({ id: brain.id, name: brain.name })
-                            }}
-                            aria-label={t("overview.deleteBrain", { name: brain.name })}
-                          >
-                            <Trash className="size-4" />
-                          </Button>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {brain.is_active && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8 text-muted-foreground hover:text-primary"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setExportTarget(brain.name)
+                              }}
+                              aria-label={t("store.exportBrain")}
+                            >
+                              <Export className="size-4" />
+                            </Button>
+                          )}
+                          {!brain.is_active && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8 text-muted-foreground hover:text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setDeleteTarget({ id: brain.id, name: brain.name })
+                              }}
+                              aria-label={t("overview.deleteBrain", { name: brain.name })}
+                            >
+                              <Trash className="size-4" />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -212,6 +230,13 @@ export default function OverviewPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Export dialog */}
+      <ExportDialog
+        open={!!exportTarget}
+        onClose={() => setExportTarget(null)}
+        brainName={exportTarget ?? ""}
+      />
 
       {/* Delete confirmation dialog */}
       <ConfirmDialog

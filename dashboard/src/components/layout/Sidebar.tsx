@@ -11,6 +11,7 @@ import {
   Sparkle,
   ChartLine,
   Gauge,
+  Storefront,
 } from "@phosphor-icons/react"
 import { cn } from "@/lib/utils"
 import { useLayoutStore } from "@/stores/useLayoutStore"
@@ -34,6 +35,7 @@ const navItems: NavItem[] = [
   { to: "/visualize", icon: ChartLine, labelKey: "nav.visualize", separator: true },
   { to: "/oracle", icon: Sparkle, labelKey: "nav.oracle" },
   { to: "/sync", icon: Cloud, labelKey: "nav.sync" },
+  { to: "/store", icon: Storefront, labelKey: "nav.store" },
   { to: "/storage", icon: HardDrive, labelKey: "nav.storage" },
   { to: "/tier-analytics", icon: Gauge, labelKey: "nav.tierAnalytics" },
   // ── Settings ──

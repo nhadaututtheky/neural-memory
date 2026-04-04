@@ -12,6 +12,7 @@ const SyncPage = lazy(() => import("@/features/sync/SyncPage"))
 const OraclePage = lazy(() => import("@/features/oracle/OraclePage"))
 const VisualizePage = lazy(() => import("@/features/visualize/VisualizePage"))
 const StoragePage = lazy(() => import("@/features/storage/StoragePage"))
+const StorePage = lazy(() => import("@/features/store/StorePage"))
 const TierAnalyticsPage = lazy(() => import("@/features/tier-analytics/TierAnalyticsPage"))
 
 function SuspensePage({ children }: { children: React.ReactNode }) {
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="visualize" element={<SuspensePage><VisualizePage /></SuspensePage>} />
         <Route path="oracle" element={<SuspensePage><OraclePage /></SuspensePage>} />
         <Route path="sync" element={<SuspensePage><SyncPage /></SuspensePage>} />
+        <Route path="store" element={<SuspensePage><StorePage /></SuspensePage>} />
         <Route path="storage" element={<SuspensePage><StoragePage /></SuspensePage>} />
         <Route path="tier-analytics" element={<SuspensePage><TierAnalyticsPage /></SuspensePage>} />
         <Route path="settings" element={<SuspensePage><SettingsPage /></SuspensePage>} />

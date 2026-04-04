@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Brain Store (Marketplace)** — community brain marketplace for sharing and importing curated knowledge brains:
+  - `.brain` package format v1.0 — single JSON file with manifest + BrainSnapshot, human-inspectable
+  - Three-gate security model — export, import, and registry gates all use `brain_scanner.py` with Unicode bypass protection (NFKC normalization + zero-width char stripping)
+  - Registry client — GitHub-based distribution via `raw.githubusercontent.com`, 5-min TTL in-memory cache with stale fallback
+  - MCP tool `nmem_store` — browse, preview, import, and export community brains (action-based schema)
+  - FastAPI endpoints — `/api/dashboard/store/registry`, `/preview`, `/import`, `/export`, `/rate`, `/import-remote`
+  - Dashboard Store page — browse grid with search, category filters, sort options, preview dialog with security scan display, one-click import, 5-star rating
+  - Export dialog — export active brain from Overview page with metadata form, auto-download as `.brain` file
+  - Size tiers — Micro (<100KB), Small (<1MB), Medium (<10MB), Reject (>10MB)
+  - Rating system — in-memory bounded (1000 packages × 100 ratings), average + count tracking
+  - i18n — full English and Vietnamese translations (35+ keys)
 - **`tag_mode` parameter for recall** — filter by tags using AND (all must match, default) or OR (any tag matches). Available in REST API, MCP `nmem_recall`, and cross-brain recall. Backward-compatible: default behavior unchanged.
 
 ### Fixed

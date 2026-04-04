@@ -34,6 +34,7 @@ from neural_memory.mcp.provenance_handler import ProvenanceHandler
 from neural_memory.mcp.recall_handler import RecallHandler
 from neural_memory.mcp.remember_handler import RememberHandler
 from neural_memory.mcp.stats_handler import StatsHandler
+from neural_memory.mcp.store_handler import StoreHandler
 from neural_memory.mcp.tier_handler import TierHandler
 
 # Re-export shared utilities for backward compatibility.
@@ -54,6 +55,7 @@ class ToolHandler(
     InstructionHandler,
     BudgetHandler,
     TierHandler,
+    StoreHandler,
     RememberHandler,
     RecallHandler,
 ):

@@ -1974,4 +1974,80 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "required": ["action"],
         },
     },
+    {
+        "name": "nmem_store",
+        "description": "Brain Store — browse, preview, import, and export community knowledge brains. "
+        "Share curated brains with the community or import others' expertise.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["browse", "preview", "import", "export"],
+                    "description": "browse=search community brain registry, preview=view brain details before import, "
+                    "import=download and import a brain, export=export current brain as .brain package",
+                },
+                "brain_name": {
+                    "type": "string",
+                    "description": "Brain name in registry (required for preview/import)",
+                },
+                "search": {
+                    "type": "string",
+                    "description": "Search query for browse (matches name, description, tags)",
+                },
+                "category": {
+                    "type": "string",
+                    "enum": [
+                        "programming",
+                        "devops",
+                        "writing",
+                        "science",
+                        "personal",
+                        "security",
+                        "data",
+                        "design",
+                        "general",
+                    ],
+                    "description": "Filter by category (browse) or set category (export)",
+                },
+                "tag": {
+                    "type": "string",
+                    "description": "Filter by tag (browse only)",
+                },
+                "sort_by": {
+                    "type": "string",
+                    "enum": ["created_at", "rating_avg", "download_count"],
+                    "description": "Sort order for browse results (default: created_at)",
+                },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50,
+                    "description": "Max results for browse (default: 20, max: 50)",
+                },
+                "display_name": {
+                    "type": "string",
+                    "description": "Display name for exported brain (required for export)",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Description for exported brain (export only)",
+                },
+                "author": {
+                    "type": "string",
+                    "description": "Author name for exported brain (export only, default: anonymous)",
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Tags for exported brain (export only)",
+                },
+                "output_path": {
+                    "type": "string",
+                    "description": "File path to save exported .brain package (export only)",
+                },
+            },
+            "required": ["action"],
+        },
+    },
 ]

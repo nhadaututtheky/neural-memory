@@ -283,6 +283,7 @@ class MCPServer(
             "nmem_tier": self._tier,
             "nmem_boundaries": self._boundaries,
             "nmem_milestone": self._milestone,
+            "nmem_store": self._store,
         }
         handler = dispatch.get(name)
         if handler:
