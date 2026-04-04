@@ -16,7 +16,7 @@ def _make_snapshot(
         "brain_id": "brain-1",
         "brain_name": "test-brain",
         "exported_at": "2026-03-02T12:00:00",
-        "version": "4.29.0",
+        "version": "4.30.0",
         "neurons": neurons or [],
         "synapses": synapses or [],
         "fibers": fibers or [],
