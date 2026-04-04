@@ -9,9 +9,7 @@ Covers:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-
-import pytest
+from datetime import datetime
 
 from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
@@ -108,7 +106,6 @@ class TestTypeAwarePruning:
     def test_co_occurs_decays_faster(self) -> None:
         """CO_OCCURS synapse should decay 3x faster than semantic synapses."""
         now = datetime.now(tz=None)  # naive UTC per project convention
-        created = now - timedelta(days=10)
 
         co_occurs = Synapse.create(
             source_id="a",

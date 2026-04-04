@@ -147,8 +147,6 @@ class TestRelationEncoding:
             "The Redis cache crashed because the memory limit was exceeded.",
         )
 
-        # Should find CAUSED_BY synapse (Redis exists from first encode)
-        caused_by = [s for s in result.synapses_created if s.type == SynapseType.CAUSED_BY]
         # The key fix: existing "Redis" entity is now in the matching pool
         # Even if no CAUSED_BY is found (regex matching is best-effort),
         # the matching pool should include existing neurons
