@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.32.1] — 2026-04-05
+
+### Fixed
+
+- **Double-decay on inferred CO_OCCURS** — inferred synapses were hit by both `_inferred` (0.5×) AND CO_OCCURS (0.33×) decay, evaporating at 0.165× per consolidation. Now only one decay path applies.
+- **Dedup ALIAS pruning** — dedup ALIAS synapses (`_dedup=True`, `reinforced_count=0`) were pruned by the new type-aware decay, breaking dedup chains. Now excluded from accelerated decay.
+- **Truncation metadata leak** — `_content_truncated` metadata no longer leaks onto dedup alias neurons
+- **Ephemeral quality warning** — quality warning for long content now skipped for ephemeral memories
+
 ## [4.32.0] — 2026-04-05
 
 ### Added
