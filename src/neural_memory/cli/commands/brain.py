@@ -31,18 +31,28 @@ def brain_list(
         nmem brain list
         nmem brain list --json
     """
+    import os
+
     config = get_config()
     brains = config.list_brains()
-    current = config.current_brain
+    # Effective brain: env var overrides config (matches CLI get_storage resolution)
+    env_brain = os.environ.get("NEURALMEMORY_BRAIN") or os.environ.get("NMEM_BRAIN")
+    current = env_brain or config.current_brain
 
     if json_output:
-        output_result({"brains": brains, "current": current}, True)
+        result: dict[str, Any] = {"brains": brains, "current": current}
+        if env_brain:
+            result["source"] = "env"
+        output_result(result, True)
     else:
         if not brains:
             typer.echo("No brains found. Create one with: nmem brain create <name>")
             return
 
-        typer.echo("Available brains:")
+        if env_brain:
+            typer.echo(f"Available brains (active from env: {env_brain}):")
+        else:
+            typer.echo("Available brains:")
         for brain in brains:
             marker = " *" if brain == current else ""
             typer.echo(f"  {brain}{marker}")

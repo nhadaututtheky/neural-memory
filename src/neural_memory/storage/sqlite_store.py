@@ -1,4 +1,15 @@
-"""SQLite storage backend for persistent neural memory."""
+"""SQLite storage backend for persistent neural memory.
+
+.. deprecated::
+    This module is superseded by ``neural_memory.storage.sql.sql_storage.SQLStorage``
+    used with ``neural_memory.storage.sql.sqlite_dialect.SQLiteDialect``.
+    The unified adapter provides the same functionality through a dialect-agnostic
+    architecture that works with SQLite, PostgreSQL, and future backends.
+
+    Existing code using ``SQLiteStorage`` continues to work. New code should
+    prefer ``SQLStorage(SQLiteDialect(db_path=...))`` or pass
+    ``backend="unified"`` to ``create_storage()``.
+"""
 
 from __future__ import annotations
 
@@ -85,6 +96,14 @@ class SQLiteStorage(
     """
 
     def __init__(self, db_path: str | Path) -> None:
+        import warnings
+
+        warnings.warn(
+            "SQLiteStorage is deprecated. Use SQLStorage(SQLiteDialect(db_path=...)) "
+            "from neural_memory.storage.sql instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._db_path = Path(db_path).resolve()
         self._conn: aiosqlite.Connection | None = None
         self._current_brain_id: str | None = None

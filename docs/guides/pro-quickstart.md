@@ -7,7 +7,7 @@ You installed Pro. Here's how to make it work for you in 5 minutes.
 ## 1. Install and activate
 
 ```bash
-pip install neural-memory-pro
+pip install neural-memory
 nmem pro activate YOUR_LICENSE_KEY
 ```
 
@@ -192,8 +192,8 @@ Pro sync uses **Merkle delta** — only changes are transmitted. A brain with 10
 ### "Pro: Inactive" after install
 
 ```bash
-# Check if the package is installed
-pip show neural-memory-pro
+# Check if Pro deps are installed
+python -c "from neural_memory.pro import is_pro_deps_installed; print(is_pro_deps_installed())"
 
 # Re-activate license
 nmem pro activate YOUR_LICENSE_KEY
@@ -213,7 +213,7 @@ nmem_tier_info    # shows indexing progress
 ### Want to downgrade?
 
 ```bash
-pip uninstall neural-memory-pro
+pip install neural-memory  # reinstall without [pro] extra
 ```
 
 Your data stays intact. Neural Memory falls back to SQLite + FTS5 automatically. No data loss, no migration needed.

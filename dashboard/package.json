@@ -7,10 +7,13 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "e2e": "playwright test",
+    "e2e:headed": "playwright test --headed"
   },
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",
+    "@phosphor-icons/react": "^2.1.10",
     "@radix-ui/react-slot": "^1.2.4",
     "@react-sigma/core": "^5.0.6",
     "@tanstack/react-query": "^5.90.21",
@@ -25,7 +28,6 @@
     "graphology-types": "^0.24.8",
     "i18next": "^25.8.13",
     "i18next-browser-languagedetector": "^8.2.1",
-    "lucide-react": "^0.576.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-i18next": "^16.5.4",
@@ -41,6 +43,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/vite": "^4.2.1",
     "@types/node": "^24.11.0",
     "@types/react": "^19.2.7",

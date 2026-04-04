@@ -205,12 +205,34 @@ async def _compute_score_breakdown(
         best_intensity = max(s.metadata.get("_intensity", 0.5) for s in felt_synapses)
         emotional_resonance = min(0.1, 0.05 * best_intensity)
 
+    # Decision domain boost: DECISION memories get a boost when their
+    # context_tags match query tokens (via the calling retrieval context)
+    decision_domain_boost = 0.0
+    try:
+        neuron_obj = await storage.get_neuron(top_id)
+        if neuron_obj:
+            decision_meta = neuron_obj.metadata.get("_decision")
+            if decision_meta and isinstance(decision_meta, dict):
+                context_tags = decision_meta.get("context_tags", [])
+                if context_tags:
+                    # Compare against top neuron's content tokens as proxy
+                    content_tokens = {
+                        w.lower() for w in (neuron_obj.content or "").split() if len(w) > 2
+                    }
+                    tag_tokens = {str(t).lower() for t in context_tags}
+                    if content_tokens and tag_tokens:
+                        match_ratio = len(content_tokens & tag_tokens) / len(tag_tokens)
+                        decision_domain_boost = min(0.1, 0.1 * match_ratio)
+    except Exception:
+        pass  # Non-critical boost
+
     raw_total = (
         base_confidence
         + intersection_boost
         + freshness_boost
         + frequency_boost
         + emotional_resonance
+        + decision_domain_boost
     )
     return ScoreBreakdown(
         base_activation=base_confidence,
@@ -218,6 +240,7 @@ async def _compute_score_breakdown(
         freshness_boost=freshness_boost,
         frequency_boost=frequency_boost,
         emotional_resonance=emotional_resonance,
+        decision_domain_boost=decision_domain_boost,
         raw_total=raw_total,
     )
 

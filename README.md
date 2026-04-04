@@ -1,6 +1,8 @@
 # NeuralMemory
 
+[![GitHub stars](https://img.shields.io/github/stars/nhadaututtheky/neural-memory?style=social)](https://github.com/nhadaututtheky/neural-memory/stargazers)
 [![PyPI](https://img.shields.io/pypi/v/neural-memory.svg)](https://pypi.org/project/neural-memory/)
+[![Downloads](https://img.shields.io/pypi/dm/neural-memory)](https://pypi.org/project/neural-memory/)
 [![CI](https://github.com/nhadaututtheky/neural-memory/workflows/CI/badge.svg)](https://github.com/nhadaututtheky/neural-memory/actions)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
@@ -26,7 +28,7 @@ Restart your AI tool. Your agent now remembers.
 
 ## 3 Tools. That's It.
 
-52 MCP tools are available, but you only need three:
+55 MCP tools are available, but you only need three:
 
 | Tool | What it does |
 |------|-------------|
@@ -36,7 +38,7 @@ Restart your AI tool. Your agent now remembers.
 
 Everything else — sessions, context loading, habit tracking, maintenance — works transparently in the background.
 
-> [All 52 MCP tools →](https://nhadaututtheky.github.io/neural-memory/api/mcp-tools/)
+> [All 55 MCP tools →](https://nhadaututtheky.github.io/neural-memory/api/mcp-tools/)
 
 ---
 
@@ -161,7 +163,7 @@ asyncio.run(main())
 
 ## Neural Memory Pro
 
-Free Neural Memory is complete — 52 tools, unlimited memories, fully offline. **You never have to pay.**
+Free Neural Memory is complete — 55 tools, unlimited memories, fully offline. **You never have to pay.**
 
 But past 10K memories, things change. Keyword matching misses semantically related content. Consolidation slows to minutes. Storage grows unbounded. If your agent's brain is getting big, Pro makes it smart.
 
@@ -196,9 +198,9 @@ Pro  (HNSW):  7 results — includes "JWT rotation", "session hardening", "OAuth
 ### Get Pro
 
 ```bash
-pip install neural-memory-pro         # install Pro package
-nmem pro activate YOUR_LICENSE_KEY    # activate license
-nmem pro status                       # verify: Pro: Active
+pip install neural-memory                 # Pro features included
+nmem pro activate YOUR_LICENSE_KEY       # activate license
+nmem pro status                          # verify: Pro: Active
 ```
 
 **[$9/mo](https://nhadaututtheky.github.io/neural-memory/landing/pricing/)** — 30-day money-back guarantee. All free tools keep working. Downgrade anytime, keep your data.
@@ -255,11 +257,10 @@ Set memory slot in `~/.openclaw/openclaw.json`:
 <details>
 <summary><b>Upgrade to Pro</b></summary>
 
-Already using Neural Memory? Upgrade in 3 steps:
+Already using Neural Memory? Just activate your key:
 
 ```bash
-pip install neural-memory-pro         # 1. install Pro package
-nmem pro activate YOUR_LICENSE_KEY    # 2. activate license
+nmem pro activate YOUR_LICENSE_KEY    # activate license
 ```
 
 Then enable InfinityDB (semantic search engine):
@@ -311,7 +312,7 @@ Zero LLM calls, zero API cost. [Full benchmarks →](docs/benchmarks.md)
 | [Quickstart Guide](https://nhadaututtheky.github.io/neural-memory/guides/quickstart-guide/) | Interactive guide with animated demos |
 | [Pro Quickstart](https://nhadaututtheky.github.io/neural-memory/guides/pro-quickstart/) | Get started with Pro features |
 | [CLI Reference](https://nhadaututtheky.github.io/neural-memory/getting-started/cli-reference/) | All 66 CLI commands |
-| [MCP Tools Reference](https://nhadaututtheky.github.io/neural-memory/api/mcp-tools/) | All 52 MCP tools with parameters |
+| [MCP Tools Reference](https://nhadaututtheky.github.io/neural-memory/api/mcp-tools/) | All 55 MCP tools with parameters |
 | [Cloud Sync](https://nhadaututtheky.github.io/neural-memory/guides/cloud-sync/) | Multi-device sync setup |
 | [Brain Health Guide](https://nhadaututtheky.github.io/neural-memory/guides/brain-health/) | Understanding and improving brain health |
 | [Embedding Setup](https://nhadaututtheky.github.io/neural-memory/guides/embedding-setup/) | Configure embedding providers |
@@ -322,7 +323,7 @@ Zero LLM calls, zero API cost. [Full benchmarks →](docs/benchmarks.md)
 ```bash
 git clone https://github.com/nhadaututtheky/neural-memory
 cd neural-memory && pip install -e ".[dev]"
-pytest tests/ -v          # 5400+ tests
+pytest tests/ -v          # 6100+ tests
 ruff check src/ tests/    # Lint
 ```
 
@@ -330,7 +331,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Support
 
-If NeuralMemory is useful to you, consider [sponsoring](https://github.com/sponsors/nhadaututtheky) or starring the repo.
+If Neural Memory helps your AI agent remember, please consider giving it a star — it helps others discover the project and keeps development going.
+
+<a href="https://github.com/nhadaututtheky/neural-memory/stargazers">
+  <img src="https://img.shields.io/github/stars/nhadaututtheky/neural-memory?style=social" alt="Star on GitHub"/>
+</a>
+
+You can also [sponsor](https://github.com/sponsors/nhadaututtheky) the project.
 
 ## License
 

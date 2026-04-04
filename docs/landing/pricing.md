@@ -12,7 +12,7 @@
 
 **$0** forever
 
-- 52 MCP tools
+- 55 MCP tools
 - SQLite storage engine
 - Spreading activation retrieval
 - FTS5 keyword search
@@ -117,7 +117,7 @@ Transfer syntax: NMPRO <email>
 ## How Licensing Works
 
 ```
-pip install neural-memory-pro
+pip install neural-memory
 nmem pro activate <license-key>
 ```
 

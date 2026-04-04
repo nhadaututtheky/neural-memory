@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react"
-import { Trophy } from "lucide-react"
+import { Trophy } from "@phosphor-icons/react"
 import { FlipCard } from "./FlipCard"
 import { generateMatchup, getMatchupPrompt } from "../engine/reading-engine"
 import type { OracleCard, MatchupState } from "../engine/types"

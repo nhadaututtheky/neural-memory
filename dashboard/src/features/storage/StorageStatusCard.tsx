@@ -2,7 +2,7 @@ import type { StorageStatusResponse } from "@/api/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useTranslation } from "react-i18next"
-import { Database, HardDrive, CheckCircle2, XCircle } from "lucide-react"
+import { Database, HardDrive, CheckCircle, XCircle } from "@phosphor-icons/react"
 
 interface StorageStatusCardProps {
   status: StorageStatusResponse
@@ -13,7 +13,7 @@ function FileStatus({ exists, label }: { exists: boolean; label: string }) {
   return (
     <div className="flex items-center gap-2 text-sm">
       {exists ? (
-        <CheckCircle2 className="size-4 text-green-500" aria-hidden="true" />
+        <CheckCircle className="size-4 text-green-500" aria-hidden="true" />
       ) : (
         <XCircle className="size-4 text-muted-foreground" aria-hidden="true" />
       )}

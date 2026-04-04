@@ -16,8 +16,11 @@ from typing import Any
 _TEMPLATES: dict[str, list[tuple[str, str]]] = {
     # (context_key, sentence_template_with_{value}_placeholder)
     "decision": [
+        ("chosen", "Chose {value}"),
         ("reason", "because {value}"),
         ("alternatives", "Alternatives considered: {value}"),
+        ("rejected", "Rejected alternatives: {value}"),
+        ("confidence", "Confidence: {value}"),
         ("decided_by", "Decided by {value}"),
         ("impact", "Impact: {value}"),
     ],

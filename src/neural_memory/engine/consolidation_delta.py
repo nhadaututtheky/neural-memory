@@ -24,6 +24,7 @@ if TYPE_CHECKING:
         ConsolidationStrategy,
     )
     from neural_memory.storage.base import NeuralStorage
+    from neural_memory.unified_config import TierConfig
 
 
 @dataclass(frozen=True)
@@ -177,6 +178,7 @@ async def run_with_delta(
     dry_run: bool = False,
     config: ConsolidationConfig | None = None,
     reference_time: datetime | None = None,
+    tier_config: TierConfig | None = None,
 ) -> ConsolidationDelta:
     """Run consolidation and compute a before/after health delta.
 
@@ -200,7 +202,7 @@ async def run_with_delta(
     from neural_memory.engine.diagnostics import DiagnosticsEngine
 
     diagnostics = DiagnosticsEngine(storage)
-    engine = ConsolidationEngine(storage, config)
+    engine = ConsolidationEngine(storage, config, tier_config=tier_config)
 
     # Step 1: Before snapshot
     before_report = await diagnostics.analyze(brain_id)

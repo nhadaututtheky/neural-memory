@@ -288,6 +288,50 @@ def extract_weighted_keywords(
         if vi_tokenized is not None:
             tokenized_text = vi_tokenized
 
+    # ── Phase 1: Extract code identifiers BEFORE lowercasing ─────────
+    # These are preserved as-is (case-sensitive) for precise code recall.
+    code_identifiers: dict[str, float] = {}
+    code_spans: list[tuple[int, int]] = []  # spans to skip in natural-language pass
+
+    # PascalCase: ReflexPipeline, MemoryEncoder (also split into sub-words)
+    for m in re.finditer(r"\b([A-Z][a-z]+(?:[A-Z][a-z]+)+)\b", tokenized_text):
+        ident = m.group(1)
+        code_identifiers[ident] = 1.2  # high weight for compound identifiers
+        code_spans.append((m.start(), m.end()))
+        # Also add split sub-words: ReflexPipeline -> reflex, pipeline
+        parts = re.findall(r"[A-Z][a-z]+", ident)
+        for part in parts:
+            code_identifiers.setdefault(part.lower(), 0.7)
+
+    # camelCase: processData, getKeywords
+    for m in re.finditer(r"\b([a-z][a-z0-9]*(?:[A-Z][a-z0-9]+)+)\b", tokenized_text):
+        ident = m.group(1)
+        code_identifiers[ident] = 1.2
+        code_spans.append((m.start(), m.end()))
+        parts = re.findall(r"[a-z][a-z0-9]*|[A-Z][a-z0-9]+", ident)
+        for part in parts:
+            code_identifiers.setdefault(part.lower(), 0.7)
+
+    # snake_case (2+ segments): extract_keywords, activate_trail
+    for m in re.finditer(r"\b([a-z][a-z0-9]*(?:_[a-z][a-z0-9]*){1,})\b", tokenized_text):
+        ident = m.group(1)
+        code_identifiers[ident] = 1.2
+        code_spans.append((m.start(), m.end()))
+        for part in ident.split("_"):
+            if len(part) >= min_length:
+                code_identifiers.setdefault(part, 0.7)
+
+    # Dotted modules: neural_memory.engine, os.path
+    for m in re.finditer(r"\b([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*){1,})\b", tokenized_text):
+        code_identifiers[m.group(1)] = 1.2
+        code_spans.append((m.start(), m.end()))
+
+    # Error types: ValueError, ConnectionRefusedError
+    for m in re.finditer(r"\b([A-Z][a-zA-Z]*(?:Error|Exception))\b", tokenized_text):
+        code_identifiers[m.group(1)] = 1.1
+        code_spans.append((m.start(), m.end()))
+
+    # ── Phase 2: Natural language keywords (existing logic) ────────
     words = re.findall(r"\b[a-zA-ZÀ-ỹ]+(?:_[a-zA-ZÀ-ỹ]+)*\b", tokenized_text.lower())
 
     # Filter to content words with original position
@@ -299,13 +343,16 @@ def extract_weighted_keywords(
         and w not in stop_words
     ]
 
-    if not filtered:
+    if not filtered and not code_identifiers:
         return []
 
-    total = len(filtered)
+    total = max(len(filtered), 1)
     weighted: dict[str, float] = {}
 
-    # Unigrams with position decay (1.0 at start → 0.5 at end)
+    # Seed with code identifiers (high priority)
+    weighted.update(code_identifiers)
+
+    # Unigrams with position decay (1.0 at start -> 0.5 at end)
     for idx, (word, _orig_pos) in enumerate(filtered):
         position_weight = 1.0 - 0.5 * (idx / max(1, total - 1))
         # Store with underscores replaced by spaces for readability

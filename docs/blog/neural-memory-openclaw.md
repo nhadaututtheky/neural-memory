@@ -338,7 +338,7 @@ Thêm vào MCP config (`~/.claude/claude_desktop_config.json` hoặc Cursor sett
 | **Cross-agent** | Không | Cloud sync | Portable SQLite brains |
 | **Compaction-safe** | Không (vấn đề chính) | Có | Có |
 | **Tests** | N/A | N/A | 3,976+ tests |
-| **MCP tools** | N/A | N/A | 52 tools |
+| **MCP tools** | N/A | N/A | 55 tools |
 | **Open source** | Có | Có (core) | Có (MIT) |
 
 ---

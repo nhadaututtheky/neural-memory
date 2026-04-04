@@ -147,6 +147,18 @@ class PostgresTypedMemoryMixin(PostgresBaseMixin):
         row = await self._query_one(query, *params)
         return row[0] if row else 0
 
+    async def count_typed_memories_grouped(
+        self,
+    ) -> list[tuple[str, str, int]]:
+        brain_id = self._get_brain_id()
+        query = (
+            "SELECT memory_type, tier, COUNT(*) FROM typed_memories"
+            " WHERE brain_id = $1 AND (expires_at IS NULL OR expires_at > $2)"
+            " GROUP BY memory_type, tier"
+        )
+        rows = await self._query_ro(query, brain_id, utcnow())
+        return [(row[0], row[1], row[2]) for row in rows]
+
     async def update_typed_memory(self, typed_memory: TypedMemory) -> None:
         brain_id = self._get_brain_id()
         result = await self._query(

@@ -14,7 +14,9 @@ from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from neural_memory import __version__
+from neural_memory.server.auth import APIKeyMiddleware
 from neural_memory.server.models import HealthResponse, ReadyResponse
+from neural_memory.server.rate_limit import RateLimitMiddleware
 from neural_memory.server.routes import (
     brain_router,
     consolidation_router,
@@ -465,6 +467,12 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Rate limiting middleware (inner — runs before auth, closest to handler)
+    app.add_middleware(RateLimitMiddleware)
+
+    # API key authentication middleware (outer — first line of defence)
+    app.add_middleware(APIKeyMiddleware)
 
     # Override storage dependency using the shared module
     from neural_memory.server.dependencies import get_storage as shared_get_storage

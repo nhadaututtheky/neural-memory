@@ -1,15 +1,10 @@
 """Neural Memory plugin registry.
 
-Extension point for neural-memory-pro and third-party plugins.
+Extension point for third-party plugins.
+Pro features are now bundled in the main package (neural_memory.pro).
+This registry is kept for backward compatibility and third-party extensions.
+
 Plugins are auto-discovered via Python entry_points (group: neural_memory.plugins).
-
-Usage (in your plugin's __init__.py):
-    from neural_memory.plugins import register
-    register(MyPlugin())
-
-Or via pyproject.toml entry_points for auto-discovery:
-    [project.entry-points."neural_memory.plugins"]
-    pro = "neural_memory_pro:auto_register"
 """
 
 from __future__ import annotations
@@ -94,7 +89,11 @@ def get_consolidation_strategy(name: str) -> Callable[..., Any] | None:
 
 
 def has_pro() -> bool:
-    """Check if any Pro plugin is registered."""
+    """Check if Pro features are available (built-in or plugin)."""
+    from neural_memory.pro import is_pro_deps_installed
+
+    if is_pro_deps_installed():
+        return True
     return len(get_plugins()) > 0
 
 

@@ -582,7 +582,7 @@ class TestNmemRecallWithBudget:
             patch.object(server, "_check_cross_language_hint", return_value=None),
             patch.object(server, "_surface_pending_alerts", return_value={}),
             patch.object(server, "_record_tool_action"),
-            patch("neural_memory.mcp.tool_handlers.ReflexPipeline") as mock_pipeline_cls,
+            patch("neural_memory.engine.retrieval.ReflexPipeline") as mock_pipeline_cls,
         ):
             mock_pipeline = AsyncMock()
             mock_pipeline.query = AsyncMock(return_value=mock_result)

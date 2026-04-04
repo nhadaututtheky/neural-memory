@@ -6,22 +6,22 @@ import { useFibers } from "@/api/hooks/useDashboard"
 import { api } from "@/api/client"
 import { useTranslation } from "react-i18next"
 import {
-  LayoutDashboard,
-  HeartPulse,
-  Network,
-  Clock,
-  TrendingUp,
-  Share2,
+  SquaresFour,
+  Lightbulb,
+  Graph,
+  ShareNetwork,
   Cloud,
-  Settings,
-  Sparkles,
-  BarChart3,
-  Search,
-  Layers,
+  Gear,
+  Sparkle,
+  ChartLine,
+  Gauge,
+  HardDrive,
+  MagnifyingGlass,
+  Stack,
   Brain,
   Lock,
   Command as CommandIcon,
-} from "lucide-react"
+} from "@phosphor-icons/react"
 import { openUpgradeModal } from "@/components/common/UpgradeModal"
 
 /* ------------------------------------------------------------------ */
@@ -39,16 +39,19 @@ interface NeuronResult {
 /* ------------------------------------------------------------------ */
 
 const pages = [
-  { path: "/", icon: LayoutDashboard, labelKey: "nav.overview" },
-  { path: "/health", icon: HeartPulse, labelKey: "nav.health" },
-  { path: "/graph", icon: Network, labelKey: "nav.graph" },
-  { path: "/timeline", icon: Clock, labelKey: "nav.timeline" },
-  { path: "/evolution", icon: TrendingUp, labelKey: "nav.evolution" },
-  { path: "/diagrams", icon: Share2, labelKey: "nav.mindmap" },
+  { path: "/", icon: SquaresFour, labelKey: "nav.overview" },
+  { path: "/insights?tab=health", icon: Lightbulb, labelKey: "nav.health" },
+  { path: "/insights?tab=timeline", icon: Lightbulb, labelKey: "nav.timeline" },
+  { path: "/insights?tab=evolution", icon: Lightbulb, labelKey: "nav.evolution" },
+  { path: "/insights?tab=tools", icon: Lightbulb, labelKey: "nav.toolStats" },
+  { path: "/graph", icon: Graph, labelKey: "nav.graph" },
+  { path: "/diagrams", icon: ShareNetwork, labelKey: "nav.mindmap" },
+  { path: "/visualize", icon: ChartLine, labelKey: "nav.visualize" },
+  { path: "/oracle", icon: Sparkle, labelKey: "nav.oracle" },
   { path: "/sync", icon: Cloud, labelKey: "nav.sync" },
-  { path: "/oracle", icon: Sparkles, labelKey: "nav.oracle" },
-  { path: "/tool-stats", icon: BarChart3, labelKey: "nav.toolStats" },
-  { path: "/settings", icon: Settings, labelKey: "nav.settings" },
+  { path: "/storage", icon: HardDrive, labelKey: "nav.storage" },
+  { path: "/tier-analytics", icon: Gauge, labelKey: "nav.tierAnalytics" },
+  { path: "/settings", icon: Gear, labelKey: "nav.settings" },
 ] as const
 
 /* ------------------------------------------------------------------ */
@@ -150,7 +153,7 @@ export function CommandPalette() {
         className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer"
         aria-label={t("commandPalette.placeholder")}
       >
-        <Search className="size-3.5" aria-hidden="true" />
+        <MagnifyingGlass className="size-3.5" aria-hidden="true" />
         <span className="hidden sm:inline">{t("commandPalette.search")}</span>
         <kbd className="pointer-events-none hidden select-none rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium sm:inline-flex">
           <CommandIcon className="mr-0.5 inline size-2.5" aria-hidden="true" />K
@@ -170,7 +173,7 @@ export function CommandPalette() {
             shouldFilter={false}
           >
             <div className="flex items-center border-b border-border px-3">
-              <Search className="mr-2 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <MagnifyingGlass className="mr-2 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               <Command.Input
                 value={query}
                 onValueChange={handleValueChange}
@@ -226,7 +229,7 @@ export function CommandPalette() {
                       }}
                       className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm cursor-pointer aria-selected:bg-accent"
                     >
-                      <Layers className="size-4 text-muted-foreground" aria-hidden="true" />
+                      <Stack className="size-4 text-muted-foreground" aria-hidden="true" />
                       <span className="flex-1 truncate">{fiber.summary}</span>
                       <span className="text-[10px] text-muted-foreground font-mono">
                         {fiber.neuron_count}

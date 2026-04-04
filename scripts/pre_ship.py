@@ -192,24 +192,34 @@ def check_imports() -> None:
 def check_tests() -> None:
     print("\n5. Fast Unit Tests")
 
-    result = run(
-        [
-            sys.executable,
-            "-m",
-            "pytest",
-            "tests/unit/",
-            "-x",
-            "-q",
-            "--timeout=30",
-            "--ignore=tests/unit/test_consolidation.py",
-            "-m",
-            "not stress",
-        ],
-        timeout=120,
-    )
+    import tempfile
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "pytest",
+        "tests/unit/",
+        "-x",
+        "-q",
+        "--timeout=30",
+        "--ignore=tests/unit/test_consolidation.py",
+        "-m",
+        "not stress",
+    ]
+    # Use temp file to avoid Windows subprocess PIPE buffering deadlock
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as tmp:
+        try:
+            result = subprocess.run(
+                cmd, stdout=tmp, stderr=subprocess.STDOUT,
+                cwd=str(ROOT), timeout=600,
+            )
+        except subprocess.TimeoutExpired:
+            check("pytest tests/unit/", False, "timed out after 600s")
+            return
+        tmp.seek(0)
+        output = tmp.read()
     passed = result.returncode == 0
-    # Extract summary line
-    lines = result.stdout.strip().split("\n")
+    lines = output.strip().split("\n")
     summary = lines[-1] if lines else ""
     check("pytest tests/unit/", passed, summary if not passed else f"({summary})")
 

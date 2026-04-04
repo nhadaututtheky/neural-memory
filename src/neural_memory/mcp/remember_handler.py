@@ -16,6 +16,7 @@ from neural_memory.core.memory_types import (
 from neural_memory.engine.encoder import MemoryEncoder
 from neural_memory.engine.hooks import HookEvent
 from neural_memory.mcp.constants import MAX_CONTENT_LENGTH
+from neural_memory.mcp.tool_handler_utils import _get_brain_or_error, _require_brain_id
 from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
@@ -25,28 +26,6 @@ if TYPE_CHECKING:
     from neural_memory.unified_config import UnifiedConfig
 
 logger = logging.getLogger(__name__)
-
-
-def _require_brain_id(storage: NeuralStorage) -> str:
-    """Return the current brain ID or raise ValueError if not set."""
-    brain_id = storage.brain_id
-    if not brain_id:
-        raise ValueError("No brain context set")
-    return brain_id
-
-
-async def _get_brain_or_error(
-    storage: NeuralStorage,
-) -> tuple[Any, dict[str, Any] | None]:
-    """Get brain object or return (None, error_dict)."""
-    try:
-        brain_id = _require_brain_id(storage)
-    except ValueError:
-        return None, {"error": "No brain configured"}
-    brain = await storage.get_brain(brain_id)
-    if not brain:
-        return None, {"error": "No brain configured"}
-    return brain, None
 
 
 class RememberHandler:
@@ -243,7 +222,7 @@ class RememberHandler:
                     check_sensitive_content as _check_sensitive,
                 )
 
-                original_matches = _check_sensitive(args["content"], min_severity=2)
+                original_matches = _check_sensitive(content, min_severity=2)
                 if original_matches:
                     should_encrypt = True
 
@@ -321,6 +300,24 @@ class RememberHandler:
             from neural_memory.engine.importance import auto_importance_score
 
             auto_score = auto_importance_score(content, mem_type.value, args.get("tags", []))
+
+            # A8 T3.4: Surface gap bonus — sparse topic clusters get +1 importance
+            try:
+                if hasattr(self, "_surface_text") and self._surface_text:
+                    from neural_memory.surface.parser import parse as parse_surface
+
+                    surface = parse_surface(self._surface_text)
+                    if surface.meta and surface.meta.top_entities:
+                        # Check if content topics overlap with well-covered entities
+                        content_lower = content.lower()
+                        is_covered = any(
+                            e.lower() in content_lower for e in surface.meta.top_entities[:5]
+                        )
+                        if not is_covered and auto_score < 9:
+                            auto_score += 1  # Filling a knowledge gap
+            except Exception:
+                pass
+
             priority = Priority.from_int(auto_score)
 
         # Build dedup pipeline if enabled
@@ -376,6 +373,12 @@ class RememberHandler:
             agent_id = getattr(self, "_agent_id", "")
             if agent_id:
                 tags.add(f"agent:{agent_id}")
+            # Domain scope for boundary memories
+            raw_domain = args.get("domain")
+            if raw_domain and isinstance(raw_domain, str):
+                raw_domain = raw_domain.lower().strip()[:50]
+                if mem_type == MemoryType.BOUNDARY and raw_domain:
+                    tags.add(f"domain:{raw_domain}")
             # Parse event_at for original event timestamp
             event_timestamp = utcnow()
             raw_event_at = args.get("event_at")
@@ -508,6 +511,41 @@ class RememberHandler:
             except Exception:
                 logger.debug("STORED_BY synapse creation failed (non-critical)", exc_info=True)
 
+            # Decision intelligence: detect overlapping prior decisions
+            decision_overlaps_out: list[dict[str, Any]] = []
+            if mem_type == MemoryType.DECISION:
+                try:
+                    from neural_memory.engine.decision_intel import (
+                        extract_decision_components,
+                        find_overlapping_decisions,
+                    )
+
+                    decision_context = args.get("context") or {}
+                    components = extract_decision_components(
+                        content, decision_context if isinstance(decision_context, dict) else None
+                    )
+                    if components is not None:
+                        overlaps = await find_overlapping_decisions(
+                            storage,
+                            components,
+                            tags,
+                        )
+                        for ov in overlaps:
+                            decision_overlaps_out.append(ov.to_dict())
+                            # Create EVOLVES_FROM synapse
+                            ov_fiber = await storage.get_fiber(ov.fiber_id)
+                            if ov_fiber and ov_fiber.anchor_neuron_id:
+                                evo_syn = Synapse.create(
+                                    source_id=result.fiber.anchor_neuron_id,
+                                    target_id=ov_fiber.anchor_neuron_id,
+                                    type=SynapseType.EVOLVES_FROM,
+                                    weight=ov.overlap_score,
+                                    metadata={"relationship": ov.relationship},
+                                )
+                                await storage.add_synapse(evo_syn)
+                except Exception:
+                    logger.debug("Decision overlap detection failed (non-critical)", exc_info=True)
+
             await storage.batch_save()
         finally:
             storage.enable_auto_save()
@@ -575,6 +613,14 @@ class RememberHandler:
         if source_id and isinstance(source_id, str):
             response["source_id"] = source_id
 
+        # A8 T3.3: Surface type classification hints
+        type_hint = result.fiber.metadata.get("_type_hint")
+        if type_hint:
+            response["type_hint"] = type_hint
+        type_confidence = result.fiber.metadata.get("_type_confidence")
+        if type_confidence is not None:
+            response["type_confidence"] = type_confidence
+
         if redacted_matches:
             response["auto_redacted"] = True
             response["auto_redacted_count"] = len(redacted_matches)
@@ -602,10 +648,30 @@ class RememberHandler:
                 if dedup_alias_of:
                     break
         if dedup_alias_of:
-            response["dedup_hint"] = {
+            # A8 T3.2: Enhanced dedup feedback with similarity score and fiber_id
+            dedup_hint: dict[str, Any] = {
                 "similar_existing": dedup_alias_of,
-                "message": "Similar memory already exists. Created alias link.",
+                "message": "Similar memory exists — consider nmem_edit to update instead",
             }
+            # Include similarity score if propagated from DedupCheckStep
+            dedup_sim = result.fiber.metadata.get("_dedup_similarity")
+            if dedup_sim is not None:
+                dedup_hint["similarity"] = round(float(dedup_sim), 3)
+            dedup_tier = result.fiber.metadata.get("_dedup_tier")
+            if dedup_tier is not None:
+                dedup_hint["dedup_tier"] = int(dedup_tier)
+            # Find the fiber_id for the existing anchor neuron
+            try:
+                existing_fibers = await storage.find_fibers(contains_neuron=dedup_alias_of, limit=1)
+                if existing_fibers:
+                    dedup_hint["duplicate_of"] = existing_fibers[0].id
+            except Exception:
+                pass
+            response["dedup_hint"] = dedup_hint
+
+        # Decision overlap results
+        if decision_overlaps_out:
+            response["decision_overlaps"] = decision_overlaps_out
 
         try:
             conflicts_detected = int(result.conflicts_detected)
@@ -749,6 +815,7 @@ class RememberHandler:
                 "event_at",
                 "ephemeral",
                 "tier",
+                "domain",
             ):
                 if key in item:
                     single_args[key] = item[key]

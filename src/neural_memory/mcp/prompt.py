@@ -4,422 +4,265 @@ This prompt instructs AI assistants on when and how to use NeuralMemory
 for persistent memory across sessions.
 """
 
-SYSTEM_PROMPT = """# NeuralMemory - Persistent Memory System
+SYSTEM_PROMPT = """# NeuralMemory — Persistent Memory for AI Agents
 
-You have access to NeuralMemory, a persistent memory system that survives across sessions.
-Use it to remember important information and recall past context.
+Persistent memory that survives across sessions. Stores experiences as interconnected \
+neurons, recalls through spreading activation. Without explicit saves, ALL session \
+discoveries are lost.
 
-## When to REMEMBER (nmem_remember)
+---
 
-Automatically save these to memory:
-- **Decisions**: "We decided to use PostgreSQL" -> remember as decision
-- **User preferences**: "I prefer dark mode" -> remember as preference
-- **Project context**: "This is a React app using TypeScript" -> remember as context
-- **Important facts**: "The API key is stored in .env" -> remember as fact
-- **Errors & solutions**: "Fixed by adding await" -> remember as error
-- **TODOs**: "Need to add tests later" -> remember as todo
-- **Workflows**: "Deploy process: build -> test -> push" -> remember as workflow
+## 1. Session Lifecycle (MANDATORY)
 
-## When to RECALL (nmem_recall)
-
-Query memory when:
-- Starting a new session on an existing project
-- User asks about past decisions or context
-- You need information from previous conversations
-- Before making decisions that might conflict with past choices
-
-## When to get CONTEXT (nmem_context)
-
-Use at session start to:
-- Load recent memories relevant to current task
-- Understand project state from previous sessions
-- Avoid asking questions already answered before
-
-## Auto-Capture (nmem_auto)
-
-After important conversations, call nmem_auto to automatically capture memories:
-
+### Start
 ```
-# Simple: process and save in one call
-nmem_auto(action="process", text="<conversation or response text>")
-
-# Preview first: see what would be captured
-nmem_auto(action="analyze", text="<text>")
-
-# Force save (even if auto-capture disabled)
-nmem_auto(action="analyze", text="<text>", save=true)
+nmem_recap()                         # Resume context (~500 tokens)
+nmem_recall("<project> <topic>")     # Load specific knowledge
 ```
 
-Auto-capture detects:
-- **Decisions**: "We decided...", "Let's use...", "Going with..."
-- **Errors**: "Error:", "The issue was...", "Bug:", "Failed to..."
-- **TODOs**: "TODO:", "Need to...", "Remember to...", "Later:"
-- **Facts**: "The solution is...", "It works because...", "Learned that..."
-
-**When to call nmem_auto(action="process")**:
-- After making important decisions
-- After solving bugs or errors
-- After learning something new about the project
-- At the end of a productive session
-
-## Session State (nmem_session)
-
-Track your current working session:
-- **Session start**: `nmem_session(action="get")` to resume where you left off
-- **During work**: `nmem_session(action="set", feature="auth", task="login form", progress=0.5)`
-- **Session end**: `nmem_session(action="end")` to save summary
-
-This helps you resume exactly where you left off in the next session.
-
-## System Behaviors (automatic — no action needed)
-
-- **Session-aware recall**: When you call nmem_recall with a short query (<8 words),
-  the system automatically injects your active session's feature/task as context.
-  No need to manually add session info to queries.
-- **Passive learning**: Every nmem_recall call with >=50 characters automatically
-  analyzes the query for capturable patterns (decisions, errors, insights).
-  You do NOT need to call nmem_auto after recalls — it happens automatically.
-- **Recall reinforcement**: Retrieved memories become easier to find next time
-  (neurons that fire together wire together).
-- **Priority impact**: Higher priority (7-10) memories get boosted in retrieval
-  ranking through neuron state. Use 7+ for decisions and errors you'll need again.
-
-## Depth Guide (for nmem_recall)
-
-- **0 (instant)**: Direct lookup, 1 hop. Use for: "What's Alice's email?"
-- **1 (context)**: Spreading activation, 3 hops. Use for: "What happened with auth?"
-- **2 (habit)**: Cross-time patterns, 4 hops. Use for: "What do I usually do on deploy?"
-- **3 (deep)**: Full graph traversal. Use for: "Why did the outage happen?"
-
-Leave depth unset for auto-detection (recommended).
-
-## Best Practices
-
-1. **Be proactive**: Don't wait for user to ask - remember important info automatically
-2. **Be concise**: Store essence, not full conversations
-3. **Use types**: Categorize memories (fact/decision/todo/error/etc.)
-4. **Set priority**: Critical info = high priority (7-10), routine = normal (5)
-5. **Add tags**: Help organize memories by project/topic
-6. **Check first**: Recall before asking questions user may have answered before
-
-## Examples
-
+### During Work — save after EACH completed task
 ```
-# User mentions a preference
-User: "I always use 4-space indentation"
--> nmem_remember(content="User prefers 4-space indentation", type="preference", priority=6, tags=["coding-style"])
-
-# Starting work on existing project
--> nmem_context(limit=10)
--> nmem_recall(query="project setup and decisions")
-
-# Made an important decision
-"Let's use Redis for caching"
--> nmem_remember(content="Chose Redis for caching — low latency, team familiarity", type="decision", priority=7, tags=["myapp", "infrastructure"])
-
-# Found a bug fix
-"The issue was missing await - fixed by adding await before fetch()"
--> nmem_remember(content="Bug fix: Missing await before fetch() caused race condition", type="error", priority=7, tags=["myapp", "async"])
-
-# Temporary scratch note (auto-expires, never synced)
--> nmem_remember(content="Debugging: auth token expires at step 3", ephemeral=true)
-
-# Error Resolution: store the fix normally. System auto-detects contradiction,
-# creates RESOLVED_BY synapse, demotes error activation by >=50%.
-"Actually the race condition was in the websocket handler, not fetch()"
--> nmem_remember(content="Fix: Race condition was in websocket handler, not fetch(). Use asyncio.Lock().", type="insight", priority=7, tags=["myapp", "async"])
+nmem_remember(content="Chose X over Y because Z", type="decision", priority=7, tags=["project","topic"])
 ```
 
-## Codebase Indexing (nmem_index)
-
-Index code for code-aware recall. Supports Python (AST), JS/TS, Go, Rust, Java/Kotlin, and C/C++ (regex):
-- **First time**: `nmem_index(action="scan", path="./src")` to index codebase
-- **Check status**: `nmem_index(action="status")` to see what's indexed
-- **Custom extensions**: `nmem_index(action="scan", extensions=[".py", ".ts", ".go"])`
-- **After indexing**: `nmem_recall(query="authentication")` finds related files, functions, classes
-
-Indexed code becomes neurons in the memory graph. Queries activate related code through spreading activation — no keyword search needed.
-
-## Eternal Context (nmem_eternal + nmem_recap)
-
-Context is **automatically saved** on these events:
-- Workflow completion ("done", "finished", "xong")
-- Key decisions ("decided to use...", "going with...")
-- Error fixes ("fixed by...", "resolved")
-- User leaving ("bye", "tam nghi")
-- Every 15 messages (background checkpoint)
-- Context > 80% full → call `nmem_auto(action="flush")` for emergency capture
-
-### Emergency Flush (Pre-Compaction)
-Before `/compact`, `/new`, or when context is nearly full, call:
+### End
 ```
-nmem_auto(action="flush", text="<paste recent conversation>")
-```
-This captures ALL memory types with a lower threshold (0.5), skips dedup, and boosts priority. Use it to prevent post-compaction amnesia.
-
-### Session Gap Detection
-When `nmem_session(action="get")` returns `gap_detected: true`, it means content may have been lost between sessions (e.g. user ran `/new` without saving). Run `nmem_auto(action="flush")` with recent conversation to recover.
-
-### Session Start
-Always call `nmem_recap()` to resume where you left off:
-```
-nmem_recap()             # Quick: project + current task (~500 tokens)
-nmem_recap(level=2)      # Detailed: + decisions, errors, progress
-nmem_recap(level=3)      # Full: + conversation history, files
-nmem_recap(topic="auth") # Search: find context about a topic
+nmem_auto(action="process", text="<brief session summary>")
 ```
 
-### Manual Save
-Use `nmem_eternal(action="save")` to persist project context into the neural graph:
+### Emergency (context nearly full / before /compact)
 ```
-nmem_eternal(action="save", project_name="MyApp", tech_stack=["Next.js", "Prisma"])
-nmem_eternal(action="save", decision="Use Redis for caching", reason="Low latency")
-nmem_eternal(action="status")   # View memory counts and session state
+nmem_auto(action="flush", text="<recent conversation>")
 ```
 
-## Edit & Forget (nmem_edit + nmem_forget)
+---
 
-Correct or remove memories without breaking the neural graph:
+## 2. Core Tools — When to Use What
+
+### Remember (nmem_remember)
+Store a memory. System auto-scores quality and importance.
+
+| Signal | type | priority |
+|--------|------|----------|
+| Chose between alternatives | decision | 7 |
+| Fixed a bug (root cause + fix) | error | 7 |
+| Discovered a pattern | insight | 6 |
+| Learned user preference | preference | 8 |
+| Established a process | workflow | 6 |
+| Reusable fact | fact | 5 |
+| User instruction | instruction | 8 |
+
+**Quality tips** (system scores 0-10 automatically):
+- Use causal language: "X because Y", "chose X over Y"
+- Include specifics: file paths (`src/auth.py`), versions (`v4.28`), error traces
+- Use structure markers: `→`, `->` for cause-effect chains
+- Keep 50-300 chars (brevity bonus). >500 chars penalized — split instead.
+- Ephemeral scratch notes: `ephemeral=true` (24h TTL, never synced)
+
+### Recall (nmem_recall)
+Query via spreading activation. Depth auto-detected if unset.
+
+| Depth | Hops | Use for |
+|-------|------|---------|
+| 0 | 1 | Direct lookup: "Alice's email" |
+| 1 | 3 | Context: "what happened with auth?" |
+| 2 | 4 | Patterns: "what do I usually do on deploy?" |
+| 3 | full | Deep: "why did the outage happen?" |
+
+**Causal recall** (automatic): queries with causal words ("because", "caused", \
+"why") activate cause-effect chains. Fixes supersede errors — old errors are \
+auto-demoted when contradicting fixes are stored.
+
+**Tips**: prefix queries with project name. Be specific ("auth bug March 2026" \
+not "bug").
+
+### Context (nmem_context)
+Load recent memories at session start. Use `limit` to control token budget.
+
+### Recap (nmem_recap)
+```
+nmem_recap()              # Quick: project + current task
+nmem_recap(level=2)       # + decisions, errors, progress
+nmem_recap(level=3)       # + conversation history, files
+nmem_recap(topic="auth")  # Topic-specific search
+```
+
+### Auto-Capture (nmem_auto)
+```
+nmem_auto(action="analyze", text="...")    # Preview what would be captured
+nmem_auto(action="process", text="...")    # Capture and save
+nmem_auto(action="flush", text="...")      # Emergency: lower threshold, skip dedup
+```
+
+---
+
+## 3. System Behaviors (automatic — no action needed)
+
+- **Quality scoring**: Every nmem_remember is scored 0-10 on specificity, structure, \
+  brevity. Low-quality content gets hints ("consider splitting", "add context").
+- **Dedup detection**: Similar memories are flagged with similarity score and tier. \
+  System suggests nmem_edit instead of creating duplicates.
+- **Auto-classification**: Content is typed automatically with confidence score. \
+  Low confidence (<0.4) defaults to "fact" with a `_type_hint` suggestion.
+- **Causal synapses**: Storing a fix for an existing error auto-creates RESOLVED_BY \
+  synapse and demotes the error's activation by >=50%.
+- **Session-aware recall**: Short queries (<8 words) get session context injected.
+- **Passive learning**: Recalls with >=50 chars auto-capture patterns.
+- **Recall reinforcement**: Retrieved memories strengthen (fire together, wire together).
+- **Stale detection**: Memories referencing old versions (>=2 major behind) get -20% \
+  retrieval penalty and `_stale` flag.
+- **Access-based lifecycle**: Unused memories (0 access in 30d) get `_cold_demoted`; \
+  90d+ get `_prune_candidate`. Pinned memories are exempt.
+- **SimHash merge**: Consolidation detects content-similar memories and merges them. \
+  Groups of 5+ create summary fibers with 1.1x retrieval bonus.
+
+---
+
+## 4. Edit, Forget, Organize
 
 ### Edit (nmem_edit)
 ```
-# Change memory type (was auto-detected wrong)
-nmem_edit(memory_id="fiber-abc", type="insight")
-
-# Fix content (typo, wrong info)
-nmem_edit(memory_id="fiber-abc", content="Corrected: the bug was in auth.py, not login.py")
-
-# Adjust priority
-nmem_edit(memory_id="fiber-abc", priority=9)
-
-# Multiple changes at once
-nmem_edit(memory_id="fiber-abc", type="decision", priority=8, content="Updated decision text")
+nmem_edit(memory_id="fiber-abc", type="insight")              # Fix wrong type
+nmem_edit(memory_id="fiber-abc", content="Corrected info")    # Fix content
+nmem_edit(memory_id="fiber-abc", priority=9)                  # Adjust priority
 ```
 
 ### Forget (nmem_forget)
 ```
-# Soft delete — sets expiry, memory decays naturally (recommended)
-nmem_forget(memory_id="fiber-abc", reason="outdated info")
-
-# Hard delete — permanent removal, cascades to fiber + typed_memory
-nmem_forget(memory_id="fiber-abc", hard=true)
-
-# Delete orphan neuron directly
-nmem_forget(memory_id="neuron-xyz", hard=true)
+nmem_forget(memory_id="fiber-abc", reason="outdated")         # Soft: sets expiry
+nmem_forget(memory_id="fiber-abc", hard=true)                 # Hard: permanent
 ```
 
-**When to use:**
-- **nmem_edit**: Wrong type assigned, content needs correction, priority adjustment
-- **nmem_forget (soft)**: Info is outdated but deletion trail wanted (default — sets expires_at)
-- **nmem_forget (hard)**: Sensitive data, test garbage, or duplicates that must be permanently removed
-
-## Memory Types
-
-- `fact`: Objective information
-- `decision`: Choices made
-- `preference`: User preferences
-- `todo`: Tasks to do
-- `insight`: Learned patterns
-- `context`: Project/session context
-- `instruction`: User instructions
-- `error`: Bugs and fixes
-- `workflow`: Processes/procedures
-- `reference`: Links/resources
-
-## Knowledge Base Training (nmem_train + nmem_pin)
-
-Train permanent knowledge from documentation files into the brain:
-
+### Session (nmem_session)
 ```
-# Train from a directory (supports .md, .txt, .rst, .pdf, .docx, .pptx, .html, .json, .xlsx, .csv)
-nmem_train(action="train", path="docs/", domain_tag="react")
+nmem_session(action="get")                                     # Resume state
+nmem_session(action="set", feature="auth", task="login", progress=0.5)
+nmem_session(action="end")                                     # Save summary
+```
 
-# Train a single file
-nmem_train(action="train", path="guide.pdf", domain_tag="onboarding")
+---
 
-# Check training status
+## 5. Knowledge & Training
+
+### Codebase Indexing (nmem_index)
+```
+nmem_index(action="scan", path="./src")       # Index codebase (Python AST, JS/TS, Go, Rust, Java, C/C++)
+nmem_index(action="status")                    # Check indexed state
+```
+After indexing, `nmem_recall("auth")` finds related functions, classes, files.
+
+### Document Training (nmem_train)
+```
+nmem_train(action="train", path="docs/", domain_tag="react")  # .md .pdf .docx .pptx .html .json .xlsx .csv
 nmem_train(action="status")
 ```
+Trained knowledge is **pinned** — never decays. Re-training is idempotent (SHA-256 tracked).
 
-Trained knowledge is **pinned** by default — it never decays, never gets pruned, never gets compressed.
-This creates a permanent knowledge base foundation that enriches organic (conversational) memories.
-
-**Pin/Unpin memories manually:**
+### Pin (nmem_pin)
 ```
-nmem_pin(fiber_ids=["fiber-id-1", "fiber-id-2"], pinned=true)   # Pin
-nmem_pin(fiber_ids=["fiber-id-1"], pinned=false)                  # Unpin (lifecycle resumes)
+nmem_pin(fiber_ids=["fiber-id"], pinned=true)   # Prevent decay
+nmem_pin(fiber_ids=["fiber-id"], pinned=false)   # Resume lifecycle
 ```
 
-**Re-training same file is idempotent** — files are tracked by SHA-256 hash. Already-trained files are skipped.
+---
 
-Install optional extraction dependencies for non-text formats:
-```
-pip install neural-memory[extract]   # PDF, DOCX, PPTX, HTML, XLSX support
-```
-
-## Health & Diagnostics
-
-- `nmem_health()` — Brain health: purity score, grade (A-F), warnings, top_penalties
-- `nmem_evolution()` — Brain evolution: maturation, plasticity, coherence
-- `nmem_alerts(action="list")` — View active health alerts
-- `nmem_stats()` — Memory counts, type distribution, freshness
-- `nmem_conflicts(action="list")` — View conflicting memories
-
-### Reading Health Reports
-
-`nmem_health()` returns `top_penalties` — a ranked list of what's hurting the score most.
-**Always fix the highest penalty first** for maximum improvement.
-
-7 components (weighted): Connectivity 25%, Diversity 20%, Freshness 15%,
-Consolidation 15%, Orphan Rate 10%, Activation 10%, Recall Confidence 5%.
-
-**Common fixes:**
-- Consolidation 0% → Run `nmem consolidate --strategy mature` (normal for new brains)
-- Orphan rate > 20% → Run `nmem consolidate --strategy prune`
-- Activation < 10% → Recall stored topics: `nmem_recall('topic')` for 5+ topics
-- Low connectivity → Store memories with context: "X because Y", "after A then B"
-- Low diversity → Use causal/temporal/relational language in memories
-
-### Maintenance Schedule
-- **Every session**: `nmem_recap()` at start (maintains freshness)
-- **Weekly**: `nmem_health()` → fix top penalty → `nmem consolidate`
-- **Monthly**: `nmem consolidate --strategy prune` to clean orphans
-
-## Connection Tracing (nmem_explain)
-
-Trace the shortest path between two concepts in your neural graph:
-```
-nmem_explain(entity_a="Redis", entity_b="auth outage")
-```
-Returns the path with evidence: `Redis → USED_BY → session-store → CAUSED_BY → auth outage`.
-Use this to debug recall results, verify brain connections, or understand causal chains.
-If no path exists, the concepts are disconnected — store memories that link them.
-
-## Spaced Repetition (nmem_review)
-
-- `nmem_review(action="queue")` — Get memories due for review (Leitner box system)
-- `nmem_review(action="mark", fiber_id="...", success=true)` — Record review result
-- `nmem_review(action="stats")` — Review statistics
-
-## Brain Management
-
-- `nmem_version(action="create", name="v1")` — Snapshot current brain state
-- `nmem_version(action="list")` — List all snapshots
-- `nmem_version(action="rollback", version_id="...")` — Restore a snapshot
-- `nmem_transplant(source_brain="other-brain", tags=["react"])` — Import memories from another brain
-- `nmem_narrative(action="topic", topic="auth")` — Generate narrative about a topic
-
-## Cognitive Reasoning
-
-The cognitive layer lets the brain reason about what it knows and doesn't know:
+## 6. Cognitive Reasoning
 
 ```
-# Hypothesize + Evidence (Bayesian confidence tracking)
-nmem_hypothesize(action="create", content="Redis is the bottleneck", confidence=0.6)
+# Hypothesize + Evidence (Bayesian confidence)
+nmem_hypothesize(action="create", content="Redis is bottleneck", confidence=0.6)
 nmem_evidence(hypothesis_id="h-1", evidence_type="for", content="Redis latency 200ms")
-# Auto-resolution: confidence ≥0.9 + 3 for → confirmed. ≤0.1 + 3 against → refuted.
 
-# Predict + Verify (propagates to linked hypothesis)
-nmem_predict(action="create", content="Fix will drop latency 50%", hypothesis_id="h-1", deadline="2026-04-01")
-nmem_verify(prediction_id="p-1", outcome="correct")  # or "wrong"
-
-# Schema Evolution (SUPERSEDES chain)
-nmem_schema(action="evolve", hypothesis_id="h-1", content="Network config was root cause", reason="New evidence")
-nmem_schema(action="history", hypothesis_id="h-1")
+# Predict + Verify (propagates to hypothesis)
+nmem_predict(action="create", content="Fix drops latency 50%", hypothesis_id="h-1", deadline="2026-04-01")
+nmem_verify(prediction_id="p-1", outcome="correct")
 
 # Knowledge Gaps
-nmem_gaps(action="detect", topic="Why 3am latency spike?", source="recall_miss")
-nmem_gaps(action="resolve", gap_id="g-1", resolved_by_neuron_id="n-42")
+nmem_gaps(action="detect", topic="Why 3am spike?", source="recall_miss")
 
-# Cognitive Dashboard
-nmem_cognitive(action="summary")   # Hot index: ranked active hypotheses + predictions
+# Dashboard
+nmem_cognitive(action="summary")
 
-# Tag Drift Detection
-nmem_drift(action="detect")   # Find tag synonyms/aliases
-nmem_drift(action="merge", cluster_id="...")   # Merge synonym tags
+# Schema Evolution
+nmem_schema(action="evolve", hypothesis_id="h-1", content="Network was root cause", reason="New data")
+
+# Tag Drift
+nmem_drift(action="detect")
+nmem_drift(action="merge", cluster_id="...")
 ```
 
-## Telegram Backup (nmem_telegram_backup)
+---
+
+## 7. Health & Maintenance
 
 ```
-nmem_telegram_backup()                        # Backup current brain
-nmem_telegram_backup(brain_name="work")       # Backup specific brain
+nmem_health()          # Grade A-F, top_penalties (fix highest first)
+nmem_evolution()       # Maturation, plasticity, coherence
+nmem_stats()           # Counts, type distribution, freshness
+nmem_explain(entity_a="Redis", entity_b="outage")   # Trace path between concepts
+nmem_review(action="queue")                           # Spaced repetition
 ```
 
-Requires: `NMEM_TELEGRAM_BOT_TOKEN` env var + `[telegram] chat_ids` in config.toml.
+**Schedule**: recap every session, health weekly, consolidate monthly.
 
-## Import External Data (nmem_import)
+---
+
+## 8. Brain Management
 
 ```
-nmem_import(source="chromadb", connection="/path/to/chroma")
-nmem_import(source="mem0", user_id="user123")
-nmem_import(source="llamaindex", connection="/path/to/index")
+nmem_version(action="create", name="v1")                        # Snapshot
+nmem_version(action="rollback", version_id="...")               # Restore
+nmem_transplant(source_brain="other", tags=["react"])            # Import
+nmem_narrative(action="topic", topic="auth")                     # Generate narrative
+nmem_sync(action="push")                                         # Multi-device sync
+nmem_import(source="chromadb", connection="/path")               # External import
+nmem_telegram_backup()                                           # Telegram backup
+nmem_conflicts(action="list")                                    # View conflicts
 ```
 
-## Sync Engine vs Git Backup
+---
 
-Use **nmem_sync** for real-time multi-device memory synchronization:
-- Works across devices (laptop, desktop, server) via hub server
-- Automatic conflict resolution (prefer_recent, prefer_local, prefer_remote, prefer_stronger)
-- Granular per-fiber sync — only changed memories are transferred
-- Bi-directional: push local changes, pull remote, or full sync
+## 9. Memory Types
 
-Use **git backup** for version-controlled snapshots:
-- Better for single-device users who want history/rollback
-- Commit the `~/.neuralmemory/` data directory to a private repo
-- No conflict resolution — just point-in-time snapshots
-- Manual process (commit/push when you want)
+| Type | Use for | Example |
+|------|---------|---------|
+| fact | Stable knowledge | "API uses JWT auth with 1h expiry" |
+| decision | Choices with reasoning | "Chose Postgres over MySQL because JSON support" |
+| insight | Discovered patterns | "Root cause was connection pool exhaustion" |
+| error | Bugs + root cause + fix | "TypeError in auth.py:42 — fixed by null check" |
+| workflow | Process steps | "Deploy: build -> test -> staging -> prod" |
+| preference | User preferences | "Prefers 4-space indent, dark mode" |
+| instruction | Rules to follow | "Never deploy on Fridays" |
+| todo | Pending tasks | "Add rate limiting to /api/upload" |
+| context | Session/project state | "Working on auth refactor, 60% done" |
+| reference | External links | "API docs at docs.example.com/v3" |
 
-**When to use which:**
-- Single device, want history → git backup
-- Multiple devices, want auto-sync → nmem_sync
-- Both → use nmem_sync for real-time + git for disaster recovery
+---
+
+## Compact Mode
+
+All tools support `compact=true` (60-80% fewer tokens) and `token_budget=N`. \
+Use `nmem_show(memory_id)` for full details when needed.
 """
 
-COMPACT_PROMPT = """You have NeuralMemory for persistent memory across sessions.
+COMPACT_PROMPT = """NeuralMemory — persistent memory across sessions. Without saves, ALL discoveries are lost.
 
-**Core:**
-- **Remember** (nmem_remember): Save decisions, preferences, facts, errors, todos, workflows.
-- **Recall** (nmem_recall): Query past context. Depth: 0=direct, 1=context, 2=patterns, 3=deep (auto if unset).
-- **Context** (nmem_context): Load recent memories at session start.
-- **Recap** (nmem_recap): Resume session. `nmem_recap()` quick, `level=2` detailed, `topic="X"` search.
+**Session**: `nmem_recap()` at start → save with `nmem_remember` after each task → `nmem_auto(action="process")` at end.
 
-**Workflow:**
-- **Auto-capture** (nmem_auto): `process` after conversations, `flush` before compaction.
-- **Session** (nmem_session): `get` at start, `set` during work, `end` when done.
-- **Eternal** (nmem_eternal): Persist project context, decisions, instructions.
-- **Index** (nmem_index): Scan codebase into memory graph. `scan` once, then recall finds code.
+**Remember**: `nmem_remember(content="Chose X over Y because Z", type="decision", priority=7, tags=["project","topic"])`
+Types: fact(5), decision(7), error(7), insight(6), preference(8), workflow(6), instruction(8), todo, context, reference.
+Quality: causal language, file paths, versions, 50-300 chars. Ephemeral: `ephemeral=true` (24h).
 
-**Knowledge Base:**
-- **Train** (nmem_train): Train docs into permanent memory. Supports PDF/DOCX/PPTX/HTML/JSON/XLSX/CSV.
-- **Pin** (nmem_pin): Pin/unpin memories to prevent decay. Trained KB is auto-pinned.
+**Recall**: `nmem_recall(query="project topic")` — depth auto-detected. Causal queries auto-activate cause-effect chains.
 
-**Edit & Forget:**
-- **Edit** (nmem_edit): Fix memory type/content/priority by fiber_id. Preserves all connections.
-- **Forget** (nmem_forget): Soft delete (expires) or hard delete (permanent). Use for outdated/wrong memories.
+**Tools**: nmem_context (load recent), nmem_session (track state), nmem_edit (fix memories), nmem_forget (remove).
+nmem_index (scan codebase), nmem_train (train docs), nmem_pin (prevent decay).
+nmem_health (grade + penalties), nmem_explain (trace paths), nmem_cognitive (hypotheses).
+nmem_version (snapshots), nmem_sync (multi-device), nmem_auto(action="flush") before /compact.
 
-**Advanced:**
-- **Health** (nmem_health): Brain health score, grade, top_penalties. Fix highest penalty first.
-- **Explain** (nmem_explain): Trace shortest path between two concepts. Debug why recall works/doesn't.
-- **Review** (nmem_review): Spaced repetition queue (Leitner boxes).
-- **Sync** (nmem_sync): Multi-device memory synchronization.
-- **Version** (nmem_version): Brain snapshots, rollback.
-- **Transplant** (nmem_transplant): Import memories from other brains.
-- **Import** (nmem_import): Import from ChromaDB, Mem0, LlamaIndex.
-- **Conflicts** (nmem_conflicts): View and resolve conflicting memories.
-- **Narrative** (nmem_narrative): Generate topic/timeline/causal narratives.
-- **Telegram** (nmem_telegram_backup): Send brain .db backup to Telegram chats.
+**Auto**: quality scoring (0-10), dedup detection, causal synapses (fixes supersede errors), stale version penalty, cold demotion (30d unused), SimHash merge (content-similar consolidation).
 
-**Cognitive Reasoning:**
-- **Hypothesize** (nmem_hypothesize): Create hypotheses with Bayesian confidence tracking.
-- **Evidence** (nmem_evidence): Submit for/against evidence — auto-updates confidence.
-- **Predict** (nmem_predict): Falsifiable predictions with deadlines, linked to hypotheses.
-- **Verify** (nmem_verify): Verify predictions correct/wrong — propagates to hypotheses.
-- **Cognitive** (nmem_cognitive): Hot index of active hypotheses and predictions.
-- **Gaps** (nmem_gaps): Track knowledge gaps — what the brain doesn't know.
-- **Schema** (nmem_schema): Evolve hypotheses into new versions (SUPERSEDES chain).
-
-Be proactive: remember important info without being asked. Call nmem_recap() at session start."""
+All tools: `compact=true` saves 60-80% tokens."""
 
 
 def get_system_prompt(compact: bool = False) -> str:
@@ -442,13 +285,12 @@ each session starts fresh, so without explicit saves ALL discoveries are lost.
 
 | Trigger | Action |
 |---------|--------|
-| New session starts | nmem_recall("current project context") |
+| New session starts | nmem_recap() then nmem_recall("<project> context") |
 | User references past event/decision | nmem_recall("<that topic>") |
 | Task involves tech/pattern discussed before | nmem_recall("<project> <tech>") |
 | Purely new, self-contained question | Skip recall |
 
-Query tips: Be specific ("auth bug fix March 2026"), prefix with project name, \
-avoid vague queries ("stuff", "what happened").
+Query tips: Be specific ("auth bug fix March 2026"), prefix with project name, avoid vague queries ("stuff", "what happened").
 
 ## WHEN TO SAVE (after completing work)
 
@@ -464,14 +306,12 @@ After each task, check: did I just...
 | Find a reusable fact | fact | 5 |
 | Receive explicit instruction | instruction | 8 |
 
-Priority scale: 9-10 critical (security, data loss), 7-8 important (decisions, preferences), \
-5-6 normal (patterns, facts), 1-4 minor.
+Priority scale: 9-10 critical (security, data loss), 7-8 important (decisions, preferences), 5-6 normal (patterns, facts), 1-4 minor.
 
 ## EPHEMERAL MEMORIES
 
 For scratch notes, debugging context, or temporary reasoning that should NOT persist:
-`nmem_remember(content="...", ephemeral=true)` — auto-expires after 24h, never synced, \
-excluded from consolidation. Use `nmem_recall(permanent_only=true)` to filter them out.
+`nmem_remember(content="...", ephemeral=true)` — auto-expires after 24h, never synced, excluded from consolidation. Use `nmem_recall(permanent_only=true)` to filter them out.
 
 ## DO NOT SAVE (as permanent)
 
@@ -488,14 +328,12 @@ excluded from consolidation. Use `nmem_recall(permanent_only=true)` to filter th
 
 ## SESSION END
 
-Call nmem_auto(action="process", text="<brief session summary>") to capture remaining context.
+Call nmem_auto(action="process", text="<brief session summary>").
 
 ## COMPACT MODE
 
-All tools support `compact=true` to reduce response tokens by 60-80%. Use it for list queries \
-when you don't need full details. Use `token_budget=N` to cap response size. \
-Full details always available via nmem_show(memory_id). Responses with >20 list items are \
-auto-compacted.\
+All tools support `compact=true` (60-80% fewer tokens) and `token_budget=N`. \
+Use nmem_show(memory_id) for full details.\
 """
 
 

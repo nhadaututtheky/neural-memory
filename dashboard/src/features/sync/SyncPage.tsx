@@ -8,12 +8,12 @@ import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import {
   Cloud,
-  CloudOff,
+  CloudSlash,
   Monitor,
-  RefreshCw,
+  ArrowsClockwise,
   Shield,
-  Wifi,
-} from "lucide-react"
+  WifiHigh,
+} from "@phosphor-icons/react"
 
 // No shared hub — users deploy their own Cloudflare Worker
 const DEFAULT_HUB_URL = ""
@@ -109,7 +109,7 @@ export default function SyncPage() {
           onClick={() => refetch()}
           className="cursor-pointer"
         >
-          <RefreshCw className="mr-2 size-4" />
+          <ArrowsClockwise className="mr-2 size-4" />
           {t("sync.refresh")}
         </Button>
       </div>
@@ -122,7 +122,7 @@ export default function SyncPage() {
               {isConnected ? (
                 <Cloud className="size-5 text-emerald-500" />
               ) : (
-                <CloudOff className="size-5 text-muted-foreground" />
+                <CloudSlash className="size-5 text-muted-foreground" />
               )}
               {t("sync.connectionStatus")}
             </CardTitle>
@@ -285,7 +285,7 @@ export default function SyncPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Wifi className="size-5" />
+                <WifiHigh className="size-5" />
                 {t("sync.changeLog")}
               </CardTitle>
             </CardHeader>

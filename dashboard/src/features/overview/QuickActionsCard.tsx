@@ -1,5 +1,5 @@
 import { toast } from "sonner"
-import { CheckCircle2, AlertTriangle, XCircle, Info, Copy } from "lucide-react"
+import { CheckCircle, Warning, XCircle, Info, Copy } from "@phosphor-icons/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -15,12 +15,12 @@ type StatusConfig = {
 
 const STATUS_MAP: Record<ConfigStatusItem["status"], StatusConfig> = {
   configured: {
-    icon: CheckCircle2,
+    icon: CheckCircle,
     badgeVariant: "success",
     label: "Configured",
   },
   warning: {
-    icon: AlertTriangle,
+    icon: Warning,
     badgeVariant: "warning",
     label: "Warning",
   },
@@ -136,7 +136,7 @@ export default function QuickActionsCard() {
           <LoadingSkeleton />
         ) : allConfigured ? (
           <div className="flex items-center gap-2 py-2 text-sm text-health-good">
-            <CheckCircle2 className="size-4" aria-hidden="true" />
+            <CheckCircle className="size-4" aria-hidden="true" />
             <span>All features configured</span>
           </div>
         ) : (

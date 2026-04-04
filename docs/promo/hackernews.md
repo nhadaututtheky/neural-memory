@@ -12,4 +12,4 @@ Core idea: memories are stored as typed neurons connected by typed synapses (CAU
 
 No embedding API calls needed for core recall — it's pure algorithmic graph traversal. Embeddings are optional for cross-language search (supports Ollama, sentence-transformers, Gemini, OpenAI).
 
-52 MCP tools (incl. cognitive reasoning layer), 5400+ tests, SQLite storage, Python 3.11+, MIT license.
+55 MCP tools (incl. cognitive reasoning layer), 6100+ tests, SQLite storage, Python 3.11+, MIT license.

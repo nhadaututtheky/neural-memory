@@ -8,10 +8,16 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - NEURAL_MEMORY_HOST=0.0.0.0
+      - NEURAL_MEMORY_HOST=127.0.0.1
       - NEURAL_MEMORY_PORT=8000
       - NEURAL_MEMORY_DEBUG=false
       - NEURAL_MEMORY_STORAGE=memory
+      # Set a strong API key to secure the server — required in production
+      # Generate with: python3 -c "import secrets; print('nmk_' + secrets.token_urlsafe(32))"
+      - NEURAL_MEMORY_API_KEY=${NEURAL_MEMORY_API_KEY:-}
+      # Rate limiting: max requests per window per IP (0 = disabled)
+      - NEURAL_MEMORY_RATE_LIMIT=${NEURAL_MEMORY_RATE_LIMIT:-100}
+      - NEURAL_MEMORY_RATE_LIMIT_WINDOW=${NEURAL_MEMORY_RATE_LIMIT_WINDOW:-60}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s

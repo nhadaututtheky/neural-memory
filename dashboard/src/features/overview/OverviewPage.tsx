@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { Brain, Zap, Link2, Layers, Trash2 } from "lucide-react"
+import { Brain, Lightning, Link, Stack, Trash } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import QuickActionsCard from "./QuickActionsCard"
@@ -90,19 +90,19 @@ export default function OverviewPage() {
         <KpiCard
           label={t("overview.synapses")}
           value={stats?.total_synapses ?? 0}
-          icon={Link2}
+          icon={Link}
           loading={statsLoading}
         />
         <KpiCard
           label={t("overview.fibers")}
           value={stats?.total_fibers ?? 0}
-          icon={Layers}
+          icon={Stack}
           loading={statsLoading}
         />
         <KpiCard
           label={t("overview.brains")}
           value={stats?.total_brains ?? 0}
-          icon={Zap}
+          icon={Lightning}
           loading={statsLoading}
         />
       </div>
@@ -198,7 +198,7 @@ export default function OverviewPage() {
                             }}
                             aria-label={t("overview.deleteBrain", { name: brain.name })}
                           >
-                            <Trash2 className="size-4" />
+                            <Trash className="size-4" />
                           </Button>
                         )}
                       </td>

@@ -8,6 +8,11 @@ from typing import TYPE_CHECKING, Any
 from neural_memory.core.brain_mode import BrainMode, BrainModeConfig
 from neural_memory.storage.memory_store import InMemoryStorage
 from neural_memory.storage.shared_store import SharedStorage
+
+# Unified SQL adapter (new)
+from neural_memory.storage.sql import SQLStorage
+from neural_memory.storage.sql.postgres_dialect import PostgresDialect
+from neural_memory.storage.sql.sqlite_dialect import SQLiteDialect
 from neural_memory.storage.sqlite_store import SQLiteStorage
 
 logger = logging.getLogger(__name__)
@@ -24,6 +29,7 @@ async def create_storage(
     brain_id: str,
     *,
     local_path: str | None = None,
+    backend: str | None = None,
 ) -> NeuralStorage:
     """
     Create a storage instance based on configuration.
@@ -32,14 +38,24 @@ async def create_storage(
         config: Brain mode configuration
         brain_id: ID of the brain to connect to
         local_path: Path for local SQLite storage (used in LOCAL mode)
+        backend: Storage backend to use. ``"unified"`` selects the new
+            :class:`SQLStorage` adapter; ``"postgres"`` creates a unified
+            ``SQLStorage(PostgresDialect(...))``. ``None`` (default) keeps
+            the original ``SQLiteStorage`` / ``PostgreSQLStorage`` for full
+            backward compatibility.
 
     Returns:
         Configured storage instance
 
     Examples:
-        # Local mode with SQLite
+        # Local mode with SQLite (legacy default)
         config = BrainModeConfig.local()
         storage = await create_storage(config, "brain-1", local_path="./brain.db")
+
+        # Local mode with unified SQLStorage adapter
+        storage = await create_storage(
+            config, "brain-1", local_path="./brain.db", backend="unified"
+        )
 
         # Shared mode
         config = BrainModeConfig.shared_mode("http://localhost:8000")
@@ -51,6 +67,27 @@ async def create_storage(
     """
     if config.mode == BrainMode.LOCAL:
         if local_path:
+            # --- Unified SQL adapter paths ---
+            if backend == "unified":
+                dialect = SQLiteDialect(db_path=local_path)
+                unified = SQLStorage(dialect)
+                await unified.initialize()
+                unified.set_brain(brain_id)
+                logger.info("Using unified SQLStorage with SQLiteDialect")
+                return unified
+
+            if backend == "postgres":
+                # Expects local_path to be unused; connection params come
+                # from environment or a future config extension.  For now
+                # provide sensible defaults that can be overridden.
+                pg_dialect = PostgresDialect()
+                unified = SQLStorage(pg_dialect)
+                await unified.initialize()
+                unified.set_brain(brain_id)
+                logger.info("Using unified SQLStorage with PostgresDialect")
+                return unified
+
+            # --- Legacy path (default) ---
             # Check if Pro plugin provides an alternative storage engine
             pro_storage = await _try_pro_storage(local_path, brain_id)
             if pro_storage is not None:

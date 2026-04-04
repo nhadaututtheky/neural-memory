@@ -400,13 +400,130 @@ def _build_sequential_patterns() -> list[_PatternEntry]:
     return patterns
 
 
+def _build_code_patterns() -> list[_PatternEntry]:
+    """Build compiled regex patterns for code-semantic relations."""
+    patterns: list[_PatternEntry] = []
+
+    # Pattern: "X imports Y", "X import Y", "from Y import X"
+    patterns.append(
+        (
+            re.compile(
+                r"(?:from\s+)(\S{2,60})\s+imports?\s+(\S{2,60})",
+                re.IGNORECASE,
+            ),
+            SynapseType.IMPORTS,
+            RelationType.CAUSAL,  # reuse closest category
+            0.90,
+            True,  # "from Y import X" → X imports Y (reversed)
+        )
+    )
+    patterns.append(
+        (
+            re.compile(
+                r"(\S{2,60})\s+imports?\s+(\S{2,60})",
+                re.IGNORECASE,
+            ),
+            SynapseType.IMPORTS,
+            RelationType.CAUSAL,
+            0.90,
+            False,
+        )
+    )
+
+    # "X calls Y" / "X invokes Y" / "X delegates to Y"
+    patterns.append(
+        (
+            re.compile(
+                r"(\S{2,60})\s+(?:calls?|invokes?|delegates?\s+to)\s+(\S{2,60})",
+                re.IGNORECASE,
+            ),
+            SynapseType.CALLS,
+            RelationType.CAUSAL,
+            0.85,
+            False,
+        )
+    )
+
+    # "X depends on Y" / "X requires Y" / "X needs Y"
+    patterns.append(
+        (
+            re.compile(
+                r"(\S{2,60})\s+(?:depends?\s+on|requires?|needs?)\s+(\S{2,60})",
+                re.IGNORECASE,
+            ),
+            SynapseType.DEPENDS_ON,
+            RelationType.CAUSAL,
+            0.80,
+            False,
+        )
+    )
+
+    # "X inherits from Y" / "X extends Y" / "X subclass of Y"
+    patterns.append(
+        (
+            re.compile(
+                r"(\S{2,60})\s+(?:inherits?\s+(?:from)?|extends?|subclass\s+of)\s+(\S{2,60})",
+                re.IGNORECASE,
+            ),
+            SynapseType.INHERITS,
+            RelationType.CAUSAL,
+            0.90,
+            False,
+        )
+    )
+
+    # "X implements Y" / "X conforms to Y"
+    patterns.append(
+        (
+            re.compile(
+                r"(\S{2,60})\s+(?:implements?|conforms?\s+to)\s+(\S{2,60})",
+                re.IGNORECASE,
+            ),
+            SynapseType.IMPLEMENTS,
+            RelationType.CAUSAL,
+            0.90,
+            False,
+        )
+    )
+
+    # "X defined in Y" / "X lives in Y"
+    patterns.append(
+        (
+            re.compile(
+                r"(\S{2,60})\s+(?:defined\s+in|lives?\s+in|located\s+in)\s+(\S{2,60})",
+                re.IGNORECASE,
+            ),
+            SynapseType.DEFINED_IN,
+            RelationType.CAUSAL,
+            0.85,
+            False,
+        )
+    )
+
+    # "X raises Y" / "X throws Y"
+    patterns.append(
+        (
+            re.compile(
+                r"(\S{2,60})\s+(?:raises?|throws?)\s+(\S{2,60})",
+                re.IGNORECASE,
+            ),
+            SynapseType.RAISES,
+            RelationType.CAUSAL,
+            0.85,
+            False,
+        )
+    )
+
+    return patterns
+
+
 class RelationExtractor:
     """
     Extract relations from text using regex pattern matching.
 
-    Identifies causal, comparative, and sequential relationships
-    between text spans. Each relation maps to a specific SynapseType
-    for the neural graph.
+    Identifies causal, comparative, sequential, and code-semantic
+    relationships between text spans. Each relation maps to a specific
+    SynapseType for the neural graph.
 
     No LLM dependency — pure regex-based extraction.
     """
@@ -416,6 +533,7 @@ class RelationExtractor:
         self._causal_patterns = _build_causal_patterns()
         self._comparative_patterns = _build_comparative_patterns()
         self._sequential_patterns = _build_sequential_patterns()
+        self._code_patterns = _build_code_patterns()
 
     def extract(self, text: str, language: str = "auto") -> list[RelationCandidate]:
         """
@@ -436,6 +554,7 @@ class RelationExtractor:
         candidates.extend(self._extract_family(text, self._causal_patterns))
         candidates.extend(self._extract_family(text, self._comparative_patterns))
         candidates.extend(self._extract_family(text, self._sequential_patterns))
+        candidates.extend(self._extract_family(text, self._code_patterns))
 
         return self._deduplicate(candidates)
 

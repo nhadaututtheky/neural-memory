@@ -6,6 +6,7 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from neural_memory.core.memory_types import MemoryType
 from neural_memory.engine.hooks import HookEvent
 from neural_memory.engine.retrieval import DepthLevel
 from neural_memory.mcp.constants import MAX_HOT_CONTEXT_MEMORIES, MAX_TOKEN_BUDGET
@@ -139,7 +140,7 @@ class RecallHandler:
 
     async def _recall(self, args: dict[str, Any]) -> dict[str, Any]:
         """Query memories via spreading activation."""
-        from neural_memory.mcp.tool_handlers import (
+        from neural_memory.mcp.tool_handler_utils import (
             _build_citation_audit,
             _parse_tags,
             _require_brain_id,
@@ -260,7 +261,7 @@ class RecallHandler:
 
         permanent_only = bool(args.get("permanent_only", False))
 
-        from neural_memory.mcp.tool_handlers import ReflexPipeline  # type: ignore[attr-defined]
+        from neural_memory.engine.retrieval import ReflexPipeline
 
         pipeline = ReflexPipeline(storage, brain.config)
         result = await pipeline.query(
@@ -676,7 +677,7 @@ class RecallHandler:
     ) -> dict[str, Any]:
         """Handle cross-brain recall by querying multiple brains in parallel."""
         from neural_memory.engine.cross_brain import cross_brain_recall
-        from neural_memory.mcp.tool_handlers import _parse_tags
+        from neural_memory.mcp.tool_handler_utils import _parse_tags
 
         query = args.get("query", "")
         if not query:
@@ -766,17 +767,31 @@ class RecallHandler:
             fibers = fresh_fibers[:limit]
 
         # Inject HOT tier memories — always in context regardless of recency
+        # When domain is specified, boundary memories are filtered:
+        # - Boundaries with matching domain:{value} tag → included
+        # - Boundaries with NO domain: tag (global) → included
+        # - Boundaries with a DIFFERENT domain: tag → excluded
+        # Non-boundary HOT memories are always included regardless of domain.
         existing_ids = {f.id for f in fibers}
+        context_domain = args.get("domain")
+        if context_domain and isinstance(context_domain, str):
+            context_domain = context_domain.lower().strip()[:50]
         try:
             hot_memories = await storage.find_typed_memories(
                 tier="hot", limit=MAX_HOT_CONTEXT_MEMORIES
             )
             for tm in hot_memories:
-                if tm.fiber_id not in existing_ids:
-                    hot_fiber = await storage.get_fiber(tm.fiber_id)
-                    if hot_fiber:
-                        fibers.append(hot_fiber)
-                        existing_ids.add(tm.fiber_id)
+                if tm.fiber_id in existing_ids:
+                    continue
+                # Domain filter: only applies to boundary memories
+                if context_domain and tm.memory_type == MemoryType.BOUNDARY:
+                    domain_tags = {t for t in tm.tags if t.startswith("domain:")}
+                    if domain_tags and f"domain:{context_domain}" not in domain_tags:
+                        continue  # has domain tags but none match → skip
+                hot_fiber = await storage.get_fiber(tm.fiber_id)
+                if hot_fiber:
+                    fibers.append(hot_fiber)
+                    existing_ids.add(tm.fiber_id)
             if len(hot_memories) >= MAX_HOT_CONTEXT_MEMORIES:
                 logger.warning(
                     "HOT memory limit reached (%d) — some HOT memories may be excluded from context",
@@ -784,6 +799,25 @@ class RecallHandler:
                 )
         except Exception as e:
             logger.warning("HOT memory injection failed — tier filter unavailable: %s", e)
+
+        # Cross-session correction injection: recent error→fix pairs
+        corrections_text = ""
+        try:
+            corrections_text = await self._inject_recent_corrections(storage)
+        except Exception:
+            logger.debug("Correction injection failed (non-critical)", exc_info=True)
+
+        # A8 Phase 2: Proactive context — surface signals + cluster injection + session summary
+        signals_text = ""
+        topic_context_text = ""
+        session_summary_text = ""
+        try:
+            proactive = await self._build_proactive_context(storage, existing_ids)
+            signals_text = proactive.get("signals", "")
+            topic_context_text = proactive.get("topic_context", "")
+            session_summary_text = proactive.get("session_summary", "")
+        except Exception:
+            logger.debug("Proactive context failed (non-critical)", exc_info=True)
 
         # Smart context optimization: score, dedup, budget
         from neural_memory.engine.context_optimizer import optimize_context
@@ -834,22 +868,65 @@ class RecallHandler:
             non_ghost = [item for item in plan.items if item.fidelity_level != "ghost"]
             ghost_items = [item for item in plan.items if item.fidelity_level == "ghost"]
 
-            context_parts = [f"- {item.content}" for item in non_ghost]
+            context_parts = []
+            for item in non_ghost:
+                prefix = ""
+                if item.tier == "hot":
+                    prefix = "[HOT] "
+                if item.unreliable:
+                    prefix += "[UNRELIABLE] "
+                suffix = ""
+                if item.confidence is not None and item.confidence < 1.0:
+                    suffix = f" (confidence: {item.confidence:.0%})"
+                context_parts.append(f"- {prefix}{item.content}{suffix}")
             context_text = "\n".join(context_parts) if context_parts else ""
 
             # Append ghost section if enabled and ghosts exist
             if include_ghosts and ghost_items:
-                ghost_parts = [f"- {item.content}" for item in ghost_items]
+                ghost_parts = []
+                for item in ghost_items:
+                    if item.superseded_by:
+                        ghost_parts.append(
+                            f"- [OUTDATED] {item.content} → See: {item.superseded_by}"
+                        )
+                    else:
+                        ghost_parts.append(f"- {item.content}")
                 ghost_section = "\n--- faded memories (use recall key to restore) ---\n"
                 ghost_section += "\n".join(ghost_parts)
                 context_text = (
                     (context_text + "\n" + ghost_section) if context_text else ghost_section
                 )
 
+            # Prepend corrections section (cross-session learning)
+            if corrections_text:
+                context_text = (
+                    corrections_text + "\n" + context_text if context_text else corrections_text
+                )
+
+            # A8 Phase 2: Prepend proactive context sections
+            # Order: session summary → signals → topic context → corrections → main context
+            if topic_context_text:
+                context_text = (
+                    topic_context_text + "\n" + context_text if context_text else topic_context_text
+                )
+            if signals_text:
+                context_text = signals_text + "\n" + context_text if context_text else signals_text
+            if session_summary_text:
+                context_text = (
+                    session_summary_text + "\n" + context_text
+                    if context_text
+                    else session_summary_text
+                )
+
             if not context_text:
                 context_text = "No context available."
         else:
-            context_text = "No context available."
+            parts = [
+                p
+                for p in [session_summary_text, signals_text, topic_context_text, corrections_text]
+                if p
+            ]
+            context_text = "\n".join(parts) if parts else "No context available."
 
         # Track ghost shown timestamps (only if ghosts were actually shown)
         if include_ghosts and plan.ghost_fiber_ids:
@@ -864,10 +941,15 @@ class RecallHandler:
 
         await self._record_tool_action("context")
 
+        # Count HOT memories in final output
+        hot_count = sum(1 for item in plan.items if item.tier == "hot")
+
         response: dict[str, Any] = {
             "context": context_text,
             "count": len(plan.items),
             "tokens_used": plan.total_tokens,
+            "token_budget": max_tokens,
+            "hot_memories_injected": hot_count,
         }
 
         if plan.dropped_count > 0:
@@ -917,3 +999,207 @@ class RecallHandler:
             response.update(alert_info)
 
         return response
+
+    async def _inject_recent_corrections(
+        self,
+        storage: NeuralStorage,
+        max_corrections: int = 5,
+        max_age_days: int = 7,
+    ) -> str:
+        """Fetch recent error→fix corrections for cross-session learning.
+
+        Looks for RESOLVED_BY synapses created within the last N days,
+        then formats them as a corrections section for context injection.
+
+        Args:
+            storage: Storage backend
+            max_corrections: Maximum corrections to inject
+            max_age_days: Only include corrections from the last N days
+
+        Returns:
+            Formatted corrections text, or empty string if none found
+        """
+        from datetime import timedelta
+
+        from neural_memory.core.synapse import SynapseType
+
+        now = utcnow()
+        cutoff = now - timedelta(days=max_age_days)
+
+        # Fetch all RESOLVED_BY synapses in this brain
+        resolved_synapses = await storage.get_synapses(type=SynapseType.RESOLVED_BY)
+
+        # Filter to recent ones
+        recent = [s for s in resolved_synapses if s.created_at >= cutoff]
+        if not recent:
+            return ""
+
+        # Sort by recency, take top N
+        recent.sort(key=lambda s: s.created_at, reverse=True)
+        recent = recent[:max_corrections]
+
+        # Batch-fetch source (error) and target (fix) neurons
+        all_ids = list({s.source_id for s in recent} | {s.target_id for s in recent})
+        neurons = await storage.get_neurons_batch(all_ids)
+
+        correction_lines: list[str] = []
+        for syn in recent:
+            error_neuron = neurons.get(syn.source_id)
+            fix_neuron = neurons.get(syn.target_id)
+            if not error_neuron or not fix_neuron:
+                continue
+            error_content = error_neuron.content[:100]
+            fix_content = fix_neuron.content[:100]
+            correction_lines.append(f"- {error_content} -> {fix_content}")
+
+        if not correction_lines:
+            return ""
+
+        header = "--- corrections from recent sessions ---"
+        return header + "\n" + "\n".join(correction_lines)
+
+    async def _build_proactive_context(
+        self,
+        storage: NeuralStorage,
+        existing_fiber_ids: set[str],
+    ) -> dict[str, str]:
+        """Build proactive context sections from surface + session state.
+
+        A8 Phase 2: Auto-inject relevant memories without agent asking.
+        Uses surface CLUSTERS for topic-aware injection, SIGNALS for alerts,
+        and session EMA for meta-summary.
+
+        Returns:
+            Dict with keys: signals, topic_context, session_summary (all strings, empty if N/A)
+        """
+        result: dict[str, str] = {"signals": "", "topic_context": "", "session_summary": ""}
+
+        # Parse surface (if available)
+        surface = None
+        if hasattr(self, "_surface_text") and self._surface_text:
+            try:
+                from neural_memory.surface.parser import parse
+
+                surface = parse(self._surface_text)
+            except Exception:
+                logger.debug("Surface parse failed in proactive context", exc_info=True)
+
+        # Get session state (if available)
+        session_state = None
+        try:
+            import os
+
+            from neural_memory.engine.session_state import SessionManager
+
+            source = os.environ.get("NEURALMEMORY_SOURCE", "mcp")[:256]
+            session_id = f"{source}-{id(self)}"
+            session_state = SessionManager.get_instance().get(session_id)
+        except Exception:
+            logger.debug("Session state lookup failed in proactive context", exc_info=True)
+
+        # T2.2: Surface SIGNALS as proactive alerts
+        if surface and surface.signals:
+            from neural_memory.surface.models import SignalLevel
+
+            signal_lines: list[str] = []
+            for sig in surface.signals:
+                if sig.level == SignalLevel.URGENT:
+                    signal_lines.append(f"! {sig.text}")
+                elif sig.level == SignalLevel.WATCHING:
+                    signal_lines.append(f"~ {sig.text}")
+            if signal_lines:
+                result["signals"] = "--- active signals ---\n" + "\n".join(signal_lines)
+
+        # T2.1: Surface cluster injection — match clusters to session topics
+        # M4 fix: work on a local copy to avoid mutating caller's set
+        local_seen = set(existing_fiber_ids)
+        if surface and surface.clusters and session_state:
+            topic_weights = session_state.get_topic_weights(limit=5)
+            active_topics = {t for t, w in topic_weights.items() if w >= 0.3}
+
+            if active_topics:
+                matched_fiber_ids: list[str] = []
+                for cluster in surface.clusters:
+                    if len(matched_fiber_ids) >= 9:
+                        break  # M5 fix: early exit when cap reached
+                    # Match cluster name or description against session topics
+                    cluster_terms = set(cluster.name.lower().split())
+                    if cluster.description:
+                        cluster_terms |= set(cluster.description.lower().split())
+                    if active_topics & cluster_terms:
+                        # H1 fix: search neurons by content, not by tag lookup
+                        for node_id in cluster.node_ids[:3]:  # Max 3 per cluster
+                            if len(matched_fiber_ids) >= 9:
+                                break  # M5 fix: early exit inner loop
+                            node = surface.get_node(node_id)
+                            if not node or not node.content.strip():
+                                continue
+                            try:
+                                # Find neurons whose content matches the surface node
+                                # H2 fix: truncate to first 80 chars for reliable substring match
+                                search_text = node.content.strip()[:80]
+                                neurons = await storage.find_neurons(
+                                    content_contains=search_text,
+                                    limit=2,
+                                )
+                                for neuron in neurons:
+                                    # Find fibers containing this neuron
+                                    fibers = await storage.find_fibers(
+                                        contains_neuron=neuron.id,
+                                        limit=1,
+                                    )
+                                    for fiber in fibers:
+                                        if (
+                                            fiber.id not in local_seen
+                                            and len(matched_fiber_ids) < 9
+                                        ):
+                                            matched_fiber_ids.append(fiber.id)
+                                            local_seen.add(fiber.id)
+                            except Exception:
+                                continue
+
+                if matched_fiber_ids:
+                    # Fetch fiber content for injection
+                    topic_lines: list[str] = []
+                    for fid in matched_fiber_ids[:9]:
+                        try:
+                            topic_fiber = await storage.get_fiber(fid)
+                            if topic_fiber:
+                                content = topic_fiber.summary or ""
+                                if not content and topic_fiber.anchor_neuron_id:
+                                    anchor = await storage.get_neuron(topic_fiber.anchor_neuron_id)
+                                    content = anchor.content if anchor else ""
+                                if content:
+                                    topic_lines.append(f"- {content[:150]}")
+                        except Exception:
+                            continue
+                    if topic_lines:
+                        result["topic_context"] = "--- active topic context ---\n" + "\n".join(
+                            topic_lines
+                        )
+
+        # T2.4: Session meta-summary
+        summary_parts: list[str] = []
+        if session_state:
+            topic_weights = session_state.get_topic_weights(limit=3)
+            topic_str = (
+                ", ".join(f"{t} ({w:.1f})" for t, w in topic_weights.items())
+                if topic_weights
+                else "none"
+            )
+            summary_parts.append(
+                f"Session: {session_state.query_count} queries | topics: {topic_str}"
+            )
+
+        if surface and surface.meta:
+            coverage = surface.meta.coverage
+            staleness = surface.meta.staleness
+            if coverage is not None:
+                summary_parts.append(f"surface: {coverage:.0%} coverage")
+            if staleness is not None and staleness > 0.5:
+                summary_parts.append(f"staleness: {staleness:.0%}")
+
+        if summary_parts:
+            result["session_summary"] = "--- " + " | ".join(summary_parts) + " ---"
+
+        return result

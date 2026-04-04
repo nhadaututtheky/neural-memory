@@ -205,6 +205,23 @@ class InMemoryCollectionsMixin:
             count += 1
         return count
 
+    async def count_typed_memories_grouped(
+        self,
+    ) -> list[tuple[str, str, int]]:
+        brain_id = self._get_brain_id()
+        counts: dict[tuple[str, str], int] = {}
+        for tm in self._typed_memories[brain_id].values():
+            if tm.is_expired:
+                continue
+            mt = (
+                tm.memory_type.value
+                if isinstance(tm.memory_type, MemoryType)
+                else str(tm.memory_type)
+            )
+            key = (mt, tm.tier)
+            counts[key] = counts.get(key, 0) + 1
+        return [(mt, tier, cnt) for (mt, tier), cnt in counts.items()]
+
     async def update_typed_memory(self, typed_memory: TypedMemory) -> None:
         brain_id = self._get_brain_id()
 

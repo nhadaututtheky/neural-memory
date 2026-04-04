@@ -15,6 +15,123 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **FalkorDB `find_fibers` missing tag filter** — `find_fibers()` accepted `tags` parameter but never filtered by it (only `find_fibers_batch` did). Now both methods filter correctly.
 
+## [4.29.0] — 2026-04-04
+
+### Added
+
+- **A7 Recall Intelligence**: Causal synapse roles (CAUSED_BY, RESOLVED_BY, EVIDENCE_FOR/AGAINST, etc.) with spreading activation integration. Fixes auto-supersede errors — storing a fix creates RESOLVED_BY synapse and demotes error activation by >=50%. Outcome learning tracks prediction accuracy.
+- **A8 Agent Intelligence — Phase 1 (Precision Recall)**: Context optimizer sharpens recall by injecting session topic context, deduplicating fiber results, and capping token budgets. Retrieval penalizes stale version references (-20%).
+- **A8 Phase 2 (Proactive Context)**: Surface-based topic injection at session start — up to 9 topic memories from 3 clusters. Habit-aware context with time-of-day and day-of-week patterns.
+- **A8 Phase 3 (Auto-Save Intelligence)**: Quality scoring (0-10) for every nmem_remember — specificity, structure, brevity bonuses with wall-of-text penalty. Auto-classification confidence scoring. Enhanced importance scoring with security keywords, CVE detection, error traces.
+- **A8 Phase 4 (Aggressive Consolidation)**: SimHash semantic merge (content-similar fibers merged via Union-Find). Stale version detection (>=2 major behind flagged). Access-based demotion (30d cold, 90d prune candidate, pinned exempt). Summary fibers for 5+ merged groups (1.1x retrieval bonus). Surface regeneration after structural changes.
+- **Code-semantic encoding**: 7 new synapse types (IMPORTS, CALLS, DEPENDS_ON, INHERITS, IMPLEMENTS, DEFINED_IN, RAISES). Compound identifier keyword extraction (PascalCase, camelCase, snake_case splitting).
+
+### Improved
+
+- **Agent instructions rewritten**: SYSTEM_PROMPT, COMPACT_PROMPT, MCP_INSTRUCTIONS, and SKILL.md restructured for "read less, understand more" — scannable sections, A7/A8 smart behaviors documented, tool decision matrix.
+- **Tighter regex patterns**: `_ERROR_TRACE_RE` requires `Error:` or `Traceback (most recent` pattern. `_VERSION_PATTERN` requires `v` prefix to avoid IP/date false positives. `_FILE_PATH_PATTERN` excludes abbreviations.
+
+### Tests
+
+- ~100 new tests: causal recall (22), precision recall (15), proactive context (12), auto-save intelligence (17), aggressive consolidation (23), code-semantic encoding (15+)
+
+## [4.28.0] — 2026-04-03
+
+### Fixed
+
+- **Pro deps now optional** (#125): numpy, hnswlib, msgpack moved to `[pro]` extra. Free users on Python 3.14+ were blocked by hnswlib C++ build failure. Now `pip install neural-memory` works everywhere; `pip install neural-memory[pro]` adds Pro deps.
+- **CLI activate auto-installs**: after activating a Pro key, CLI detects missing deps and offers to install them automatically.
+- **Dashboard Pro deps banner**: Settings page shows yellow warning with install command when Pro is activated but deps are missing.
+- **ClawHub display name**: fixed ".Claude Plugin" → "Neural Memory" via `--name` flag on publish.
+- **CI test fix**: mock `detect_project_root` in surface path test to prevent `.neuralmemory/` dir interference on CI runner.
+
+### Added
+
+- **InfinityDB mixin refactor**: split InfinityDBStorage into 3 mixins (typed, sync, extras) for maintainability, with dedicated test files.
+- **Pay-hub license grant**: new `/admin/license/grant` endpoint for direct D1 key insertion; `/admin/license/sync` now auto-inserts into D1.
+- **GitHub stars + download badges** on README.
+- **Distribution**: published to MCP Registry, submitted to awesome-mcp-servers lists.
+
+## [4.27.1] — 2026-04-02
+
+### Changed
+
+- **Pro deps bundled**: numpy, hnswlib, msgpack moved from optional `[pro]` extra to main dependencies. One install, zero friction: `pip install neural-memory` → activate key → done.
+
+## [4.27.0] — 2026-04-02
+
+### Changed
+
+- **Pro merge**: Pro features (InfinityDB, cone queries, directional compression, smart merge) bundled in main package. No separate `neural-memory-pro` needed.
+  - Activate with key: `nmem pro activate <KEY>`
+  - Plugin system preserved for third-party extensions
+
+### Added
+
+- 301 Pro tests migrated to `tests/unit/pro/` (auto-skip when Pro deps missing)
+
+## [4.26.0] — 2026-04-02
+
+### Added
+
+- **Tier analytics** (B5 Phase 4): MCP `nmem_tier action="analytics"` returns memory type x tier breakdown, 7d/30d velocity metrics (promoted/demoted/archived), and recent tier changes (capped at 50 events).
+  - REST API: `GET /api/dashboard/tier-analytics` (breakdown + velocity), `GET /api/dashboard/tier-history?limit=20&offset=0` (paginated events)
+  - Dashboard: Tier Analytics page with velocity KPI cards, grouped bar chart (recharts), and recent changes table
+  - `_classify_change()` helper classifies tier transitions as promoted/demoted/archived
+
+### Improved
+
+- Brain Quality C4 (Agent Visualization) marked complete — `nmem_visualize` tool fully shipped with Vega-Lite, markdown table, and ASCII chart formats
+- B5 Smart Tiers track fully complete (4/4 phases: Auto-Tier, Decision Intelligence, Domain Boundaries, Tier Analytics)
+
+### Tests
+
+- 11 new tier analytics tests (classify change, breakdown by type, velocity windows, recent changes)
+
+## [4.25.0] — 2026-04-01
+
+### Added
+
+- **Domain boundaries** (B5 Phase 3): Scope boundary memories to specific domains (e.g. `financial`, `security`, `code-review`). Boundaries without a domain remain global. Uses existing tag system with `domain:` prefix convention — zero schema migration.
+  - `nmem_remember(content="...", type="boundary", domain="financial")` → auto-adds `domain:financial` tag
+  - `nmem_recall(domain="financial")` → HOT context injection filters boundaries by domain, keeps global (unscoped) boundaries
+  - `nmem_boundaries` tool — list boundaries grouped by domain, list unique domains with counts
+- **Brain milestone tool** (`nmem_milestone`): Track neuron-count achievements and generate growth reports
+
+### Improved
+
+- MCP tool count: 53 → 55 (added `nmem_boundaries`, `nmem_milestone`)
+
+### Tests
+
+- 15 new domain boundary tests (tag creation, filtered context, boundaries tool, remember injection)
+- Updated tool count assertions across test suite
+
+## [4.24.0] — 2026-03-31
+
+### Added
+
+- **Auto-tier engine** (B5 Phase 1, Pro): Automatic WARM→HOT promotion, HOT→WARM demotion, WARM→COLD archival based on access patterns. Protection for BOUNDARY types and pinned fibers. Oscillation prevention. `nmem_tier` MCP tool with status/evaluate/apply/history/config actions.
+- **Decision intelligence** (B5 Phase 2): Extract structured decision components (chosen, alternatives, reasoning, confidence) from DECISION-type memories. Detect overlapping prior decisions, classify relationships (confirms/contradicts/evolves), create EVOLVES_FROM synapses, boost recall scores for domain-relevant decisions.
+- **Dashboard Phosphor icons**: Migrated all 19 component files from Lucide to Phosphor Icons (`@phosphor-icons/react`). Added Playwright E2E smoke tests (8 tests).
+
+### Fixed
+
+- **CLI ignores `NMEM_BRAIN` env var** (#123): CLI `get_storage()` now respects `NMEM_BRAIN`/`NEURALMEMORY_BRAIN` env vars. Priority: explicit arg > env var > config file. `brain list` shows effective brain from env var.
+- **Handler monolith split**: Split `tool_handlers.py` (2030 LOC) into 7 domain-specific handler modules. Fixed circular imports, removed duplicate utility functions.
+- **Input firewall hardening**: Added bounds validation, type checks, and range clamping across handler modules (lifecycle, provenance, evolution, stats).
+
+### Improved
+
+- Auto-tier config: `cold_archive_days` invariant (must be ≥ `demote_inactive_days`), Pro gate in consolidation engine
+- MemoryTier constants used consistently (no string literals in handlers)
+- MCP tool count: 52 → 53
+
+### Tests
+
+- 50+ new tests across tier engine, decision intelligence, brain isolation, E2E smoke tests
+- Fixed stale `ReflexPipeline` patch targets and MagicMock config attrs in test fixtures
+
 ## [4.23.4] — 2026-03-30
 
 ### Fixed

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Copy, Download, Check } from "lucide-react"
+import { Copy, DownloadSimple, Check } from "@phosphor-icons/react"
 import { copyShareImage, downloadShareImage } from "../utils/share-image"
 import type { DailyReading } from "../engine/types"
 import { useTranslation } from "react-i18next"
@@ -48,7 +48,7 @@ export function ShareButton({ reading }: ShareButtonProps) {
         className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         aria-label={t("oracle.downloadCard")}
       >
-        <Download className="size-3.5" />
+        <DownloadSimple className="size-3.5" />
         {t("oracle.downloadCard")}
       </button>
     </div>

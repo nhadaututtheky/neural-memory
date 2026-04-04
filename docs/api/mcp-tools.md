@@ -1,7 +1,7 @@
 # MCP Tools Reference
 
 Complete reference for all NeuralMemory MCP tools.
-**52 tools** available via MCP stdio transport.
+**55 tools** available via MCP stdio transport.
 
 !!! tip
     Tools are called as MCP tool calls, not CLI commands. In Claude Code, call `nmem_recall` directly — do not run `nmem recall` in terminal.
@@ -70,6 +70,9 @@ Complete reference for all NeuralMemory MCP tools.
   - [`nmem_refine`](#nmem_refine)
   - [`nmem_report_outcome`](#nmem_report_outcome)
   - [`nmem_budget`](#nmem_budget)
+  - [`nmem_tier`](#nmem_tier)
+  - [`nmem_boundaries`](#nmem_boundaries)
+  - [`nmem_milestone`](#nmem_milestone)
 
 ---
 
@@ -77,13 +80,14 @@ Complete reference for all NeuralMemory MCP tools.
 
 ### `nmem_remember`
 
-Store a memory. Auto-detects type if not specified. Error resolution: when a new memory contradicts a stored error (type='error'), the system automatically creates a RESOLVED_BY synapse and demotes the error's activation by >=50%, so the agent stops repeating outdated errors. Detection is automatic via tag overlap (>50%) and factual contradiction patterns — no manual tagging needed. Sensitive content is auto-encrypted when encryption is enabled, instead of being rejected.
+Store a memory. Auto-detects type, auto-resolves contradicted errors (RESOLVED_BY synapse). Use after completing a task, fixing a bug, or making a decision. Don't use for temporary notes (use ephemeral=true) or project context (use nmem_eternal).
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `content` | string | Yes | — | The content to remember |
 | `type` | string (`fact`, `decision`, `preference`, `todo`, `insight`, `context`, `instruction`, `error`, `workflow`, `reference`, `boundary`) | No | — | Memory type (auto-detected if not specified) |
 | `tier` | string (`hot`, `warm`, `cold`) | No | — | Memory tier: hot (always in context, slow decay), warm (default, semantic match), cold (explicit recall only, fast de... |
+| `domain` | string | No | — | Domain scope for boundary memories (e.g. 'financial', 'security', 'code-review'). Adds a domain:{value} tag. Boundari... |
 | `priority` | integer | No | — | Priority 0-10 (5=normal, 10=critical) |
 | `tags` | array[string] | No | — | Tags for categorization |
 | `expires_days` | integer | No | — | Days until memory expires |
@@ -98,7 +102,7 @@ Store a memory. Auto-detects type if not specified. Error resolution: when a new
 
 ### `nmem_remember_batch`
 
-Store multiple memories in a single call. Max 20 items, 500K total chars. Each item supports the same fields as nmem_remember. Returns per-item results (partial success — one bad item won't block the rest).
+Store multiple memories at once (max 20). Use when saving 3+ memories together. Partial success — one bad item won't block the rest.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -108,7 +112,7 @@ Store multiple memories in a single call. Max 20 items, 500K total chars. Each i
 
 ### `nmem_recall`
 
-Query memories by semantic search with confidence ranking.
+Query memories via spreading activation. Use when you need past context, decisions, or knowledge. Depth: 0=instant lookup, 1=context (default), 2=cross-time patterns, 3=deep graph. Add tags for precision. Use nmem_context instead for broad recent context.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -129,12 +133,13 @@ Query memories by semantic search with confidence ranking.
 | `permanent_only` | boolean | No | — | Exclude ephemeral (session-scoped) memories from results. Default: false (include all). |
 | `clean_for_prompt` | boolean | No | — | Return clean bullet-point text without section headers or neuron-type tags. Use when injecting recall output into pro... |
 | `tier` | string (`hot`, `warm`, `cold`) | No | — | Filter results by memory tier. Only return memories matching this tier. |
+| `domain` | string | No | — | Domain scope filter. When set, HOT context injection only includes boundaries tagged with this domain (plus unscoped ... |
 | `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
 | `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_show`
 
-Get full verbatim content + metadata + synapses for a specific memory by ID. Use this when you need the exact, unmodified content of a stored memory.
+Get full verbatim content + metadata + synapses for a memory by ID. Use after recall when you need exact content, not the summarized version.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -144,7 +149,7 @@ Get full verbatim content + metadata + synapses for a specific memory by ID. Use
 
 ### `nmem_context`
 
-Get recent memories as context.
+Get recent memories as auto-injected context. Use for broad task context. For specific queries use nmem_recall. For project-level context use nmem_recap.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -157,7 +162,7 @@ Get recent memories as context.
 
 ### `nmem_todo`
 
-Add a TODO memory (30-day expiry).
+Quick TODO memory (auto-expires in 30 days). Use nmem_forget to close when done.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -168,7 +173,7 @@ Add a TODO memory (30-day expiry).
 
 ### `nmem_auto`
 
-Auto-capture memories from text. 'process' analyzes+saves, 'flush' for emergency capture.
+Auto-extract memories from text. 'process'=analyze+save, 'flush'=emergency capture before compaction. Use at session end or when processing large text blocks.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -180,7 +185,7 @@ Auto-capture memories from text. 'process' analyzes+saves, 'flush' for emergency
 
 ### `nmem_suggest`
 
-Autocomplete suggestions from brain neurons. When called with no prefix, returns idle neurons that have never been accessed — useful for discovering neglected knowledge that needs reinforcement.
+Autocomplete from brain neurons. No prefix = idle/neglected neurons needing reinforcement.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -194,7 +199,7 @@ Autocomplete suggestions from brain neurons. When called with no prefix, returns
 
 ### `nmem_session`
 
-Track session state: task, feature, progress.
+Track current session state (task, feature, progress). Single-session only. For cross-session persistence use nmem_eternal.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -208,7 +213,7 @@ Track session state: task, feature, progress.
 
 ### `nmem_eternal`
 
-Save project context, decisions, instructions for cross-session persistence.
+SAVE project context, decisions, instructions that persist across sessions. Pair with nmem_recap to LOAD. Use for project-level facts, not task-specific memories.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -223,7 +228,7 @@ Save project context, decisions, instructions for cross-session persistence.
 
 ### `nmem_recap`
 
-Load saved project context, decisions, and progress.
+LOAD project context saved by nmem_eternal. Call at SESSION START to restore cross-session state. Level 1=quick (~500 tokens), 2=detailed, 3=full.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -236,7 +241,7 @@ Load saved project context, decisions, and progress.
 
 ### `nmem_provenance`
 
-Trace provenance, verify, or approve a memory neuron. Use 'trace' to see full provenance chain (source, stored_by, verified, approved). Use 'verify' or 'approve' to add audit trail entries.
+Trace or audit a memory's origin chain. Use when verifying where a fact came from or adding verification/approval stamps.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -248,7 +253,7 @@ Trace provenance, verify, or approve a memory neuron. Use 'trace' to see full pr
 
 ### `nmem_source`
 
-Manage memory sources (provenance). Register external documents, laws, APIs, or other origins so memories can answer 'where did this come from?'.
+Register external sources (docs, laws, APIs) for provenance tracking. Use before nmem_train to link trained memories to their origin.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -267,7 +272,7 @@ Manage memory sources (provenance). Register external documents, laws, APIs, or 
 
 ### `nmem_stats`
 
-Brain stats: memory counts and freshness.
+Quick brain stats: counts and freshness. For quality assessment use nmem_health instead.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -276,7 +281,7 @@ Brain stats: memory counts and freshness.
 
 ### `nmem_health`
 
-Brain health: purity score, grade, warnings.
+Primary health check — purity score, grade, warnings. Call FIRST, then fix top penalty. For specific alerts use nmem_alerts. For trends use nmem_evolution.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -285,7 +290,7 @@ Brain health: purity score, grade, warnings.
 
 ### `nmem_evolution`
 
-Brain evolution: maturation, plasticity, coherence.
+Long-term brain growth trends: maturation, plasticity, coherence. Use for trend analysis, not immediate health (use nmem_health for that).
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -294,7 +299,7 @@ Brain evolution: maturation, plasticity, coherence.
 
 ### `nmem_habits`
 
-Workflow habits: suggest, list, or clear.
+Learned workflow habits from tool usage patterns. Suggest next action, list habits, or clear.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -305,7 +310,7 @@ Workflow habits: suggest, list, or clear.
 
 ### `nmem_narrative`
 
-Generate narratives: timeline, topic, or causal chain.
+Generate memory narratives: timeline (date range), topic (spreading activation), or causal chain. Use to understand how knowledge connects.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -322,7 +327,7 @@ Generate narratives: timeline, topic, or causal chain.
 
 ### `nmem_hypothesize`
 
-Create, list, or inspect hypotheses — evolving beliefs with Bayesian confidence tracking. Hypotheses auto-resolve when evidence is strong enough (confirmed at >=0.9 confidence with >=3 evidence-for, refuted at <=0.1 with >=3 evidence-against). Use nmem_evidence to add supporting/opposing evidence.
+Create or inspect hypotheses (Bayesian confidence). Cognitive workflow: hypothesize -> evidence -> predict -> verify -> cognitive (dashboard). Auto-resolves at >=0.9 (confirmed) or <=0.1 (refuted) with 3+ evidence.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -339,7 +344,7 @@ Create, list, or inspect hypotheses — evolving beliefs with Bayesian confidenc
 
 ### `nmem_evidence`
 
-Add evidence for or against a hypothesis. Updates confidence via Bayesian update with surprise weighting and diminishing returns. Auto-resolves hypothesis when evidence threshold is met.
+Add evidence for/against a hypothesis. Bayesian confidence update with auto-resolve. Requires an existing hypothesis_id from nmem_hypothesize.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -354,7 +359,7 @@ Add evidence for or against a hypothesis. Updates confidence via Bayesian update
 
 ### `nmem_predict`
 
-Create, list, or inspect predictions — falsifiable claims about future observations. Predictions track confidence, optional deadlines, and can link to hypotheses via PREDICTED synapse. Verified predictions propagate evidence back to linked hypotheses. Use nmem_verify to record outcomes.
+Create falsifiable predictions linked to hypotheses. Use nmem_verify to record outcomes (propagates evidence back to hypothesis).
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -373,7 +378,7 @@ Create, list, or inspect predictions — falsifiable claims about future observa
 
 ### `nmem_verify`
 
-Verify a prediction as correct or wrong. Optionally records an observation, creates VERIFIED_BY or FALSIFIED_BY synapse, and propagates evidence to linked hypotheses. Returns updated calibration score.
+Record prediction outcome (correct/wrong). Propagates evidence to linked hypothesis. Use after observing the predicted event.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -387,7 +392,7 @@ Verify a prediction as correct or wrong. Optionally records an observation, crea
 
 ### `nmem_cognitive`
 
-Cognitive overview — O(1) summary of active hypotheses, pending predictions, calibration score, and knowledge gaps. Use 'summary' for instant dashboard, 'refresh' to recompute scores from current state.
+Cognitive dashboard — instant O(1) summary of hypotheses, predictions, calibration, and gaps. Use as overview after cognitive workflow steps.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -398,7 +403,7 @@ Cognitive overview — O(1) summary of active hypotheses, pending predictions, c
 
 ### `nmem_gaps`
 
-Metacognition — track what the brain doesn't know. Detect knowledge gaps from contradictions, low-confidence hypotheses, recall misses, or manual flagging. Resolve gaps when new information fills them.
+Track what the brain doesn't know. Detect gaps from contradictions, low-confidence, or recall misses. Resolve when new info fills them.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -416,7 +421,7 @@ Metacognition — track what the brain doesn't know. Detect knowledge gaps from 
 
 ### `nmem_schema`
 
-Schema evolution — evolve hypotheses into new versions. Creates a version chain via SUPERSEDES synapse so the brain tracks how beliefs changed over time. Use when a hypothesis needs updating with new understanding.
+Evolve a hypothesis into a new version (SUPERSEDES chain). Use when understanding changes — preserves belief evolution history.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -432,7 +437,7 @@ Schema evolution — evolve hypotheses into new versions. Creates a version chai
 
 ### `nmem_explain`
 
-Find and explain the shortest path between two entities in the neural graph. Returns a step-by-step explanation with synapse types, weights, and supporting memory evidence.
+Explain how two concepts connect in the neural graph (shortest path with synapse types and weights). Use to understand relationships between entities.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -446,7 +451,7 @@ Find and explain the shortest path between two entities in the neural graph. Ret
 
 ### `nmem_train`
 
-Train brain from documentation files. Supports PDF, DOCX, PPTX, HTML, JSON, XLSX, CSV (requires: pip install neural-memory[extract]). Trained memories are pinned by default (no decay, no compression, permanent KB).
+Train brain from docs (PDF, DOCX, PPTX, HTML, JSON, XLSX, CSV). Pinned by default as permanent KB. Requires: pip install neural-memory[extract].
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -462,7 +467,7 @@ Train brain from documentation files. Supports PDF, DOCX, PPTX, HTML, JSON, XLSX
 
 ### `nmem_train_db`
 
-Train brain from database schema.
+Train brain from database schema (tables, columns, relationships). SQLite supported.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -477,7 +482,7 @@ Train brain from database schema.
 
 ### `nmem_index`
 
-Index codebase for code-aware recall.
+Index codebase for code-aware recall. Extracts symbols, imports, and relationships. Run once per project, re-scan after major changes.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -489,7 +494,7 @@ Index codebase for code-aware recall.
 
 ### `nmem_import`
 
-Import from external systems (ChromaDB, Mem0, Cognee, etc.).
+Import memories from external systems (ChromaDB, Mem0, Cognee, Graphiti, LlamaIndex). One-time migration tool.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -505,7 +510,7 @@ Import from external systems (ChromaDB, Mem0, Cognee, etc.).
 
 ### `nmem_edit`
 
-Edit an existing memory's type, content, or priority. Use when a memory was auto-typed incorrectly or needs content correction. Preserves all connections (synapses) and fiber associations.
+Edit a memory's type, content, priority, or tier. Preserves all synapses. Use when auto-typing was wrong or content needs correction. For complete replacement, forget+remember.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -519,7 +524,7 @@ Edit an existing memory's type, content, or priority. Use when a memory was auto
 
 ### `nmem_forget`
 
-Explicitly delete or close a specific memory. Soft delete by default (marks as expired). Use hard=true for permanent removal. Use for closing completed TODOs or removing outdated/incorrect memories.
+Delete a memory. Soft delete by default; hard=true for permanent removal. Use to close completed TODOs or remove outdated memories.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -531,7 +536,7 @@ Explicitly delete or close a specific memory. Soft delete by default (marks as e
 
 ### `nmem_pin`
 
-Pin, unpin, or list pinned memories. Pinned memories skip decay, pruning, and compression — use for permanent knowledge base content.
+Pin memories as permanent KB (skip decay/pruning/compression). Use for critical knowledge.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -543,7 +548,7 @@ Pin, unpin, or list pinned memories. Pinned memories skip decay, pruning, and co
 
 ### `nmem_consolidate`
 
-Run memory consolidation on the current brain. Strategies: prune (remove weak synapses/orphans), merge (combine overlapping fibers), summarize (cluster topic neurons), mature (episodic→semantic), infer (co-activation synapses), enrich (metadata extraction), dream (synthetic bridges), learn_habits (workflow patterns), dedup (merge near-duplicates), semantic_link (cross-domain connections), compress (old fibers), process_tool_events, detect_drift (find tag synonyms/aliases), all (run all in dependency order). Use dry_run=true to preview without applying changes.
+Run brain consolidation (sleep-like maintenance). Strategy 'all' runs everything in order. Use periodically or after bulk imports. dry_run=true to preview.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -557,7 +562,7 @@ Run memory consolidation on the current brain. Strategies: prune (remove weak sy
 
 ### `nmem_drift`
 
-Semantic drift detection — find tag clusters that should be merged or aliased. Detects when different tags refer to the same concept using Jaccard similarity. Actions: detect (run analysis), list (show clusters), merge (apply canonical tag), alias (mark as related), dismiss (ignore cluster).
+Find tags that mean the same thing (Jaccard similarity). Detect clusters, then merge/alias/dismiss.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -569,7 +574,7 @@ Semantic drift detection — find tag clusters that should be merged or aliased.
 
 ### `nmem_review`
 
-Spaced repetition reviews (Leitner box system).
+Spaced repetition reviews (Leitner 5-box system). Queue due reviews, mark success/fail, view stats.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -582,7 +587,7 @@ Spaced repetition reviews (Leitner box system).
 
 ### `nmem_alerts`
 
-Brain health alerts: list or acknowledge.
+Actionable health alerts. Call after nmem_health to see specific issues. Acknowledge alerts after fixing them.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -596,7 +601,7 @@ Brain health alerts: list or acknowledge.
 
 ### `nmem_sync`
 
-Trigger manual sync with hub server.
+Manual sync with cloud hub. Push local changes, pull remote, or full bidirectional sync.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -609,7 +614,7 @@ Trigger manual sync with hub server.
 
 ### `nmem_sync_status`
 
-Show sync status: pending changes, devices, last sync.
+View sync status: pending changes, connected devices, last sync time.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -618,7 +623,7 @@ Show sync status: pending changes, devices, last sync.
 
 ### `nmem_sync_config`
 
-View or update sync configuration. Use action='setup' for guided onboarding, action='activate' to activate a purchased license key.
+Configure sync: setup (onboarding), activate (license key), get/set settings.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -635,7 +640,7 @@ View or update sync configuration. Use action='setup' for guided onboarding, act
 
 ### `nmem_telegram_backup`
 
-Send brain database file as backup to Telegram.
+Backup brain database to Telegram. Requires Telegram bot config.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -647,7 +652,7 @@ Send brain database file as backup to Telegram.
 
 ### `nmem_version`
 
-Brain version control: snapshot, list, rollback, diff.
+Brain version control: snapshot current state, rollback, or diff between versions. Use before risky consolidation or major changes.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -663,7 +668,7 @@ Brain version control: snapshot, list, rollback, diff.
 
 ### `nmem_transplant`
 
-Transplant memories between brains by tags/types.
+Copy memories from another brain by tags/types. Use for sharing knowledge between project brains.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -676,7 +681,7 @@ Transplant memories between brains by tags/types.
 
 ### `nmem_conflicts`
 
-Memory conflicts: list, resolve, or pre-check.
+Detect and resolve conflicting memories. Pre-check new content for contradictions before saving.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -693,7 +698,7 @@ Memory conflicts: list, resolve, or pre-check.
 
 ### `nmem_visualize`
 
-Generate charts from memory data. Returns Vega-Lite, markdown table, or ASCII chart.
+Generate charts from memory data (Vega-Lite/markdown/ASCII). Use for financial metrics, trends, or any structured data in memories.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -706,7 +711,7 @@ Generate charts from memory data. Returns Vega-Lite, markdown table, or ASCII ch
 
 ### `nmem_watch`
 
-Watch directories for file changes and auto-ingest into memory.
+Watch directories for file changes, auto-ingest into memory. Scan for one-shot, start/stop for continuous monitoring.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -720,7 +725,7 @@ Watch directories for file changes and auto-ingest into memory.
 
 ### `nmem_surface`
 
-Knowledge Surface management — generate or inspect the .nm surface file. The surface is a compact knowledge graph (~1000 tokens) loaded every session. Actions: generate (rebuild from brain.db), show (display current surface info).
+Knowledge Surface (.nm file) — compact graph (~1000 tokens) loaded every session. Generate to rebuild, show to inspect.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -731,7 +736,7 @@ Knowledge Surface management — generate or inspect the .nm surface file. The s
 
 ### `nmem_tool_stats`
 
-Tool usage analytics: which tools agents use, frequency, success rates, and daily trends.
+Agent tool usage analytics: frequency, success rates, daily trends. Use to understand which NM tools are being used and how effectively.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -743,7 +748,7 @@ Tool usage analytics: which tools agents use, frequency, success rates, and dail
 
 ### `nmem_lifecycle`
 
-Memory lifecycle management — view lifecycle states and manage compression resistance. Hot memories (accessed recently or high priority) resist compression automatically. Actions: status (distribution of lifecycle states), recover (rehydrate a compressed memory), freeze (prevent a memory from compressing), thaw (resume normal lifecycle).
+Manage memory lifecycle: view compression states, freeze/thaw individual memories, recover compressed content. Use when a memory was incorrectly compressed.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -754,7 +759,7 @@ Memory lifecycle management — view lifecycle states and manage compression res
 
 ### `nmem_refine`
 
-Refine an instruction or workflow memory — update its content, record a failure mode, or add a trigger pattern. Each refinement increments the version counter and stores a snapshot in refinement_history. Use this to improve instructions based on real-world usage: update text when the instruction needs correction, add failure_mode when something went wrong, add trigger to improve recall.
+Refine an instruction/workflow: update content, add failure modes, add trigger patterns. Use to improve instructions based on real-world execution outcomes.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -768,7 +773,7 @@ Refine an instruction or workflow memory — update its content, record a failur
 
 ### `nmem_report_outcome`
 
-Report execution outcome for an instruction or workflow memory. Increments execution_count, updates success_rate, and optionally records failure modes. Instructions with high success_rate + many executions are boosted during recall. Call this after executing an instruction to build up its track record.
+Report instruction execution outcome (success/fail). Builds track record — high success rate boosts recall priority. Call after executing an instruction.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -781,7 +786,7 @@ Report execution outcome for an instruction or workflow memory. Increments execu
 
 ### `nmem_budget`
 
-Token budget analysis for recall — estimate, analyze, or optimize context window usage. Use 'estimate' to dry-run a query and see token cost breakdown. Use 'analyze' to profile the brain's average fiber token costs by memory type. Use 'optimize' to find low-value-per-token fibers that are candidates for compression.
+Token budget analysis: estimate recall cost, profile brain token usage, find compression candidates. Use when context window is tight.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -791,6 +796,39 @@ Token budget analysis for recall — estimate, analyze, or optimize context wind
 | `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
 | `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
+### `nmem_tier`
+
+Auto-tier: promote/demote memories between HOT/WARM/COLD by access patterns (Pro). Evaluate (dry-run) before apply. Free users: manual tiers only.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `action` | string (`status`, `evaluate`, `apply`, `history`, `config`, `analytics`) | Yes | — | Action: 'status' (distribution), 'evaluate' (dry-run), 'apply' (execute), 'history' (fiber tier log), 'config' (thres... |
+| `fiber_id` | string | No | — | Fiber ID for 'history' action. |
+| `dry_run` | boolean | No | default: false | If true with action='apply', show changes without applying (default: false). |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
+
+### `nmem_boundaries`
+
+View domain-scoped boundaries (safety rules, always HOT tier). List boundaries by domain or view domain summary.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `action` | string (`list`, `domains`) | No | — | Action: list (show boundaries, optionally filtered by domain), domains (list unique domains with boundary counts). De... |
+| `domain` | string | No | — | Filter boundaries by domain (e.g. 'financial', 'security'). Only used with action=list. |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
+
+### `nmem_milestone`
+
+Brain growth milestones (100, 250, 500...10K neurons). Check for new achievements, view progress to next, or generate growth report.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `action` | string (`check`, `progress`, `history`, `report`) | Yes | — | check=detect+record new milestones, progress=distance to next milestone, history=all recorded milestones, report=gene... |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
+
 ---
 
-*Auto-generated by `scripts/gen_mcp_docs.py` from `tool_schemas.py` — 52 tools.*
+*Auto-generated by `scripts/gen_mcp_docs.py` from `tool_schemas.py` — 55 tools.*

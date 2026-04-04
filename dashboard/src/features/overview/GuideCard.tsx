@@ -2,7 +2,7 @@ import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useStats } from "@/api/hooks/useDashboard"
-import { BookOpen, X, ExternalLink } from "lucide-react"
+import { BookOpen, X, ArrowSquareOut } from "@phosphor-icons/react"
 
 const GUIDE_URL =
   "https://nhadaututtheky.github.io/neural-memory/guides/quickstart-guide/"
@@ -55,7 +55,7 @@ export default function GuideCard() {
         >
           <a href={GUIDE_URL} target="_blank" rel="noopener noreferrer">
             Open Guide
-            <ExternalLink className="size-3.5" aria-hidden="true" />
+            <ArrowSquareOut className="size-3.5" aria-hidden="true" />
           </a>
         </Button>
 

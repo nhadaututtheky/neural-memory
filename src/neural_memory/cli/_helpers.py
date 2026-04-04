@@ -76,7 +76,14 @@ async def get_storage(
     Returns:
         Storage instance (local JSON, local SQLite, or remote shared)
     """
-    name = brain_name or config.current_brain
+    # Priority: explicit arg > env var > config file
+    if brain_name is None:
+        import os
+
+        env_brain = os.environ.get("NEURALMEMORY_BRAIN") or os.environ.get("NMEM_BRAIN")
+        name = env_brain or config.current_brain
+    else:
+        name = brain_name
 
     # Remote shared mode (via server)
     use_shared = (config.is_shared_mode or force_shared) and not force_local and not force_sqlite

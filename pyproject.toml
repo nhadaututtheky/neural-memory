@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "neural-memory"
-version = "4.23.4"
-description = "Reflex-based memory system for AI agents - retrieval through activation, not search"
+version = "4.29.0"
+description = "Persistent memory for AI agents — 55 MCP tools, spreading activation recall, neuroscience-inspired consolidation. Works with Claude, GPT, Gemini."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
@@ -20,6 +20,17 @@ keywords = [
     "graph",
     "retrieval",
     "llm",
+    "mcp",
+    "model-context-protocol",
+    "spreading-activation",
+    "knowledge-graph",
+    "persistent-memory",
+    "ai-memory",
+    "claude",
+    "rag",
+    "neuroscience",
+    "consolidation",
+    "recall",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -29,7 +40,11 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Database",
+    "Framework :: FastAPI",
     "Typing :: Typed",
 ]
 dependencies = [
@@ -44,6 +59,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+pro = [
+    "numpy>=1.24.0",
+    "hnswlib>=0.8.0",
+    "msgpack>=1.0.0",
+]
 server = [
     "fastapi>=0.100",
     "uvicorn[standard]>=0.23",
@@ -136,10 +156,12 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/nhadaututtheky/neural-memory"
+Homepage = "https://neuralmemory.theio.vn"
 Documentation = "https://nhadaututtheky.github.io/neural-memory"
 Repository = "https://github.com/nhadaututtheky/neural-memory"
 Issues = "https://github.com/nhadaututtheky/neural-memory/issues"
+Changelog = "https://github.com/nhadaututtheky/neural-memory/blob/main/CHANGELOG.md"
+"Get Pro" = "https://neuralmemory.theio.vn/landing/pro-landing.html"
 
 [project.scripts]
 neural-memory = "neural_memory.cli:main"
@@ -218,10 +240,13 @@ ignore = [
 "src/neural_memory/utils/config.py" = ["S104"]   # configurable bind address
 "src/neural_memory/utils/simhash.py" = ["S324"]  # MD5 for fingerprint, not crypto
 "src/neural_memory/storage/sqlite_*.py" = ["S608"] # SQL with hardcoded column names
+"src/neural_memory/storage/sql/**" = ["S608"]      # parameterized SQL via dialect placeholders
 "src/neural_memory/cli/**" = ["T201", "S603", "S607", "S310"]  # CLI: print, subprocess, url open
 "src/neural_memory/storage/falkordb/**" = ["DTZ901"]  # naive UTC datetimes by design
 "src/neural_memory/safety/sensitive.py" = ["S105"] # pattern names, not actual secrets
 "src/neural_memory/engine/db_introspector.py" = ["S608"]  # identifier-validated SQL
+"src/neural_memory/pro/**" = ["TC002"]  # numpy/hnswlib runtime imports used in Pro code
+"src/neural_memory/pro/infinitydb/migrator.py" = ["S608"]  # pre-built queries from hardcoded table names
 "src/neural_memory/git_context.py" = ["S603", "S607"]     # git subprocess calls
 "src/neural_memory/server/app.py" = ["B008"]              # FastAPI Depends() in defaults
 "scripts/**" = ["T201", "S603", "S105", "ERA001", "E741", "SIM110", "SIM212", "B905", "F541", "N806", "C401"]  # CLI scripts: print, subprocess, ANSI codes, style
@@ -280,6 +305,14 @@ module = "neural_memory.engine.reranker"
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
+module = "neural_memory.pro.infinitydb.vector_store"
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = "neural_memory.storage.sql.*"
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
 module = "neural_memory.engine.doc_extractor"
 disallow_untyped_calls = false
 
@@ -301,6 +334,11 @@ filterwarnings = [
 [tool.coverage.run]
 source = ["src/neural_memory"]
 branch = true
+omit = [
+    "src/neural_memory/pro/infinitydb/*",
+    "src/neural_memory/pro/storage_adapter*.py",
+    "src/neural_memory/storage/sql/*",
+]
 
 [tool.coverage.report]
 fail_under = 67

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react"
-import { Shuffle } from "lucide-react"
+import { Shuffle } from "@phosphor-icons/react"
 import { FlipCard } from "./FlipCard"
 import { generateWhatIf } from "../engine/reading-engine"
 import type { OracleCard, WhatIfScenario } from "../engine/types"

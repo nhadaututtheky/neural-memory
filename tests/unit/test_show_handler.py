@@ -205,7 +205,7 @@ class TestExactRecall:
         storage.get_neuron = AsyncMock(side_effect=lambda nid: neuron1 if nid == "n1" else neuron2)
         storage.get_typed_memory = AsyncMock(side_effect=lambda fid: tm1 if fid == "fib-1" else tm2)
 
-        with patch("neural_memory.mcp.tool_handlers.ReflexPipeline") as mock_pipeline_cls:
+        with patch("neural_memory.engine.retrieval.ReflexPipeline") as mock_pipeline_cls:
             mock_pipeline = AsyncMock()
             mock_pipeline.query = AsyncMock(return_value=mock_result)
             mock_pipeline_cls.return_value = mock_pipeline
@@ -233,7 +233,7 @@ class TestExactRecall:
         mock_result.score_breakdown = None
         mock_result.metadata = {}
 
-        with patch("neural_memory.mcp.tool_handlers.ReflexPipeline") as mock_pipeline_cls:
+        with patch("neural_memory.engine.retrieval.ReflexPipeline") as mock_pipeline_cls:
             mock_pipeline = AsyncMock()
             mock_pipeline.query = AsyncMock(return_value=mock_result)
             mock_pipeline_cls.return_value = mock_pipeline

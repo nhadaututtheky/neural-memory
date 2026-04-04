@@ -4,7 +4,7 @@
 > Every item passes the VISION.md 4-question test + brain test.
 > ZERO LLM dependency — pure algorithmic, regex, graph-based.
 
-**Current state**: v4.22.1 — 52 MCP tools, 5400+ tests, schema v38, SQLite + PostgreSQL + InfinityDB backends, neuroscience engine (10 brain-inspired algorithms), tiered memory loading (HOT/WARM/COLD).
+**Current state**: v4.27.1 — 55 MCP tools, 6100+ tests, schema v38, SQLite + PostgreSQL + InfinityDB backends, neuroscience engine (10 brain-inspired algorithms), tiered memory (HOT/WARM/COLD + auto-tier + domain boundaries), decision intelligence, 7-module handler architecture, Pro bundled in main package (license-gated).
 **Architecture**: Spreading activation reflex engine, biological memory model, MCP standard.
 
 ---
@@ -52,6 +52,15 @@
 | IDE rules generator (Cursor, Windsurf, Cline, Gemini, AGENTS.md) | v4.6 | — |
 | Cascading retrieval with fiber summary tier | v4.3 | — |
 | HuggingFace Spaces chatbot (ReflexPipeline, no LLM) | v4.3 | — |
+| Auto-tier engine, decision intelligence, domain boundaries | v4.24–v4.25 | Intelligent memory management |
+| Milestone analysis (`nmem_milestone`) | v4.25 | Brain growth tracking |
+| Pro merged into main package (license-gated, zero-friction install) | v4.27 | One install, key unlocks |
+| Pay-hub (Cloudflare Workers + D1, SePay + Polar) | v4.27 | Payment infrastructure |
+| File watcher ingestion (`nmem_watch` MCP + CLI) | v4.14 | Environmental learning |
+| Agent visualization (`nmem_visualize` Vega-Lite/ASCII) | v4.15 | Brain introspection |
+| Brain Oracle (card-based memory fortune teller, 3 modes) | v4.16 | Playful brain exploration |
+| Markdown brain export (`snapshot_to_markdown`) | v4.17 | Human-readable export |
+| OpenClaw plugin (v1.16.0, ClawHub marketplace) | v4.6 | IDE integration |
 
 ---
 
@@ -79,14 +88,14 @@
 - [x] Phase 3: `nmem serve` integration, debounce (2s), metrics
 - **Brain test**: Não tự hấp thụ thông tin từ môi trường → Yes
 
-### A3. Brain Quality Track C — Vertical Intelligence
+### A3. Brain Quality Track C — Vertical Intelligence ✅
 
 **Problem**: Brain treats all content the same. Domain-specific entities (financial amounts, legal references) deserve specialized extraction and encoding.
 
-**Scope**: 3 sub-phases (plan: `.rune/plan-brain-quality.md`)
-- [ ] C1+C2: Domain entity types + structured data encoding (regex-based, no LLM)
-- [ ] C3: Cross-encoder reranking (optional `bge-reranker` post-SA refinement)
-- [ ] C4: Agent visualization (`nmem_visualize` → Vega-Lite/markdown/ASCII charts)
+**Scope**: 3 sub-phases (plan: `.rune/plan-brain-quality.md`) — **all shipped**
+- [x] C1+C2: Domain entity types + structured data encoding (regex-based, no LLM) — shipped v4.25
+- [x] C3: Cross-encoder reranking (optional `bge-reranker` post-SA refinement) — shipped v4.25
+- [x] C4: Agent visualization (`nmem_visualize` → Vega-Lite/markdown/ASCII charts) — shipped v4.25
 - **Brain test**: Kế toán nhớ "ROE" khác "Paris" → Yes
 
 ### A4. Stability & Polish
@@ -131,6 +140,91 @@
 - **Brain test**: Não có working memory (nhanh) vs long-term memory (chậm) → Yes
 - **Backward compatible**: default `warm` → existing memories unchanged
 
+### A7. Recall Intelligence — Smarter Context, Fewer Mistakes ✅
+
+**Problem**: Brain stores both mistakes and corrections, but recall doesn't know which supersedes which. Agents repeat old wrong approaches because:
+1. RESOLVED_BY/EVOLVES_FROM synapses are stored but **ignored during recall ranking**
+2. Error demotion only reduces activation 50-75% — errors still appear in context
+3. Workflow habits (BEFORE synapses) don't boost recall — treated like any other synapse
+4. `report_outcome` updates metadata but creates no synapses → outcomes don't feed back into retrieval
+5. No "follow the correction chain" logic — agent sees the bug, not the fix
+
+**Scope**: 4 phases (plan: `.rune/plan-recall-intelligence.md`)
+
+#### Phase 1: Causal-Aware Recall ✅
+- [x] 7 synapse roles (SUPERSESSION, REINFORCEMENT, WEAKENING, SEQUENTIAL, STRUCTURAL, LATERAL, PASSIVE)
+- [x] `_apply_causal_semantics()` post-processing: chain following, directionality-aware, cycle-safe
+- [x] SUPERSESSION: error→fix chain → demote error to ghost, inject fix with 1.2× boost
+- [x] WEAKENING: capped at ×0.5, supersession-protected targets immune
+- [x] [OUTDATED] labels on superseded memories in context output
+- [x] 35 tests, 0 regressions
+- **Brain test**: Não nhớ cách sửa chứ không lặp lại lỗi → ✅ Yes
+
+#### Phase 2: Outcome-Driven Learning ✅
+- [x] Existing `success_rate` scoring leveraged (already in fiber ranking, ±0.15 boost)
+- [x] `confidence` field on ContextItem: `success_count / execution_count` visible in context
+- [x] `[UNRELIABLE]` label on memories with <30% success rate + ≥3 executions
+- [x] Confidence percentage shown in context: `(confidence: 85%)`
+- [x] 12 tests
+- **Brain test**: Não học từ kết quả, không chỉ từ kinh nghiệm → ✅ Yes
+
+#### Phase 3: Workflow Recall Boost ✅
+- [x] `_apply_habit_boost()`: +0.05 per `_habit_frequency` unit, capped at +0.2
+- [x] SEQUENTIAL role: step N → step N+1 auto-priming (+0.1 via BEFORE/AFTER/LEADS_TO/CALLS)
+- [x] Workflow version tracking: EVOLVES_FROM/SUPERSEDES handled by SUPERSESSION role
+- [x] 4 tests
+- **Brain test**: Thói quen lặp đi lặp lại trở thành phản xạ → ✅ Yes
+
+#### Phase 4: Cross-Session Context Bridge ✅
+- [x] `_inject_recent_corrections()`: fetches RESOLVED_BY synapses from last 7 days
+- [x] Formats as "--- corrections from recent sessions ---" section in nmem_context
+- [x] Batch neuron fetch, recency sort, max 5 corrections, 100-char truncation
+- [x] Inter-agent learning: RESOLVED_BY synapses are brain-global → any agent sees all corrections
+- [x] 9 tests
+- **Brain test**: Ngủ dậy nhớ bài học hôm qua, không lặp sai → ✅ Yes
+
+### A8. Agent Intelligence — Smarter Memory for Smarter Agents
+
+**Problem**: NM stores well but recalls poorly. Agents get 15 memories when only 3 matter, must manually query, and depend on crafting perfect `nmem_remember` calls. The system should be intelligent enough to surface the right memory at the right time, warn about low-quality saves, and self-clean over time.
+
+**Design principle**: Reuse existing infrastructure (Surface.nm, session EMA, priming engine, tier system, lifecycle, DedupCheckStep). Zero new parallel systems — extend what works, connect what's disconnected.
+
+**Scope**: 4 phases (plan: `.rune/plan-agent-intelligence.md`)
+
+#### Phase 1: Precision Recall ✅
+- [x] MMR diversity re-ranking in `_find_matching_fibers()` — greedy selection with Jaccard overlap penalty
+- [x] Topic affinity boost from session EMA (Dice-normalized, +0.15 for matching tags)
+- [x] Early SimHash dedup before fiber cap (reuse `is_near_duplicate()`, batch anchor fetch)
+- [x] Recent-access boost (multiplicative ×1.1 for fibers accessed in last 7 days)
+- [x] T1.4 deferred — surface depth routing already handles NEEDS_DETAIL/NEEDS_DEEP via depth override
+- [x] 19 tests, 0 regressions (479 related tests passed)
+- **Brain test**: Não lọc nhiễu, chỉ nhớ cái liên quan → ✅ Yes
+
+#### Phase 2: Proactive Context ✅
+- [x] Surface CLUSTERS → topic-aware injection in `_context()` (match clusters to session EMA, cap 9 memories)
+- [x] Surface SIGNALS → proactive alerts (! URGENT, ~ WATCHING) in context output
+- [x] Tool event → topic EMA feed at half-weight alpha (file stems + keywords from action context)
+- [x] Session meta-summary in context header (query count, topics, surface coverage, staleness >50%)
+- [x] 22 tests, 0 regressions, mypy clean
+- **Brain test**: Não chủ động nhớ lại khi gặp bối cảnh quen → ✅ Yes
+
+#### Phase 3: Auto-Save Intelligence ✅
+- [x] Quality scorer enhanced: +specificity (file paths, versions, numbers), +structure markers (→), +brevity bonus (50-300 chars), wall-of-text penalty (>500 chars)
+- [x] DedupCheckStep feedback: similarity score, dedup tier, fiber_id of existing memory surfaced to agent
+- [x] AutoTagStep: confidence-based classification (0.0-1.0), type_hint when agent type mismatches content
+- [x] Importance scoring: +file paths (+1), +versions (+1), +error traces (+2), +security keywords (+2), surface gap bonus (+1 for sparse topics), cap at 9
+- [x] 28 tests, 0 regressions, mypy clean
+- **Brain test**: Não tự biết cái gì đáng nhớ → ✅ Yes
+
+#### Phase 4: Aggressive Consolidation ✅
+- [x] SimHash merge pass alongside existing Jaccard merge (reuse Union-Find + `is_near_duplicate`)
+- [x] Surface-driven stale detection (version patterns ≥2 major behind → `_stale`, -20% retrieval penalty)
+- [x] Access-based demotion (freq=0 + 30d → `_cold_demoted`, 90d → `_prune_candidate`, pinned exempt)
+- [x] Summary fiber creation from 5+ merged memories (`_stage: semantic`, originals preserved with `_demoted_by_merge`)
+- [x] Surface regeneration after consolidation (triggered on structural changes)
+- [x] 23 tests, 0 regressions, mypy clean
+- **Brain test**: Não nén ký ức thành tri thức, quên chi tiết giữ bản chất → ✅ Yes
+
 **Target**: v5.0 = "production-ready for teams" release.
 
 ---
@@ -139,16 +233,18 @@
 
 > From open-source tool to sustainable product. Revenue enables long-term development.
 
-### B1. Sync Hub: Landing + Payment (plan: `.rune/plan-sync-hub-phase3.md`)
+### B1. Sync Hub: Landing + Payment ✅ (plan: `.rune/plan-sync-hub-phase3.md`)
 
 **Problem**: Cloud sync works but has no billing. Need landing page + payment flow.
 
-**Scope**:
-- [ ] Landing page (Cloudflare Pages) — features, pricing, signup
-- [ ] SePay integration (Vietnam, 0% fee) for domestic users
-- [ ] Stripe integration for global users
-- [ ] Free tier (100 neurons synced) → Pro tier ($5/mo, unlimited)
-- [ ] Usage dashboard: sync history, storage used, device count
+**Scope**: **Shipped** — landing at `neuralmemory.theio.vn`, pay-hub at `pay.theio.vn`
+- [x] Landing page (GitHub Pages) — features, pricing, pro-landing.html
+- [x] SePay integration (Vietnam, 0% fee) — VietQR checkout
+- [x] Polar integration (international) — Card/PayPal checkout
+- [x] Pro tier ($9/mo or $89/yr, 219k VND/tháng)
+- [x] Dashboard UpgradeModal — purchase + license activation
+- [x] Pay-hub D1 orders table, webhook fulfillment, /verify endpoint
+- [ ] Usage dashboard: sync history, storage used, device count (deferred)
 
 ### B2. Sync Hub: Team Sharing (plan: `.rune/plan-sync-hub-phase4.md`)
 
@@ -166,10 +262,10 @@
 **Problem**: Users don't know NeuralMemory exists. Need to be where they search.
 
 **Scope**:
-- [ ] MCP Registry listing (modelcontextprotocol.io)
-- [ ] awesome-mcp-servers PR (punkpeye/awesome-mcp-servers)
-- [ ] PyPI package optimization (description, classifiers, keywords)
-- [ ] npm package for OpenClaw plugin
+- [x] MCP Registry listing (modelcontextprotocol.io)
+- [x] awesome-mcp-servers PR (punkpeye/awesome-mcp-servers)
+- [x] PyPI package optimization (description, classifiers, keywords)
+- [x] npm package for OpenClaw plugin (v1.16.0, ClawHub marketplace)
 - [ ] Blog posts: "NeuralMemory vs Mem0", "Why spreading activation beats RAG"
 - [ ] HuggingFace Spaces demo polished + promoted
 
@@ -185,15 +281,15 @@
 - [ ] Free tier: publish up to 3 brains. Premium: unlimited + featured listing
 - **Brain test**: Humans learn from books/teachers (external knowledge) → Yes
 
-### B5. Pro: Smart Tiers & Decision Intelligence — Issue #112
+### B5. Pro: Smart Tiers & Decision Intelligence ✅ — Issue #112
 
 **Problem**: Free tier gives manual HOT/WARM/COLD control (#111). Pro makes it intelligent — auto-promote/demote by usage, structured decision matching, domain-scoped safety boundaries.
 
-**Scope**: Requires #111 (A6) first
-- [ ] Auto-tier promotion/demotion: access patterns → auto WARM↔HOT, configurable thresholds
-- [ ] Decision component matching: structured `components` metadata on decisions, overlap scoring
-- [ ] Domain-filtered boundaries: `boundary:financial`, `boundary:external`, `nmem_boundaries(domain=...)`
-- [ ] Tier analytics dashboard: distribution chart, decay curves, coverage gap detection, promotion history
+**Scope**: Requires #111 (A6) first — plan: `.rune/plan-smart-tiers.md`
+- [x] Phase 1: Auto-tier Engine — promote/demote by access patterns, Pro-gated, TierEngine + MCP tool (v4.24.0)
+- [x] Phase 2: Decision Intelligence — structured components, overlap scoring, EVOLVES_FROM synapse (v4.24.0)
+- [x] Phase 3: Domain Boundaries — `domain:` tag convention, domain-filtered HOT context, `nmem_boundaries` tool (v4.25.0)
+- [x] Phase 4: Tier Analytics — dashboard API, distribution charts, promotion history (v4.26.0)
 - **Foundation**: A5 hippocampal replay (LTP/LTD) already provides strengthen/weaken mechanism
 - **Monetization gate**: Intelligence, not data access — users always see all memories, Pro makes management smarter
 - **Brain test**: Não tự điều chỉnh độ ưu tiên theo thói quen → Yes
@@ -402,4 +498,4 @@ Every roadmap item must pass:
 ---
 
 *See [VISION.md](VISION.md) for the north star guiding all decisions.*
-*Last updated: 2026-03-28*
+*Last updated: 2026-04-03*

@@ -1,4 +1,15 @@
-"""PostgreSQL + pgvector composite storage backend."""
+"""PostgreSQL + pgvector composite storage backend.
+
+.. deprecated::
+    This module is superseded by ``neural_memory.storage.sql.sql_storage.SQLStorage``
+    used with ``neural_memory.storage.sql.postgres_dialect.PostgresDialect``.
+    The unified adapter provides the same functionality through a dialect-agnostic
+    architecture that works with SQLite, PostgreSQL, and future backends.
+
+    Existing code using ``PostgreSQLStorage`` continues to work. New code should
+    prefer ``SQLStorage(PostgresDialect(...))`` or pass
+    ``backend="postgres"`` to ``create_storage()``.
+"""
 
 from __future__ import annotations
 
@@ -63,6 +74,14 @@ class PostgreSQLStorage(
         password: str = "",
         embedding_dim: int = 384,
     ) -> None:
+        import warnings
+
+        warnings.warn(
+            "PostgreSQLStorage is deprecated. Use SQLStorage(PostgresDialect(...)) "
+            "from neural_memory.storage.sql instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._host = host
         self._port = port
         self._database = database

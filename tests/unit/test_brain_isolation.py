@@ -2,6 +2,7 @@
 
 Verifies that NMEM_BRAIN / NEURALMEMORY_BRAIN env vars provide
 process-level brain isolation without mutating shared config state.
+Covers both MCP server (get_shared_storage) and CLI (_helpers.get_storage).
 """
 
 from __future__ import annotations
@@ -174,3 +175,114 @@ class TestEnvVarBrainPinning:
 
             # Config never mutated by either
             assert mock_config.current_brain == "default"
+
+
+class TestCLIEnvVarBrainPinning:
+    """CLI get_storage() must respect NMEM_BRAIN / NEURALMEMORY_BRAIN env vars."""
+
+    @pytest.mark.asyncio
+    async def test_cli_respects_nmem_brain_env_var(self) -> None:
+        """CLI get_storage uses NMEM_BRAIN when no explicit brain_name given."""
+        mock_cli_config = MagicMock()
+        mock_cli_config.current_brain = "config-brain"
+        mock_cli_config.is_shared_mode = False
+        mock_cli_config.use_sqlite = True
+
+        mock_storage = AsyncMock()
+
+        with (
+            patch.dict(os.environ, {"NMEM_BRAIN": "env-brain"}, clear=False),
+            patch(
+                "neural_memory.unified_config.get_shared_storage",
+                new_callable=AsyncMock,
+                return_value=mock_storage,
+            ) as mock_get_shared,
+        ):
+            from neural_memory.cli._helpers import get_storage
+
+            result = await get_storage(mock_cli_config)
+
+            # Should call get_shared_storage with env var brain, not config brain
+            mock_get_shared.assert_awaited_once_with("env-brain")
+            assert result is mock_storage
+
+    @pytest.mark.asyncio
+    async def test_cli_respects_neuralmemory_brain_env_var(self) -> None:
+        """CLI get_storage uses NEURALMEMORY_BRAIN (long form)."""
+        mock_cli_config = MagicMock()
+        mock_cli_config.current_brain = "config-brain"
+        mock_cli_config.is_shared_mode = False
+        mock_cli_config.use_sqlite = True
+
+        mock_storage = AsyncMock()
+
+        with (
+            patch.dict(
+                os.environ,
+                {"NEURALMEMORY_BRAIN": "long-form-brain"},
+                clear=False,
+            ),
+            patch(
+                "neural_memory.unified_config.get_shared_storage",
+                new_callable=AsyncMock,
+                return_value=mock_storage,
+            ) as mock_get_shared,
+        ):
+            os.environ.pop("NMEM_BRAIN", None)
+
+            from neural_memory.cli._helpers import get_storage
+
+            await get_storage(mock_cli_config)
+
+            mock_get_shared.assert_awaited_once_with("long-form-brain")
+
+    @pytest.mark.asyncio
+    async def test_cli_falls_back_to_config_without_env_var(self) -> None:
+        """Without env var, CLI uses config.current_brain (existing behavior)."""
+        mock_cli_config = MagicMock()
+        mock_cli_config.current_brain = "config-brain"
+        mock_cli_config.is_shared_mode = False
+        mock_cli_config.use_sqlite = True
+
+        mock_storage = AsyncMock()
+
+        with (
+            patch.dict(os.environ, {}, clear=False),
+            patch(
+                "neural_memory.unified_config.get_shared_storage",
+                new_callable=AsyncMock,
+                return_value=mock_storage,
+            ) as mock_get_shared,
+        ):
+            os.environ.pop("NMEM_BRAIN", None)
+            os.environ.pop("NEURALMEMORY_BRAIN", None)
+
+            from neural_memory.cli._helpers import get_storage
+
+            await get_storage(mock_cli_config)
+
+            mock_get_shared.assert_awaited_once_with("config-brain")
+
+    @pytest.mark.asyncio
+    async def test_cli_explicit_brain_name_overrides_env_var(self) -> None:
+        """Explicit brain_name arg overrides env var."""
+        mock_cli_config = MagicMock()
+        mock_cli_config.current_brain = "config-brain"
+        mock_cli_config.is_shared_mode = False
+        mock_cli_config.use_sqlite = True
+
+        mock_storage = AsyncMock()
+
+        with (
+            patch.dict(os.environ, {"NMEM_BRAIN": "env-brain"}, clear=False),
+            patch(
+                "neural_memory.unified_config.get_shared_storage",
+                new_callable=AsyncMock,
+                return_value=mock_storage,
+            ) as mock_get_shared,
+        ):
+            from neural_memory.cli._helpers import get_storage
+
+            await get_storage(mock_cli_config, brain_name="explicit-brain")
+
+            mock_get_shared.assert_awaited_once_with("explicit-brain")

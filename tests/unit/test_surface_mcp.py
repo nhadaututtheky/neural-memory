@@ -88,7 +88,10 @@ class TestResolver:
 
     def test_global_surface_path(self, tmp_path: Path) -> None:
         """Global surface path uses brain name."""
-        with patch("neural_memory.unified_config.get_neuralmemory_dir", return_value=tmp_path):
+        with (
+            patch("neural_memory.surface.resolver.detect_project_root", return_value=None),
+            patch("neural_memory.unified_config.get_neuralmemory_dir", return_value=tmp_path),
+        ):
             path = get_surface_path("myproject")
             assert path == tmp_path / "surfaces" / "myproject.nm"
 

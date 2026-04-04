@@ -15,7 +15,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from neural_memory.mcp.tool_handlers import _require_brain_id
+from neural_memory.mcp.tool_handler_utils import _require_brain_id
 from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:

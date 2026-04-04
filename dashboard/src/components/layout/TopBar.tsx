@@ -1,4 +1,4 @@
-import { PanelLeftClose, PanelLeft, Sun, Moon, Monitor, Globe, HelpCircle } from "lucide-react"
+import { SidebarSimple, Sun, Moon, Monitor, Globe, Question } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { useLayoutStore } from "@/stores/useLayoutStore"
 import { useStats, useHealthCheck } from "@/api/hooks/useDashboard"
@@ -42,9 +42,9 @@ export function TopBar() {
         aria-label={sidebarOpen ? t("common.collapseSidebar") : t("common.expandSidebar")}
       >
         {sidebarOpen ? (
-          <PanelLeftClose className="size-5" />
+          <SidebarSimple className="size-5" weight="bold" />
         ) : (
-          <PanelLeft className="size-5" />
+          <SidebarSimple className="size-5" />
         )}
       </Button>
 
@@ -77,7 +77,7 @@ export function TopBar() {
           target="_blank"
           rel="noopener noreferrer"
         >
-          <HelpCircle className="size-4" />
+          <Question className="size-4" />
         </a>
       </Button>
 
@@ -100,6 +100,7 @@ export function TopBar() {
         onClick={cycleTheme}
         aria-label={t(themeKeys[theme])}
         title={t(themeKeys[theme])}
+        data-testid="theme-toggle"
       >
         <ThemeIcon className="size-4" />
       </Button>

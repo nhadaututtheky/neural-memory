@@ -1,6 +1,7 @@
 {
   "nav": {
     "overview": "Overview",
+    "insights": "Insights",
     "health": "Health",
     "graph": "Graph",
     "timeline": "Timeline",
@@ -11,6 +12,7 @@
     "toolStats": "Tool Stats",
     "visualize": "Visualize",
     "storage": "Storage",
+    "tierAnalytics": "Tier Analytics",
     "settings": "Settings"
   },
   "common": {

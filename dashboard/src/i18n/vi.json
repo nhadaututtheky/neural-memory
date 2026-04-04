@@ -1,6 +1,7 @@
 {
   "nav": {
     "overview": "Tổng quan",
+    "insights": "Phân tích",
     "health": "Sức khỏe",
     "graph": "Đồ thị",
     "timeline": "Dòng thời gian",
@@ -11,6 +12,7 @@
     "visualize": "Trực quan",
     "sync": "Đồng bộ",
     "storage": "Lưu trữ",
+    "tierAnalytics": "Phân tích Tier",
     "settings": "Cài đặt"
   },
   "common": {

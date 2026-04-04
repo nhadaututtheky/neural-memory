@@ -22,7 +22,7 @@ Or manual:
 }
 ```
 
-**Features:** 52 MCP tools, proactive auto-save, habits tracking, connection explainer, multi-brain, local SQLite, optional embeddings (Ollama/Gemini/OpenAI).
+**Features:** 55 MCP tools, proactive auto-save, habits tracking, connection explainer, multi-brain, local SQLite, optional embeddings (Ollama/Gemini/OpenAI).
 
 **No API keys needed** for core recall — it's pure graph traversal.
 

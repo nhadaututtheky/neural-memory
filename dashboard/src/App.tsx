@@ -4,118 +4,41 @@ import { AppShell } from "@/components/layout/AppShell"
 import { PageSkeleton } from "@/components/common/PageSkeleton"
 
 const OverviewPage = lazy(() => import("@/features/overview/OverviewPage"))
-const HealthPage = lazy(() => import("@/features/health/HealthPage"))
+const InsightsPage = lazy(() => import("@/features/insights/InsightsPage"))
 const GraphPage = lazy(() => import("@/features/graph/GraphPage"))
-const TimelinePage = lazy(() => import("@/features/timeline/TimelinePage"))
-const EvolutionPage = lazy(() => import("@/features/evolution/EvolutionPage"))
 const DiagramsPage = lazy(() => import("@/features/diagrams/DiagramsPage"))
 const SettingsPage = lazy(() => import("@/features/settings/SettingsPage"))
 const SyncPage = lazy(() => import("@/features/sync/SyncPage"))
 const OraclePage = lazy(() => import("@/features/oracle/OraclePage"))
-const ToolStatsPage = lazy(() => import("@/features/tool-stats/ToolStatsPage"))
 const VisualizePage = lazy(() => import("@/features/visualize/VisualizePage"))
 const StoragePage = lazy(() => import("@/features/storage/StoragePage"))
+const TierAnalyticsPage = lazy(() => import("@/features/tier-analytics/TierAnalyticsPage"))
+
+function SuspensePage({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
+}
 
 export default function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route
-          index
-          element={
-            <Suspense fallback={<PageSkeleton />}>
-              <OverviewPage />
-            </Suspense>
-          }
-        />
-        <Route
-          path="health"
-          element={
-            <Suspense fallback={<PageSkeleton />}>
-              <HealthPage />
-            </Suspense>
-          }
-        />
-        <Route
-          path="graph"
-          element={
-            <Suspense fallback={<PageSkeleton />}>
-              <GraphPage />
-            </Suspense>
-          }
-        />
-        <Route
-          path="timeline"
-          element={
-            <Suspense fallback={<PageSkeleton />}>
-              <TimelinePage />
-            </Suspense>
-          }
-        />
-        <Route
-          path="evolution"
-          element={
-            <Suspense fallback={<PageSkeleton />}>
-              <EvolutionPage />
-            </Suspense>
-          }
-        />
-        <Route
-          path="diagrams"
-          element={
-            <Suspense fallback={<PageSkeleton />}>
-              <DiagramsPage />
-            </Suspense>
-          }
-        />
-        <Route
-          path="settings"
-          element={
-            <Suspense fallback={<PageSkeleton />}>
-              <SettingsPage />
-            </Suspense>
-          }
-        />
-        <Route
-          path="sync"
-          element={
-            <Suspense fallback={<PageSkeleton />}>
-              <SyncPage />
-            </Suspense>
-          }
-        />
-        <Route
-          path="oracle"
-          element={
-            <Suspense fallback={<PageSkeleton />}>
-              <OraclePage />
-            </Suspense>
-          }
-        />
-        <Route
-          path="tool-stats"
-          element={
-            <Suspense fallback={<PageSkeleton />}>
-              <ToolStatsPage />
-            </Suspense>
-          }
-        />
-        <Route
-          path="visualize"
-          element={
-            <Suspense fallback={<PageSkeleton />}>
-              <VisualizePage />
-            </Suspense>
-          }
-        />
-        <Route
-          path="storage"
-          element={
-            <Suspense fallback={<PageSkeleton />}>
-              <StoragePage />
-            </Suspense>
-          }
-        />
+        <Route index element={<SuspensePage><OverviewPage /></SuspensePage>} />
+        <Route path="insights" element={<SuspensePage><InsightsPage /></SuspensePage>} />
+        <Route path="graph" element={<SuspensePage><GraphPage /></SuspensePage>} />
+        <Route path="diagrams" element={<SuspensePage><DiagramsPage /></SuspensePage>} />
+        <Route path="visualize" element={<SuspensePage><VisualizePage /></SuspensePage>} />
+        <Route path="oracle" element={<SuspensePage><OraclePage /></SuspensePage>} />
+        <Route path="sync" element={<SuspensePage><SyncPage /></SuspensePage>} />
+        <Route path="storage" element={<SuspensePage><StoragePage /></SuspensePage>} />
+        <Route path="tier-analytics" element={<SuspensePage><TierAnalyticsPage /></SuspensePage>} />
+        <Route path="settings" element={<SuspensePage><SettingsPage /></SuspensePage>} />
+
+        {/* Legacy redirects — preserve bookmarks */}
+        <Route path="health" element={<Navigate to="/insights?tab=health" replace />} />
+        <Route path="timeline" element={<Navigate to="/insights?tab=timeline" replace />} />
+        <Route path="evolution" element={<Navigate to="/insights?tab=evolution" replace />} />
+        <Route path="tool-stats" element={<Navigate to="/insights?tab=tools" replace />} />
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

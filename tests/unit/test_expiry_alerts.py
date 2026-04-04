@@ -151,10 +151,14 @@ class TestRecallExpiryWarnings:
     @pytest.fixture
     def server(self) -> MCPServer:
         with patch("neural_memory.mcp.server.get_config") as mock_get_config:
-            mock_get_config.return_value = MagicMock(
+            mock_config = MagicMock(
                 current_brain="test-brain",
                 get_brain_db_path=MagicMock(return_value="/tmp/test-brain.db"),
             )
+            mock_config.encryption = MagicMock(enabled=False, auto_encrypt_sensitive=False)
+            mock_config.safety = MagicMock(auto_redact_min_severity=3)
+            mock_config.retrieval = MagicMock(max_expansions_per_term=3)
+            mock_get_config.return_value = mock_config
             return MCPServer()
 
     @pytest.mark.asyncio
@@ -178,7 +182,7 @@ class TestRecallExpiryWarnings:
 
         with (
             patch.object(server, "get_storage", return_value=mock_storage),
-            patch("neural_memory.mcp.tool_handlers.ReflexPipeline") as mock_pipeline_cls,
+            patch("neural_memory.engine.retrieval.ReflexPipeline") as mock_pipeline_cls,
             patch.object(server, "_check_maintenance", return_value=MagicMock(hints=())),
             patch.object(server, "_fire_eternal_trigger"),
             patch.object(server, "_record_tool_action", new_callable=AsyncMock),
@@ -215,7 +219,7 @@ class TestRecallExpiryWarnings:
 
         with (
             patch.object(server, "get_storage", return_value=mock_storage),
-            patch("neural_memory.mcp.tool_handlers.ReflexPipeline") as mock_pipeline_cls,
+            patch("neural_memory.engine.retrieval.ReflexPipeline") as mock_pipeline_cls,
             patch.object(server, "_check_maintenance", return_value=MagicMock(hints=())),
             patch.object(server, "_fire_eternal_trigger"),
             patch.object(server, "_record_tool_action", new_callable=AsyncMock),

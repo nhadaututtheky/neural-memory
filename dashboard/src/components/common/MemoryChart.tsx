@@ -5,6 +5,15 @@ import { Button } from "@/components/ui/button"
 import { useTranslation } from "react-i18next"
 import type { VisualizeResponse } from "@/api/types"
 
+const QUERY_SUGGESTIONS = [
+  { label: "Memory types", query: "memory types breakdown", icon: "◐" },
+  { label: "Timeline", query: "memories over time", icon: "◷" },
+  { label: "Top tags", query: "most used tags", icon: "◈" },
+  { label: "Priority", query: "priority distribution", icon: "▥" },
+  { label: "Activity", query: "activity by day", icon: "▦" },
+  { label: "Connections", query: "most connected neurons", icon: "◎" },
+] as const
+
 interface MemoryChartProps {
   /** Initial query to visualize */
   query?: string
@@ -31,26 +40,59 @@ export default function MemoryChart({
   const [query, setQuery] = useState(initialQuery)
   const [result, setResult] = useState<VisualizeResponse | null>(null)
 
-  const handleVisualize = () => {
-    if (!query.trim()) return
+  const handleVisualize = (q?: string) => {
+    const finalQuery = q ?? query
+    if (!finalQuery.trim()) return
+    if (q) setQuery(q)
     visualize.mutate(
-      { query: query.trim(), chart_type: chartType, format, limit },
+      { query: finalQuery.trim(), chart_type: chartType, format, limit },
       { onSuccess: (data) => setResult(data) },
     )
   }
 
-  // Render Vega-Lite spec when available
+  // Render Vega-Lite spec when available — patch labels for readability
   useEffect(() => {
     if (!result?.vega_lite || !vegaRef.current) return
 
     let cancelled = false
+
+    // Patch Vega-Lite spec for readable labels
+    const spec = { ...(result.vega_lite as Record<string, unknown>) }
+
+    // Override config for readable axis labels
+    const patchConfig = {
+      ...(spec.config as Record<string, unknown> | undefined),
+      axis: {
+        labelFontSize: 11,
+        labelAngle: 0,
+        labelLimit: 120,
+        labelOverlap: "greedy",
+        titleFontSize: 12,
+        titlePadding: 8,
+      },
+      view: { stroke: "transparent" },
+      legend: { labelFontSize: 11, titleFontSize: 12 },
+    }
+    spec.config = patchConfig
+
+    // Make chart responsive
+    if (!spec.width) spec.width = "container"
+    if (!spec.height) spec.height = 300
+
+    // Patch encoding label angle if present
+    const encoding = spec.encoding as Record<string, Record<string, unknown>> | undefined
+    if (encoding?.x?.axis) {
+      encoding.x.axis = { ...encoding.x.axis, labelAngle: -30, labelLimit: 100 }
+    }
+
     import("vega-embed").then((vegaEmbed) => {
       if (cancelled || !vegaRef.current) return
       vegaEmbed
-        .default(vegaRef.current, result.vega_lite as Record<string, unknown>, {
+        .default(vegaRef.current, spec, {
           actions: { export: true, source: false, compiled: false, editor: false },
           theme: document.documentElement.classList.contains("dark") ? "dark" : undefined,
           renderer: "svg",
+          width: vegaRef.current.clientWidth - 32,
         })
         .catch((err: unknown) => console.error("Vega render error:", err))
     })
@@ -69,19 +111,37 @@ export default function MemoryChart({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleVisualize()}
-          placeholder={t("commandPalette.placeholder")}
+          placeholder="e.g. memory types breakdown, activity by day..."
           className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           aria-label="Chart query"
         />
         <Button
           size="sm"
-          onClick={handleVisualize}
+          onClick={() => handleVisualize()}
           disabled={visualize.isPending || !query.trim()}
           className="cursor-pointer"
         >
           {visualize.isPending ? t("common.loading") : "Visualize"}
         </Button>
       </div>
+
+      {/* Query suggestion chips */}
+      {!result && (
+        <div className="flex flex-wrap gap-2">
+          {QUERY_SUGGESTIONS.map((s) => (
+            <button
+              key={s.query}
+              type="button"
+              onClick={() => handleVisualize(s.query)}
+              disabled={visualize.isPending}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer disabled:opacity-50"
+            >
+              <span>{s.icon}</span>
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Chart output */}
       {result && (
@@ -90,7 +150,7 @@ export default function MemoryChart({
           {result.vega_lite && (
             <div
               ref={vegaRef}
-              className="w-full min-h-[200px] rounded-md border border-border bg-background p-2"
+              className="w-full min-h-[300px] rounded-md border border-border bg-background p-4 [&_svg]:max-w-full"
             />
           )}
 
@@ -125,12 +185,40 @@ export default function MemoryChart({
             </div>
           )}
 
-          {/* Data points count */}
-          {result.data_points_count != null && result.data_points_count > 0 && (
-            <p className="text-[11px] text-muted-foreground">
-              {result.data_points_count} data points · {result.chart_type}
-            </p>
-          )}
+          {/* Chart meta + actions */}
+          <div className="flex items-center justify-between">
+            {result.data_points_count != null && result.data_points_count > 0 && (
+              <p className="text-[11px] text-muted-foreground">
+                {result.data_points_count} data points · {result.chart_type}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setResult(null)
+                setQuery("")
+              }}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              ← Try another query
+            </button>
+          </div>
+
+          {/* Quick re-query chips */}
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {QUERY_SUGGESTIONS.filter((s) => s.query !== query).slice(0, 4).map((s) => (
+              <button
+                key={s.query}
+                type="button"
+                onClick={() => handleVisualize(s.query)}
+                disabled={visualize.isPending}
+                className="inline-flex items-center gap-1 rounded-full border border-border/50 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer disabled:opacity-50"
+              >
+                <span>{s.icon}</span>
+                {s.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>

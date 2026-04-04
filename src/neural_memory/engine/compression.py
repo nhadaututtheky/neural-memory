@@ -604,9 +604,15 @@ class CompressionEngine:
         # Pro directional compression: multi-axis semantic preservation
         _pro_compressed = False
         if target_tier in (CompressionTier.EXTRACTIVE, CompressionTier.ENTITY_ONLY):
-            from neural_memory.plugins import get_compression_fn
+            pro_compress = None
+            try:
+                from neural_memory.pro.hyperspace.directional_compress import directional_compress
 
-            pro_compress = get_compression_fn()
+                pro_compress = directional_compress
+            except ImportError:
+                from neural_memory.plugins import get_compression_fn
+
+                pro_compress = get_compression_fn()
             if pro_compress is not None:
                 try:
                     level_map = {

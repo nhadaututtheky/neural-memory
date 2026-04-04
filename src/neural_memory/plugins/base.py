@@ -12,12 +12,12 @@ from typing import Any
 
 
 class ProPlugin(ABC):
-    """Extension point for neural-memory-pro and third-party plugins."""
+    """Extension point for third-party plugins."""
 
     @property
     @abstractmethod
     def name(self) -> str:
-        """Plugin name (e.g. 'neural-memory-pro')."""
+        """Plugin name."""
         ...
 
     @property

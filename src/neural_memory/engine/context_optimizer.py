@@ -48,6 +48,10 @@ class ContextItem:
     token_count: int
     truncated: bool = False
     fidelity_level: str = "full"
+    tier: str = "warm"
+    superseded_by: str = ""
+    confidence: float | None = None  # success_count / execution_count
+    unreliable: bool = False  # True if success_rate < 0.3 with ≥3 executions
 
 
 @dataclass(frozen=True)
@@ -346,12 +350,25 @@ async def optimize_context(
         if fiber_tier == "hot":
             score = min(1.0, score + 0.3)
 
+        # Outcome confidence from execution history
+        exec_count = fiber.metadata.get("execution_count", 0)
+        success_rate = fiber.metadata.get("success_rate")
+        item_confidence: float | None = None
+        item_unreliable = False
+        if isinstance(exec_count, (int, float)) and exec_count > 0 and success_rate is not None:
+            item_confidence = float(success_rate)
+            if item_confidence < 0.3 and exec_count >= 3:
+                item_unreliable = True
+
         scored_items.append(
             ContextItem(
                 fiber_id=fiber.id,
                 content=content,
                 score=score,
                 token_count=_estimate_tokens(content),
+                tier=fiber_tier,
+                confidence=item_confidence,
+                unreliable=item_unreliable,
             )
         )
 

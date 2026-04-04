@@ -1,11 +1,11 @@
-import { Sparkles, Shuffle, Swords } from "lucide-react"
+import { Sparkle, Shuffle, Sword } from "@phosphor-icons/react"
 import type { OracleMode } from "../engine/types"
 import { useTranslation } from "react-i18next"
 
-const MODES: { key: OracleMode; labelKey: string; icon: typeof Sparkles }[] = [
-  { key: "daily", labelKey: "oracle.dailyReading", icon: Sparkles },
+const MODES: { key: OracleMode; labelKey: string; icon: typeof Sparkle }[] = [
+  { key: "daily", labelKey: "oracle.dailyReading", icon: Sparkle },
   { key: "whatif", labelKey: "oracle.whatif", icon: Shuffle },
-  { key: "matchup", labelKey: "oracle.matchup", icon: Swords },
+  { key: "matchup", labelKey: "oracle.matchup", icon: Sword },
 ]
 
 interface ModeSelectorProps {

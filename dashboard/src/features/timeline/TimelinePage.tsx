@@ -16,7 +16,7 @@ import {
   Cell,
 } from "recharts"
 import { useTranslation } from "react-i18next"
-import { Brain, Layers, Zap, CalendarDays } from "lucide-react"
+import { Brain, Stack, Lightning, CalendarBlank } from "@phosphor-icons/react"
 
 const RANGE_OPTIONS = [
   { days: 7, key: "range7d" },
@@ -144,19 +144,19 @@ export default function TimelinePage() {
         <KpiCard
           label={t("timeline.totalPeriod")}
           value={kpis.total}
-          icon={Layers}
+          icon={Stack}
           loading={statsLoading}
         />
         <KpiCard
           label={t("timeline.avgPerDay")}
           value={kpis.avgPerDay}
-          icon={Zap}
+          icon={Lightning}
           loading={statsLoading}
         />
         <KpiCard
           label={t("timeline.activeDays")}
           value={kpis.activeDays}
-          icon={CalendarDays}
+          icon={CalendarBlank}
           loading={statsLoading}
         />
       </div>

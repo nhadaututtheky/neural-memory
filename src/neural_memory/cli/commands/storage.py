@@ -77,8 +77,8 @@ def storage_status() -> None:
         typer.echo()
     elif is_pro and not pro_installed:
         typer.secho("Tip", bold=True)
-        typer.echo("  Pro license active but Pro package not installed.")
-        typer.echo("    pip install neural-memory-pro")
+        typer.echo("  Pro license active but Pro deps missing.")
+        typer.echo("    pip install neural-memory")
         typer.echo()
     elif cfg.storage_backend == "infinitydb":
         typer.secho("InfinityDB Active", fg=typer.colors.GREEN, bold=True)
@@ -123,11 +123,11 @@ def storage_switch(
 
     # Guard: InfinityDB requires Pro
     if backend == "infinitydb":
-        from neural_memory.plugins import has_pro
+        from neural_memory.pro import is_pro_deps_installed
 
-        if not has_pro():
+        if not is_pro_deps_installed():
             typer.secho(
-                "Pro package not installed. Run: pip install neural-memory-pro",
+                "Pro dependencies not installed. Run: pip install neural-memory",
                 fg=typer.colors.RED,
             )
             raise typer.Exit(1)

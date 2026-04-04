@@ -3,7 +3,7 @@
 This guide walks you through basic NeuralMemory usage in 5 minutes.
 
 !!! tip "3 tools you need"
-    NeuralMemory has 52 tools, but you only need three: **`nmem_remember`**, **`nmem_recall`**, and **`nmem_health`**. The agent handles the other 49 automatically. See [all tools](../guides/mcp-server.md#available-tools).
+    NeuralMemory has 55 tools, but you only need three: **`nmem_remember`**, **`nmem_recall`**, and **`nmem_health`**. The agent handles the other 52 automatically. See [all tools](../guides/mcp-server.md#available-tools).
 
 ## 0. Setup
 

@@ -152,6 +152,12 @@ class BrainConfig:
     # Interference forgetting (memory competition detection)
     interference_detection_enabled: bool = False
     fan_effect_threshold: int = 15
+    # Precision recall (A8 Phase 1)
+    recent_access_boost: float = 0.1
+    recent_access_window_days: int = 7
+    diversity_overlap_threshold: float = 0.6
+    diversity_penalty_factor: float = 0.7
+    topic_affinity_boost: float = 0.15
 
     def with_updates(self, **kwargs: Any) -> BrainConfig:
         """Create a new config with updated values."""

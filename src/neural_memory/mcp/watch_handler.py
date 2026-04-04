@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from neural_memory.mcp.tool_handlers import _require_brain_id
+from neural_memory.mcp.tool_handler_utils import _require_brain_id
 
 if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage

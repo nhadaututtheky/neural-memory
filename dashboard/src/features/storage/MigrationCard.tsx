@@ -13,12 +13,12 @@ import { MigrationProgress } from "./MigrationProgress"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import {
-  ArrowRightLeft,
-  Loader2,
-  CheckCircle2,
-  AlertTriangle,
-  Zap,
-} from "lucide-react"
+  ArrowsLeftRight,
+  SpinnerGap,
+  CheckCircle,
+  Warning,
+  Lightning,
+} from "@phosphor-icons/react"
 
 interface MigrationCardProps {
   status: StorageStatusResponse
@@ -80,7 +80,7 @@ export function MigrationCard({ status }: MigrationCardProps) {
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
-          <ArrowRightLeft className="size-5" aria-hidden="true" />
+          <ArrowsLeftRight className="size-5" aria-hidden="true" />
           {t("storage.migration")}
         </CardTitle>
       </CardHeader>
@@ -89,7 +89,7 @@ export function MigrationCard({ status }: MigrationCardProps) {
         {isSqlite && !activeJobId && (
           <div className="space-y-2 rounded-lg border border-dashed p-3">
             <div className="flex items-center gap-2 text-sm font-medium">
-              <Zap className="size-4 text-yellow-500" aria-hidden="true" />
+              <Lightning className="size-4 text-yellow-500" aria-hidden="true" />
               {t("storage.whyUpgrade")}
             </div>
             <ul className="space-y-1 text-xs text-muted-foreground list-disc pl-5">
@@ -107,7 +107,7 @@ export function MigrationCard({ status }: MigrationCardProps) {
         {job && isDone && (
           <div className="space-y-3 rounded-lg border border-green-500/30 bg-green-500/5 p-3">
             <div className="flex items-center gap-2 text-sm font-medium text-green-600 dark:text-green-400">
-              <CheckCircle2 className="size-4" aria-hidden="true" />
+              <CheckCircle className="size-4" aria-hidden="true" />
               {t("storage.migrationDone")}
             </div>
             <MigrationProgress job={job} />
@@ -122,7 +122,7 @@ export function MigrationCard({ status }: MigrationCardProps) {
               className="cursor-pointer"
             >
               {setBackend.isPending && (
-                <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
+                <SpinnerGap className="mr-2 size-4 animate-spin" aria-hidden="true" />
               )}
               {t("storage.switchBackend", {
                 backend:
@@ -136,7 +136,7 @@ export function MigrationCard({ status }: MigrationCardProps) {
         {job && isError && (
           <div className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
             <div className="flex items-center gap-2 text-sm font-medium text-destructive">
-              <AlertTriangle className="size-4" aria-hidden="true" />
+              <Warning className="size-4" aria-hidden="true" />
               {t("storage.migrationError")}
             </div>
             {job.error && (
@@ -170,7 +170,7 @@ export function MigrationCard({ status }: MigrationCardProps) {
                 className="cursor-pointer"
               >
                 {startMigration.isPending && (
-                  <Loader2
+                  <SpinnerGap
                     className="mr-2 size-4 animate-spin"
                     aria-hidden="true"
                   />
@@ -186,7 +186,7 @@ export function MigrationCard({ status }: MigrationCardProps) {
                 className="cursor-pointer"
               >
                 {startMigration.isPending && (
-                  <Loader2
+                  <SpinnerGap
                     className="mr-2 size-4 animate-spin"
                     aria-hidden="true"
                   />
@@ -200,7 +200,7 @@ export function MigrationCard({ status }: MigrationCardProps) {
         {/* Running indicator */}
         {isRunning && (
           <Badge variant="secondary" className="animate-pulse">
-            <Loader2 className="mr-1.5 size-3 animate-spin" aria-hidden="true" />
+            <SpinnerGap className="mr-1.5 size-3 animate-spin" aria-hidden="true" />
             {t("storage.migrating")}
           </Badge>
         )}

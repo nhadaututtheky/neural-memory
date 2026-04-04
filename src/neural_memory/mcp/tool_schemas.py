@@ -102,13 +102,9 @@ def get_tool_schemas_for_tier(tier: str) -> list[dict[str, Any]]:
 _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "name": "nmem_remember",
-        "description": "Store a memory. Auto-detects type if not specified. "
-        "Error resolution: when a new memory contradicts a stored error (type='error'), "
-        "the system automatically creates a RESOLVED_BY synapse and demotes the error's "
-        "activation by >=50%, so the agent stops repeating outdated errors. Detection is "
-        "automatic via tag overlap (>50%) and factual contradiction patterns — no manual "
-        "tagging needed. Sensitive content is auto-encrypted when encryption is enabled, "
-        "instead of being rejected.",
+        "description": "Store a memory. Auto-detects type, auto-resolves contradicted errors (RESOLVED_BY synapse). "
+        "Use after completing a task, fixing a bug, or making a decision. "
+        "Don't use for temporary notes (use ephemeral=true) or project context (use nmem_eternal).",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -136,6 +132,13 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "description": "Memory tier: hot (always in context, slow decay), "
                     "warm (default, semantic match), cold (explicit recall only, fast decay). "
                     "Boundary type auto-promotes to hot.",
+                },
+                "domain": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "description": "Domain scope for boundary memories (e.g. 'financial', 'security', 'code-review'). "
+                    "Adds a domain:{value} tag. Boundaries without domain are global (apply everywhere). "
+                    "Only meaningful for type=boundary; ignored for other types.",
                 },
                 "priority": {
                     "type": "integer",
@@ -182,8 +185,10 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "description": "Structured context dict merged into content "
                     "server-side using type-specific templates. Keys like "
                     "'reason', 'alternatives', 'cause', 'fix', 'steps' are "
-                    "auto-expanded. Any agent can send structured data "
-                    "instead of crafting perfect prose.",
+                    "auto-expanded. For type='decision': 'chosen', 'alternatives'/"
+                    "'rejected', 'confidence' enable decision intelligence "
+                    "(overlap detection, evolution tracking). Any agent can send "
+                    "structured data instead of crafting perfect prose.",
                     "additionalProperties": True,
                 },
                 "ephemeral": {
@@ -198,9 +203,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_remember_batch",
-        "description": "Store multiple memories in a single call. Max 20 items, 500K total chars. "
-        "Each item supports the same fields as nmem_remember. Returns per-item results "
-        "(partial success — one bad item won't block the rest).",
+        "description": "Store multiple memories at once (max 20). Use when saving 3+ memories together. "
+        "Partial success — one bad item won't block the rest.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -275,7 +279,9 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_recall",
-        "description": "Query memories by semantic search with confidence ranking.",
+        "description": "Query memories via spreading activation. Use when you need past context, decisions, or knowledge. "
+        "Depth: 0=instant lookup, 1=context (default), 2=cross-time patterns, 3=deep graph. "
+        "Add tags for precision. Use nmem_context instead for broad recent context.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -364,14 +370,21 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "enum": ["hot", "warm", "cold"],
                     "description": "Filter results by memory tier. Only return memories matching this tier.",
                 },
+                "domain": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "description": "Domain scope filter. When set, HOT context injection only includes boundaries "
+                    "tagged with this domain (plus unscoped global boundaries). "
+                    "Example: domain='financial' filters out security boundaries from context.",
+                },
             },
             "required": ["query"],
         },
     },
     {
         "name": "nmem_show",
-        "description": "Get full verbatim content + metadata + synapses for a specific memory by ID. "
-        "Use this when you need the exact, unmodified content of a stored memory.",
+        "description": "Get full verbatim content + metadata + synapses for a memory by ID. "
+        "Use after recall when you need exact content, not the summarized version.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -385,9 +398,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_provenance",
-        "description": "Trace provenance, verify, or approve a memory neuron. "
-        "Use 'trace' to see full provenance chain (source, stored_by, verified, approved). "
-        "Use 'verify' or 'approve' to add audit trail entries.",
+        "description": "Trace or audit a memory's origin chain. Use when verifying where a fact came from "
+        "or adding verification/approval stamps.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -410,8 +422,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_source",
-        "description": "Manage memory sources (provenance). Register external documents, laws, APIs, "
-        "or other origins so memories can answer 'where did this come from?'.",
+        "description": "Register external sources (docs, laws, APIs) for provenance tracking. "
+        "Use before nmem_train to link trained memories to their origin.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -466,7 +478,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_context",
-        "description": "Get recent memories as context.",
+        "description": "Get recent memories as auto-injected context. Use for broad task context. "
+        "For specific queries use nmem_recall. For project-level context use nmem_recap.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -495,7 +508,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_todo",
-        "description": "Add a TODO memory (30-day expiry).",
+        "description": "Quick TODO memory (auto-expires in 30 days). Use nmem_forget to close when done.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -512,12 +525,13 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_stats",
-        "description": "Brain stats: memory counts and freshness.",
+        "description": "Quick brain stats: counts and freshness. For quality assessment use nmem_health instead.",
         "inputSchema": {"type": "object", "properties": {}, "required": []},
     },
     {
         "name": "nmem_auto",
-        "description": "Auto-capture memories from text. 'process' analyzes+saves, 'flush' for emergency capture.",
+        "description": "Auto-extract memories from text. 'process'=analyze+save, 'flush'=emergency capture before compaction. "
+        "Use at session end or when processing large text blocks.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -540,9 +554,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_suggest",
-        "description": "Autocomplete suggestions from brain neurons. "
-        "When called with no prefix, returns idle neurons that have never been "
-        "accessed — useful for discovering neglected knowledge that needs reinforcement.",
+        "description": "Autocomplete from brain neurons. No prefix = idle/neglected neurons needing reinforcement.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -575,7 +587,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_session",
-        "description": "Track session state: task, feature, progress.",
+        "description": "Track current session state (task, feature, progress). Single-session only. "
+        "For cross-session persistence use nmem_eternal.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -608,7 +621,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_index",
-        "description": "Index codebase for code-aware recall.",
+        "description": "Index codebase for code-aware recall. Extracts symbols, imports, and relationships. "
+        "Run once per project, re-scan after major changes.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -632,7 +646,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_import",
-        "description": "Import from external systems (ChromaDB, Mem0, Cognee, etc.).",
+        "description": "Import memories from external systems (ChromaDB, Mem0, Cognee, Graphiti, LlamaIndex). "
+        "One-time migration tool.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -665,7 +680,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_eternal",
-        "description": "Save project context, decisions, instructions for cross-session persistence.",
+        "description": "SAVE project context, decisions, instructions that persist across sessions. "
+        "Pair with nmem_recap to LOAD. Use for project-level facts, not task-specific memories.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -701,7 +717,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_recap",
-        "description": "Load saved project context, decisions, and progress.",
+        "description": "LOAD project context saved by nmem_eternal. Call at SESSION START to restore cross-session state. "
+        "Level 1=quick (~500 tokens), 2=detailed, 3=full.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -720,17 +737,19 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_health",
-        "description": "Brain health: purity score, grade, warnings.",
+        "description": "Primary health check — purity score, grade, warnings. Call FIRST, then fix top penalty. "
+        "For specific alerts use nmem_alerts. For trends use nmem_evolution.",
         "inputSchema": {"type": "object", "properties": {}, "required": []},
     },
     {
         "name": "nmem_evolution",
-        "description": "Brain evolution: maturation, plasticity, coherence.",
+        "description": "Long-term brain growth trends: maturation, plasticity, coherence. "
+        "Use for trend analysis, not immediate health (use nmem_health for that).",
         "inputSchema": {"type": "object", "properties": {}, "required": []},
     },
     {
         "name": "nmem_habits",
-        "description": "Workflow habits: suggest, list, or clear.",
+        "description": "Learned workflow habits from tool usage patterns. Suggest next action, list habits, or clear.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -749,7 +768,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_version",
-        "description": "Brain version control: snapshot, list, rollback, diff.",
+        "description": "Brain version control: snapshot current state, rollback, or diff between versions. "
+        "Use before risky consolidation or major changes.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -790,7 +810,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_transplant",
-        "description": "Transplant memories between brains by tags/types.",
+        "description": "Copy memories from another brain by tags/types. Use for sharing knowledge between project brains.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -824,7 +844,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_conflicts",
-        "description": "Memory conflicts: list, resolve, or pre-check.",
+        "description": "Detect and resolve conflicting memories. Pre-check new content for contradictions before saving.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -863,9 +883,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_train",
-        "description": "Train brain from documentation files. "
-        "Supports PDF, DOCX, PPTX, HTML, JSON, XLSX, CSV (requires: pip install neural-memory[extract]). "
-        "Trained memories are pinned by default (no decay, no compression, permanent KB).",
+        "description": "Train brain from docs (PDF, DOCX, PPTX, HTML, JSON, XLSX, CSV). "
+        "Pinned by default as permanent KB. Requires: pip install neural-memory[extract].",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -924,8 +943,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_pin",
-        "description": "Pin, unpin, or list pinned memories. Pinned memories skip decay, pruning, "
-        "and compression — use for permanent knowledge base content.",
+        "description": "Pin memories as permanent KB (skip decay/pruning/compression). Use for critical knowledge.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -950,7 +968,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_train_db",
-        "description": "Train brain from database schema.",
+        "description": "Train brain from database schema (tables, columns, relationships). SQLite supported.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -990,7 +1008,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_alerts",
-        "description": "Brain health alerts: list or acknowledge.",
+        "description": "Actionable health alerts. Call after nmem_health to see specific issues. "
+        "Acknowledge alerts after fixing them.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1015,7 +1034,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_narrative",
-        "description": "Generate narratives: timeline, topic, or causal chain.",
+        "description": "Generate memory narratives: timeline (date range), topic (spreading activation), or causal chain. "
+        "Use to understand how knowledge connects.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1054,7 +1074,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_visualize",
-        "description": "Generate charts from memory data. Returns Vega-Lite, markdown table, or ASCII chart.",
+        "description": "Generate charts from memory data (Vega-Lite/markdown/ASCII). "
+        "Use for financial metrics, trends, or any structured data in memories.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1084,7 +1105,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_watch",
-        "description": "Watch directories for file changes and auto-ingest into memory.",
+        "description": "Watch directories for file changes, auto-ingest into memory. "
+        "Scan for one-shot, start/stop for continuous monitoring.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1119,7 +1141,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_review",
-        "description": "Spaced repetition reviews (Leitner box system).",
+        "description": "Spaced repetition reviews (Leitner 5-box system). Queue due reviews, mark success/fail, view stats.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1148,7 +1170,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_sync",
-        "description": "Trigger manual sync with hub server.",
+        "description": "Manual sync with cloud hub. Push local changes, pull remote, or full bidirectional sync.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1176,7 +1198,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_sync_status",
-        "description": "Show sync status: pending changes, devices, last sync.",
+        "description": "View sync status: pending changes, connected devices, last sync time.",
         "inputSchema": {
             "type": "object",
             "properties": {},
@@ -1184,7 +1206,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_sync_config",
-        "description": "View or update sync configuration. Use action='setup' for guided onboarding, action='activate' to activate a purchased license key.",
+        "description": "Configure sync: setup (onboarding), activate (license key), get/set settings.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1230,7 +1252,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_telegram_backup",
-        "description": "Send brain database file as backup to Telegram.",
+        "description": "Backup brain database to Telegram. Requires Telegram bot config.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1243,10 +1265,9 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_hypothesize",
-        "description": "Create, list, or inspect hypotheses — evolving beliefs with Bayesian "
-        "confidence tracking. Hypotheses auto-resolve when evidence is strong enough "
-        "(confirmed at >=0.9 confidence with >=3 evidence-for, refuted at <=0.1 with "
-        ">=3 evidence-against). Use nmem_evidence to add supporting/opposing evidence.",
+        "description": "Create or inspect hypotheses (Bayesian confidence). "
+        "Cognitive workflow: hypothesize -> evidence -> predict -> verify -> cognitive (dashboard). "
+        "Auto-resolves at >=0.9 (confirmed) or <=0.1 (refuted) with 3+ evidence.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1297,9 +1318,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_evidence",
-        "description": "Add evidence for or against a hypothesis. Updates confidence via "
-        "Bayesian update with surprise weighting and diminishing returns. "
-        "Auto-resolves hypothesis when evidence threshold is met.",
+        "description": "Add evidence for/against a hypothesis. Bayesian confidence update with auto-resolve. "
+        "Requires an existing hypothesis_id from nmem_hypothesize.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1339,10 +1359,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_predict",
-        "description": "Create, list, or inspect predictions — falsifiable claims about future "
-        "observations. Predictions track confidence, optional deadlines, and can link "
-        "to hypotheses via PREDICTED synapse. Verified predictions propagate evidence "
-        "back to linked hypotheses. Use nmem_verify to record outcomes.",
+        "description": "Create falsifiable predictions linked to hypotheses. "
+        "Use nmem_verify to record outcomes (propagates evidence back to hypothesis).",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1401,9 +1419,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_verify",
-        "description": "Verify a prediction as correct or wrong. Optionally records an observation, "
-        "creates VERIFIED_BY or FALSIFIED_BY synapse, and propagates evidence to "
-        "linked hypotheses. Returns updated calibration score.",
+        "description": "Record prediction outcome (correct/wrong). Propagates evidence to linked hypothesis. "
+        "Use after observing the predicted event.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1437,9 +1454,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_cognitive",
-        "description": "Cognitive overview — O(1) summary of active hypotheses, pending predictions, "
-        "calibration score, and knowledge gaps. Use 'summary' for instant dashboard, "
-        "'refresh' to recompute scores from current state.",
+        "description": "Cognitive dashboard — instant O(1) summary of hypotheses, predictions, calibration, and gaps. "
+        "Use as overview after cognitive workflow steps.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1460,9 +1476,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_gaps",
-        "description": "Metacognition — track what the brain doesn't know. Detect knowledge gaps "
-        "from contradictions, low-confidence hypotheses, recall misses, or manual flagging. "
-        "Resolve gaps when new information fills them.",
+        "description": "Track what the brain doesn't know. Detect gaps from contradictions, low-confidence, "
+        "or recall misses. Resolve when new info fills them.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1521,9 +1536,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_schema",
-        "description": "Schema evolution — evolve hypotheses into new versions. "
-        "Creates a version chain via SUPERSEDES synapse so the brain tracks how beliefs changed over time. "
-        "Use when a hypothesis needs updating with new understanding.",
+        "description": "Evolve a hypothesis into a new version (SUPERSEDES chain). "
+        "Use when understanding changes — preserves belief evolution history.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1565,7 +1579,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_explain",
-        "description": "Find and explain the shortest path between two entities in the neural graph. Returns a step-by-step explanation with synapse types, weights, and supporting memory evidence.",
+        "description": "Explain how two concepts connect in the neural graph (shortest path with synapse types and weights). "
+        "Use to understand relationships between entities.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1589,9 +1604,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_edit",
-        "description": "Edit an existing memory's type, content, or priority. "
-        "Use when a memory was auto-typed incorrectly or needs content correction. "
-        "Preserves all connections (synapses) and fiber associations.",
+        "description": "Edit a memory's type, content, priority, or tier. Preserves all synapses. "
+        "Use when auto-typing was wrong or content needs correction. For complete replacement, forget+remember.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1637,9 +1651,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_forget",
-        "description": "Explicitly delete or close a specific memory. "
-        "Soft delete by default (marks as expired). Use hard=true for permanent removal. "
-        "Use for closing completed TODOs or removing outdated/incorrect memories.",
+        "description": "Delete a memory. Soft delete by default; hard=true for permanent removal. "
+        "Use to close completed TODOs or remove outdated memories.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1661,13 +1674,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_consolidate",
-        "description": "Run memory consolidation on the current brain. "
-        "Strategies: prune (remove weak synapses/orphans), merge (combine overlapping fibers), "
-        "summarize (cluster topic neurons), mature (episodic→semantic), infer (co-activation synapses), "
-        "enrich (metadata extraction), dream (synthetic bridges), learn_habits (workflow patterns), "
-        "dedup (merge near-duplicates), semantic_link (cross-domain connections), compress (old fibers), "
-        "process_tool_events, detect_drift (find tag synonyms/aliases), all (run all in dependency order). "
-        "Use dry_run=true to preview without applying changes.",
+        "description": "Run brain consolidation (sleep-like maintenance). Strategy 'all' runs everything in order. "
+        "Use periodically or after bulk imports. dry_run=true to preview.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1713,10 +1721,7 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_drift",
-        "description": "Semantic drift detection — find tag clusters that should be merged or aliased. "
-        "Detects when different tags refer to the same concept using Jaccard similarity. "
-        "Actions: detect (run analysis), list (show clusters), merge (apply canonical tag), "
-        "alias (mark as related), dismiss (ignore cluster).",
+        "description": "Find tags that mean the same thing (Jaccard similarity). Detect clusters, then merge/alias/dismiss.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1741,9 +1746,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_surface",
-        "description": "Knowledge Surface management — generate or inspect the .nm surface file. "
-        "The surface is a compact knowledge graph (~1000 tokens) loaded every session. "
-        "Actions: generate (rebuild from brain.db), show (display current surface info).",
+        "description": "Knowledge Surface (.nm file) — compact graph (~1000 tokens) loaded every session. "
+        "Generate to rebuild, show to inspect.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1770,7 +1774,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_tool_stats",
-        "description": "Tool usage analytics: which tools agents use, frequency, success rates, and daily trends.",
+        "description": "Agent tool usage analytics: frequency, success rates, daily trends. "
+        "Use to understand which NM tools are being used and how effectively.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1797,10 +1802,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_lifecycle",
-        "description": "Memory lifecycle management — view lifecycle states and manage compression resistance. "
-        "Hot memories (accessed recently or high priority) resist compression automatically. "
-        "Actions: status (distribution of lifecycle states), recover (rehydrate a compressed memory), "
-        "freeze (prevent a memory from compressing), thaw (resume normal lifecycle).",
+        "description": "Manage memory lifecycle: view compression states, freeze/thaw individual memories, "
+        "recover compressed content. Use when a memory was incorrectly compressed.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1821,11 +1824,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_refine",
-        "description": "Refine an instruction or workflow memory — update its content, "
-        "record a failure mode, or add a trigger pattern. "
-        "Each refinement increments the version counter and stores a snapshot in refinement_history. "
-        "Use this to improve instructions based on real-world usage: update text when the instruction "
-        "needs correction, add failure_mode when something went wrong, add trigger to improve recall.",
+        "description": "Refine an instruction/workflow: update content, add failure modes, add trigger patterns. "
+        "Use to improve instructions based on real-world execution outcomes.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1858,10 +1858,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_report_outcome",
-        "description": "Report execution outcome for an instruction or workflow memory. "
-        "Increments execution_count, updates success_rate, and optionally records failure modes. "
-        "Instructions with high success_rate + many executions are boosted during recall. "
-        "Call this after executing an instruction to build up its track record.",
+        "description": "Report instruction execution outcome (success/fail). Builds track record — "
+        "high success rate boosts recall priority. Call after executing an instruction.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1888,10 +1886,8 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     },
     {
         "name": "nmem_budget",
-        "description": "Token budget analysis for recall — estimate, analyze, or optimize context window usage. "
-        "Use 'estimate' to dry-run a query and see token cost breakdown. "
-        "Use 'analyze' to profile the brain's average fiber token costs by memory type. "
-        "Use 'optimize' to find low-value-per-token fibers that are candidates for compression.",
+        "description": "Token budget analysis: estimate recall cost, profile brain token usage, "
+        "find compression candidates. Use when context window is tight.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1909,6 +1905,70 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "minimum": 50,
                     "maximum": 100000,
                     "description": "Token budget to estimate against (default: 4000).",
+                },
+            },
+            "required": ["action"],
+        },
+    },
+    {
+        "name": "nmem_tier",
+        "description": "Auto-tier: promote/demote memories between HOT/WARM/COLD by access patterns (Pro). "
+        "Evaluate (dry-run) before apply. Free users: manual tiers only.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["status", "evaluate", "apply", "history", "config", "analytics"],
+                    "description": "Action: 'status' (distribution), 'evaluate' (dry-run), 'apply' (execute), "
+                    "'history' (fiber tier log), 'config' (thresholds), 'analytics' (type breakdown + velocity).",
+                },
+                "fiber_id": {
+                    "type": "string",
+                    "description": "Fiber ID for 'history' action.",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "If true with action='apply', show changes without applying (default: false).",
+                },
+            },
+            "required": ["action"],
+        },
+    },
+    {
+        "name": "nmem_boundaries",
+        "description": "View domain-scoped boundaries (safety rules, always HOT tier). "
+        "List boundaries by domain or view domain summary.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["list", "domains"],
+                    "description": "Action: list (show boundaries, optionally filtered by domain), "
+                    "domains (list unique domains with boundary counts). Default: list.",
+                },
+                "domain": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "description": "Filter boundaries by domain (e.g. 'financial', 'security'). "
+                    "Only used with action=list.",
+                },
+            },
+        },
+    },
+    {
+        "name": "nmem_milestone",
+        "description": "Brain growth milestones (100, 250, 500...10K neurons). "
+        "Check for new achievements, view progress to next, or generate growth report.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["check", "progress", "history", "report"],
+                    "description": "check=detect+record new milestones, progress=distance to next milestone, "
+                    "history=all recorded milestones, report=generate growth report for current state",
                 },
             },
             "required": ["action"],

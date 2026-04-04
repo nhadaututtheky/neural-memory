@@ -1,7 +1,7 @@
 import type { TierDistribution } from "@/api/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useTranslation } from "react-i18next"
-import { Layers } from "lucide-react"
+import { Stack } from "@phosphor-icons/react"
 
 interface TierDistributionCardProps {
   data: TierDistribution
@@ -45,7 +45,7 @@ export function TierDistributionCard({ data }: TierDistributionCardProps) {
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
-          <Layers className="size-5" aria-hidden="true" />
+          <Stack className="size-5" aria-hidden="true" />
           {t("storage.tierDistribution")}
         </CardTitle>
       </CardHeader>

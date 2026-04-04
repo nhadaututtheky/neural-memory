@@ -7,7 +7,8 @@ Free Neural Memory is a complete, production-ready memory system — **you never
 **One command. No migration. No breaking changes.**
 
 ```bash
-pip install neural-memory-pro    # auto-registers, auto-upgrades storage
+pip install neural-memory              # Pro features included
+nmem pro activate YOUR_LICENSE_KEY    # activate with your key
 ```
 
 All 52 free tools keep working. Your existing memories are preserved. Pro adds 3 new tools and upgrades the engine underneath.
@@ -64,7 +65,7 @@ The difference isn't speed. It's **recall quality**. Your agent remembers by mea
 | **Consolidation** | O(N²) brute-force | O(N×k) HNSW neighbor clustering |
 | **Graph traversal** | SQL JOINs per hop | Native adjacency BFS, <1ms |
 | **Crash recovery** | SQLite WAL | Custom WAL + idempotent replay |
-| **MCP tools** | 52 tools | 52 + 3 Pro-exclusive |
+| **MCP tools** | 55 tools | 52 + 3 Pro-exclusive |
 | **Storage per 1M neurons** | ~5 GB | **~1 GB** (with tier compression) |
 
 ---
@@ -265,14 +266,15 @@ Smart consolidation with preview mode.
 One command. No config changes needed.
 
 ```bash
-pip install neural-memory-pro
+pip install neural-memory
+nmem pro activate YOUR_LICENSE_KEY
 ```
 
-Pro auto-registers via Python entry points. Your existing 52 MCP tools keep working unchanged. Three new tools appear automatically.
+Pro features are bundled in the main package — all dependencies included. Just activate your license key. Your existing 55 MCP tools keep working unchanged. Three new tools appear automatically.
 
 To enable InfinityDB (semantic search engine), set `storage_backend = "infinitydb"` in your `config.toml`. On next startup, existing memories are auto-migrated from SQLite. Both databases coexist — downgrade is safe.
 
-**Downgrade is safe:** uninstall `neural-memory-pro` and everything reverts to free SQLite. No data loss — SQLite database is preserved alongside InfinityDB files.
+**Downgrade is safe:** remove Pro dependencies and everything reverts to free SQLite. No data loss — SQLite database is preserved alongside InfinityDB files.
 
 ---
 
@@ -295,7 +297,7 @@ To enable InfinityDB (semantic search engine), set `storage_backend = "infinityd
 
 ### Free — $0 forever
 
-Everything you have today. 52 MCP tools, SQLite storage, spreading activation, 14 consolidation strategies, FTS5 search, cloud sync (100 neurons). **No features removed, ever.**
+Everything you have today. 55 MCP tools, SQLite storage, spreading activation, 14 consolidation strategies, FTS5 search, cloud sync (100 neurons). **No features removed, ever.**
 
 ### Pro — $9/month (219,000 VND)
 

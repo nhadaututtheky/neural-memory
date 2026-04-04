@@ -4,14 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { ExternalLink, Bug, MessageSquare, Github } from "lucide-react"
+import { ArrowSquareOut, Bug, ChatText, GithubLogo } from "@phosphor-icons/react"
 import { useTranslation } from "react-i18next"
 import ConfigStatusCards from "./ConfigStatusCards"
 import EmbeddingConfig from "./EmbeddingConfig"
 import WatcherCard from "./WatcherCard"
 import { openUpgradeModal } from "@/components/common/UpgradeModal"
 
-const FEEDBACK_ICONS = [Bug, MessageSquare, Github] as const
+const FEEDBACK_ICONS = [Bug, ChatText, GithubLogo] as const
 const FEEDBACK_COLORS = ["#ef4444", "#6366f1", "#a8a29e"] as const
 const FEEDBACK_KEYS = ["reportBug", "featureRequest", "discussions"] as const
 const FEEDBACK_URLS = [
@@ -116,6 +116,17 @@ export default function SettingsPage() {
                 )}
               </div>
             </div>
+            {license?.is_pro && license?.pro_deps_missing && (
+              <div className="mt-3 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm">
+                <p className="font-medium text-yellow-400">Pro dependencies missing</p>
+                <p className="text-muted-foreground mt-1">
+                  Missing: {license.pro_deps_missing.join(", ")}
+                </p>
+                <code className="mt-2 block rounded bg-muted px-2 py-1 text-xs select-all">
+                  pip install neural-memory[pro]
+                </code>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -266,7 +277,7 @@ export default function SettingsPage() {
                     <p className="text-sm font-medium">{t(`settings.${key}`)}</p>
                     <p className="text-xs text-muted-foreground">{t(`settings.${key}Desc`)}</p>
                   </div>
-                  <ExternalLink className="size-3.5 shrink-0 text-muted-foreground mt-0.5" />
+                  <ArrowSquareOut className="size-3.5 shrink-0 text-muted-foreground mt-0.5" />
                 </a>
               )
             })}

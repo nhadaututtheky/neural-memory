@@ -153,6 +153,20 @@ class SQLiteTypedMemoryMixin:
             row = await cursor.fetchone()
             return row[0] if row else 0
 
+    async def count_typed_memories_grouped(
+        self,
+    ) -> list[tuple[str, str, int]]:
+        conn = self._ensure_conn()
+        brain_id = self._get_brain_id()
+        query = (
+            "SELECT memory_type, tier, COUNT(*) FROM typed_memories"
+            " WHERE brain_id = ? AND (expires_at IS NULL OR expires_at > ?)"
+            " GROUP BY memory_type, tier"
+        )
+        params = [brain_id, utcnow().isoformat()]
+        async with conn.execute(query, params) as cursor:
+            return [(row[0], row[1], row[2]) async for row in cursor]
+
     async def update_typed_memory(self, typed_memory: TypedMemory) -> None:
         conn = self._ensure_conn()
         brain_id = self._get_brain_id()

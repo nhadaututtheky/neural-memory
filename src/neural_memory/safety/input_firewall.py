@@ -12,9 +12,9 @@ Detects:
 - Raw JSON metadata blocks (sender_id, message_id patterns)
 - Repetitive content (copy-paste loops)
 
-This module is deliberately conservative: it blocks obvious garbage
-but does NOT block legitimate long content sent via explicit nmem_remember.
-Only auto-capture entry points (hooks, passive capture) should use this.
+Auto-capture path (hooks, passive capture) uses check_content() which blocks.
+Explicit path (nmem_remember) uses sanitize_explicit_content() which strips
+dangerous patterns but never blocks — the caller made a deliberate decision.
 """
 
 from __future__ import annotations
@@ -210,34 +210,49 @@ def strip_nm_context_noise(text: str) -> str:
 
 
 def sanitize_explicit_content(text: str) -> str:
-    """Light sanitization for explicit nmem_remember path.
+    """Sanitize content for explicit nmem_remember path.
 
-    Unlike check_content() (which blocks), this only strips dangerous
-    control sequences and fake role tags. It does NOT block content —
-    the caller made a deliberate decision to store it.
+    Unlike check_content() (which blocks), this strips dangerous patterns
+    but does NOT block content — the caller made a deliberate decision to
+    store it.
 
-    Safe for technical content: base64, JSON metadata, code snippets
-    all pass through unchanged. Only chat-platform artifacts and
-    binary control characters are removed.
+    Strips:
+    - Binary control characters and chat-platform artifacts (<ctrl*>)
+    - Fake role tags (<user>, <assistant>, etc.)
+    - Chat metadata injection patterns (sender_id, message_id in JSON)
+    - NeuralMemory context noise (re-ingested NM output headers/bullets)
+
+    Safe for technical content: base64, JSON data structures, code snippets
+    all pass through unchanged. Only adversarial/artifact patterns are removed.
 
     Args:
         text: Raw content from explicit remember call.
 
     Returns:
-        Sanitized content with control sequences stripped.
+        Sanitized content with dangerous patterns stripped.
     """
     if not text or not isinstance(text, str):
         return text
 
-    sanitized = _CONTROL_SEQ_RE.sub("", text)
+    sanitized = text
+
+    # Strip control sequences and fake role tags
+    sanitized = _CONTROL_SEQ_RE.sub("", sanitized)
+
+    # Strip chat metadata injection patterns (non-blocking: remove, don't reject)
+    sanitized = _METADATA_INJECTION_RE.sub("", sanitized)
+
+    # Strip NM context noise (prevents re-ingest loops)
+    sanitized = _NM_CONTEXT_NOISE_RE.sub("", sanitized)
 
     # Collapse excessive whitespace from removals
-    sanitized = re.sub(r"\n{3,}", "\n\n", sanitized)
+    sanitized = re.sub(r"\n{3,}", "\n\n", sanitized).strip()
 
     if sanitized != text:
+        stripped_chars = len(text) - len(sanitized)
         logger.debug(
-            "Explicit path: sanitized %d control chars from content",
-            len(text) - len(sanitized),
+            "Explicit path: sanitized %d chars (control + metadata + NM noise)",
+            stripped_chars,
         )
 
     return sanitized

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Sparkles } from "lucide-react"
+import { Sparkle } from "@phosphor-icons/react"
 import { ModeSelector } from "./components/ModeSelector"
 import { DailyReading } from "./components/DailyReading"
 import { WhatIfMode } from "./components/WhatIfMode"
@@ -28,7 +28,7 @@ export default function OraclePage() {
   if (cards.length < 3) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 p-6 pt-24">
-        <Sparkles className="size-12 text-muted-foreground/40" />
+        <Sparkle className="size-12 text-muted-foreground/40" />
         <h2 className="font-display text-xl font-semibold text-muted-foreground">
           {t("oracle.needMore")}
         </h2>

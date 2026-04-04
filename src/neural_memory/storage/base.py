@@ -794,6 +794,16 @@ class NeuralStorage(ABC):
         """
         raise NotImplementedError
 
+    async def count_typed_memories_grouped(
+        self,
+    ) -> list[tuple[str, str, int]]:
+        """Count typed memories grouped by (memory_type, tier).
+
+        Returns:
+            List of (memory_type, tier, count) tuples.
+        """
+        raise NotImplementedError
+
     async def update_typed_memory(self, typed_memory: TypedMemory) -> None:
         """Update an existing typed memory.
 

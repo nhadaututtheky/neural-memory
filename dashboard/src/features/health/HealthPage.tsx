@@ -5,16 +5,16 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import {
-  ChevronDown,
-  ChevronUp,
+  CaretDown,
+  CaretUp,
   Brain,
   Lightbulb,
-  Zap,
+  Lightning,
   BookOpen,
-  AlertTriangle,
-  TrendingUp,
+  Warning,
+  TrendUp,
   ArrowRight,
-} from "lucide-react"
+} from "@phosphor-icons/react"
 import {
   Radar,
   RadarChart,
@@ -26,7 +26,7 @@ import {
 import { useTranslation } from "react-i18next"
 import type { PenaltyFactor } from "@/api/types"
 
-const ENRICHMENT_ICONS = [Brain, Lightbulb, Zap, BookOpen] as const
+const ENRICHMENT_ICONS = [Brain, Lightbulb, Lightning, BookOpen] as const
 const ENRICHMENT_COLORS = ["#6366f1", "#f59e0b", "#059669", "#06b6d4"] as const
 const ENRICHMENT_KEYS = ["remember", "causal", "diverse", "train"] as const
 
@@ -193,7 +193,7 @@ function TopPenaltiesSection({ penalties }: { penalties: PenaltyFactor[] }) {
     <Card className="border-amber-500/30 bg-amber-500/5">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
-          <AlertTriangle className="size-5 text-amber-500" />
+          <Warning className="size-5 text-amber-500" />
           {t("health.topPenalties")}
         </CardTitle>
       </CardHeader>
@@ -248,7 +248,7 @@ function PenaltyCard({ penalty, rank }: { penalty: PenaltyFactor; rank: number }
 
       {/* Estimated gain */}
       <div className="mb-3 flex items-center gap-1.5 rounded-md bg-emerald-500/10 px-2.5 py-1.5">
-        <TrendingUp className="size-3.5 text-emerald-500" />
+        <TrendUp className="size-3.5 text-emerald-500" />
         <span className="text-xs font-medium text-emerald-600">
           {t("health.estimatedGain", { gain: gainPts })}
         </span>
@@ -281,7 +281,7 @@ function MemoryEnrichmentGuide() {
             onClick={() => setExpanded((v) => !v)}
             aria-label={expanded ? t("health.collapseTips") : t("health.expandTips")}
           >
-            {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+            {expanded ? <CaretUp className="size-4" /> : <CaretDown className="size-4" />}
             <span className="ml-1 text-xs">{expanded ? t("health.less") : t("health.more")}</span>
           </Button>
         </div>

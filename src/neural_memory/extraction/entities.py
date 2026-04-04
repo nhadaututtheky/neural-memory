@@ -41,6 +41,13 @@ class EntitySubtype(StrEnum):
     CODE_SYMBOL = "code_symbol"  # function_name(), ClassName, module.attr
     VERSION = "version"  # v2.1.0, Python 3.11, React 19
 
+    # Code-semantic (function/class/module/package/error distinction)
+    FUNCTION_NAME = "function_name"  # extract_keywords(), process_data()
+    CLASS_NAME = "class_name"  # ReflexPipeline, MemoryEncoder
+    MODULE_NAME = "module_name"  # neural_memory.engine, os.path
+    PACKAGE_NAME = "package_name"  # numpy, aiohttp, neural-memory
+    ERROR_TYPE = "error_type"  # ValueError, KeyError, ConnectionRefusedError
+
 
 @dataclass(frozen=True)
 class Entity:
@@ -143,8 +150,21 @@ class EntityExtractor:
     PASCAL_CASE_PATTERN = re.compile(r"\b([A-Z][a-z]+(?:[A-Z][a-z]+)+)\b")
     # snake_case with 2+ segments: extract_keywords, activate_trail
     SNAKE_CASE_PATTERN = re.compile(r"\b([a-z][a-z0-9]*(?:_[a-z][a-z0-9]*){1,})\b")
+    # snake_case or PascalCase followed by () — function call
+    FUNCTION_CALL_PATTERN = re.compile(
+        r"\b([a-z][a-z0-9]*(?:_[a-z][a-z0-9]*)*|[A-Z][a-z]+(?:[A-Z][a-z]+)*)\s*\("
+    )
     # File paths: src/neural_memory/server.py, config.toml
     FILE_PATH_PATTERN = re.compile(r"(?:[\w.-]+/)+[\w.-]+\.\w+")
+    # Dotted module: neural_memory.engine, os.path (2+ dot-separated segments)
+    MODULE_PATH_PATTERN = re.compile(r"\b([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*){1,})\b")
+    # Error types: ValueError, KeyError, ConnectionRefusedError, *Exception
+    ERROR_TYPE_PATTERN = re.compile(r"\b([A-Z][a-zA-Z]*(?:Error|Exception))\b")
+    # Package names in context: pip install X, import X, require('X')
+    PACKAGE_CONTEXT_PATTERN = re.compile(
+        r"(?:pip install|pip3 install|import|from|require\()\s+['\"]?([a-z][a-z0-9_-]+)",
+        re.IGNORECASE,
+    )
 
     # Pattern for Vietnamese names (words after person prefixes)
     VI_NAME_PATTERN = re.compile(
@@ -233,6 +253,16 @@ class EntityExtractor:
         r"\s+\d+(?:\.\d+){0,2}"  # Python 3.11
         r")\b",
         re.IGNORECASE,
+    )
+
+    # Stack trace: Python traceback lines — File "path", line N, in func
+    TRACEBACK_FRAME_PATTERN = re.compile(
+        r'File\s+"([^"]+)",\s+line\s+(\d+),\s+in\s+(\w+)',
+    )
+    # Stack trace: final error line — ErrorType: message
+    TRACEBACK_ERROR_PATTERN = re.compile(
+        r"^([A-Z][a-zA-Z]*(?:Error|Exception)):\s*(.+)$",
+        re.MULTILINE,
     )
 
     def __init__(self, use_nlp: bool = False) -> None:
@@ -451,13 +481,105 @@ class EntityExtractor:
         text: str,
         existing: list[Entity],
     ) -> list[Entity]:
-        """Extract code identifiers (PascalCase, snake_case, file paths)."""
+        """Extract code identifiers with semantic subtypes."""
         entities: list[Entity] = []
         existing_spans = {(e.start, e.end) for e in existing}
         existing_texts = {e.text.lower() for e in existing}
 
+        # Build set of known function call names for subtype inference
+        function_names: set[str] = set()
+        for match in self.FUNCTION_CALL_PATTERN.finditer(text):
+            function_names.add(match.group(1))
+
+        # ── Stack trace extraction (highest priority) ──────────────
+        # Extract BEFORE general patterns so traceback entities get richer metadata.
+        traceback_texts: set[str] = set()
+
+        # Traceback frames: File "path", line N, in func_name
+        for match in self.TRACEBACK_FRAME_PATTERN.finditer(text):
+            func_name = match.group(3)
+            if func_name != "<module>" and func_name.lower() not in existing_texts:
+                traceback_texts.add(func_name.lower())
+                entities.append(
+                    Entity(
+                        text=func_name,
+                        type=EntityType.CODE,
+                        start=match.start(3),
+                        end=match.end(3),
+                        subtype=EntitySubtype.FUNCTION_NAME,
+                        confidence=0.9,
+                        raw_value=f"{match.group(1)}:{match.group(2)}",
+                    )
+                )
+
+        # Traceback error lines: ValueError: message
+        for match in self.TRACEBACK_ERROR_PATTERN.finditer(text):
+            error_name = match.group(1)
+            if (
+                error_name.lower() not in existing_texts
+                and error_name.lower() not in traceback_texts
+            ):
+                traceback_texts.add(error_name.lower())
+                entities.append(
+                    Entity(
+                        text=error_name,
+                        type=EntityType.CODE,
+                        start=match.start(1),
+                        end=match.end(1),
+                        subtype=EntitySubtype.ERROR_TYPE,
+                        confidence=0.95,
+                        raw_value=match.group(2).strip(),
+                    )
+                )
+
+        # Merge traceback texts into existing_texts to prevent duplicate extraction
+        existing_texts = existing_texts | traceback_texts
+
+        # ── General code patterns ─────────────────────────────────
+
+        # Error types (ValueError, KeyError, etc.) — extract before PascalCase
+        error_texts: set[str] = set()
+        for match in self.ERROR_TYPE_PATTERN.finditer(text):
+            if (match.start(), match.end()) in existing_spans:
+                continue
+            name = match.group(1)
+            if name.lower() in existing_texts:
+                continue
+            error_texts.add(name)
+            entities.append(
+                Entity(
+                    text=name,
+                    type=EntityType.CODE,
+                    start=match.start(),
+                    end=match.end(),
+                    subtype=EntitySubtype.ERROR_TYPE,
+                    confidence=0.9,
+                )
+            )
+
         # PascalCase (e.g., ReflexPipeline, MemoryEncoder)
         for match in self.PASCAL_CASE_PATTERN.finditer(text):
+            if (match.start(), match.end()) in existing_spans:
+                continue
+            name = match.group(1)
+            if name.lower() in existing_texts or name in error_texts:
+                continue
+            subtype = EntitySubtype.CLASS_NAME
+            if name in function_names:
+                subtype = EntitySubtype.FUNCTION_NAME
+            entities.append(
+                Entity(
+                    text=name,
+                    type=EntityType.CODE,
+                    start=match.start(),
+                    end=match.end(),
+                    subtype=subtype,
+                    confidence=0.85,
+                )
+            )
+
+        # Dotted module paths (e.g., neural_memory.engine, os.path)
+        for match in self.MODULE_PATH_PATTERN.finditer(text):
             if (match.start(), match.end()) in existing_spans:
                 continue
             if match.group(1).lower() in existing_texts:
@@ -468,6 +590,7 @@ class EntityExtractor:
                     type=EntityType.CODE,
                     start=match.start(),
                     end=match.end(),
+                    subtype=EntitySubtype.MODULE_NAME,
                     confidence=0.85,
                 )
             )
@@ -482,13 +605,33 @@ class EntityExtractor:
             # Skip common non-code snake_case (e.g., stop words joined)
             if len(word) < 5:
                 continue
+            subtype = (
+                EntitySubtype.FUNCTION_NAME if word in function_names else EntitySubtype.CODE_SYMBOL
+            )
             entities.append(
                 Entity(
                     text=word,
                     type=EntityType.CODE,
                     start=match.start(),
                     end=match.end(),
+                    subtype=subtype,
                     confidence=0.8,
+                )
+            )
+
+        # Package names in context (pip install X, import X)
+        for match in self.PACKAGE_CONTEXT_PATTERN.finditer(text):
+            pkg = match.group(1)
+            if pkg.lower() in existing_texts:
+                continue
+            entities.append(
+                Entity(
+                    text=pkg,
+                    type=EntityType.CODE,
+                    start=match.start(1),
+                    end=match.end(1),
+                    subtype=EntitySubtype.PACKAGE_NAME,
+                    confidence=0.85,
                 )
             )
 
@@ -502,6 +645,7 @@ class EntityExtractor:
                     type=EntityType.CODE,
                     start=match.start(),
                     end=match.end(),
+                    subtype=EntitySubtype.MODULE_NAME,
                     confidence=0.9,
                 )
             )

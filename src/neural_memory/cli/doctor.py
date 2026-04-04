@@ -433,17 +433,15 @@ def _check_pro_plugin() -> dict[str, Any]:
                 "detail": ", ".join(names),
             }
 
-        # Check if Pro package is importable but not registered
-        try:
-            import neural_memory_pro  # noqa: F401
+        # Check if Pro deps are available (built-in Pro)
+        from neural_memory.pro import is_pro_deps_installed
 
+        if is_pro_deps_installed():
             return {
-                "name": "Pro plugin",
-                "status": WARN,
-                "detail": "Package installed but not registered — check entry_points",
+                "name": "Pro features",
+                "status": OK,
+                "detail": "Pro dependencies installed (numpy, hnswlib, msgpack)",
             }
-        except ImportError:
-            pass
 
         # Check license
         from neural_memory.unified_config import get_config
@@ -451,14 +449,14 @@ def _check_pro_plugin() -> dict[str, Any]:
         config = get_config()
         if config.is_pro():
             return {
-                "name": "Pro plugin",
+                "name": "Pro features",
                 "status": WARN,
-                "detail": "License active but plugin not installed",
-                "fix": "Run: pip install neural-memory-pro",
+                "detail": "License active but Pro deps not installed",
+                "fix": "Run: pip install neural-memory",
             }
 
         return {
-            "name": "Pro plugin",
+            "name": "Pro features",
             "status": SKIP,
             "detail": "Not installed (free tier)",
         }

@@ -163,15 +163,15 @@ async def _migrate_to_infinitydb(brain_name: str | None) -> None:
     """Run the SQLite -> InfinityDB migration (Pro feature)."""
     from pathlib import Path
 
-    from neural_memory.plugins import get_storage_class, has_pro
+    from neural_memory.pro import is_pro_deps_installed
     from neural_memory.unified_config import get_config
 
     config = get_config()
 
     # Pre-flight: Pro checks
-    if not has_pro():
+    if not is_pro_deps_installed():
         typer.secho(
-            "Pro package not installed. Run: pip install neural-memory-pro",
+            "Pro dependencies not installed. Run: pip install neural-memory",
             fg=typer.colors.RED,
         )
         raise typer.Exit(1)
@@ -227,10 +227,16 @@ async def _migrate_to_infinitydb(brain_name: str | None) -> None:
     snapshot = await source.export_brain(brain_id)
 
     # Open target InfinityDB
-    storage_cls = get_storage_class()
-    if storage_cls is None:
-        typer.secho("InfinityDB storage class not available from Pro plugin.", fg=typer.colors.RED)
-        raise typer.Exit(1)
+    try:
+        from neural_memory.pro.storage_adapter import InfinityDBStorage
+
+        storage_cls: type = InfinityDBStorage
+    except ImportError:
+        typer.secho(
+            "InfinityDB not available. Run: pip install neural-memory",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(1) from None
 
     brain_dir = brains_dir / name
     brain_dir.mkdir(parents=True, exist_ok=True)

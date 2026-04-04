@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
     from neural_memory.unified_config import UnifiedConfig
-from neural_memory.mcp.tool_handlers import _require_brain_id
+from neural_memory.mcp.tool_handler_utils import _require_brain_id
 
 logger = logging.getLogger(__name__)
 

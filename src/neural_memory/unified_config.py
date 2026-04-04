@@ -1093,6 +1093,53 @@ class RerankerConfig:
 
 
 @dataclass(frozen=True)
+class TierConfig:
+    """Auto-tier promotion/demotion configuration (Pro feature).
+
+    Controls automatic movement of memories between HOT/WARM/COLD tiers
+    based on access patterns. Free users keep manual tiers only.
+    """
+
+    auto_enabled: bool = False  # Pro only — free users keep manual tiers
+    promote_threshold: int = 5  # access_frequency >= N → WARM→HOT
+    demote_inactive_days: int = 30  # no access in N days → HOT→WARM
+    cold_archive_days: int = 90  # no access in N days → WARM→COLD
+    max_hot_memories: int = 100  # cap HOT tier size
+
+    def __post_init__(self) -> None:
+        if self.promote_threshold < 1:
+            object.__setattr__(self, "promote_threshold", 1)
+        if self.demote_inactive_days < 1:
+            object.__setattr__(self, "demote_inactive_days", 1)
+        if self.cold_archive_days < 1:
+            object.__setattr__(self, "cold_archive_days", 1)
+        if self.max_hot_memories < 1:
+            object.__setattr__(self, "max_hot_memories", 1)
+        # Invariant: cold_archive_days must be >= demote_inactive_days
+        if self.cold_archive_days < self.demote_inactive_days:
+            object.__setattr__(self, "cold_archive_days", self.demote_inactive_days)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "auto_enabled": self.auto_enabled,
+            "promote_threshold": self.promote_threshold,
+            "demote_inactive_days": self.demote_inactive_days,
+            "cold_archive_days": self.cold_archive_days,
+            "max_hot_memories": self.max_hot_memories,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> TierConfig:
+        return cls(
+            auto_enabled=bool(data.get("auto_enabled", False)),
+            promote_threshold=int(data.get("promote_threshold", 5)),
+            demote_inactive_days=int(data.get("demote_inactive_days", 30)),
+            cold_archive_days=int(data.get("cold_archive_days", 90)),
+            max_hot_memories=int(data.get("max_hot_memories", 100)),
+        )
+
+
+@dataclass(frozen=True)
 class WatcherConfig:
     """Settings for file watcher auto-ingestion."""
 
@@ -1229,6 +1276,9 @@ class UnifiedConfig:
     # Cross-encoder reranking (optional)
     reranker: RerankerConfig = field(default_factory=RerankerConfig)
 
+    # Auto-tier promotion/demotion (Pro feature)
+    tiers: TierConfig = field(default_factory=TierConfig)
+
     # File watcher auto-ingestion
     watcher: WatcherConfig = field(default_factory=WatcherConfig)
 
@@ -1331,6 +1381,7 @@ class UnifiedConfig:
             mem0_sync=Mem0SyncConfig.from_dict(data.get("mem0_sync", {})),
             license=LicenseConfig.from_dict(data.get("license", {})),
             reranker=RerankerConfig.from_dict(data.get("reranker", {})),
+            tiers=TierConfig.from_dict(data.get("tiers", {})),
             watcher=WatcherConfig.from_dict(data.get("watcher", {})),
             device_id=raw_device_id,
             sync=SyncConfig.from_dict(sync_data),
@@ -1533,6 +1584,14 @@ class UnifiedConfig:
             f"blend_weight = {self.reranker.blend_weight}",
             f"min_score = {self.reranker.min_score}",
             f"max_candidates = {self.reranker.max_candidates}",
+            "",
+            "# Auto-tier promotion/demotion (Pro feature)",
+            "[tiers]",
+            f"auto_enabled = {'true' if self.tiers.auto_enabled else 'false'}",
+            f"promote_threshold = {self.tiers.promote_threshold}",
+            f"demote_inactive_days = {self.tiers.demote_inactive_days}",
+            f"cold_archive_days = {self.tiers.cold_archive_days}",
+            f"max_hot_memories = {self.tiers.max_hot_memories}",
             "",
             "# File watcher auto-ingestion",
             "[watcher]",
@@ -1920,7 +1979,7 @@ _falkordb_storage: NeuralStorage | None = None
 
 
 async def _get_infinitydb_storage(config: UnifiedConfig, name: str) -> NeuralStorage:
-    """Create or return cached InfinityDB storage (Pro plugin).
+    """Create or return cached InfinityDB storage (direct import).
 
     Each brain gets its own InfinityDB instance (separate directory with
     binary files), cached in _storage_cache with an 'inf:' prefix to avoid
@@ -1928,12 +1987,19 @@ async def _get_infinitydb_storage(config: UnifiedConfig, name: str) -> NeuralSto
     """
     lock = _get_storage_lock()
 
-    from neural_memory.plugins import get_storage_class
+    storage_cls: type | None = None
+    try:
+        from neural_memory.pro.storage_adapter import InfinityDBStorage
 
-    storage_cls = get_storage_class()
+        storage_cls = InfinityDBStorage
+    except ImportError:
+        from neural_memory.plugins import get_storage_class
+
+        storage_cls = get_storage_class()
     if storage_cls is None:
         logger.warning(
-            "InfinityDB backend requested but Pro plugin not installed, falling back to SQLite"
+            "InfinityDB backend requested but Pro deps not available. "
+            "Reinstall with: pip install neural-memory  — falling back to SQLite"
         )
         return await _get_sqlite_storage(config, name, None)
 
