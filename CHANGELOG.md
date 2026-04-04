@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.30.1] — 2026-04-05
+
+### Fixed
+
+- **SSRF prevention in brain registry** — HTTPS-only scheme validation, private/loopback IP blocking, body-size limit on actual bytes (not Content-Length header)
+- **Import brain UUID generation** — imported brains now get a proper UUID instead of empty string, which caused `import_brain()` to fail silently
+- **Brain Store page layout** — fixed content overlapping sidebar (missing padding)
+- **BrainPreviewDialog null safety** — optional chaining on `scan_result.findings` and `content_hash`
+- **Error message sanitization** — removed brain names from 404 responses, added path validation on registry preview
+
+### Added
+
+- **Upload .brain file button** — direct file import from Store page header with toast feedback
+- **Export brain dialog** — export active brain from Overview page with metadata form and auto-download
+
 ## [4.30.0] — 2026-04-05
 
 ### Added
