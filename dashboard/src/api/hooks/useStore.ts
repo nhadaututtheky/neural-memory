@@ -59,6 +59,29 @@ export function useImportRemoteBrain() {
   })
 }
 
+export function useImportBrainFile() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData()
+      formData.append("file", file)
+      const res = await fetch("/api/dashboard/store/import", {
+        method: "POST",
+        body: formData,
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "Import failed" }))
+        throw new Error(typeof err.detail === "string" ? err.detail : "Import failed")
+      }
+      return res.json() as Promise<StoreImportResponse>
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dashboard", "stats"] })
+      qc.invalidateQueries({ queryKey: ["dashboard", "brains"] })
+    },
+  })
+}
+
 export function useExportBrain() {
   return useMutation({
     mutationFn: (data: {

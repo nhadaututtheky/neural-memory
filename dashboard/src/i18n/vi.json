@@ -412,6 +412,7 @@
     "category": "Danh mục",
     "tags": "Thẻ",
     "tagsHint": "Phân cách bằng dấu phẩy (vd: python, coding, best-practices)",
+    "uploadBrain": "Nhập file .brain",
     "exportSecurityNote": "Brain sẽ được quét nội dung nhạy cảm trước khi xuất. Nội dung có rủi ro cao sẽ bị chặn."
   },
   "upgrade": {

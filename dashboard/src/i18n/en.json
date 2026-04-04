@@ -412,6 +412,7 @@
     "category": "Category",
     "tags": "Tags",
     "tagsHint": "Comma-separated (e.g. python, coding, best-practices)",
+    "uploadBrain": "Import .brain file",
     "exportSecurityNote": "Your brain will be scanned for sensitive content before export. High-risk content will be blocked."
   },
   "upgrade": {

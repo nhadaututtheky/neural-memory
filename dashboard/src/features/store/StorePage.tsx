@@ -1,9 +1,10 @@
-import { useState, useDeferredValue } from "react"
-import { Storefront, Package } from "@phosphor-icons/react"
+import { useRef, useState, useDeferredValue } from "react"
+import { Storefront, Package, UploadSimple } from "@phosphor-icons/react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
-import { useRegistry } from "@/api/hooks/useStore"
+import { useRegistry, useImportBrainFile } from "@/api/hooks/useStore"
 import { useTranslation } from "react-i18next"
+import { toast } from "sonner"
 import { StoreFilters } from "./StoreFilters"
 import { BrainCard } from "./BrainCard"
 import { BrainPreviewDialog } from "./BrainPreviewDialog"
@@ -14,8 +15,25 @@ export default function StorePage() {
   const [category, setCategory] = useState("")
   const [sortBy, setSortBy] = useState("created_at")
   const [previewName, setPreviewName] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const importFile = useImportBrainFile()
 
   const deferredSearch = useDeferredValue(search)
+
+  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    importFile.mutate(file, {
+      onSuccess: (data) => {
+        toast.success(t("store.importSuccess", { name: data.brain_name, neurons: data.neurons_imported }))
+      },
+      onError: (err) => {
+        toast.error(err instanceof Error ? err.message : t("store.importError"))
+      },
+    })
+    // Reset so same file can be re-selected
+    e.target.value = ""
+  }
 
   const { data, isLoading, error, refetch } = useRegistry({
     category: category || undefined,
@@ -28,14 +46,36 @@ export default function StorePage() {
   return (
     <div className="space-y-6 p-6">
       {/* Page Header */}
-      <div>
-        <h1 className="font-display text-2xl font-bold text-foreground inline-flex items-center gap-2.5">
-          <Storefront className="size-7" aria-hidden="true" />
-          {t("store.title")}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t("store.subtitle")}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-foreground inline-flex items-center gap-2.5">
+            <Storefront className="size-7" aria-hidden="true" />
+            {t("store.title")}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("store.subtitle")}
+          </p>
+        </div>
+        <div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".brain,.json"
+            onChange={handleFileImport}
+            className="hidden"
+            aria-label={t("store.uploadBrain")}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importFile.isPending}
+            className="cursor-pointer"
+          >
+            <UploadSimple className="size-4 mr-1.5" aria-hidden="true" />
+            {importFile.isPending ? t("store.importing") : t("store.uploadBrain")}
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
