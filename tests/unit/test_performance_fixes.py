@@ -340,6 +340,9 @@ class TestInvertedIndexMerge:
         storage = AsyncMock()
         storage._get_brain_id = MagicMock(return_value="brain1")
         storage._current_brain_id = "brain1"
+        # SimHash merge pass calls get_neurons_batch — return empty dict
+        # so the pass is skipped gracefully (no anchor content_hashes)
+        storage.get_neurons_batch = AsyncMock(return_value={})
         return storage
 
     @pytest.mark.asyncio

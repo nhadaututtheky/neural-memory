@@ -6,7 +6,6 @@ basic neuron CRUD works end-to-end through the unified SQL adapter.
 
 from __future__ import annotations
 
-import pytest
 import pytest_asyncio
 
 from neural_memory.core.brain import Brain, BrainConfig
