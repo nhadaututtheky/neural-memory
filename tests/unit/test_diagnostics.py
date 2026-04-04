@@ -627,13 +627,13 @@ class TestWarnings:
 
     @pytest.mark.asyncio
     async def test_no_consolidation_warning(self, rich_storage: InMemoryStorage) -> None:
-        """Brain with no SEMANTIC fibers should get NO_CONSOLIDATION."""
+        """Brain with no SEMANTIC fibers should get LOW_CONSOLIDATION."""
         engine = DiagnosticsEngine(rich_storage)
         brain_id = rich_storage._current_brain_id
         report = await engine.analyze(brain_id)
 
         codes = {w.code for w in report.warnings}
-        assert "NO_CONSOLIDATION" in codes
+        assert "LOW_CONSOLIDATION" in codes
 
     @pytest.mark.asyncio
     async def test_no_stale_warning_when_fresh(self, rich_storage: InMemoryStorage) -> None:

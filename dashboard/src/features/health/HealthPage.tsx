@@ -154,6 +154,20 @@ export default function HealthPage() {
                       </div>
                     ))}
                   </div>
+                ) : health?.top_penalties && health.top_penalties.length > 0 ? (
+                  <div className="space-y-2">
+                    {health.top_penalties.map((p: { component: string; action: string; estimated_gain: string }, i: number) => (
+                      <div
+                        key={i}
+                        className="flex items-start gap-2 rounded-lg border border-border p-3"
+                      >
+                        <Badge variant="warning" className="mt-0.5 shrink-0">
+                          {p.component.replace(/_/g, " ")}
+                        </Badge>
+                        <span className="text-sm">{p.action}</span>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
                     {t("health.noWarnings")}

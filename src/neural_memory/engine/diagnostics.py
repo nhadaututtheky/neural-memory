@@ -365,6 +365,7 @@ class DiagnosticsEngine:
             freshness=freshness,
             fibers=fibers,
             contradicts_count=contradicts_count,
+            activation_efficiency=activation_efficiency,
         )
 
         # Rank penalty factors with actual metrics for dynamic action strings
@@ -541,12 +542,13 @@ class DiagnosticsEngine:
         freshness: float,
         fibers: list[Any],
         contradicts_count: int = 0,
+        activation_efficiency: float = 1.0,
     ) -> tuple[list[DiagnosticWarning], list[str]]:
         """Generate warnings and recommendations from metrics."""
         warnings: list[DiagnosticWarning] = []
         recommendations: list[str] = []
 
-        # Stale brain
+        # Stale brain / low freshness
         if fiber_count > 0 and freshness == 0.0:
             warnings.append(
                 DiagnosticWarning(
@@ -559,6 +561,19 @@ class DiagnosticsEngine:
                 f"Brain has {fiber_count} memories but none accessed recently. "
                 "Try: nmem_recall with a topic you're currently working on "
                 "to reactivate relevant memories."
+            )
+        elif fiber_count > 0 and freshness < 0.30:
+            pct = freshness * 100
+            warnings.append(
+                DiagnosticWarning(
+                    severity=WarningSeverity.WARNING,
+                    code="LOW_FRESHNESS",
+                    message=f"Low freshness: only {pct:.0f}% of memories active in last 7 days.",
+                )
+            )
+            recommendations.append(
+                f"Only {pct:.0f}% of memories are fresh (active in last 7 days). "
+                "Recall topics you've stored to keep pathways active."
             )
 
         # Low connectivity
@@ -617,19 +632,38 @@ class DiagnosticsEngine:
                 "or recall related topics to build connections."
             )
 
-        # No consolidation
-        if consolidation_ratio == 0.0 and fiber_count > 0:
+        # Low consolidation (< 10% semantic)
+        if consolidation_ratio < 0.10 and fiber_count > 0:
+            semantic_count = int(consolidation_ratio * fiber_count)
+            pct = consolidation_ratio * 100
+            severity = WarningSeverity.WARNING
             warnings.append(
                 DiagnosticWarning(
-                    severity=WarningSeverity.WARNING,
-                    code="NO_CONSOLIDATION",
-                    message="No memories have reached SEMANTIC stage.",
+                    severity=severity,
+                    code="LOW_CONSOLIDATION",
+                    message=f"Only {pct:.0f}% of memories consolidated ({semantic_count}/{fiber_count} semantic).",
                 )
             )
             recommendations.append(
-                f"All {fiber_count} memories are still episodic (not consolidated). "
+                f"Only {semantic_count}/{fiber_count} memories ({pct:.0f}%) have reached SEMANTIC stage. "
                 "Run: nmem consolidate --strategy mature to advance them. "
                 "Memories need repeated recalls over days to mature naturally."
+            )
+
+        # Low activation efficiency
+        if activation_efficiency < 0.30 and neuron_count > 50:
+            inactive_pct = (1.0 - activation_efficiency) * 100
+            warnings.append(
+                DiagnosticWarning(
+                    severity=WarningSeverity.WARNING,
+                    code="LOW_ACTIVATION",
+                    message=f"{inactive_pct:.0f}% of neurons never accessed — pathways dormant.",
+                )
+            )
+            recommendations.append(
+                f"{inactive_pct:.0f}% of neurons have never been accessed. "
+                "Recall memories by topic to activate dormant pathways. "
+                "Try: nmem_recall for 5+ different topics you've stored."
             )
 
         # Tag drift detection
