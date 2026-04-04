@@ -159,7 +159,7 @@ class TestStageTransitions:
         assert advanced.stage == MemoryStage.EPISODIC
 
     def test_episodic_to_semantic_with_spacing(self) -> None:
-        """EPISODIC should advance to SEMANTIC after 7 days with 3 distinct reinforcement days."""
+        """EPISODIC should advance to SEMANTIC after 3 days with 2+ distinct reinforcement days."""
         t0 = datetime(2026, 1, 1, 12, 0, 0)
         record = MaturationRecord(
             fiber_id="f1",
@@ -178,7 +178,7 @@ class TestStageTransitions:
         assert advanced.stage == MemoryStage.SEMANTIC
 
     def test_episodic_stays_without_spacing(self) -> None:
-        """EPISODIC should NOT advance without 3 distinct reinforcement days."""
+        """EPISODIC should NOT advance without 2 distinct reinforcement days."""
         t0 = datetime(2026, 1, 1, 12, 0, 0)
         record = MaturationRecord(
             fiber_id="f1",
@@ -196,7 +196,7 @@ class TestStageTransitions:
         assert result.stage == MemoryStage.EPISODIC  # stays
 
     def test_episodic_stays_if_too_recent(self) -> None:
-        """EPISODIC should NOT advance before 7 days even with spacing."""
+        """EPISODIC should NOT advance before 3 days even with spacing."""
         t0 = datetime(2026, 1, 1, 12, 0, 0)
         record = MaturationRecord(
             fiber_id="f1",
@@ -206,13 +206,74 @@ class TestStageTransitions:
             rehearsal_count=5,
             reinforcement_timestamps=(
                 "2026-01-02T10:00:00",
-                "2026-01-04T10:00:00",
-                "2026-01-06T10:00:00",
+                "2026-01-03T10:00:00",
             ),
         )
-        t1 = t0 + timedelta(days=5)  # only 5 days
+        t1 = t0 + timedelta(days=2)  # only 2 days — below 3-day gate
         result = compute_stage_transition(record, now=t1)
         assert result.stage == MemoryStage.EPISODIC
+
+    def test_episodic_promotes_with_two_distinct_days(self) -> None:
+        """EPISODIC should promote with 2 distinct days after 3-day gate."""
+        t0 = datetime(2026, 1, 1, 12, 0, 0)
+        record = MaturationRecord(
+            fiber_id="f1",
+            brain_id="b1",
+            stage=MemoryStage.EPISODIC,
+            stage_entered_at=t0,
+            rehearsal_count=3,
+            reinforcement_timestamps=(
+                "2026-01-02T10:00:00",
+                "2026-01-03T10:00:00",
+            ),
+        )
+        t1 = t0 + timedelta(days=4)  # past 3-day gate
+        advanced = compute_stage_transition(record, now=t1)
+        assert advanced.stage == MemoryStage.SEMANTIC
+
+    def test_agent_path_with_rehearsals_and_windows(self) -> None:
+        """Agent path: 5+ rehearsals across 3+ distinct 2h windows."""
+        t0 = datetime(2026, 1, 1, 12, 0, 0)
+        record = MaturationRecord(
+            fiber_id="f1",
+            brain_id="b1",
+            stage=MemoryStage.EPISODIC,
+            stage_entered_at=t0,
+            rehearsal_count=6,
+            reinforcement_timestamps=(
+                "2026-01-02T08:00:00",  # window 4
+                "2026-01-02T10:30:00",  # window 5
+                "2026-01-02T14:00:00",  # window 7
+                "2026-01-02T14:30:00",  # window 7 (same)
+                "2026-01-02T16:00:00",  # window 8
+                "2026-01-02T18:00:00",  # window 9
+            ),
+        )
+        t1 = t0 + timedelta(days=4)  # past 3-day gate
+        advanced = compute_stage_transition(record, now=t1)
+        assert advanced.stage == MemoryStage.SEMANTIC
+
+    def test_agent_path_insufficient_windows(self) -> None:
+        """Agent path should NOT promote with <3 windows even with 5+ rehearsals."""
+        t0 = datetime(2026, 1, 1, 12, 0, 0)
+        record = MaturationRecord(
+            fiber_id="f1",
+            brain_id="b1",
+            stage=MemoryStage.EPISODIC,
+            stage_entered_at=t0,
+            rehearsal_count=6,
+            reinforcement_timestamps=(
+                "2026-01-02T10:00:00",
+                "2026-01-02T10:30:00",
+                "2026-01-02T11:00:00",
+                "2026-01-02T11:30:00",
+                "2026-01-02T10:15:00",
+                "2026-01-02T10:45:00",
+            ),  # all in window 5 — only 1 distinct window
+        )
+        t1 = t0 + timedelta(days=4)
+        result = compute_stage_transition(record, now=t1)
+        assert result.stage == MemoryStage.EPISODIC  # stays
 
     def test_semantic_stays(self) -> None:
         """SEMANTIC is the final stage — should not advance further."""

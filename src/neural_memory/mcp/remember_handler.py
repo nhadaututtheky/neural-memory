@@ -633,6 +633,13 @@ class RememberHandler:
                     {m.type.value for m in remaining_matches}
                 )
 
+        # Quality hint: warn about long content
+        if len(content) > 500:
+            response["quality_warning"] = (
+                f"Content is {len(content)} chars — long memories reduce recall precision. "
+                "Consider splitting into 2-3 focused memories."
+            )
+
         if is_ephemeral:
             response["ephemeral"] = True
             response["message"] += " [ephemeral — auto-expires, never synced]"

@@ -41,17 +41,17 @@ STAGE_DECAY_MULTIPLIERS: dict[MemoryStage, float] = {
 # Time thresholds for automatic stage transitions
 _STM_TO_WORKING = timedelta(minutes=30)
 _WORKING_TO_EPISODIC = timedelta(hours=4)
-_EPISODIC_TO_SEMANTIC = timedelta(days=7)
+_EPISODIC_TO_SEMANTIC = timedelta(days=3)
 
 # Spacing effect: minimum distinct days of reinforcement for semantic promotion
-_MIN_DISTINCT_DAYS = 3
+_MIN_DISTINCT_DAYS = 2
 
 # Alternative path for AI agents: high rehearsal count with temporal spread.
-# Agents recall the same memory many times per day but rarely across 3 distinct
-# calendar days. This alternative requires 15+ rehearsals spread across 5+
-# distinct 2-hour windows, still with the 7-day time gate.
-_MIN_REHEARSAL_COUNT = 15
-_MIN_DISTINCT_WINDOWS = 5
+# Agents recall the same memory frequently but rarely across many distinct
+# calendar days. This path requires 5+ rehearsals spread across 3+ distinct
+# 2-hour windows, with the time gate reduced to 3 days.
+_MIN_REHEARSAL_COUNT = 5
+_MIN_DISTINCT_WINDOWS = 3
 _WINDOW_SIZE_HOURS = 2
 
 
@@ -199,7 +199,7 @@ def compute_stage_transition(
     Stage transition rules:
     - STM → Working: time > 30 minutes
     - Working → Episodic: time > 4 hours
-    - Episodic → Semantic: time > 7 days AND (3+ distinct days OR 15+ rehearsals with 5+ 2h-windows)
+    - Episodic → Semantic: time > 3 days AND (2+ distinct days OR 5+ rehearsals with 3+ 2h-windows)
 
     Args:
         record: Current maturation record
