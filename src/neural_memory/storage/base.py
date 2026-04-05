@@ -152,6 +152,7 @@ class NeuralStorage(ABC):
         limit: int = 100,
         offset: int = 0,
         ephemeral: bool | None = None,
+        created_before: datetime | None = None,
     ) -> list[Neuron]:
         """
         Find neurons matching criteria.
@@ -164,6 +165,7 @@ class NeuralStorage(ABC):
             limit: Maximum results to return
             offset: Number of rows to skip (for pagination)
             ephemeral: Filter by ephemeral flag (None=all, True=only ephemeral, False=only permanent)
+            created_before: Filter to neurons created at or before this timestamp (time-travel)
 
         Returns:
             List of matching neurons
@@ -576,6 +578,7 @@ class NeuralStorage(ABC):
         limit_per_neuron: int = 10,
         tags: set[str] | None = None,
         tag_mode: str = "and",
+        created_before: datetime | None = None,
     ) -> list[Fiber]:
         """Find fibers containing ANY of the given neurons, deduplicated.
 

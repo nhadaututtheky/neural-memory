@@ -246,6 +246,18 @@ class RecallHandler:
             except (ValueError, TypeError):
                 return {"error": f"Invalid valid_at datetime: {args['valid_at']}"}
 
+        # Parse optional time-travel filter
+        as_of = None
+        if "as_of" in args:
+            try:
+                as_of = datetime.fromisoformat(args["as_of"])
+                if as_of.tzinfo is not None:
+                    from datetime import UTC
+
+                    as_of = as_of.astimezone(UTC).replace(tzinfo=None)
+            except (ValueError, TypeError):
+                return {"error": f"Invalid as_of datetime: {args['as_of']}"}
+
         await self.hooks.emit(HookEvent.PRE_RECALL, {"query": query, "depth": depth.value})
 
         # Surface depth routing: SUFFICIENT → answer from surface, skip brain.db
@@ -274,6 +286,7 @@ class RecallHandler:
             session_id=f"mcp-{id(self)}",
             exclude_ephemeral=permanent_only,
             tag_mode=tag_mode,
+            as_of=as_of,
         )
 
         # Passive auto-capture on long queries

@@ -218,6 +218,7 @@ class ReflexPipeline:
         session_id: str | None = None,
         exclude_ephemeral: bool = False,
         tag_mode: str = "and",
+        as_of: datetime | None = None,
     ) -> RetrievalResult:
         """
         Execute the retrieval pipeline.
@@ -303,7 +304,10 @@ class ReflexPipeline:
 
         # 3. Find anchor neurons (time-first) with ranked results
         anchor_sets, ranked_lists = await self._find_anchors_ranked(
-            stimulus, exclude_ephemeral=exclude_ephemeral, exclude_ids=exclude_ids
+            stimulus,
+            exclude_ephemeral=exclude_ephemeral,
+            exclude_ids=exclude_ids,
+            created_before=as_of,
         )
 
         # 3.5 RRF score fusion: compute initial activation levels from multi-retriever ranks
@@ -604,6 +608,7 @@ class ReflexPipeline:
             query_tokens=query_tokens,
             tag_mode=tag_mode,
             session_topics=_session_topics,
+            created_before=as_of,
         )
 
         # 6. Extract subgraph
@@ -1851,6 +1856,7 @@ class ReflexPipeline:
         *,
         exclude_ephemeral: bool = False,
         exclude_ids: set[str] | None = None,
+        created_before: datetime | None = None,
     ) -> tuple[list[list[str]], list[list[RankedAnchor]]]:
         """Find anchor neurons with ranked results for RRF fusion.
 
@@ -2080,12 +2086,10 @@ class ReflexPipeline:
         # 6. Apply SimHash pre-filter exclusion
         if exclude_ids:
             anchor_sets = [
-                [nid for nid in anchors if nid not in exclude_ids]
-                for anchors in anchor_sets
+                [nid for nid in anchors if nid not in exclude_ids] for anchors in anchor_sets
             ]
             ranked_lists = [
-                [ra for ra in ranked if ra.neuron_id not in exclude_ids]
-                for ranked in ranked_lists
+                [ra for ra in ranked if ra.neuron_id not in exclude_ids] for ranked in ranked_lists
             ]
             # Remove empty lists
             anchor_sets = [a for a in anchor_sets if a]
@@ -2101,6 +2105,7 @@ class ReflexPipeline:
         query_tokens: set[str] | None = None,
         tag_mode: str = "and",
         session_topics: set[str] | None = None,
+        created_before: datetime | None = None,
     ) -> list[Fiber]:
         """Find fibers that contain activated neurons (batch query).
 
@@ -2119,7 +2124,11 @@ class ReflexPipeline:
 
         top_neuron_ids = [a.neuron_id for a in top_neurons]
         fibers = await self._storage.find_fibers_batch(
-            top_neuron_ids, limit_per_neuron=3, tags=tags, tag_mode=tag_mode
+            top_neuron_ids,
+            limit_per_neuron=3,
+            tags=tags,
+            tag_mode=tag_mode,
+            created_before=created_before,
         )
 
         # Apply point-in-time temporal filter

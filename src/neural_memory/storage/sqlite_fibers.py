@@ -215,6 +215,7 @@ class SQLiteFiberMixin:
         limit_per_neuron: int = 10,
         tags: set[str] | None = None,
         tag_mode: str = "and",
+        created_before: datetime | None = None,
     ) -> list[Fiber]:
         """Find fibers containing any of the given neurons in a single SQL query."""
         if not neuron_ids:
@@ -239,6 +240,10 @@ class SQLiteFiberMixin:
             joiner = " OR " if tag_mode == "or" else " AND "
             sql += f" AND ({joiner.join(tag_clauses)})"
             params.extend(tags)
+
+        if created_before is not None:
+            sql += " AND f.created_at <= ?"
+            params.append(created_before.isoformat())
 
         sql += " ORDER BY f.salience DESC LIMIT ?"
         params.append(total_limit)

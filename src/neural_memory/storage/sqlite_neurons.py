@@ -202,6 +202,7 @@ class SQLiteNeuronMixin:
         limit: int = 100,
         offset: int = 0,
         ephemeral: bool | None = None,
+        created_before: datetime | None = None,
     ) -> list[Neuron]:
         # Cache shortcut for exact-match lookups (most repeated pattern)
         if content_exact is not None and content_contains is None and time_range is None:
@@ -242,6 +243,10 @@ class SQLiteNeuronMixin:
                 query += " AND n.ephemeral = ?"
                 params.append(1 if ephemeral else 0)
 
+            if created_before is not None:
+                query += " AND n.created_at <= ?"
+                params.append(created_before.isoformat())
+
             query += " ORDER BY fts.rank LIMIT ? OFFSET ?"
             params.extend([limit, offset])
         else:
@@ -274,6 +279,10 @@ class SQLiteNeuronMixin:
             if ephemeral is not None:
                 query += " AND ephemeral = ?"
                 params.append(1 if ephemeral else 0)
+
+            if created_before is not None:
+                query += " AND created_at <= ?"
+                params.append(created_before.isoformat())
 
             query += " ORDER BY id LIMIT ? OFFSET ?"
             params.extend([limit, offset])
