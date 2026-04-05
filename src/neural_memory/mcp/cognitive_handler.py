@@ -5,7 +5,15 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Literal
 
-from neural_memory.mcp.constants import MAX_CONTENT_LENGTH
+from neural_memory.mcp.constants import (
+    DEFAULT_LIST_LIMIT,
+    MAX_CONTENT_LENGTH,
+    MAX_LIST_LIMIT,
+    MAX_TAG_LENGTH,
+    MAX_TOPIC_LENGTH,
+    PREVIEW_MEDIUM,
+    PREVIEW_SHORT,
+)
 from neural_memory.mcp.tool_handler_utils import _require_brain_id
 
 if TYPE_CHECKING:
@@ -71,7 +79,7 @@ class CognitiveHandler:
 
         tags = set()
         for t in args.get("tags", []):
-            if isinstance(t, str) and len(t) <= 100:
+            if isinstance(t, str) and len(t) <= MAX_TAG_LENGTH:
                 tags.add(t)
 
         # Create hypothesis neuron via encoder
@@ -155,7 +163,7 @@ class CognitiveHandler:
             "hypothesis_id": anchor_id,
             "fiber_id": result.fiber.id,
             "confidence": initial_confidence,
-            "content_preview": content[:120],
+            "content_preview": content[:PREVIEW_SHORT],
             "neurons_created": len(result.neurons_created),
             "synapses_created": len(result.synapses_created),
         }
@@ -169,9 +177,9 @@ class CognitiveHandler:
             return {"error": f"Invalid status: {status_filter}. Valid: {sorted(_VALID_STATUSES)}"}
 
         try:
-            limit = min(int(args.get("limit", 20)), 100)
+            limit = min(int(args.get("limit", DEFAULT_LIST_LIMIT)), MAX_LIST_LIMIT)
         except (TypeError, ValueError):
-            limit = 20
+            limit = DEFAULT_LIST_LIMIT
 
         try:
             states = await storage.list_cognitive_states(
@@ -187,7 +195,7 @@ class CognitiveHandler:
                 hypotheses.append(
                     {
                         "hypothesis_id": state["neuron_id"],
-                        "content": content[:200] if content else "",
+                        "content": content[:PREVIEW_MEDIUM] if content else "",
                         "confidence": state["confidence"],
                         "evidence_for": state["evidence_for_count"],
                         "evidence_against": state["evidence_against_count"],
@@ -234,7 +242,7 @@ class CognitiveHandler:
                     evidence_for.append(
                         {
                             "neuron_id": syn.source_id,
-                            "content": (src_neuron.content[:120] if src_neuron else "(deleted)"),
+                            "content": (src_neuron.content[:PREVIEW_SHORT] if src_neuron else "(deleted)"),
                             "weight": syn.weight,
                         }
                     )
@@ -243,7 +251,7 @@ class CognitiveHandler:
                     evidence_against.append(
                         {
                             "neuron_id": syn.source_id,
-                            "content": (src_neuron.content[:120] if src_neuron else "(deleted)"),
+                            "content": (src_neuron.content[:PREVIEW_SHORT] if src_neuron else "(deleted)"),
                             "weight": syn.weight,
                         }
                     )
@@ -327,7 +335,7 @@ class CognitiveHandler:
 
         tags = set()
         for t in args.get("tags", []):
-            if isinstance(t, str) and len(t) <= 100:
+            if isinstance(t, str) and len(t) <= MAX_TAG_LENGTH:
                 tags.add(t)
 
         try:
@@ -495,7 +503,7 @@ class CognitiveHandler:
 
         tags = set()
         for t in args.get("tags", []):
-            if isinstance(t, str) and len(t) <= 100:
+            if isinstance(t, str) and len(t) <= MAX_TAG_LENGTH:
                 tags.add(t)
 
         brain_id = storage.current_brain_id
@@ -588,7 +596,7 @@ class CognitiveHandler:
             "fiber_id": result.fiber.id,
             "confidence": confidence,
             "deadline": deadline,
-            "content_preview": content[:120],
+            "content_preview": content[:PREVIEW_SHORT],
             "neurons_created": len(result.neurons_created),
             "synapses_created": len(result.synapses_created),
         }
@@ -603,9 +611,9 @@ class CognitiveHandler:
             return {"error": f"Invalid status: {status_filter}. Valid: {sorted(_VALID_STATUSES)}"}
 
         try:
-            limit = min(int(args.get("limit", 20)), 100)
+            limit = min(int(args.get("limit", DEFAULT_LIST_LIMIT)), MAX_LIST_LIMIT)
         except (TypeError, ValueError):
-            limit = 20
+            limit = DEFAULT_LIST_LIMIT
 
         try:
             states = await storage.list_predictions(
@@ -620,7 +628,7 @@ class CognitiveHandler:
                 predictions.append(
                     {
                         "prediction_id": state["neuron_id"],
-                        "content": content[:200] if content else "",
+                        "content": content[:PREVIEW_MEDIUM] if content else "",
                         "confidence": state["confidence"],
                         "status": state["status"],
                         "deadline": state["predicted_at"],
@@ -687,14 +695,14 @@ class CognitiveHandler:
                     hyp_neuron = await storage.get_neuron(syn.target_id)
                     linked_hypothesis = {
                         "hypothesis_id": syn.target_id,
-                        "content": (hyp_neuron.content[:120] if hyp_neuron else "(deleted)"),
+                        "content": (hyp_neuron.content[:PREVIEW_SHORT] if hyp_neuron else "(deleted)"),
                     }
                 elif syn.type in (SynapseType.VERIFIED_BY, SynapseType.FALSIFIED_BY):
                     obs_neuron = await storage.get_neuron(syn.target_id)
                     verification = {
                         "outcome": "correct" if syn.type == SynapseType.VERIFIED_BY else "wrong",
                         "observation_id": syn.target_id,
-                        "content": (obs_neuron.content[:120] if obs_neuron else "(deleted)"),
+                        "content": (obs_neuron.content[:PREVIEW_SHORT] if obs_neuron else "(deleted)"),
                     }
                 if linked_hypothesis and verification:
                     break
@@ -880,7 +888,7 @@ class CognitiveHandler:
 
         tags = set()
         for t in args.get("tags", []):
-            if isinstance(t, str) and len(t) <= 100:
+            if isinstance(t, str) and len(t) <= MAX_TAG_LENGTH:
                 tags.add(t)
 
         try:
@@ -1212,8 +1220,8 @@ class CognitiveHandler:
         topic = args.get("topic", "").strip()
         if not topic:
             return {"error": "topic is required"}
-        if len(topic) > 500:
-            return {"error": f"Topic too long ({len(topic)} chars). Max: 500."}
+        if len(topic) > MAX_TOPIC_LENGTH:
+            return {"error": f"Topic too long ({len(topic)} chars). Max: {MAX_TOPIC_LENGTH}."}
 
         source = args.get("source", "user_flagged")
         if source not in self._VALID_DETECTION_SOURCES:
@@ -1261,9 +1269,9 @@ class CognitiveHandler:
         include_resolved = bool(args.get("include_resolved", False))
 
         try:
-            limit = min(int(args.get("limit", 20)), 100)
+            limit = min(int(args.get("limit", DEFAULT_LIST_LIMIT)), MAX_LIST_LIMIT)
         except (TypeError, ValueError):
-            limit = 20
+            limit = DEFAULT_LIST_LIMIT
 
         try:
             gaps = await storage.list_knowledge_gaps(
@@ -1382,7 +1390,7 @@ class CognitiveHandler:
 
         tags = set()
         for t in args.get("tags", []):
-            if isinstance(t, str) and len(t) <= 100:
+            if isinstance(t, str) and len(t) <= MAX_TAG_LENGTH:
                 tags.add(t)
 
         # Create new hypothesis neuron

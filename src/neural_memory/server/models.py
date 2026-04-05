@@ -89,6 +89,21 @@ class QueryRequest(BaseModel):
         max_length=50,
         description="Domain scope filter for HOT context boundary injection.",
     )
+    mode: str = Field(
+        "associative",
+        pattern=r"^(associative|exact)$",
+        description="Recall mode: 'associative' (spreading activation, default) or 'exact' (per-fiber content).",
+    )
+    clean_for_prompt: bool = Field(
+        False,
+        description="Strip metadata and return only clean text suitable for LLM prompts.",
+    )
+    recall_token_budget: int | None = Field(
+        None,
+        ge=100,
+        le=100000,
+        description="Token budget for context formatting. Trims context to fit within budget.",
+    )
 
 
 class CreateBrainRequest(BaseModel):

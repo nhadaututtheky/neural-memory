@@ -430,7 +430,7 @@ class InfinityDB:
                 "content": neuron.get("content", ""),
                 "priority": neuron.get("priority", 5),
                 "activation_level": neuron.get("activation_level", 1.0),
-                "created_at": now,
+                "created_at": neuron.get("created_at") or now,
                 "updated_at": now,
                 "accessed_at": now,
                 "access_count": 0,

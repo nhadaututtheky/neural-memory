@@ -2028,7 +2028,7 @@ class ConsolidationEngine:
             _logger.debug("SMART_MERGE skipped: Pro not available")
             return
 
-        db = getattr(self._storage, "_infinitydb", None)
+        db = getattr(self._storage, "_db", None)
         if db is None:
             _logger.debug("SMART_MERGE skipped: storage is not InfinityDB")
             return

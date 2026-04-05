@@ -260,6 +260,10 @@ class SQLiteToInfinityMigrator:
             if isinstance(tags, str):
                 result["tags"] = [t.strip() for t in tags.split(",") if t.strip()]
 
+        # Preserve original creation timestamp
+        if "created_at" in columns and row.get("created_at") is not None:
+            result["created_at"] = str(row["created_at"])
+
         # Embedding (stored as blob in some NM versions)
         if "embedding" in columns and row.get("embedding") is not None:
             try:
@@ -410,12 +414,51 @@ class SQLiteToInfinityMigrator:
                         )
                         neuron_ids = [str(r["neuron_id"]) for r in cursor.fetchall()]
 
+                    # Preserve fiber metadata for round-trip fidelity
+                    fiber_meta: dict[str, Any] = {}
+                    for key in (
+                        "salience", "conductivity", "coherence", "frequency",
+                        "compression_tier", "pinned",
+                    ):
+                        val = row_dict.get(key)
+                        if val is not None:
+                            fiber_meta[key] = val
+                    for dt_key in ("time_start", "time_end", "created_at", "last_conducted"):
+                        val = row_dict.get(dt_key)
+                        if val is not None:
+                            fiber_meta[dt_key] = str(val)
+                    # Tags (stored as comma-separated in SQLite)
+                    for tag_key in ("auto_tags", "agent_tags"):
+                        raw = row_dict.get(tag_key)
+                        if raw:
+                            fiber_meta[tag_key] = [
+                                t.strip() for t in str(raw).split(",") if t.strip()
+                            ]
+                    for str_key in ("pathway", "anchor_neuron_id", "essence"):
+                        val = row_dict.get(str_key)
+                        if val is not None:
+                            fiber_meta[str_key] = val
+                    # Synapse IDs from join table
+                    synapse_ids: list[str] = []
+                    if has_fiber_neurons:
+                        try:
+                            cursor.execute(
+                                "SELECT synapse_id FROM fiber_neurons WHERE fiber_id = ? AND synapse_id IS NOT NULL",
+                                (fid,),
+                            )
+                            synapse_ids = [str(r[0]) for r in cursor.fetchall() if r[0]]
+                        except Exception:
+                            pass  # Column may not exist
+                    if synapse_ids:
+                        fiber_meta["synapse_ids"] = synapse_ids
+
                     self._target._fibers.add_fiber(
                         name=name,
                         fiber_id=str(fid),
                         fiber_type=fiber_type,
                         description=description,
                         neuron_ids=neuron_ids,
+                        metadata=fiber_meta if fiber_meta else None,
                     )
                     stats.fibers_migrated += 1
                 except Exception as e:

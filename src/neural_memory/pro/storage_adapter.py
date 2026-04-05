@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from neural_memory.core.brain import Brain
+from neural_memory.core.brain import Brain, BrainConfig
 from neural_memory.core.fiber import Fiber
 from neural_memory.core.neuron import Neuron, NeuronState, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
@@ -29,6 +29,11 @@ from neural_memory.pro.storage_adapter_sync import InfinityDBSyncMixin
 from neural_memory.pro.storage_adapter_typed import InfinityDBTypedMixin
 from neural_memory.storage.base import NeuralStorage
 from neural_memory.utils.timeutils import utcnow
+
+logger = logging.getLogger(__name__)
+
+# Sentinel for sorting fibers without created_at (naive UTC, far past)
+_EPOCH = datetime(2000, 1, 1)  # noqa: DTZ001
 
 if TYPE_CHECKING:
     from neural_memory.core.brain import BrainSnapshot
@@ -100,21 +105,117 @@ def _meta_to_synapse(edge: dict[str, Any]) -> Synapse:
     )
 
 
+def _apply_fiber_filters(
+    fibers: list[Fiber],
+    *,
+    time_overlaps: tuple[datetime, datetime] | None = None,
+    tags: set[str] | None = None,
+    min_salience: float | None = None,
+    metadata_key: str | None = None,
+    tag_mode: str = "and",
+) -> list[Fiber]:
+    """Apply post-fetch filters on Fiber objects."""
+    result = fibers
+    if time_overlaps is not None:
+        start, end = time_overlaps
+        result = [
+            f for f in result
+            if f.time_start is not None
+            and f.time_end is not None
+            and f.time_start <= end
+            and f.time_end >= start
+        ]
+    if tags is not None and tags:
+        result = [
+            f for f in result
+            if _fiber_tags_match(f, tags, tag_mode)
+        ]
+    if min_salience is not None:
+        result = [f for f in result if f.salience >= min_salience]
+    if metadata_key is not None:
+        result = [
+            f for f in result
+            if f.metadata.get(metadata_key) is not None
+        ]
+    return result
+
+
+def _fiber_tags_match(fiber: Fiber, tags: set[str], mode: str) -> bool:
+    """Check if fiber's tags match the filter."""
+    fiber_tags = (fiber.auto_tags or set()) | (fiber.agent_tags or set())
+    if mode == "or":
+        return bool(fiber_tags & tags)
+    return tags <= fiber_tags
+
+
 def _meta_to_fiber(fdict: dict[str, Any]) -> Fiber:
-    """Convert InfinityDB fiber dict to Fiber frozen dataclass."""
+    """Convert InfinityDB fiber dict to Fiber frozen dataclass.
+
+    InfinityDB FiberStore natively stores: id, name, type, description,
+    neuron_ids, metadata. All other Fiber fields are preserved in the
+    metadata sub-dict by add_fiber() and extracted here.
+    """
     nids = fdict.get("neuron_ids", [])
+    meta = dict(fdict.get("metadata") or {})
+
+    # Extract fields stashed in metadata by add_fiber()
+    synapse_ids = set(meta.pop("synapse_ids", []))
+    anchor_neuron_id = meta.pop("anchor_neuron_id", nids[0] if nids else "")
+    pathway = meta.pop("pathway", [])
+    conductivity = meta.pop("conductivity", 1.0)
+    salience = meta.pop("salience", 0.0)
+    frequency = meta.pop("frequency", 0)
+    coherence = meta.pop("coherence", 0.0)
+    compression_tier = meta.pop("compression_tier", 0)
+    pinned = meta.pop("pinned", False)
+    auto_tags = set(meta.pop("auto_tags", []))
+    agent_tags = set(meta.pop("agent_tags", []))
+    essence = meta.pop("essence", None)
+
+    # Datetime fields (stored as ISO strings)
+    time_start = _parse_dt(meta.pop("time_start", None))
+    time_end = _parse_dt(meta.pop("time_end", None))
+    last_conducted = _parse_dt(meta.pop("last_conducted", None))
+    created_at = _parse_dt(meta.pop("created_at", None)) or utcnow()
+
+    # Reconstruct clean metadata (without stashed fields)
+    meta["fiber_type"] = fdict.get("type", "cluster")
+    meta["description"] = fdict.get("description", "")
+
     return Fiber(
         id=fdict.get("id", ""),
         summary=fdict.get("name", ""),
         neuron_ids=set(nids),
-        synapse_ids=set(fdict.get("synapse_ids", [])),
-        anchor_neuron_id=fdict.get("anchor_neuron_id", nids[0] if nids else ""),
-        metadata={
-            "fiber_type": fdict.get("fiber_type", "cluster"),
-            "description": fdict.get("description", ""),
-            **(fdict.get("metadata") or {}),
-        },
+        synapse_ids=synapse_ids,
+        anchor_neuron_id=anchor_neuron_id,
+        pathway=pathway,
+        conductivity=conductivity,
+        last_conducted=last_conducted,
+        time_start=time_start,
+        time_end=time_end,
+        coherence=coherence,
+        salience=salience,
+        frequency=frequency,
+        auto_tags=auto_tags,
+        agent_tags=agent_tags,
+        metadata=meta,
+        compression_tier=compression_tier,
+        pinned=pinned,
+        created_at=created_at,
+        essence=essence,
     )
+
+
+def _parse_dt(val: Any) -> datetime | None:
+    """Parse ISO datetime string or return datetime as-is."""
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val
+    try:
+        return datetime.fromisoformat(str(val))
+    except (ValueError, TypeError):
+        return None
 
 
 class InfinityDBStorage(
@@ -216,16 +317,27 @@ class InfinityDBStorage(
         if time_range is not None:
             tr = (time_range[0].isoformat(), time_range[1].isoformat())
 
+        # Fetch extra if created_before filter will trim results
+        fetch_limit = limit * 2 if created_before else limit
         results = await self.db.find_neurons(
             neuron_type=type.value if type else None,
             content_contains=content_contains,
             content_exact=content_exact,
             time_range=tr,
-            limit=limit,
+            limit=fetch_limit,
             offset=offset,
             ephemeral=ephemeral,
         )
-        return [_meta_to_neuron(m) for m in results]
+        neurons = [_meta_to_neuron(m) for m in results]
+
+        # Post-filter: created_before (engine doesn't support natively)
+        if created_before is not None:
+            neurons = [
+                n for n in neurons
+                if n.created_at is not None and n.created_at < created_before
+            ]
+
+        return neurons[:limit]
 
     async def suggest_neurons(
         self, prefix: str, type_filter: NeuronType | None = None, limit: int = 5
@@ -415,16 +527,34 @@ class InfinityDBStorage(
     async def add_fiber(self, fiber: Fiber) -> str:
         neuron_ids = list(fiber.neuron_ids) if fiber.neuron_ids else None
         fiber_meta = dict(fiber.metadata) if fiber.metadata else {}
-        # Preserve fields that InfinityDB fiber store doesn't natively track
-        if fiber.synapse_ids:
-            fiber_meta["synapse_ids"] = list(fiber.synapse_ids)
-        if fiber.anchor_neuron_id:
-            fiber_meta["anchor_neuron_id"] = fiber.anchor_neuron_id
+
+        # Stash all Fiber fields into metadata for round-trip preservation
+        fiber_meta["synapse_ids"] = list(fiber.synapse_ids) if fiber.synapse_ids else []
+        fiber_meta["anchor_neuron_id"] = fiber.anchor_neuron_id or ""
+        fiber_meta["pathway"] = fiber.pathway or []
+        fiber_meta["conductivity"] = fiber.conductivity
+        fiber_meta["salience"] = fiber.salience
+        fiber_meta["frequency"] = fiber.frequency
+        fiber_meta["coherence"] = fiber.coherence
+        fiber_meta["compression_tier"] = fiber.compression_tier
+        fiber_meta["pinned"] = fiber.pinned
+        fiber_meta["auto_tags"] = list(fiber.auto_tags) if fiber.auto_tags else []
+        fiber_meta["agent_tags"] = list(fiber.agent_tags) if fiber.agent_tags else []
+        fiber_meta["created_at"] = fiber.created_at.isoformat() if fiber.created_at else None
+        if fiber.essence is not None:
+            fiber_meta["essence"] = fiber.essence
+        if fiber.time_start is not None:
+            fiber_meta["time_start"] = fiber.time_start.isoformat()
+        if fiber.time_end is not None:
+            fiber_meta["time_end"] = fiber.time_end.isoformat()
+        if fiber.last_conducted is not None:
+            fiber_meta["last_conducted"] = fiber.last_conducted.isoformat()
+
         return await self.db.add_fiber(
             name=fiber.summary or "",
             fiber_id=fiber.id if fiber.id else None,
-            fiber_type=fiber_meta.pop("fiber_type", "cluster") if fiber_meta else "cluster",
-            description=fiber_meta.pop("description", "") if fiber_meta else "",
+            fiber_type=fiber_meta.pop("fiber_type", "cluster"),
+            description=fiber_meta.pop("description", ""),
             neuron_ids=neuron_ids,
             metadata=fiber_meta,
         )
@@ -447,15 +577,27 @@ class InfinityDBStorage(
     ) -> list[Fiber]:
         if contains_neuron:
             fiber_ids = await self.db.get_fibers_for_neuron(contains_neuron)
-            fibers = []
-            for fid in fiber_ids[:limit]:
+            raw = []
+            for fid in fiber_ids:
                 f = await self.db.get_fiber(fid)
                 if f is not None:
-                    fibers.append(_meta_to_fiber(f))
-            return fibers
+                    raw.append(_meta_to_fiber(f))
+        else:
+            # Fetch more than limit to allow post-filtering
+            fetch_limit = limit * 3 if (tags or min_salience or time_overlaps or metadata_key) else limit
+            results = await self.db.find_fibers(limit=fetch_limit)
+            raw = [_meta_to_fiber(f) for f in results]
 
-        results = await self.db.find_fibers(limit=limit)
-        return [_meta_to_fiber(f) for f in results]
+        # Post-filter on Fiber attributes
+        filtered = _apply_fiber_filters(
+            raw,
+            time_overlaps=time_overlaps,
+            tags=tags,
+            min_salience=min_salience,
+            metadata_key=metadata_key,
+            tag_mode=tag_mode,
+        )
+        return filtered[:limit]
 
     async def update_fiber(self, fiber: Fiber) -> None:
         # InfinityDB FiberStore doesn't have update_fiber — delete + re-add
@@ -471,25 +613,93 @@ class InfinityDBStorage(
         order_by: Literal["created_at", "salience", "frequency"] = "created_at",
         descending: bool = True,
     ) -> list[Fiber]:
-        results = await self.db.find_fibers(limit=limit)
-        return [_meta_to_fiber(f) for f in results]
+        # Fetch extra to allow sorting, then trim to limit
+        fetch_limit = min(limit * 3, 300)
+        results = await self.db.find_fibers(limit=fetch_limit)
+        fibers = [_meta_to_fiber(f) for f in results]
+        # Sort by requested field
+        sort_key = {
+            "created_at": lambda f: f.created_at or _EPOCH,
+            "salience": lambda f: f.salience,
+            "frequency": lambda f: f.frequency,
+        }.get(order_by, lambda f: f.created_at or _EPOCH)
+        fibers.sort(key=sort_key, reverse=descending)
+        return fibers[:limit]
 
     # ========== Brain Operations ==========
 
+    def _brain_config_path(self) -> Path:
+        """Path to sidecar brain config JSON file."""
+        return self._base_dir / (self._current_brain_id or "default") / "brain.config.json"
+
     async def save_brain(self, brain: Brain) -> None:
-        # Brain metadata is stored in the InfinityDB header
         await self.db.flush()
+        # Persist brain metadata as JSON sidecar
+        try:
+            import json
+
+            config_path = self._brain_config_path()
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            data = {
+                "id": brain.id,
+                "name": brain.name,
+                "owner_id": brain.owner_id,
+                "is_public": brain.is_public,
+                "created_at": brain.created_at.isoformat() if brain.created_at else None,
+                "updated_at": brain.updated_at.isoformat() if brain.updated_at else None,
+                "config": brain.config.to_dict() if hasattr(brain.config, "to_dict") else {},
+            }
+            config_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except Exception:
+            logger.debug("Failed to persist brain config sidecar", exc_info=True)
 
     async def get_brain(self, brain_id: str) -> Brain | None:
         if brain_id != self.db.brain_id:
             return None
         stats = await self.db.get_stats()
+
+        # Try loading from sidecar config
+        brain_name = brain_id
+        config = None
+        owner_id = None
+        is_public = False
+        created_at = None
+        updated_at = None
+        try:
+            import json
+
+            config_path = self._brain_config_path()
+            if config_path.exists():
+                data = json.loads(config_path.read_text(encoding="utf-8"))
+                brain_name = data.get("name", brain_id)
+                owner_id = data.get("owner_id")
+                is_public = data.get("is_public", False)
+                created_at_str = data.get("created_at")
+                if created_at_str:
+                    created_at = datetime.fromisoformat(created_at_str)
+                updated_at_str = data.get("updated_at")
+                if updated_at_str:
+                    updated_at = datetime.fromisoformat(updated_at_str)
+                config_dict = data.get("config")
+                if config_dict:
+                    config = BrainConfig(**{
+                        k: v for k, v in config_dict.items()
+                        if k in BrainConfig.__dataclass_fields__
+                    })
+        except Exception:
+            logger.debug("Failed to load brain config sidecar", exc_info=True)
+
         return Brain(
             id=brain_id,
-            name=brain_id,
+            name=brain_name,
             neuron_count=stats["neuron_count"],
             synapse_count=stats["synapse_count"],
             fiber_count=stats["fiber_count"],
+            config=config or BrainConfig(),
+            owner_id=owner_id,
+            is_public=is_public,
+            created_at=created_at or utcnow(),
+            updated_at=updated_at or utcnow(),
         )
 
     async def export_brain(self, brain_id: str) -> BrainSnapshot:

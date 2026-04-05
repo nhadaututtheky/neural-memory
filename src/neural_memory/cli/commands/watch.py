@@ -52,7 +52,9 @@ def watch(
             }
 
         if action == "status":
-            db = storage._db  # type: ignore[attr-defined]
+            db = getattr(storage, "_db", None)
+            if db is None or not hasattr(db, "execute"):
+                return {"error": "File watcher requires SQLite storage backend"}
             tracker = WatchStateTracker(db)
             stats = await tracker.get_stats()
             return {"action": "status", **stats}
@@ -63,7 +65,9 @@ def watch(
         path = Path(directory).resolve()
 
         # Create watcher
-        db = storage._db  # type: ignore[attr-defined]
+        db = getattr(storage, "_db", None)
+        if db is None or not hasattr(db, "execute"):
+            return {"error": "File watcher requires SQLite storage backend"}
         tracker = WatchStateTracker(db)
         trainer = DocTrainer(storage, brain.config)
 

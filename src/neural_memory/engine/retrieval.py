@@ -408,7 +408,7 @@ class ReflexPipeline:
                 cone_fn = get_retrieval_strategy("cone")
             if cone_fn is not None and self._embedding_provider is not None:
                 try:
-                    db = getattr(self._storage, "_infinitydb", None)
+                    db = getattr(self._storage, "_db", None)
                     if db is not None:
                         query_vec = await self._embedding_provider.embed(query)
                         cone_results = await cone_fn(query_vec, db)

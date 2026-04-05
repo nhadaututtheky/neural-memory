@@ -143,6 +143,79 @@ async def query_memory(
             metadata={"filtered": "below_min_confidence"},
         )
 
+    # Post-filter by min_trust / tier (mirrors MCP recall_handler logic)
+    fibers_matched = result.fibers_matched
+    needs_post_filter = (
+        request.min_trust is not None or request.tier is not None
+    ) and fibers_matched
+    if needs_post_filter:
+        try:
+            passing_ids: set[str] = set()
+            for fid in fibers_matched:
+                tm = await storage.get_typed_memory(fid)
+                # Trust filter
+                if request.min_trust is not None:
+                    if tm and tm.trust_score is not None:
+                        if tm.trust_score < request.min_trust:
+                            continue
+                    elif tm is None:
+                        # No typed memory — skip if trust required
+                        continue
+                # Tier filter
+                if request.tier is not None:
+                    fiber_tier = getattr(tm, "tier", "warm") if tm else "warm"
+                    if fiber_tier != request.tier:
+                        continue
+                passing_ids.add(fid)
+            fibers_matched = [f for f in fibers_matched if f in passing_ids]
+        except Exception:
+            logger.warning(
+                "Post-filter (min_trust/tier) failed, returning unfiltered",
+                exc_info=True,
+            )
+
+    # Budget-aware context re-formatting (opt-in via recall_token_budget)
+    context = result.context
+    extra_metadata: dict[str, Any] = {}
+    if request.recall_token_budget is not None and fibers_matched:
+        try:
+            from neural_memory.engine.retrieval_context import format_context_budgeted
+            from neural_memory.engine.token_budget import BudgetConfig, format_budget_report
+
+            budget_cfg = BudgetConfig()
+            from neural_memory.engine.activation import ActivationResult
+
+            fibers_for_budget = []
+            activations_for_budget: dict[str, ActivationResult] = {}
+            for fid in fibers_matched:
+                fiber = await storage.get_fiber(fid)
+                if fiber:
+                    fibers_for_budget.append(fiber)
+                    activations_for_budget[fid] = ActivationResult(
+                        neuron_id=fiber.anchor_neuron_id,
+                        activation_level=1.0,
+                        hop_distance=0,
+                        path=[fiber.anchor_neuron_id],
+                        source_anchor=fiber.anchor_neuron_id,
+                    )
+
+            if fibers_for_budget:
+                budgeted_ctx, _, allocation = await format_context_budgeted(
+                    storage=storage,
+                    activations=activations_for_budget,
+                    fibers=fibers_for_budget,
+                    max_tokens=min(request.recall_token_budget, 100_000),
+                    budget_config=budget_cfg,
+                    clean_for_prompt=request.clean_for_prompt,
+                )
+                context = budgeted_ctx
+                extra_metadata["budget"] = format_budget_report(allocation)
+        except Exception:
+            logger.warning(
+                "Budget-aware context formatting failed, using default",
+                exc_info=True,
+            )
+
     subgraph = None
     if request.include_subgraph:
         subgraph = SubgraphResponse(
@@ -151,16 +224,18 @@ async def query_memory(
             anchor_ids=result.subgraph.anchor_ids,
         )
 
+    response_metadata = {**result.metadata, **extra_metadata} if extra_metadata else result.metadata
+
     return QueryResponse(
         answer=result.answer,
         confidence=result.confidence,
         depth_used=result.depth_used.value,
         neurons_activated=result.neurons_activated,
-        fibers_matched=result.fibers_matched,
-        context=result.context,
+        fibers_matched=fibers_matched,
+        context=context,
         latency_ms=result.latency_ms,
         subgraph=subgraph,
-        metadata=result.metadata,
+        metadata=response_metadata,
     )
 
 

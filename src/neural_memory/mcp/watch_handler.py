@@ -214,7 +214,9 @@ class WatchHandler:
         from neural_memory.engine.file_watcher import FileWatcher, WatchConfig
         from neural_memory.engine.watch_state import WatchStateTracker
 
-        db = storage._db  # Access underlying aiosqlite connection
+        db = getattr(storage, "_db", None)
+        if db is None or not hasattr(db, "execute"):
+            raise RuntimeError("File watcher requires SQLite storage backend")
         state_tracker = WatchStateTracker(db)
         brain_config = await storage.get_brain_config()
         trainer = DocTrainer(storage, brain_config)
