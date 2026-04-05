@@ -112,6 +112,8 @@ async def query_memory(
         reference_time=request.reference_time,
         tags=tags,
         tag_mode=request.tag_mode,
+        as_of=request.as_of,
+        simhash_threshold=request.simhash_threshold,
     )
 
     subgraph = None

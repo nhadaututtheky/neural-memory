@@ -219,6 +219,7 @@ class ReflexPipeline:
         exclude_ephemeral: bool = False,
         tag_mode: str = "and",
         as_of: datetime | None = None,
+        simhash_threshold: int | None = None,
     ) -> RetrievalResult:
         """
         Execute the retrieval pipeline.
@@ -228,6 +229,7 @@ class ReflexPipeline:
             depth: Retrieval depth (auto-detect if None)
             max_tokens: Maximum tokens in context
             reference_time: Reference time for temporal parsing
+            simhash_threshold: Per-query SimHash pre-filter override (None = use brain config)
 
         Returns:
             RetrievalResult with answer and context
@@ -294,12 +296,17 @@ class ReflexPipeline:
 
         # 2.9 SimHash pre-filter: exclude distant neurons before anchor search
         exclude_ids: set[str] = set()
-        if self._config.simhash_prefilter_threshold > 0 and query.strip():
+        effective_simhash = (
+            simhash_threshold
+            if simhash_threshold is not None
+            else self._config.simhash_prefilter_threshold
+        )
+        if effective_simhash > 0 and query.strip():
             from neural_memory.engine.simhash_filter import compute_exclude_set
 
             neuron_hashes = await self._storage.get_neuron_hashes()
             exclude_ids = compute_exclude_set(
-                query, neuron_hashes, self._config.simhash_prefilter_threshold
+                query, neuron_hashes, effective_simhash
             )
 
         # 3. Find anchor neurons (time-first) with ranked results
@@ -2329,6 +2336,8 @@ class ReflexPipeline:
         stimulus: Stimulus,
         depth: DepthLevel | None = None,
         max_tokens: int | None = None,
+        as_of: datetime | None = None,
+        simhash_threshold: int | None = None,
     ) -> RetrievalResult:
         """
         Execute retrieval with a pre-parsed stimulus.
@@ -2339,4 +2348,6 @@ class ReflexPipeline:
             stimulus.raw_query,
             depth=depth,
             max_tokens=max_tokens,
+            as_of=as_of,
+            simhash_threshold=simhash_threshold,
         )

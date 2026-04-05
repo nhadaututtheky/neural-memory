@@ -377,6 +377,20 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "tagged with this domain (plus unscoped global boundaries). "
                     "Example: domain='financial' filters out security boundaries from context.",
                 },
+                "as_of": {
+                    "type": "string",
+                    "description": "ISO datetime for time-travel recall. Returns only memories that existed at that point "
+                    "in time (created_at <= as_of) and reconstructs their maturation stage. "
+                    "Example: '2026-03-01T00:00:00' recalls memory state as of March 1st.",
+                },
+                "simhash_threshold": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 64,
+                    "description": "SimHash pre-filter Hamming distance cutoff. Neurons with content_hash farther than "
+                    "this threshold from the query hash are excluded before spreading activation. "
+                    "0 = disabled (default). Lower values = stricter filtering. Overrides brain config for this query.",
+                },
             },
             "required": ["query"],
         },

@@ -275,6 +275,16 @@ class RecallHandler:
 
         from neural_memory.engine.retrieval import ReflexPipeline
 
+        # Parse optional per-query simhash threshold override
+        simhash_threshold: int | None = None
+        if "simhash_threshold" in args:
+            try:
+                simhash_threshold = int(args["simhash_threshold"])
+                if not 0 <= simhash_threshold <= 64:
+                    return {"error": "simhash_threshold must be 0-64"}
+            except (ValueError, TypeError):
+                return {"error": f"Invalid simhash_threshold: {args['simhash_threshold']}"}
+
         pipeline = ReflexPipeline(storage, brain.config)
         result = await pipeline.query(
             query=effective_query,
@@ -287,6 +297,7 @@ class RecallHandler:
             exclude_ephemeral=permanent_only,
             tag_mode=tag_mode,
             as_of=as_of,
+            simhash_threshold=simhash_threshold,
         )
 
         # Passive auto-capture on long queries

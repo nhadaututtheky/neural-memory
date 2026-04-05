@@ -165,6 +165,7 @@ class BrainSettings:
     max_spread_hops: int = 4
     max_context_tokens: int = 1500
     freshness_weight: float = 0.0
+    simhash_prefilter_threshold: int = 0  # 0=disabled, 1-64=Hamming distance cutoff
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -174,6 +175,7 @@ class BrainSettings:
             "max_spread_hops": self.max_spread_hops,
             "max_context_tokens": self.max_context_tokens,
             "freshness_weight": self.freshness_weight,
+            "simhash_prefilter_threshold": self.simhash_prefilter_threshold,
         }
 
     @classmethod
@@ -185,6 +187,7 @@ class BrainSettings:
             max_spread_hops=data.get("max_spread_hops", 4),
             max_context_tokens=data.get("max_context_tokens", 1500),
             freshness_weight=data.get("freshness_weight", 0.0),
+            simhash_prefilter_threshold=int(data.get("simhash_prefilter_threshold", 0)),
         )
 
 
@@ -1426,6 +1429,7 @@ class UnifiedConfig:
             f"max_spread_hops = {self.brain.max_spread_hops}",
             f"max_context_tokens = {self.brain.max_context_tokens}",
             f"freshness_weight = {self.brain.freshness_weight}",
+            f"simhash_prefilter_threshold = {self.brain.simhash_prefilter_threshold}  # 0=disabled, 1-64=Hamming distance cutoff",
             "",
             "# Embedding settings (cross-language recall via Gemini/OpenAI/OpenRouter)",
             "[embedding]",
@@ -1961,6 +1965,7 @@ async def _get_sqlite_storage(
                 max_spread_hops=config.brain.max_spread_hops,
                 max_context_tokens=config.brain.max_context_tokens,
                 freshness_weight=config.brain.freshness_weight,
+                simhash_prefilter_threshold=config.brain.simhash_prefilter_threshold,
                 embedding_enabled=config.embedding.enabled,
                 embedding_provider=config.embedding.provider,
                 embedding_model=config.embedding.model,
@@ -2087,6 +2092,7 @@ async def _get_falkordb_storage(config: UnifiedConfig, name: str) -> NeuralStora
             max_spread_hops=config.brain.max_spread_hops,
             max_context_tokens=config.brain.max_context_tokens,
             freshness_weight=config.brain.freshness_weight,
+            simhash_prefilter_threshold=config.brain.simhash_prefilter_threshold,
         )
         brain = Brain.create(name=name, config=brain_config, brain_id=name)
         await storage.save_brain(brain)
@@ -2135,6 +2141,7 @@ async def _get_postgres_storage(config: UnifiedConfig, name: str) -> NeuralStora
                 max_spread_hops=config.brain.max_spread_hops,
                 max_context_tokens=config.brain.max_context_tokens,
                 freshness_weight=config.brain.freshness_weight,
+                simhash_prefilter_threshold=config.brain.simhash_prefilter_threshold,
                 embedding_enabled=config.embedding.enabled,
                 embedding_provider=config.embedding.provider,
                 embedding_model=config.embedding.model,
@@ -2171,6 +2178,7 @@ async def _get_postgres_storage(config: UnifiedConfig, name: str) -> NeuralStora
             max_spread_hops=config.brain.max_spread_hops,
             max_context_tokens=config.brain.max_context_tokens,
             freshness_weight=config.brain.freshness_weight,
+            simhash_prefilter_threshold=config.brain.simhash_prefilter_threshold,
             embedding_enabled=config.embedding.enabled,
             embedding_provider=config.embedding.provider,
             embedding_model=config.embedding.model,

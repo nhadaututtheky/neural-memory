@@ -49,6 +49,16 @@ class QueryRequest(BaseModel):
         pattern=r"^(and|or)$",
         description="Tag matching mode: 'and' (all tags must match, default) or 'or' (any tag matches)",
     )
+    as_of: datetime | None = Field(
+        None,
+        description="ISO datetime for time-travel recall. Returns only memories that existed at that point in time.",
+    )
+    simhash_threshold: int | None = Field(
+        None,
+        ge=0,
+        le=64,
+        description="SimHash pre-filter Hamming distance cutoff. 0=disabled. Overrides brain config for this query.",
+    )
 
 
 class CreateBrainRequest(BaseModel):
