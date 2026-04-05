@@ -205,7 +205,8 @@ class SQLiteNeuronMixin:
         created_before: datetime | None = None,
     ) -> list[Neuron]:
         # Cache shortcut for exact-match lookups (most repeated pattern)
-        if content_exact is not None and content_contains is None and time_range is None:
+        # Skip cache when created_before is set — cache doesn't track temporal filters
+        if content_exact is not None and content_contains is None and time_range is None and created_before is None:
             type_val = type.value if type is not None else None
             cached = self._neuron_cache.get(content_exact, type_val)
             if cached is not None:
