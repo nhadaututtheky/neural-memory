@@ -156,7 +156,7 @@ export default function HealthPage() {
                   </div>
                 ) : health?.top_penalties && health.top_penalties.length > 0 ? (
                   <div className="space-y-2">
-                    {health.top_penalties.map((p: { component: string; action: string; estimated_gain: string }, i: number) => (
+                    {health.top_penalties.map((p: PenaltyFactor, i: number) => (
                       <div
                         key={i}
                         className="flex items-start gap-2 rounded-lg border border-border p-3"

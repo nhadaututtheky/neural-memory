@@ -523,6 +523,7 @@ export interface StoreExportResponse {
   scan_summary: Record<string, unknown>
   package_size_bytes: number
   size_tier: string
+  package?: Record<string, unknown>
 }
 
 // POST /api/dashboard/store/rate
