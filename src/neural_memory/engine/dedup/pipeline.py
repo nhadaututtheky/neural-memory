@@ -83,7 +83,14 @@ class DedupPipeline:
         if content_hash is None:
             content_hash = simhash(content)
 
-        # Fetch candidate anchors from storage
+        # Fast path: exact content_hash match via indexed column
+        hash_candidates = await self._get_candidates_by_hash(content_hash)
+        if hash_candidates:
+            tier1_result = self._tier1_simhash(content_hash, hash_candidates)
+            if tier1_result is not None:
+                return tier1_result
+
+        # Fetch candidate anchors from storage (text-based search)
         candidates = await self._get_candidates(content)
         if not candidates:
             return DedupResult(is_duplicate=False, reason="no candidates found")
@@ -106,6 +113,26 @@ class DedupPipeline:
                 return tier3_result
 
         return DedupResult(is_duplicate=False, reason="no tier found a match")
+
+    async def _get_candidates_by_hash(self, content_hash: int) -> list[Neuron]:
+        """Fast path: fetch neurons with matching SimHash via indexed column."""
+        if content_hash == 0:
+            return []
+        try:
+            all_hashes = await self._storage.get_neuron_hashes()
+            # Find neurons with exact hash match (hamming distance 0)
+            matching_ids = [nid for nid, h in all_hashes if h == content_hash]
+            if not matching_ids:
+                return []
+            neurons = []
+            for nid in matching_ids[:10]:  # Cap at 10 exact matches
+                neuron = await self._storage.get_neuron(nid)
+                if neuron and neuron.metadata.get("is_anchor", False):
+                    neurons.append(neuron)
+            return neurons
+        except Exception:
+            logger.debug("Hash-based candidate lookup failed", exc_info=True)
+            return []
 
     async def _get_candidates(self, content: str) -> list[Neuron]:
         """Fetch candidate anchor neurons for comparison."""

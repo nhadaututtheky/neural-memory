@@ -143,12 +143,14 @@ async def _consolidation_loop(
     """Background loop: run consolidation on a fixed interval.
 
     First run waits one full interval to avoid triggering on every
-    server restart. Logs each run with summary stats.
+    server restart. Uses run_with_delta() for before/after health
+    snapshots (consistent with MCP consolidation behavior).
     """
     import asyncio
     import logging
 
-    from neural_memory.engine.consolidation import ConsolidationEngine, ConsolidationStrategy
+    from neural_memory.engine.consolidation import ConsolidationStrategy
+    from neural_memory.engine.consolidation_delta import run_with_delta
 
     _logger = logging.getLogger(__name__)
     interval_seconds = maint.scheduled_consolidation_interval_hours * 3600
@@ -162,11 +164,11 @@ async def _consolidation_loop(
                 _logger.debug("Consolidation daemon skipped: no brain context set")
                 continue
 
-            engine = ConsolidationEngine(storage)
-            report = await engine.run(strategies=strategies)
+            delta = await run_with_delta(storage, brain_id, strategies=strategies)
             _logger.info(
-                "Background consolidation complete: %s",
-                report.summary(),
+                "Background consolidation complete: %s | purity delta: %+.1f",
+                delta.report.summary(),
+                delta.purity_delta,
             )
         except asyncio.CancelledError:
             raise

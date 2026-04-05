@@ -380,10 +380,11 @@ class RecallHandler:
                     # Replace the pipeline-generated context with budget-aware context
                     result = _dc_replace(result, context=budgeted_ctx)
             except Exception:
-                logger.debug(
-                    "Budget-aware recall failed (non-critical), using standard context",
+                logger.warning(
+                    "Budget-aware recall failed, falling back to standard context",
                     exc_info=True,
                 )
+                budget_stats = {"budget_applied": False, "reason": "budget formatting failed"}
 
         if result.confidence < min_confidence:
             return {
@@ -429,7 +430,7 @@ class RecallHandler:
                     else result
                 )
             except Exception:
-                logger.debug("Post-filter (trust/tier) failed (non-critical)", exc_info=True)
+                logger.warning("Post-filter (trust/tier) failed, returning unfiltered results", exc_info=True)
 
         # Exact mode: return raw neuron contents without truncation
         if recall_mode == "exact" and result.fibers_matched:
@@ -821,8 +822,8 @@ class RecallHandler:
                     "HOT memory limit reached (%d) — some HOT memories may be excluded from context",
                     MAX_HOT_CONTEXT_MEMORIES,
                 )
-        except Exception as e:
-            logger.warning("HOT memory injection failed — tier filter unavailable: %s", e)
+        except Exception:
+            logger.warning("HOT memory injection failed — tier filter unavailable", exc_info=True)
 
         # Cross-session correction injection: recent error→fix pairs
         corrections_text = ""
