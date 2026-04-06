@@ -193,6 +193,8 @@ class MaturationRecord:
 def compute_stage_transition(
     record: MaturationRecord,
     now: datetime | None = None,
+    fast_track_rehearsals: int = 10,
+    fast_track_time_days: float = 1.0,
 ) -> MaturationRecord:
     """Compute if a maturation record should advance to the next stage.
 
@@ -200,10 +202,13 @@ def compute_stage_transition(
     - STM → Working: time > 30 minutes
     - Working → Episodic: time > 4 hours
     - Episodic → Semantic: time > 3 days AND (2+ distinct days OR 5+ rehearsals with 3+ 2h-windows)
+    - Fast-track: 10+ rehearsals reduces episodic→semantic time to 1 day
 
     Args:
         record: Current maturation record
         now: Reference time for transition checks
+        fast_track_rehearsals: Rehearsals needed for fast-track (default 10)
+        fast_track_time_days: Reduced time for fast-track (default 1.0 day)
 
     Returns:
         New MaturationRecord (possibly in a new stage)
@@ -220,8 +225,13 @@ def compute_stage_transition(
             return record.advance_stage(MemoryStage.EPISODIC, now)
 
     elif record.stage == MemoryStage.EPISODIC:
-        if time_in_stage >= _EPISODIC_TO_SEMANTIC and (
-            # Classic path: 3+ distinct calendar days (human spaced repetition)
+        # Fast-track: high-recall memories need less time
+        time_threshold = _EPISODIC_TO_SEMANTIC
+        if record.rehearsal_count >= fast_track_rehearsals:
+            time_threshold = timedelta(days=fast_track_time_days)
+
+        if time_in_stage >= time_threshold and (
+            # Classic path: 2+ distinct calendar days (human spaced repetition)
             record.distinct_reinforcement_days >= _MIN_DISTINCT_DAYS
             # Agent path: 5+ rehearsals spread across 3+ distinct 2h windows
             or (

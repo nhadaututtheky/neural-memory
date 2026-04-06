@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import re
 import time
 from collections.abc import Awaitable, Callable
@@ -66,15 +67,34 @@ class ConsolidationConfig:
     prune_weight_threshold: float = 0.05
     prune_min_inactive_days: float = 7.0
     prune_isolated_neurons: bool = True
+    prune_semantic_factor: float = 0.5
+    bridge_weight_floor: float = 0.01
     merge_overlap_threshold: float = 0.5
     merge_max_fiber_size: int = 50
+    merge_temporal_halflife_seconds: float = 7200.0
     summarize_min_cluster_size: int = 3
     summarize_tag_overlap_threshold: float = 0.4
     infer_co_activation_threshold: int = 3
     infer_window_days: int = 7
     infer_max_per_run: int = 50
+    surface_regen_prune_threshold: int = 10
+    maturation_fast_track_rehearsals: int = 10
+    maturation_fast_track_time_days: float = 1.0
     strategy_timeout_seconds: float = 120.0
     total_timeout_seconds: float = 600.0
+
+    def __post_init__(self) -> None:
+        """Validate config invariants to prevent degenerate behavior."""
+        if self.prune_semantic_factor < 0 or self.prune_semantic_factor > 1:
+            object.__setattr__(
+                self, "prune_semantic_factor", max(0.0, min(1.0, self.prune_semantic_factor))
+            )
+        if self.bridge_weight_floor < 0:
+            object.__setattr__(self, "bridge_weight_floor", 0.0)
+        if self.maturation_fast_track_rehearsals < 1:
+            object.__setattr__(self, "maturation_fast_track_rehearsals", 1)
+        if self.maturation_fast_track_time_days <= 0:
+            object.__setattr__(self, "maturation_fast_track_time_days", 0.1)
 
 
 @dataclass(frozen=True)
@@ -250,7 +270,7 @@ class ConsolidationEngine:
         self,
         storage: NeuralStorage,
         config: ConsolidationConfig | None = None,
-        dream_decay_multiplier: float = 10.0,
+        dream_decay_multiplier: float = 3.0,
         tier_config: TierConfig | None = None,
     ) -> None:
         self._storage = storage
@@ -402,8 +422,11 @@ class ConsolidationEngine:
         if not dry_run and (
             report.fibers_merged > 0
             or report.fibers_removed > 0
+            or report.fibers_compressed > 0
+            or report.synapses_pruned >= self._config.surface_regen_prune_threshold
             or report.extra.get("stale_flagged", 0) > 0
             or report.extra.get("cold_demoted", 0) > 0
+            or report.extra.get("lifecycle_states_updated", 0) > 0
         ):
             await self._regenerate_surface_after_consolidation()
 
@@ -486,14 +509,20 @@ class ConsolidationEngine:
         # Build fiber salience cache for high-salience protection
         fibers_for_salience = await self._storage.get_fibers(limit=10000)
         fiber_salience_cache: dict[str, list[Fiber]] = {}
+        semantic_neuron_ids: set[str] = set()
         for fib in fibers_for_salience:
             if fib.salience > 0.8:
                 for nid in fib.neuron_ids:
                     fiber_salience_cache.setdefault(nid, []).append(fib)
+            # Track neurons in semantic-stage fibers (mature merged fibers)
+            fib_meta = fib.metadata or {}
+            if fib_meta.get("_stage") == "semantic":
+                semantic_neuron_ids.update(fib.neuron_ids)
 
         # Pre-fetch neighbor counts for bridge detection (avoid N+1 queries)
         # Collect all unique source neuron IDs from synapses eligible for pruning
-        candidate_source_ids = list({s.source_id for s in all_synapses if s.weight >= 0.02})
+        bridge_floor = self._config.bridge_weight_floor
+        candidate_source_ids = list({s.source_id for s in all_synapses if s.weight >= bridge_floor})
         neighbor_synapses_map: dict[str, list[Synapse]] = {}
         if candidate_source_ids:
             neighbor_synapses_map = await self._storage.get_synapses_for_neurons(
@@ -542,7 +571,12 @@ class ConsolidationEngine:
             ):
                 decayed = decayed.decay(factor=0.33)
 
-            should_prune = decayed.weight < self._config.prune_weight_threshold
+            # Semantic-stage neurons use reduced threshold (harder to prune)
+            effective_prune_threshold = self._config.prune_weight_threshold
+            if synapse.source_id in semantic_neuron_ids or synapse.target_id in semantic_neuron_ids:
+                effective_prune_threshold *= self._config.prune_semantic_factor
+
+            should_prune = decayed.weight < effective_prune_threshold
 
             # Check inactivity
             if synapse.last_activated is not None:
@@ -566,7 +600,7 @@ class ConsolidationEngine:
 
             if should_prune:
                 # Protect bridge synapses (only connection between source and target)
-                if synapse.weight >= 0.02:
+                if synapse.weight >= bridge_floor:
                     out_synapses = neighbor_synapses_map.get(synapse.source_id, [])
                     neighbor_ids = {s.target_id for s in out_synapses}
                     if synapse.target_id in neighbor_ids and len(neighbor_ids) <= 1:
@@ -754,24 +788,24 @@ class ConsolidationEngine:
 
             if union_size > 0:
                 jaccard = intersection / union_size
-                # Lower threshold for temporally-close fibers
+                # Graduated temporal proximity: closer fibers need less overlap
                 if fiber_list[i].created_at and fiber_list[j].created_at:
                     time_diff = abs(
                         (fiber_list[i].created_at - fiber_list[j].created_at).total_seconds()
                     )
                 else:
                     time_diff = float("inf")
-                effective_threshold = (
-                    self._config.merge_overlap_threshold * 0.6
-                    if time_diff < 3600
-                    else self._config.merge_overlap_threshold
-                )
+                halflife = self._config.merge_temporal_halflife_seconds
+                # Smooth curve: 60% threshold at t=0, rising to 100% as t→∞
+                temporal_factor = 1.0 - 0.4 * math.exp(-time_diff / halflife)
+                effective_threshold = self._config.merge_overlap_threshold * temporal_factor
                 if jaccard >= effective_threshold:
                     uf.union(i, j)
 
         # --- T4.1: SimHash semantic merge pass ---
         # Fetch anchor neuron content_hash for content-based similarity
         simhash_roots: set[int] = set()  # C1 fix: track which roots got SimHash unions
+        anchor_neurons: dict[str, Any] = {}
         anchor_ids_unique = list(
             {
                 fiber_list[i].anchor_neuron_id
@@ -865,6 +899,26 @@ class ConsolidationEngine:
             if is_summary:
                 merge_metadata["_stage"] = "semantic"
                 merge_metadata["_summary_fiber"] = True
+                # Preserve original summaries for context recovery
+                original_summaries = [f.summary for f in member_fibers if f.summary][:10]
+                if original_summaries:
+                    merge_metadata["_original_summaries"] = original_summaries
+
+            # Build summary from anchor neuron content (not just "Merged from N")
+            anchor_ids_for_summary = list(dict.fromkeys(f.anchor_neuron_id for f in member_fibers))[
+                :3
+            ]
+            if anchor_ids_for_summary and anchor_neurons:
+                snippets = []
+                for aid in anchor_ids_for_summary:
+                    a_neuron = anchor_neurons.get(aid)
+                    if a_neuron and a_neuron.content:
+                        snippets.append(a_neuron.content[:80].strip())
+                merge_summary = (
+                    " | ".join(snippets) if snippets else f"Merged from {len(member_fibers)} fibers"
+                )
+            else:
+                merge_summary = f"Merged from {len(member_fibers)} fibers"
 
             merged_fiber = Fiber(
                 id=merged_fiber_id,
@@ -876,7 +930,7 @@ class ConsolidationEngine:
                 frequency=best_frequency,
                 auto_tags=merged_auto_tags,
                 agent_tags=merged_agent_tags,
-                summary=f"Merged from {len(member_fibers)} fibers",
+                summary=merge_summary,
                 metadata=merge_metadata,
                 created_at=min(f.created_at for f in member_fibers),
             )
@@ -1121,9 +1175,16 @@ class ConsolidationEngine:
         # Get all maturation records
         all_maturations = await self._storage.find_maturations()
 
-        # Phase 1: Advance stages
+        # Phase 1: Advance stages (with fast-track for high-recall memories)
+        ft_rehearsals = self._config.maturation_fast_track_rehearsals
+        ft_time = self._config.maturation_fast_track_time_days
         for record in all_maturations:
-            advanced = compute_stage_transition(record, now=reference_time)
+            advanced = compute_stage_transition(
+                record,
+                now=reference_time,
+                fast_track_rehearsals=ft_rehearsals,
+                fast_track_time_days=ft_time,
+            )
             if advanced.stage != record.stage:
                 report.stages_advanced += 1
                 if not dry_run:
@@ -1831,7 +1892,7 @@ class ConsolidationEngine:
         # --- T4.2 + T4.3: Fiber-level stale detection and access-based demotion ---
         await self._lifecycle_fiber_pass(report, reference_time, dry_run)
 
-    _VERSION_PATTERN: re.Pattern[str] = re.compile(r"\bv(\d+)\.(\d+)(?:\.\d+)?\b")
+    _VERSION_PATTERN: re.Pattern[str] = re.compile(r"(?<![A-Za-z])[vV](\d+)\.(\d+)(?:\.\d+)?\b")
 
     async def _lifecycle_fiber_pass(
         self,

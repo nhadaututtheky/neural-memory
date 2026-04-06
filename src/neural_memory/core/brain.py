@@ -53,7 +53,7 @@ class BrainConfig:
     emotional_weight_scale: float = 0.8
     sequential_window_seconds: float = 30.0
     dream_neuron_count: int = 5
-    dream_decay_multiplier: float = 10.0
+    dream_decay_multiplier: float = 3.0
     habit_min_frequency: int = 3
     habit_suggestion_min_weight: float = 0.8
     habit_suggestion_min_count: int = 5

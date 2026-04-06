@@ -87,7 +87,7 @@ class TestInferenceWeightReduction:
 
     def test_initial_weight_reduced(self) -> None:
         config = InferenceConfig()
-        assert config.inferred_initial_weight == 0.2
+        assert config.inferred_initial_weight == 0.3
 
     def test_max_weight_reduced(self) -> None:
         config = InferenceConfig()

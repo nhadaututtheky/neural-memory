@@ -157,9 +157,14 @@ async def reconsolidate_on_recall(
 
     drift = _jaccard_distance(original_tags, query_tags) if query_tags else 0.0
 
-    # Step 3: Create bridge synapse if drift exceeds threshold
+    # Step 3: Create bridge synapse if drift exceeds soft threshold
+    # Graduated response: start at 80% of threshold with weaker bridges
     bridge_created = False
-    if drift > threshold and query_entities:
+    soft_threshold = threshold * 0.8
+    if drift > soft_threshold and query_entities:
+        # Scale bridge weight: 0.15 at soft threshold, up to 0.3 at full drift
+        drift_ratio = min(1.0, (drift - soft_threshold) / (threshold * 0.5))
+        base_weight = 0.15 + 0.15 * drift_ratio
         bridges = 0
         for entity in query_entities[:_MAX_BRIDGE_PER_RECALL]:
             anchor_id = await _find_or_create_context_anchor(storage, entity, brain_id)
@@ -169,7 +174,7 @@ async def reconsolidate_on_recall(
                         source_id=anchor_neuron_id,
                         target_id=anchor_id,
                         type=SynapseType.RELATED_TO,
-                        weight=min(0.3, 0.2 * drift),
+                        weight=min(0.3, base_weight),
                         metadata={
                             "_reconsolidation_bridge": True,
                             "drift_score": round(drift, 3),

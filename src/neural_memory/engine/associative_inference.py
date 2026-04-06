@@ -22,7 +22,7 @@ class InferenceConfig:
 
     co_activation_threshold: int = 3
     co_activation_window_days: int = 7
-    inferred_initial_weight: float = 0.2
+    inferred_initial_weight: float = 0.3
     inferred_max_weight: float = 0.5
     weight_scale_factor: float = 0.1
     max_inferences_per_run: int = 50
