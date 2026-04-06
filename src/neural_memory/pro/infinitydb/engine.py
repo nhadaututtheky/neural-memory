@@ -780,6 +780,58 @@ class InfinityDB:
         """Whether Tantivy text index is available."""
         return self._text_index is not None and self._text_index.is_open
 
+    def find_neurons_by_content_batch(
+        self,
+        terms: list[str],
+        limit_per_term: int = 3,
+        neuron_type: str | None = None,
+        ephemeral: bool | None = None,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Batch find neurons matching multiple content_contains terms.
+
+        Returns results for all terms in a single pass, avoiding per-call overhead.
+        Uses Tantivy batch search when available, falls back to linear scan.
+        """
+        if self._text_index is not None:
+            batch_ids = self._text_index.search_contains_batch(terms, limit_per_term=limit_per_term * 3)
+            results: dict[str, list[dict[str, Any]]] = {}
+            # Cache metadata lookups across terms (same neuron may match multiple terms)
+            meta_cache: dict[str, dict[str, Any] | None] = {}
+            for term, nids in batch_ids.items():
+                matched: list[dict[str, Any]] = []
+                for nid in nids:
+                    if nid not in meta_cache:
+                        result = self._metadata.get_by_id(nid)
+                        if result is not None:
+                            _slot, meta = result
+                            meta_cache[nid] = dict(meta)
+                        else:
+                            meta_cache[nid] = None
+                    cached = meta_cache[nid]
+                    if cached is None:
+                        continue
+                    if neuron_type and cached.get("type") != neuron_type:
+                        continue
+                    if ephemeral is not None and cached.get("ephemeral") != ephemeral:
+                        continue
+                    matched.append(cached)
+                    if len(matched) >= limit_per_term:
+                        break
+                results[term] = matched
+            return results
+
+        # Fallback: individual linear scans
+        results = {}
+        for term in terms:
+            found = self._metadata.find(
+                content_contains=term,
+                limit=limit_per_term,
+                ephemeral=ephemeral,
+                neuron_type=neuron_type,
+            )
+            results[term] = [dict(meta) for _, meta in found]
+        return results
+
     # --- Synapse (Graph) API ---
 
     async def add_synapse(

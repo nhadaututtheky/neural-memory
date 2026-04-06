@@ -1916,17 +1916,7 @@ class ReflexPipeline:
                 ]
             )
 
-        # 2 & 3. Entity + keyword anchors (parallel)
-        entity_tasks = [
-            self._storage.find_neurons(
-                content_contains=entity.text,
-                limit=3,
-                ephemeral=ephemeral_filter,
-                created_before=created_before,
-            )
-            for entity in stimulus.entities
-        ]
-
+        # 2 & 3. Entity + keyword anchors
         # Expand keywords for better recall (morphological + smart expansion)
         expanded_keywords = self._expand_query_terms(list(stimulus.keywords[:5]))
 
@@ -1975,27 +1965,65 @@ class ReflexPipeline:
             except Exception:
                 logger.debug("IDF anchor limit computation failed (non-critical)", exc_info=True)
 
-        keyword_tasks = [
-            self._storage.find_neurons(
-                content_contains=keyword,
-                limit=kw_limits.get(keyword, _default_kw_limit),
-                ephemeral=ephemeral_filter,
-                created_before=created_before,
-            )
-            for keyword in normalized[:15]  # cap at 15 (expanded with Vietnamese variants)
-        ]
-
         entity_anchors: list[str] = []
         keyword_anchors: list[str] = []
-        all_tasks = entity_tasks + keyword_tasks
-        if all_tasks:
-            all_results = await asyncio.gather(*all_tasks)
 
-            for neurons in all_results[: len(entity_tasks)]:
-                entity_anchors.extend(n.id for n in neurons)
+        # Batch path: use find_neurons_by_content_batch when available (InfinityDB)
+        _has_batch = hasattr(self._storage, "find_neurons_by_content_batch")
+        if _has_batch and (stimulus.entities or normalized):
+            entity_terms = [e.text for e in stimulus.entities]
+            kw_terms = list(normalized[:15])
+            all_terms = entity_terms + kw_terms
+            if all_terms:
+                max_limit = max(
+                    3,  # entity default
+                    max(
+                        (kw_limits.get(kw, _default_kw_limit) for kw in kw_terms),
+                        default=_default_kw_limit,
+                    ),
+                )
+                batch_results = await self._storage.find_neurons_by_content_batch(
+                    terms=all_terms,
+                    limit_per_term=max_limit,
+                    ephemeral=ephemeral_filter,
+                    created_before=created_before,
+                )
+                for et in entity_terms:
+                    entity_anchors.extend(n.id for n in batch_results.get(et, [])[:3])
+                for kw in kw_terms:
+                    kw_limit = kw_limits.get(kw, _default_kw_limit)
+                    keyword_anchors.extend(
+                        n.id for n in batch_results.get(kw, [])[:kw_limit]
+                    )
+        else:
+            # Standard path: individual find_neurons calls (SQLite, etc.)
+            entity_tasks = [
+                self._storage.find_neurons(
+                    content_contains=entity.text,
+                    limit=3,
+                    ephemeral=ephemeral_filter,
+                    created_before=created_before,
+                )
+                for entity in stimulus.entities
+            ]
+            keyword_tasks = [
+                self._storage.find_neurons(
+                    content_contains=keyword,
+                    limit=kw_limits.get(keyword, _default_kw_limit),
+                    ephemeral=ephemeral_filter,
+                    created_before=created_before,
+                )
+                for keyword in normalized[:15]
+            ]
+            all_tasks = entity_tasks + keyword_tasks
+            if all_tasks:
+                all_results = await asyncio.gather(*all_tasks)
 
-            for neurons in all_results[len(entity_tasks) :]:
-                keyword_anchors.extend(n.id for n in neurons)
+                for neurons in all_results[: len(entity_tasks)]:
+                    entity_anchors.extend(n.id for n in neurons)
+
+                for neurons in all_results[len(entity_tasks) :]:
+                    keyword_anchors.extend(n.id for n in neurons)
 
             if entity_anchors:
                 anchor_sets.append(entity_anchors)

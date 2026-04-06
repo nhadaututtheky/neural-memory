@@ -193,6 +193,55 @@ class TextIndex:
         hits = self.search(substring, limit=limit)
         return [nid for nid, _score in hits]
 
+    def search_contains_batch(
+        self,
+        terms: list[str],
+        limit_per_term: int = 3,
+    ) -> dict[str, list[str]]:
+        """Batch search for multiple terms at once.
+
+        More efficient than calling search_contains() per term because
+        it runs a single combined query and maps results back to terms.
+
+        Args:
+            terms: List of search terms.
+            limit_per_term: Max results per term.
+
+        Returns:
+            Dict mapping each term to a list of matching neuron_ids.
+        """
+        if not self._is_open or self._index is None or not terms:
+            return {t: [] for t in terms}
+
+        if self._dirty:
+            try:
+                self.commit()
+            except Exception:
+                logger.debug("Tantivy auto-commit before batch search failed", exc_info=True)
+
+        # Build per-term results using individual Tantivy queries (fast: <0.2ms each)
+        results: dict[str, list[str]] = {}
+        try:
+            searcher = self._index.searcher()
+            for term in terms:
+                try:
+                    parsed = self._index.parse_query(term, ["content"])
+                    search_results = searcher.search(parsed, limit=limit_per_term)
+                    nids: list[str] = []
+                    for _score, doc_address in search_results.hits:
+                        doc = searcher.doc(doc_address)
+                        nid_list = doc["neuron_id"]
+                        if nid_list:
+                            nids.append(nid_list[0])
+                    results[term] = nids
+                except Exception:
+                    results[term] = []
+        except Exception:
+            logger.debug("Tantivy batch search failed", exc_info=True)
+            return {t: [] for t in terms}
+
+        return results
+
     @property
     def count(self) -> int:
         """Approximate document count."""

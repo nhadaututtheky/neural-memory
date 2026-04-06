@@ -344,6 +344,29 @@ class InfinityDBStorage(
 
         return neurons[:limit]
 
+    async def find_neurons_by_content_batch(
+        self,
+        terms: list[str],
+        limit_per_term: int = 3,
+        ephemeral: bool | None = None,
+        created_before: datetime | None = None,
+    ) -> dict[str, list[Neuron]]:
+        """Batch find neurons matching multiple content_contains terms."""
+        raw = self.db.find_neurons_by_content_batch(
+            terms=terms,
+            limit_per_term=limit_per_term * 2 if created_before else limit_per_term,
+            ephemeral=ephemeral,
+        )
+        results: dict[str, list[Neuron]] = {}
+        for term, metas in raw.items():
+            neurons = [_meta_to_neuron(m) for m in metas]
+            if created_before is not None:
+                neurons = [
+                    n for n in neurons if n.created_at is not None and n.created_at < created_before
+                ]
+            results[term] = neurons[:limit_per_term]
+        return results
+
     async def suggest_neurons(
         self, prefix: str, type_filter: NeuronType | None = None, limit: int = 5
     ) -> list[dict[str, Any]]:
