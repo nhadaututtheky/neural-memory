@@ -792,12 +792,18 @@ class InfinityDB:
         Returns results for all terms in a single pass, avoiding per-call overhead.
         Uses Tantivy batch search when available, falls back to linear scan.
         """
+        results: dict[str, list[dict[str, Any]]] = {}
+
         if self._text_index is not None:
             batch_ids = self._text_index.search_contains_batch(terms, limit_per_term=limit_per_term * 3)
-            results: dict[str, list[dict[str, Any]]] = {}
             # Cache metadata lookups across terms (same neuron may match multiple terms)
             meta_cache: dict[str, dict[str, Any] | None] = {}
+            fallback_terms: list[str] = []
             for term, nids in batch_ids.items():
+                if not nids:
+                    # Tantivy miss — fall back to linear scan for this term
+                    fallback_terms.append(term)
+                    continue
                 matched: list[dict[str, Any]] = []
                 for nid in nids:
                     if nid not in meta_cache:
@@ -818,11 +824,11 @@ class InfinityDB:
                     if len(matched) >= limit_per_term:
                         break
                 results[term] = matched
-            return results
+        else:
+            fallback_terms = list(terms)
 
-        # Fallback: individual linear scans
-        results = {}
-        for term in terms:
+        # Linear scan fallback for terms with no Tantivy hits
+        for term in fallback_terms:
             found = self._metadata.find(
                 content_contains=term,
                 limit=limit_per_term,
@@ -830,6 +836,7 @@ class InfinityDB:
                 neuron_type=neuron_type,
             )
             results[term] = [dict(meta) for _, meta in found]
+
         return results
 
     # --- Synapse (Graph) API ---

@@ -569,6 +569,10 @@ async def run_scale(
     result.encode_elapsed_sec = encode_elapsed
     result.encode_rate = n_memories / encode_elapsed
 
+    # Flush InfinityDB stores (including Tantivy text index) before recall
+    if hasattr(storage, "db") and hasattr(storage.db, "flush"):
+        await storage.db.flush()
+
     # Get actual counts
     brain_id = getattr(storage, "_current_brain_id", None)
     if brain_id is None and hasattr(storage, "db"):
