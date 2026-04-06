@@ -491,13 +491,13 @@ class InfinityDB:
 
     async def get_neuron(self, neuron_id: str) -> dict[str, Any] | None:
         """Get a neuron by ID. Auto-promotes tier on access."""
-        result = await asyncio.to_thread(self._metadata.get_by_id, neuron_id)
+        result = self._metadata.get_by_id(neuron_id)
         if result is None:
             return None
         slot, meta = result
 
         # Auto-promote tier on access
-        await self._maybe_promote(slot, meta)
+        self._maybe_promote_sync(slot, meta)
 
         return dict(meta)
 
@@ -513,8 +513,7 @@ class InfinityDB:
         ephemeral: bool | None = None,
     ) -> list[dict[str, Any]]:
         """Find neurons matching filters."""
-        results = await asyncio.to_thread(
-            self._metadata.find,
+        results = self._metadata.find(
             neuron_type=neuron_type,
             content_contains=content_contains,
             content_exact=content_exact,
@@ -748,12 +747,12 @@ class InfinityDB:
             direction: "outgoing", "incoming", or "both"
         """
         if direction == "outgoing":
-            return await asyncio.to_thread(self._graph.get_outgoing, neuron_id)
+            return self._graph.get_outgoing(neuron_id)
         elif direction == "incoming":
-            return await asyncio.to_thread(self._graph.get_incoming, neuron_id)
+            return self._graph.get_incoming(neuron_id)
         else:
-            out = await asyncio.to_thread(self._graph.get_outgoing, neuron_id)
-            inc = await asyncio.to_thread(self._graph.get_incoming, neuron_id)
+            out = self._graph.get_outgoing(neuron_id)
+            inc = self._graph.get_incoming(neuron_id)
             # Deduplicate self-loop edges that appear in both directions
             seen: set[str] = set()
             merged: list[dict[str, Any]] = []
@@ -771,7 +770,7 @@ class InfinityDB:
 
     async def update_synapse(self, edge_id: str, updates: dict[str, Any]) -> bool:
         """Update synapse weight, type, or metadata."""
-        return await asyncio.to_thread(self._graph.update_edge, edge_id, updates)
+        return self._graph.update_edge(edge_id, updates)
 
     async def get_neighbors(
         self,
@@ -781,8 +780,7 @@ class InfinityDB:
         edge_type: str | None = None,
     ) -> list[str]:
         """Get neighbor neuron IDs."""
-        return await asyncio.to_thread(
-            self._graph.get_neighbors,
+        return self._graph.get_neighbors(
             neuron_id,
             direction=direction,
             edge_type=edge_type,
@@ -809,7 +807,7 @@ class InfinityDB:
 
     async def get_subgraph(self, neuron_ids: list[str]) -> list[dict[str, Any]]:
         """Get all edges within a set of neurons (induced subgraph)."""
-        return await asyncio.to_thread(self._graph.get_subgraph, neuron_ids)
+        return self._graph.get_subgraph(neuron_ids)
 
     # --- Fiber API ---
 
@@ -849,7 +847,7 @@ class InfinityDB:
 
     async def get_fiber(self, fiber_id: str) -> dict[str, Any] | None:
         """Get fiber by ID."""
-        return await asyncio.to_thread(self._fibers.get_fiber, fiber_id)
+        return self._fibers.get_fiber(fiber_id)
 
     async def find_fibers(
         self,
@@ -859,8 +857,7 @@ class InfinityDB:
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         """Find fibers matching filters."""
-        return await asyncio.to_thread(
-            self._fibers.find_fibers,
+        return self._fibers.find_fibers(
             name_contains=name_contains,
             fiber_type=fiber_type,
             limit=limit,
@@ -876,7 +873,7 @@ class InfinityDB:
 
     async def get_fibers_for_neuron(self, neuron_id: str) -> list[str]:
         """Get all fiber IDs containing a neuron."""
-        return await asyncio.to_thread(self._fibers.get_fibers_for_neuron, neuron_id)
+        return self._fibers.get_fibers_for_neuron(neuron_id)
 
     async def delete_fiber(self, fiber_id: str) -> bool:
         """Delete a fiber."""
@@ -900,8 +897,8 @@ class InfinityDB:
 
     # --- Tier Management ---
 
-    async def _maybe_promote(self, slot: int, meta: dict[str, Any]) -> None:
-        """Promote neuron tier if access pattern warrants it.
+    def _maybe_promote_sync(self, slot: int, meta: dict[str, Any]) -> None:
+        """Promote neuron tier if access pattern warrants it (sync, no thread hop).
 
         Updates accessed_at and access_count before classifying so the
         tier decision reflects the current access, not stale state.
@@ -911,11 +908,7 @@ class InfinityDB:
         # Update access stats before classifying
         now = _utcnow()
         access_count = meta.get("access_count", 0) + 1
-        await asyncio.to_thread(
-            self._metadata.update,
-            slot,
-            {"accessed_at": now, "access_count": access_count},
-        )
+        self._metadata.update(slot, {"accessed_at": now, "access_count": access_count})
         meta["accessed_at"] = now
         meta["access_count"] = access_count
 
@@ -927,14 +920,18 @@ class InfinityDB:
 
         target = self._tier_manager.should_promote(meta, current_tier)
         if target is not None and target != current_tier:
-            await asyncio.to_thread(self._metadata.update, slot, {"tier": int(target)})
+            self._metadata.update(slot, {"tier": int(target)})
             meta["tier"] = int(target)
             logger.debug(
-                "Promoted neuron %s: %s → %s",
+                "Promoted neuron %s: %s -> %s",
                 meta.get("id", "?"),
                 current_tier.name,
                 target.name,
             )
+
+    async def _maybe_promote(self, slot: int, meta: dict[str, Any]) -> None:
+        """Async wrapper for backward compatibility."""
+        self._maybe_promote_sync(slot, meta)
 
     async def demote_sweep(self) -> dict[str, int]:
         """Scan all neurons and demote those whose tier should decrease.

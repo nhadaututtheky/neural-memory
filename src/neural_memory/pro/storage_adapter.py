@@ -297,6 +297,17 @@ class InfinityDBStorage(
             return None
         return _meta_to_neuron(meta)
 
+    async def get_neurons_batch(self, neuron_ids: list[str]) -> dict[str, Neuron]:
+        """Batch get neurons — direct in-memory lookup, no per-ID thread hop."""
+        results: dict[str, Neuron] = {}
+        for nid in neuron_ids:
+            result = self.db._metadata.get_by_id(nid)
+            if result is not None:
+                _slot, meta = result
+                self.db._maybe_promote_sync(_slot, meta)
+                results[nid] = _meta_to_neuron(dict(meta))
+        return results
+
     async def find_neurons(
         self,
         type: NeuronType | None = None,
@@ -426,6 +437,24 @@ class InfinityDBStorage(
 
         return synapses
 
+    async def get_synapses_for_neurons(
+        self,
+        neuron_ids: list[str],
+        direction: str = "out",
+    ) -> dict[str, list[Synapse]]:
+        """Batch get synapses — direct in-memory graph lookup."""
+        dir_map = {"out": "outgoing", "in": "incoming", "both": "both"}
+        infdb_dir = dir_map.get(direction, "outgoing")
+        results: dict[str, list[Synapse]] = {}
+        for nid in neuron_ids:
+            edges = self.db._graph.get_outgoing(nid) if infdb_dir == "outgoing" else (
+                self.db._graph.get_incoming(nid) if infdb_dir == "incoming" else (
+                    self.db._graph.get_outgoing(nid) + self.db._graph.get_incoming(nid)
+                )
+            )
+            results[nid] = [_meta_to_synapse(e) for e in edges]
+        return results
+
     async def update_synapse(self, synapse: Synapse) -> None:
         await self.db.update_synapse(
             synapse.id,
@@ -450,23 +479,32 @@ class InfinityDBStorage(
         dir_map = {"out": "outgoing", "in": "incoming", "both": "both"}
         edges = await self.db.get_synapses(neuron_id, direction=dir_map.get(direction, "both"))
 
-        results: list[tuple[Neuron, Synapse]] = []
+        # Pre-filter edges and collect neighbor IDs
+        filtered_edges: list[tuple[str, Synapse]] = []
         for edge in edges:
             synapse = _meta_to_synapse(edge)
             if synapse_types and synapse.type not in synapse_types:
                 continue
             if min_weight is not None and synapse.weight < min_weight:
                 continue
-
             neighbor_id = (
                 edge.get("target_id")
                 if edge.get("source_id") == neuron_id
                 else edge.get("source_id")
             )
-            if not neighbor_id:
-                continue
+            if neighbor_id:
+                filtered_edges.append((neighbor_id, synapse))
 
-            neuron = await self.get_neuron(neighbor_id)
+        if not filtered_edges:
+            return []
+
+        # Batch fetch all neighbor neurons at once (no per-ID thread hop)
+        neighbor_ids = [nid for nid, _ in filtered_edges]
+        neurons_batch = await self.get_neurons_batch(neighbor_ids)
+
+        results: list[tuple[Neuron, Synapse]] = []
+        for nid, synapse in filtered_edges:
+            neuron = neurons_batch.get(nid)
             if neuron is not None:
                 results.append((neuron, synapse))
 
@@ -594,6 +632,41 @@ class InfinityDBStorage(
             tag_mode=tag_mode,
         )
         return filtered[:limit]
+
+    async def find_fibers_batch(
+        self,
+        neuron_ids: list[str],
+        limit_per_neuron: int = 10,
+        tags: set[str] | None = None,
+        tag_mode: str = "and",
+        created_before: datetime | None = None,
+    ) -> list[Fiber]:
+        """Batch find fibers — direct in-memory lookup, no per-ID thread hop."""
+        seen_ids: set[str] = set()
+        all_fibers: list[Fiber] = []
+        for nid in neuron_ids:
+            fiber_ids = self.db._fibers.get_fibers_for_neuron(nid)
+            count = 0
+            for fid in fiber_ids:
+                if fid in seen_ids:
+                    continue
+                seen_ids.add(fid)
+                raw = self.db._fibers.get_fiber(fid)
+                if raw is not None:
+                    fiber = _meta_to_fiber(raw)
+                    if tags:
+                        fiber_tags = set(fiber.tags) if fiber.tags else set()
+                        if tag_mode == "and" and not tags.issubset(fiber_tags):
+                            continue
+                        if tag_mode == "or" and not tags.intersection(fiber_tags):
+                            continue
+                    if created_before and fiber.created_at and fiber.created_at > created_before:
+                        continue
+                    all_fibers.append(fiber)
+                    count += 1
+                    if count >= limit_per_neuron:
+                        break
+        return all_fibers
 
     async def update_fiber(self, fiber: Fiber) -> None:
         # InfinityDB FiberStore doesn't have update_fiber — delete + re-add

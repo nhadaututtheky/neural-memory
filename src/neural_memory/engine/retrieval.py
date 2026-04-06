@@ -235,6 +235,7 @@ class ReflexPipeline:
             RetrievalResult with answer and context
         """
         start_time = time.perf_counter()
+        _phase_timings: dict[str, float] = {}
 
         # Clear stale writes from any previous failed query
         self._write_queue.clear()
@@ -248,6 +249,7 @@ class ReflexPipeline:
 
         # 1. Parse query into stimulus
         stimulus = self._parser.parse(query, reference_time)
+        _phase_timings["parse"] = (time.perf_counter() - start_time) * 1000
 
         # 2. Auto-detect depth if not specified
         _depth_decision: DepthDecision | None = None
@@ -306,6 +308,7 @@ class ReflexPipeline:
 
             neuron_hashes = await self._storage.get_neuron_hashes()
             exclude_ids = compute_exclude_set(query, neuron_hashes, effective_simhash)
+        _phase_timings["simhash_prefilter"] = (time.perf_counter() - start_time) * 1000
 
         # 3. Find anchor neurons (time-first) with ranked results
         anchor_sets, ranked_lists = await self._find_anchors_ranked(
@@ -332,6 +335,7 @@ class ReflexPipeline:
             )
             if fused_scores:
                 anchor_activations = rrf_to_activation_levels(fused_scores)
+        _phase_timings["anchors_rrf"] = (time.perf_counter() - start_time) * 1000
 
         # 3.7 Predictive priming: merge session-aware activation boosts
         _priming_result = None
@@ -479,6 +483,7 @@ class ReflexPipeline:
                 anchor_activations=anchor_activations,
             )
             co_activations = []
+        _phase_timings["activation"] = (time.perf_counter() - start_time) * 1000
 
         # 4.5 Lateral inhibition: top-K winners suppress competitors
         activations = self._apply_lateral_inhibition(activations)
@@ -491,6 +496,7 @@ class ReflexPipeline:
 
         # 4.75 Apply causal semantics: role-aware post-processing
         activations = await self._apply_causal_semantics(activations)
+        _phase_timings["post_activation"] = (time.perf_counter() - start_time) * 1000
 
         # 4.8 Sufficiency check: early exit if signal is too weak
         from neural_memory.engine.sufficiency import GateCalibration, check_sufficiency
@@ -522,6 +528,7 @@ class ReflexPipeline:
 
         if not _sufficiency.sufficient:
             _early_latency = (time.perf_counter() - start_time) * 1000
+            _phase_timings["early_exit"] = _early_latency
             _early_result = RetrievalResult(
                 answer=None,
                 confidence=_sufficiency.confidence,
@@ -543,6 +550,7 @@ class ReflexPipeline:
                     "sufficiency_gate": _sufficiency.gate,
                     "sufficiency_reason": _sufficiency.reason,
                     "sufficiency_confidence": _sufficiency.confidence,
+                    "phase_timings_ms": _phase_timings,
                 },
             )
             # Flush any pending writes even on early exit
@@ -615,6 +623,7 @@ class ReflexPipeline:
             session_topics=_session_topics,
             created_before=as_of,
         )
+        _phase_timings["fibers"] = (time.perf_counter() - start_time) * 1000
 
         # 6. Extract subgraph
         neuron_ids, synapse_ids = await self._activator.get_activated_subgraph(
@@ -654,6 +663,7 @@ class ReflexPipeline:
             encryptor=_encryptor,
             brain_id=_brain_id,
         )
+        _phase_timings["reconstruction"] = (time.perf_counter() - start_time) * 1000
 
         latency_ms = (time.perf_counter() - start_time) * 1000
 
@@ -708,6 +718,7 @@ class ReflexPipeline:
                 "activation_levels": {
                     nid: round(ar.activation_level, 4) for nid, ar in activations.items()
                 },
+                "phase_timings_ms": _phase_timings,
             },
         )
 
