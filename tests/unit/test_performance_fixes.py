@@ -153,6 +153,9 @@ class TestEmbeddingFallback:
             metadata={"_embedding": [0.1, 0.2, 0.3]},
         )
         mock_storage.find_neurons = AsyncMock(return_value=[neuron])
+        # Remove auto-created knn_search so hasattr() is False → uses fallback path
+        if hasattr(mock_storage, "knn_search"):
+            del mock_storage.knn_search
 
         pipeline = ReflexPipeline(
             storage=mock_storage,
