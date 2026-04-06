@@ -205,7 +205,13 @@ class BrainOpsMixin:
         target_brain_id: str | None = None,
     ) -> str:
         brain_id = target_brain_id or snapshot.brain_id
-        config = BrainConfig(**snapshot.config)
+        # Filter to known BrainConfig fields — packages from older/newer
+        # versions may contain keys that don't exist in this version.
+        import dataclasses as _dc
+
+        _known_fields = {f.name for f in _dc.fields(BrainConfig)}
+        _filtered_config = {k: v for k, v in snapshot.config.items() if k in _known_fields}
+        config = BrainConfig(**_filtered_config)
         brain = Brain.create(
             name=snapshot.brain_name,
             config=config,
@@ -240,10 +246,10 @@ class BrainOpsMixin:
         row = await d.fetch_one(
             f"""SELECT
                 (SELECT COUNT(*) FROM neurons WHERE brain_id = {d.ph(1)}) AS neuron_count,
-                (SELECT COUNT(*) FROM synapses WHERE brain_id = {d.ph(1)}) AS synapse_count,
-                (SELECT COUNT(*) FROM fibers WHERE brain_id = {d.ph(1)}) AS fiber_count
+                (SELECT COUNT(*) FROM synapses WHERE brain_id = {d.ph(2)}) AS synapse_count,
+                (SELECT COUNT(*) FROM fibers WHERE brain_id = {d.ph(3)}) AS fiber_count
             """,
-            [brain_id],
+            [brain_id, brain_id, brain_id],
         )
         return {
             "neuron_count": int(row["neuron_count"]) if row else 0,
@@ -408,14 +414,32 @@ class BrainOpsMixin:
             ["brain_id", "neuron_id"],
         )
 
+        import logging as _logging
+
+        _log = _logging.getLogger(__name__)
+
         for n_data in neurons_data:
-            neuron = Neuron(
-                id=n_data["id"],
-                type=NeuronType(n_data["type"]),
-                content=n_data["content"],
-                metadata=n_data.get("metadata", {}),
-                created_at=datetime.fromisoformat(n_data["created_at"]),
-            )
+            try:
+                try:
+                    neuron_type = NeuronType(n_data["type"])
+                except ValueError:
+                    # Unknown type (e.g. MemoryType "fact"/"decision" from older exports)
+                    # — store raw value in metadata, use CONCEPT as fallback.
+                    neuron_type = NeuronType.CONCEPT
+                    meta = {**n_data.get("metadata", {}), "original_type": n_data["type"]}
+                    n_data = {**n_data, "metadata": meta}
+                neuron = Neuron(
+                    id=n_data["id"],
+                    type=neuron_type,
+                    content=n_data.get("content", ""),
+                    metadata=n_data.get("metadata", {}),
+                    created_at=datetime.fromisoformat(n_data["created_at"])
+                    if n_data.get("created_at")
+                    else utcnow(),
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                _log.warning("Skipping neuron %s: %s", n_data.get("id", "?"), exc)
+                continue
             await d.execute(
                 upsert_sql,
                 [
@@ -464,17 +488,31 @@ class BrainOpsMixin:
         )
 
         for s_data in synapses_data:
-            synapse = Synapse(
-                id=s_data["id"],
-                source_id=s_data["source_id"],
-                target_id=s_data["target_id"],
-                type=SynapseType(s_data["type"]),
-                weight=s_data["weight"],
-                direction=Direction(s_data.get("direction", "uni")),
-                metadata=s_data.get("metadata", {}),
-                reinforced_count=s_data.get("reinforced_count", 0),
-                created_at=datetime.fromisoformat(s_data["created_at"]),
-            )
+            try:
+                try:
+                    synapse_type = SynapseType(s_data["type"])
+                except ValueError:
+                    synapse_type = SynapseType.RELATED_TO
+                try:
+                    direction = Direction(s_data.get("direction", "uni"))
+                except ValueError:
+                    direction = Direction.UNIDIRECTIONAL
+                synapse = Synapse(
+                    id=s_data["id"],
+                    source_id=s_data["source_id"],
+                    target_id=s_data["target_id"],
+                    type=synapse_type,
+                    weight=float(s_data.get("weight", 0.5)),
+                    direction=direction,
+                    metadata=s_data.get("metadata", {}),
+                    reinforced_count=int(s_data.get("reinforced_count", 0)),
+                    created_at=datetime.fromisoformat(s_data["created_at"])
+                    if s_data.get("created_at")
+                    else utcnow(),
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                _log.warning("Skipping synapse %s: %s", s_data.get("id", "?"), exc)
+                continue
             await d.execute(
                 upsert_sql,
                 [
@@ -549,33 +587,42 @@ class BrainOpsMixin:
         )
 
         for f_data in fibers_data:
-            auto_tags = set(f_data.get("auto_tags", []))
-            agent_tags = set(f_data.get("agent_tags", []))
-            if not auto_tags and not agent_tags:
-                agent_tags = set(f_data.get("tags", []))
+            try:
+                auto_tags = set(f_data.get("auto_tags", []))
+                agent_tags = set(f_data.get("agent_tags", []))
+                if not auto_tags and not agent_tags:
+                    agent_tags = set(f_data.get("tags", []))
 
-            fiber = Fiber(
-                id=f_data["id"],
-                neuron_ids=set(f_data["neuron_ids"]),
-                synapse_ids=set(f_data["synapse_ids"]),
-                anchor_neuron_id=f_data["anchor_neuron_id"],
-                time_start=(
-                    datetime.fromisoformat(f_data["time_start"])
-                    if f_data.get("time_start")
-                    else None
-                ),
-                time_end=(
-                    datetime.fromisoformat(f_data["time_end"]) if f_data.get("time_end") else None
-                ),
-                coherence=f_data.get("coherence", 0.0),
-                salience=f_data.get("salience", 0.0),
-                frequency=f_data.get("frequency", 0),
-                summary=f_data.get("summary"),
-                auto_tags=auto_tags,
-                agent_tags=agent_tags,
-                metadata=f_data.get("metadata", {}),
-                created_at=datetime.fromisoformat(f_data["created_at"]),
-            )
+                fiber = Fiber(
+                    id=f_data["id"],
+                    neuron_ids=set(f_data.get("neuron_ids", [])),
+                    synapse_ids=set(f_data.get("synapse_ids", [])),
+                    anchor_neuron_id=f_data.get("anchor_neuron_id", ""),
+                    time_start=(
+                        datetime.fromisoformat(f_data["time_start"])
+                        if f_data.get("time_start")
+                        else None
+                    ),
+                    time_end=(
+                        datetime.fromisoformat(f_data["time_end"])
+                        if f_data.get("time_end")
+                        else None
+                    ),
+                    coherence=f_data.get("coherence", 0.0),
+                    salience=f_data.get("salience", 0.0),
+                    frequency=f_data.get("frequency", 0),
+                    summary=f_data.get("summary"),
+                    auto_tags=auto_tags,
+                    agent_tags=agent_tags,
+                    metadata=f_data.get("metadata", {}),
+                    created_at=datetime.fromisoformat(f_data["created_at"])
+                    if f_data.get("created_at")
+                    else utcnow(),
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                _log.warning("Skipping fiber %s: %s", f_data.get("id", "?"), exc)
+                continue
+
             all_tags = sorted(fiber.auto_tags | fiber.agent_tags)
 
             await d.execute(
@@ -613,60 +660,74 @@ class BrainOpsMixin:
 
     async def _import_projects(self, projects_data: list[dict[str, Any]]) -> None:
         for p_data in projects_data:
-            project = Project(
-                id=p_data["id"],
-                name=p_data["name"],
-                description=p_data.get("description", ""),
-                start_date=datetime.fromisoformat(p_data["start_date"]),
-                end_date=(
-                    datetime.fromisoformat(p_data["end_date"]) if p_data.get("end_date") else None
-                ),
-                tags=frozenset(p_data.get("tags", [])),
-                priority=p_data.get("priority", 1.0),
-                metadata=p_data.get("metadata", {}),
-                created_at=datetime.fromisoformat(p_data["created_at"]),
-            )
-            await self.add_project(project)
+            try:
+                project = Project(
+                    id=p_data["id"],
+                    name=p_data["name"],
+                    description=p_data.get("description", ""),
+                    start_date=datetime.fromisoformat(p_data["start_date"])
+                    if p_data.get("start_date")
+                    else utcnow(),
+                    end_date=(
+                        datetime.fromisoformat(p_data["end_date"])
+                        if p_data.get("end_date")
+                        else None
+                    ),
+                    tags=frozenset(p_data.get("tags", [])),
+                    priority=p_data.get("priority", 1.0),
+                    metadata=p_data.get("metadata", {}),
+                    created_at=datetime.fromisoformat(p_data["created_at"])
+                    if p_data.get("created_at")
+                    else utcnow(),
+                )
+                await self.add_project(project)
+            except (KeyError, TypeError, ValueError) as exc:
+                _log.warning("Skipping project %s: %s", p_data.get("id", "?"), exc)
 
     async def _import_typed_memories(
         self,
         typed_memories_data: list[dict[str, Any]],
     ) -> None:
         for tm_data in typed_memories_data:
-            prov_data = tm_data.get("provenance", {})
-            provenance = Provenance(
-                source=prov_data.get("source", "import"),
-                confidence=Confidence(prov_data.get("confidence", "medium")),
-                verified=prov_data.get("verified", False),
-                verified_at=(
-                    datetime.fromisoformat(prov_data["verified_at"])
-                    if prov_data.get("verified_at")
-                    else None
-                ),
-                created_by=prov_data.get("created_by", "import"),
-                last_confirmed=(
-                    datetime.fromisoformat(prov_data["last_confirmed"])
-                    if prov_data.get("last_confirmed")
-                    else None
-                ),
-            )
+            try:
+                prov_data = tm_data.get("provenance", {})
+                provenance = Provenance(
+                    source=prov_data.get("source", "import"),
+                    confidence=Confidence(prov_data.get("confidence", "medium")),
+                    verified=prov_data.get("verified", False),
+                    verified_at=(
+                        datetime.fromisoformat(prov_data["verified_at"])
+                        if prov_data.get("verified_at")
+                        else None
+                    ),
+                    created_by=prov_data.get("created_by", "import"),
+                    last_confirmed=(
+                        datetime.fromisoformat(prov_data["last_confirmed"])
+                        if prov_data.get("last_confirmed")
+                        else None
+                    ),
+                )
 
-            typed_memory = TypedMemory(
-                fiber_id=tm_data["fiber_id"],
-                memory_type=MemoryType(tm_data["memory_type"]),
-                priority=Priority(tm_data["priority"]),
-                provenance=provenance,
-                expires_at=(
-                    datetime.fromisoformat(tm_data["expires_at"])
-                    if tm_data.get("expires_at")
-                    else None
-                ),
-                project_id=tm_data.get("project_id"),
-                tags=frozenset(tm_data.get("tags", [])),
-                metadata=tm_data.get("metadata", {}),
-                created_at=datetime.fromisoformat(tm_data["created_at"]),
-            )
-            await self.add_typed_memory(typed_memory)
+                typed_memory = TypedMemory(
+                    fiber_id=tm_data["fiber_id"],
+                    memory_type=MemoryType(tm_data["memory_type"]),
+                    priority=Priority(tm_data.get("priority", "normal")),
+                    provenance=provenance,
+                    expires_at=(
+                        datetime.fromisoformat(tm_data["expires_at"])
+                        if tm_data.get("expires_at")
+                        else None
+                    ),
+                    project_id=tm_data.get("project_id"),
+                    tags=frozenset(tm_data.get("tags", [])),
+                    metadata=tm_data.get("metadata", {}),
+                    created_at=datetime.fromisoformat(tm_data["created_at"])
+                    if tm_data.get("created_at")
+                    else utcnow(),
+                )
+                await self.add_typed_memory(typed_memory)
+            except (KeyError, TypeError, ValueError) as exc:
+                _log.warning("Skipping typed memory %s: %s", tm_data.get("fiber_id", "?"), exc)
 
 
 # ---------------------------------------------------------------------------

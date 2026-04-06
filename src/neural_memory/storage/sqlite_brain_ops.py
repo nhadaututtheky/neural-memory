@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -21,6 +22,8 @@ from neural_memory.core.project import Project
 from neural_memory.core.synapse import Direction, Synapse, SynapseType
 from neural_memory.storage.sqlite_row_mappers import row_to_brain
 from neural_memory.utils.timeutils import utcnow
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import aiosqlite
@@ -153,7 +156,11 @@ class SQLiteBrainMixin:
     ) -> str:
         brain_id = target_brain_id or snapshot.brain_id
 
-        config = BrainConfig(**snapshot.config)
+        import dataclasses as _dc
+
+        _known_fields = {f.name for f in _dc.fields(BrainConfig)}
+        _filtered_config = {k: v for k, v in snapshot.config.items() if k in _known_fields}
+        config = BrainConfig(**_filtered_config)
         brain = Brain.create(
             name=snapshot.brain_name,
             config=config,
@@ -216,13 +223,25 @@ class SQLiteBrainMixin:
         conn = self._ensure_conn()
         brain_id = self._get_brain_id()
         for n_data in neurons_data:
-            neuron = Neuron(
-                id=n_data["id"],
-                type=NeuronType(n_data["type"]),
-                content=n_data["content"],
-                metadata=n_data.get("metadata", {}),
-                created_at=datetime.fromisoformat(n_data["created_at"]),
-            )
+            try:
+                try:
+                    neuron_type = NeuronType(n_data["type"])
+                except ValueError:
+                    neuron_type = NeuronType.CONCEPT
+                    meta = {**n_data.get("metadata", {}), "original_type": n_data["type"]}
+                    n_data = {**n_data, "metadata": meta}
+                neuron = Neuron(
+                    id=n_data["id"],
+                    type=neuron_type,
+                    content=n_data.get("content", ""),
+                    metadata=n_data.get("metadata", {}),
+                    created_at=datetime.fromisoformat(n_data["created_at"])
+                    if n_data.get("created_at")
+                    else utcnow(),
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                logger.warning("Skipping neuron %s: %s", n_data.get("id", "?"), exc)
+                continue
             # Insert neuron directly (skip per-statement commit)
             await conn.execute(
                 """INSERT OR REPLACE INTO neurons (id, brain_id, type, content, metadata, content_hash, created_at)
@@ -239,7 +258,7 @@ class SQLiteBrainMixin:
             )
             # Insert neuron state
             await conn.execute(
-                """INSERT INTO neuron_states
+                """INSERT OR IGNORE INTO neuron_states
                    (neuron_id, brain_id, firing_threshold, refractory_period_ms,
                     homeostatic_target, created_at)
                    VALUES (?, ?, ?, ?, ?, ?)""",
@@ -250,17 +269,31 @@ class SQLiteBrainMixin:
         conn = self._ensure_conn()
         brain_id = self._get_brain_id()
         for s_data in synapses_data:
-            synapse = Synapse(
-                id=s_data["id"],
-                source_id=s_data["source_id"],
-                target_id=s_data["target_id"],
-                type=SynapseType(s_data["type"]),
-                weight=s_data["weight"],
-                direction=Direction(s_data["direction"]),
-                metadata=s_data.get("metadata", {}),
-                reinforced_count=s_data.get("reinforced_count", 0),
-                created_at=datetime.fromisoformat(s_data["created_at"]),
-            )
+            try:
+                try:
+                    synapse_type = SynapseType(s_data["type"])
+                except ValueError:
+                    synapse_type = SynapseType.RELATED_TO
+                try:
+                    direction = Direction(s_data.get("direction", "uni"))
+                except ValueError:
+                    direction = Direction.UNIDIRECTIONAL
+                synapse = Synapse(
+                    id=s_data["id"],
+                    source_id=s_data["source_id"],
+                    target_id=s_data["target_id"],
+                    type=synapse_type,
+                    weight=float(s_data.get("weight", 0.5)),
+                    direction=direction,
+                    metadata=s_data.get("metadata", {}),
+                    reinforced_count=int(s_data.get("reinforced_count", 0)),
+                    created_at=datetime.fromisoformat(s_data["created_at"])
+                    if s_data.get("created_at")
+                    else utcnow(),
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                logger.warning("Skipping synapse %s: %s", s_data.get("id", "?"), exc)
+                continue
             # Insert directly (skip per-statement commit and neuron existence check)
             await conn.execute(
                 """INSERT OR REPLACE INTO synapses
@@ -286,33 +319,41 @@ class SQLiteBrainMixin:
         conn = self._ensure_conn()
         brain_id = self._get_brain_id()
         for f_data in fibers_data:
-            auto_tags = set(f_data.get("auto_tags", []))
-            agent_tags = set(f_data.get("agent_tags", []))
-            if not auto_tags and not agent_tags:
-                agent_tags = set(f_data.get("tags", []))
+            try:
+                auto_tags = set(f_data.get("auto_tags", []))
+                agent_tags = set(f_data.get("agent_tags", []))
+                if not auto_tags and not agent_tags:
+                    agent_tags = set(f_data.get("tags", []))
 
-            fiber = Fiber(
-                id=f_data["id"],
-                neuron_ids=set(f_data["neuron_ids"]),
-                synapse_ids=set(f_data["synapse_ids"]),
-                anchor_neuron_id=f_data["anchor_neuron_id"],
-                time_start=(
-                    datetime.fromisoformat(f_data["time_start"])
-                    if f_data.get("time_start")
-                    else None
-                ),
-                time_end=(
-                    datetime.fromisoformat(f_data["time_end"]) if f_data.get("time_end") else None
-                ),
-                coherence=f_data.get("coherence", 0.0),
-                salience=f_data.get("salience", 0.0),
-                frequency=f_data.get("frequency", 0),
-                summary=f_data.get("summary"),
-                auto_tags=auto_tags,
-                agent_tags=agent_tags,
-                metadata=f_data.get("metadata", {}),
-                created_at=datetime.fromisoformat(f_data["created_at"]),
-            )
+                fiber = Fiber(
+                    id=f_data["id"],
+                    neuron_ids=set(f_data.get("neuron_ids", [])),
+                    synapse_ids=set(f_data.get("synapse_ids", [])),
+                    anchor_neuron_id=f_data.get("anchor_neuron_id", ""),
+                    time_start=(
+                        datetime.fromisoformat(f_data["time_start"])
+                        if f_data.get("time_start")
+                        else None
+                    ),
+                    time_end=(
+                        datetime.fromisoformat(f_data["time_end"])
+                        if f_data.get("time_end")
+                        else None
+                    ),
+                    coherence=f_data.get("coherence", 0.0),
+                    salience=f_data.get("salience", 0.0),
+                    frequency=f_data.get("frequency", 0),
+                    summary=f_data.get("summary"),
+                    auto_tags=auto_tags,
+                    agent_tags=agent_tags,
+                    metadata=f_data.get("metadata", {}),
+                    created_at=datetime.fromisoformat(f_data["created_at"])
+                    if f_data.get("created_at")
+                    else utcnow(),
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                logger.warning("Skipping fiber %s: %s", f_data.get("id", "?"), exc)
+                continue
             # Insert directly without per-fiber commit
             all_tags = sorted(fiber.auto_tags | fiber.agent_tags)
             await conn.execute(
