@@ -417,6 +417,7 @@ class SpreadingActivation:
         anchor_sets: list[list[str]],
         max_hops: int | None = None,
         anchor_activations: dict[str, float] | None = None,
+        scope: set[str] | None = None,
     ) -> tuple[dict[str, ActivationResult], list[str]]:
         """
         Activate from multiple anchor sets and find intersections.
@@ -429,6 +430,7 @@ class SpreadingActivation:
             anchor_sets: List of anchor neuron lists
             max_hops: Maximum hops for each activation
             anchor_activations: Optional per-anchor initial activation levels (from RRF).
+            scope: Optional set of neuron IDs to constrain spreading.
 
         Returns:
             Tuple of (combined activations, intersection neuron IDs)
@@ -438,7 +440,7 @@ class SpreadingActivation:
 
         # Activate from each set in parallel
         tasks = [
-            self.activate(anchors, max_hops, anchor_activations=anchor_activations)
+            self.activate(anchors, max_hops, anchor_activations=anchor_activations, scope=scope)
             for anchors in anchor_sets
             if anchors
         ]
