@@ -945,17 +945,9 @@ class ReflexPipeline:
         Dense graph (avg >8 synapses/neuron) → PPR dampens hub noise.
         Medium → hybrid.
         """
-        # Prefer hnsw_hybrid when InfinityDB is available with vectors
-        if (
-            hasattr(self._storage, "knn_search")
-            and self._embedding_provider is not None
-        ):
-            try:
-                db = getattr(self._storage, "db", None) or getattr(self._storage, "_db", None)
-                if db is not None and hasattr(db, "_index") and db._index.count > 0:
-                    return "hnsw_hybrid"
-            except Exception:
-                pass
+        # hnsw_hybrid is available for InfinityDB but not auto-selected —
+        # embedding call overhead negates the scoped activation benefit at <100K.
+        # Use activation_strategy = "hnsw_hybrid" in config to opt in.
 
         try:
             density = await self._storage.get_graph_density()  # type: ignore[attr-defined]

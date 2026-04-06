@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import type { AppEnv, Order } from "./types.js";
+import type { AppEnv, Env, Order } from "./types.js";
 import checkout from "./routes/checkout.js";
 import order from "./routes/order.js";
 import webhook from "./routes/webhook.js";
@@ -48,6 +48,36 @@ const PRO_FEATURES = [
   "smart_merge",
   "infinity_db",
 ];
+
+// ── Expire stale pending orders (30 min cutoff) ───────────────────────────
+
+async function expirePendingOrders(env: Env): Promise<number> {
+  const db = env.PAY_DB;
+  const cutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const { results } = await db
+    .prepare(
+      "SELECT id FROM orders WHERE status = 'pending' AND created_at < ?",
+    )
+    .bind(cutoff)
+    .all<{ id: string }>();
+
+  if (results.length === 0) return 0;
+
+  const ids = results.map((r) => r.id);
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50);
+    const placeholders = chunk.map(() => "?").join(",");
+    await db
+      .prepare(
+        `UPDATE orders SET status = 'expired' WHERE id IN (${placeholders})`,
+      )
+      .bind(...chunk)
+      .run();
+  }
+
+  console.log(`Expired ${ids.length} stale pending orders`);
+  return ids.length;
+}
 
 // ── Shared verify logic ────────────────────────────────────────────────────
 
@@ -346,6 +376,19 @@ app.post("/admin/orders/fulfill", async (c) => {
   return c.json({ fulfilled, failed, total: results.length });
 });
 
+// ── Admin: expire stale pending orders on demand ─────────────────────────
+
+app.post("/admin/orders/expire", async (c) => {
+  const auth = c.req.header("Authorization");
+  const expected = `Bearer ${c.env.COMPANION_ADMIN_SECRET}`;
+  if (auth !== expected) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const expired = await expirePendingOrders(c.env);
+  return c.json({ expired });
+});
+
 // Verify endpoint — supports both GET (Companion app) and POST (legacy)
 app.get("/verify", async (c) => {
   const key = (c.req.query("key") || "").trim();
@@ -358,4 +401,10 @@ app.post("/verify", async (c) => {
   return verifyKey(c, key);
 });
 
-export default app;
+
+export default {
+  fetch: app.fetch,
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(expirePendingOrders(env));
+  },
+};
