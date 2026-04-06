@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.34.0] — 2026-04-07
+
+### Added
+
+- **Consolidation Phase 3-4 Quality Improvements** — 5 new config knobs for fine-tuning consolidation behavior:
+  - **Semantic prune protection** — neurons in semantic-stage fibers use halved prune threshold (`prune_semantic_factor=0.5`), preserving mature knowledge
+  - **Bridge weight floor** — sole-connection synapses protected above configurable floor (`bridge_weight_floor=0.01`), preventing graph fragmentation
+  - **Expanded surface regen triggers** — regeneration now fires on `fibers_compressed`, `lifecycle_states_updated`, and configurable `surface_regen_prune_threshold`
+  - **Maturation fast-track** — memories with 10+ rehearsals across 3+ time windows advance episodic→semantic in 1 day instead of 3 (`maturation_fast_track_rehearsals`, `maturation_fast_track_time_days`)
+  - **Config validation** — `ConsolidationConfig.__post_init__` clamps degenerate values (negative factors, zero rehearsals)
+- **Robust brain import** — enum fallbacks and per-entity error handling for `.brain` file imports
+
+### Fixed
+
+- **Version regex false positives** — version pattern no longer matches IPv4/IPv6 prefixes (e.g., `IPv4.0`)
+- **Pro feature name mismatch** — unified feature names between pay-hub and sync-hub (canonical registry in `pay-hub/src/lib/features.ts`)
+- **brain_ops.py logger scope** — `_log` moved to module level, fixing undefined name errors in import methods
+
+### Tests
+
+- 35 new tests (22 Phase 3, 13 Phase 4) covering semantic protection, bridge floors, surface triggers, version regex, fast-track maturation, config validation
+
 ## [4.33.0] — 2026-04-05
 
 ### Added

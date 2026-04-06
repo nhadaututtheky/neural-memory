@@ -16,7 +16,7 @@ from neural_memory.engine.encoder import EncodingResult, MemoryEncoder
 from neural_memory.engine.reflex_activation import CoActivation, ReflexActivation
 from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline, RetrievalResult
 
-__version__ = "4.33.0"
+__version__ = "4.34.0"
 
 __all__ = [
     "__version__",
