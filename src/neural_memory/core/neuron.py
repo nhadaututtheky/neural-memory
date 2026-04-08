@@ -131,7 +131,9 @@ class Neuron:
         updates: dict[str, Any] = {"_grounded": grounded, "_confidence": confidence}
         if not grounded:
             # Remove grounding keys when ungrounding
-            new_meta = {k: v for k, v in self.metadata.items() if k not in ("_grounded", "_confidence")}
+            new_meta = {
+                k: v for k, v in self.metadata.items() if k not in ("_grounded", "_confidence")
+            }
             return Neuron(
                 id=self.id,
                 type=self.type,
