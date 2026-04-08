@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.41.0] — 2026-04-09
+
+### Added
+
+- **Goal-directed recall** — prefrontal cortex-style top-down attention modulation. Agents can declare active goals (`nmem_goal`), and memories topologically close to those goals get a BFS proximity boost during retrieval. Recall becomes relevance-based (proximity to goal) instead of just similarity-based
+- **Session intent declaration** — `nmem_session(action="set", intent="...")` seeds topic EMA with strong 0.6 alpha boost, priming all subsequent recalls toward the declared intent. Pending intent propagates to new sessions automatically
+- **New MCP tool: `nmem_goal`** — create, list, activate, pause, complete goals with priority 1-10. Goals are metadata-backed on existing INTENT neurons (zero schema migration)
+
+### Improved
+
+- **Goal proximity in all recall paths** — goal scoring applied consistently across main pipeline + familiarity fallback strategies A and B
+- **BFS capped at 10 goals** to prevent unbounded graph traversal in large brains
+- **EMA seed capped at 1.0** to prevent double-seeding from repeated intent declarations
+
+### Tests
+
+- 17 new tests for BFS proximity scoring (linear chains, branching, cycles, multi-goal), goal neuron helpers, intent seeding, and edge cases
+
 ## [4.40.0] — 2026-04-08
 
 ### Added
