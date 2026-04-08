@@ -54,6 +54,7 @@ class TestIdeTargets:
         assert "windsurf" in IDE_TARGETS
         assert "cline" in IDE_TARGETS
         assert "gemini" in IDE_TARGETS
+        assert "codex" in IDE_TARGETS
         assert "agents" in IDE_TARGETS
 
     def test_file_names_correct(self) -> None:
@@ -101,15 +102,27 @@ class TestGenerateRulesFile:
             assert status == "created", f"Failed for {ide}"
             assert (tmp_path / info["file"]).exists(), f"File missing for {ide}"
 
-    def test_all_files_have_same_content(self, tmp_path: Path) -> None:
-        """All IDEs get the same rules content."""
+    def test_all_generic_files_have_same_content(self, tmp_path: Path) -> None:
+        """All non-Codex IDEs get the same rules content."""
         contents: list[str] = []
         for ide in IDE_TARGETS:
+            if ide == "codex":
+                continue
             generate_rules_file(tmp_path, ide)
             file_path = tmp_path / IDE_TARGETS[ide]["file"]
             contents.append(file_path.read_text(encoding="utf-8"))
-        # All should be identical
+        # All generic targets should be identical
         assert len(set(contents)) == 1
+
+    def test_codex_has_distinct_content(self, tmp_path: Path) -> None:
+        """Codex target produces different content from generic targets."""
+        generate_rules_file(tmp_path, "codex")
+        generate_rules_file(tmp_path, "cursor")
+        codex = (tmp_path / "codex.md").read_text(encoding="utf-8")
+        cursor = (tmp_path / ".cursorrules").read_text(encoding="utf-8")
+        assert codex != cursor
+        assert "Codex CLI" in codex
+        assert "Hook 1: Session Start" in codex
 
     def test_immutability_of_targets(self) -> None:
         """IDE_TARGETS should not be modified by generate."""
