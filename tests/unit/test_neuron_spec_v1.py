@@ -234,6 +234,7 @@ class TestLateralInhibition:
             lateral_inhibition_k=5,
             lateral_inhibition_factor=0.3,
             activation_threshold=0.0,
+            graph_density_scaling_enabled=False,
         )
         pipeline = ReflexPipeline.__new__(ReflexPipeline)
         pipeline._config = config
