@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.43.0] — 2026-04-09
+
+### Improved
+
+- **Goal proximity × prediction error compound** — memories that are both surprising (high prediction error) and near active goals now receive an amplified boost (`1 + surprise * 0.3`), making unexpected goal-relevant information surface more strongly
+- **Causal auto-inclusion dedup** — `gather_causal_context()` now excludes neuron IDs already present in matched fibers, preventing duplicate content when temporal binding and causal tracing surface the same neurons
+- **Schema-cluster diversity in MMR** — when schema assimilation is enabled, the greedy MMR loop now caps fibers per schema cluster (same cap as lifecycle strata), preventing a single knowledge schema from dominating recall results
+- **Interference goal tiebreaker** — `resolve_interference()` accepts `goal_neuron_ids`; goal-relevant neurons receive halved weight decay during retroactive interference resolution (0.975 vs 0.95), preserving goal-relevant memories under competition
+
+### Fixed
+
+- **4 integration debts resolved** — all cross-feature gaps from Section 9 of FEATURE_REGISTRY.md now marked FIXED (goal×prediction, causal dedup, schema→MMR, interference+goal)
+
 ## [4.42.0] — 2026-04-09
 
 ### Added
