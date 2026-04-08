@@ -63,23 +63,26 @@ async def gather_causal_context(
     fiber_neuron_ids: list[list[str]],
     max_hops: int = 2,
     max_tokens_budget: int = 0,
+    exclude_neuron_ids: set[str] | None = None,
 ) -> CausalContext:
     """Trace causal chains from selected fibers' neurons.
 
     For each fiber's neuron IDs, traces both causes and effects
-    up to max_hops. Deduplicates across fibers.
+    up to max_hops. Deduplicates across fibers and against
+    exclude_neuron_ids (e.g. neurons already in main results).
 
     Args:
         storage: Storage backend (brain context must be set)
         fiber_neuron_ids: List of neuron ID lists, one per selected fiber
         max_hops: Maximum causal hops per trace (default 2)
         max_tokens_budget: Max chars for supplement text (0 = use default)
+        exclude_neuron_ids: Neuron IDs already in results (skip in supplement)
 
     Returns:
         CausalContext with aggregated chains and formatted supplement
     """
     budget = max_tokens_budget if max_tokens_budget > 0 else MAX_CAUSAL_SUPPLEMENT_CHARS
-    seen_neuron_ids: set[str] = set()
+    seen_neuron_ids: set[str] = set(exclude_neuron_ids) if exclude_neuron_ids else set()
     all_chains: list[CausalChain] = []
 
     # Flatten seed neuron IDs from top fibers (bounded)

@@ -731,11 +731,16 @@ class ReflexPipeline:
                 _causal_max_hops = getattr(self._config, "causal_auto_include_max_hops", 2)
                 # Budget: 20% of max_tokens (approximate 4 chars/token), min 200 chars
                 _causal_budget = max(200, int(max_tokens * 0.2 * 4))
+                # Exclude neurons already in matched fibers (dedup with temporal binding)
+                _matched_nids: set[str] = set()
+                for _f in fibers_matched:
+                    _matched_nids.update(_f.neuron_ids)
                 _causal_ctx = await gather_causal_context(
                     self._storage,
                     _fiber_neuron_ids,
                     max_hops=_causal_max_hops,
                     max_tokens_budget=_causal_budget,
+                    exclude_neuron_ids=_matched_nids,
                 )
                 _causal_supplement = _causal_ctx.supplement_text
             except Exception:
@@ -2614,11 +2619,16 @@ class ReflexPipeline:
                         score += affinity * _topic_affinity_boost
 
             # --- Goal-directed recall: proximity to active goals ---
+            # Compound with prediction error: surprise near goals amplifies boost
             if _goal_proximity and _goal_proximity_boost > 0:
                 goal_neurons = [nid for nid in fiber.neuron_ids if nid in _goal_proximity]
                 if goal_neurons:
                     max_prox = max(_goal_proximity[nid] for nid in goal_neurons)
-                    score += max_prox * _goal_proximity_boost
+                    goal_boost = max_prox * _goal_proximity_boost
+                    _surprise = (fiber.metadata or {}).get("_surprise_bonus", 0.0)
+                    if isinstance(_surprise, (int, float)) and _surprise > 0:
+                        goal_boost *= 1.0 + float(_surprise) * 0.3
+                    score += goal_boost
 
             # --- Anti-redundancy: penalize previously surfaced fibers ---
             if _session_state and _anti_redundancy > 0:
@@ -2705,10 +2715,11 @@ class ReflexPipeline:
         selected_neuron_sets: list[set[str]] = []
         selected_hashes: list[int] = []
 
-        # Stratum-aware diversity: track lifecycle stage counts
+        # Stratum-aware diversity: track lifecycle stage + schema cluster counts
         from collections import Counter as _Counter
 
         stratum_counts: _Counter[str] = _Counter()
+        schema_counts: _Counter[str] = _Counter()
         _stratum_cap = getattr(self._config, "stratum_diversity_cap", 0.4)
         _target_count = 10
 
@@ -2751,10 +2762,18 @@ class ReflexPipeline:
                 # Allow first 3 selections unconstrained, then enforce cap
                 continue
 
+            # Schema-cluster diversity: cap fibers from same schema (when enabled)
+            _schema_id = fiber_meta.get("_schema_id")
+            if _schema_id and len(selected) >= 3:
+                if schema_counts[_schema_id] >= max_per_stratum:
+                    continue
+
             selected.append(fiber)
             selected_neuron_sets.append(set(fiber.neuron_ids))
             selected_hashes.append(fiber_hash)
             stratum_counts[stratum] += 1
+            if _schema_id:
+                schema_counts[_schema_id] += 1
 
         return selected
 

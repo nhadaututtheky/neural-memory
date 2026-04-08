@@ -160,6 +160,7 @@ async def resolve_interference(
     storage: NeuralStorage,
     config: BrainConfig,
     dry_run: bool = False,
+    goal_neuron_ids: set[str] | None = None,
 ) -> ResolutionReport:
     """Resolve detected interference.
 
@@ -167,12 +168,16 @@ async def resolve_interference(
     - Proactive: boost new memory priority
     - Fan effect: flag for consolidation merge
 
+    Goal-directed tiebreaker: if the interfered-with neuron is linked to
+    an active goal, the weight reduction is halved (0.975 vs 0.95).
+
     Args:
         results: Interference detection results
         new_neuron: The new neuron causing interference
         storage: Storage backend
         config: Brain configuration
         dry_run: If True, count actions but don't write
+        goal_neuron_ids: Neuron IDs near active goals (reduces penalty)
 
     Returns:
         ResolutionReport with action counts
@@ -180,6 +185,7 @@ async def resolve_interference(
     contradicts_created = 0
     priorities_boosted = 0
     fan_effects_flagged = 0
+    _goal_ids = goal_neuron_ids or set()
 
     for r in results:
         if r.interference_type == InterferenceType.RETROACTIVE:
@@ -192,12 +198,14 @@ async def resolve_interference(
                 )
                 await storage.add_synapse(syn)
 
-                # Reduce old memory's outgoing weights by 5%
+                # Reduce old memory's outgoing weights
+                # Goal-relevant memories resist interference (halved penalty)
+                _decay = 0.975 if r.neuron_id in _goal_ids else 0.95
                 old_synapses = await storage.get_synapses(source_id=r.neuron_id)
                 for old_syn in old_synapses[:10]:
                     from dataclasses import replace
 
-                    new_weight = max(0.01, old_syn.weight * 0.95)
+                    new_weight = max(0.01, old_syn.weight * _decay)
                     if new_weight != old_syn.weight:
                         updated = replace(old_syn, weight=new_weight)
                         try:

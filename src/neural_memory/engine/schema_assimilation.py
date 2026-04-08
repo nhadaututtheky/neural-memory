@@ -129,6 +129,17 @@ async def _assimilate(
         weight=0.6,
     )
     await storage.add_synapse(synapse)
+
+    # Store schema ID on neuron for stratum MMR diversity tracking
+    meta = dict(neuron.metadata) if neuron.metadata else {}
+    if meta.get("_schema_id") != schema.id:
+        meta["_schema_id"] = schema.id
+        updated = neuron.with_metadata(_schema_id=schema.id)
+        try:
+            await storage.update_neuron(updated)
+        except Exception:
+            logger.debug("Schema ID metadata update skipped for %s", neuron.id[:12])
+
     logger.debug("Assimilated neuron %s into schema %s", neuron.id[:12], schema.id[:12])
 
     version = (schema.metadata or {}).get("schema_version", 1)
