@@ -168,6 +168,9 @@ class BrainConfig:
     diversity_overlap_threshold: float = 0.6
     diversity_penalty_factor: float = 0.7
     topic_affinity_boost: float = 0.15
+    # Goal-directed recall (prefrontal cortex top-down attention modulation)
+    goal_proximity_boost: float = 0.25
+    goal_max_hops: int = 3
 
     def with_updates(self, **kwargs: Any) -> BrainConfig:
         """Create a new config with updated values."""

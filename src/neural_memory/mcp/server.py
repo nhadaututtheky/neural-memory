@@ -35,6 +35,7 @@ from neural_memory.mcp.conflict_handler import ConflictHandler
 from neural_memory.mcp.connection_handler import ConnectionHandler
 from neural_memory.mcp.db_train_handler import DBTrainHandler
 from neural_memory.mcp.drift_handler import DriftHandler
+from neural_memory.mcp.goal_handler import GoalHandler
 from neural_memory.mcp.eternal_handler import EternalHandler
 from neural_memory.mcp.expiry_cleanup_handler import ExpiryCleanupHandler
 from neural_memory.mcp.index_handler import IndexHandler
@@ -107,6 +108,7 @@ class MCPServer(
     TelegramHandler,
     DriftHandler,
     MilestoneHandler,
+    GoalHandler,
 ):
     """MCP server that exposes NeuralMemory tools.
 
@@ -284,6 +286,7 @@ class MCPServer(
             "nmem_boundaries": self._boundaries,
             "nmem_milestone": self._milestone,
             "nmem_store": self._store,
+            "nmem_goal": self._goal,
         }
         handler = dispatch.get(name)
         if handler:

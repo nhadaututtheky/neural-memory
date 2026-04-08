@@ -89,6 +89,10 @@ class SessionState:
     priming_hits: int = 0
     priming_misses: int = 0
 
+    # Goal-directed recall state
+    active_goal_ids: list[str] = field(default_factory=list)
+    session_intent: str | None = None
+
     @property
     def priming_hit_rate(self) -> float:
         """Fraction of primed neurons that appeared in final results."""
@@ -172,6 +176,30 @@ class SessionState:
 
         self.topic_ema = decayed
 
+    def seed_intent(self, intent: str) -> None:
+        """Seed topic EMA from a declared session intent.
+
+        Extracts keywords from the intent string and injects them into
+        the EMA with a strong boost (alpha=0.6), effectively priming the
+        session toward goal-relevant topics.
+
+        Args:
+            intent: Natural language description of the session intent
+        """
+        self.session_intent = intent
+        keywords = extract_keywords(intent)
+        if not keywords:
+            return
+
+        # Inject with stronger alpha than normal queries (0.6 vs 0.3)
+        intent_alpha = 0.6
+        for kw in keywords:
+            normalized = kw.lower().strip()
+            if normalized:
+                self.topic_ema[normalized] = min(
+                    1.0, self.topic_ema.get(normalized, 0.0) + intent_alpha
+                )
+
     def get_top_topics(self, limit: int = MAX_TOPICS_RETURNED) -> list[str]:
         """Return top topics sorted by EMA weight."""
         if not self.topic_ema:
@@ -239,6 +267,7 @@ class SessionManager:
 
     def __init__(self) -> None:
         self._sessions: OrderedDict[str, SessionState] = OrderedDict()
+        self._pending_intent: str | None = None
 
     @classmethod
     def get_instance(cls) -> SessionManager:
@@ -274,6 +303,9 @@ class SessionManager:
             logger.debug("Session evicted (LRU): %s (%d queries)", evicted_id, evicted.query_count)
 
         session = SessionState(session_id=session_id)
+        # Apply pending intent from nmem_session(intent=...) if set
+        if self._pending_intent:
+            session.seed_intent(self._pending_intent)
         self._sessions[session_id] = session
         return session
 
@@ -292,6 +324,14 @@ class SessionManager:
     def all_sessions(self) -> list[SessionState]:
         """Return all active sessions (for iteration/persist)."""
         return list(self._sessions.values())
+
+    def set_pending_intent(self, intent: str) -> None:
+        """Store intent to apply to newly created sessions.
+
+        Called by nmem_session(intent=...) so that sessions created
+        AFTER the intent declaration also receive the topic EMA boost.
+        """
+        self._pending_intent = intent
 
     def _expire_stale(self, now: float) -> None:
         """Remove sessions that have been inactive too long."""

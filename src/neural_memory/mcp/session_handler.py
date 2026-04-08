@@ -139,7 +139,23 @@ class SessionHandler:
         finally:
             storage.enable_auto_save()
 
-        return {
+        # Seed session intent into retrieval pipeline's SessionState.
+        # Seeds ALL existing sessions + stores pending intent for new sessions.
+        intent = args.get("intent", "").strip()
+        if intent:
+            try:
+                from neural_memory.engine.session_state import SessionManager
+
+                mgr = SessionManager.get_instance()
+                # Seed all existing sessions (typically 1-2)
+                for ss in mgr.all_sessions():
+                    ss.seed_intent(intent)
+                # Store pending intent for sessions created later
+                mgr.set_pending_intent(intent)
+            except Exception:
+                logger.debug("Failed to seed session intent", exc_info=True)
+
+        response: dict[str, Any] = {
             "active": True,
             "feature": metadata["feature"],
             "task": metadata["task"],
@@ -151,6 +167,10 @@ class SessionHandler:
             "repo": metadata.get("repo", ""),
             "message": "Session state updated",
         }
+        if intent:
+            response["intent"] = intent
+            response["message"] += f" (intent: {intent[:60]})"
+        return response
 
     # ── END ──
 

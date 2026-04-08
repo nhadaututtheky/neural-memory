@@ -676,6 +676,26 @@ class ReflexPipeline:
                 _session_topics = {t for t, w in top_topics.items() if w > 0.3}
             except Exception:
                 pass
+        # 5.5 Goal-directed recall: compute proximity to active goals
+        _goal_proximity: dict[str, float] = {}
+        if getattr(self._config, "goal_proximity_boost", 0.0) > 0:
+            try:
+                from neural_memory.engine.goal_proximity import (
+                    compute_goal_proximity,
+                    find_active_goals,
+                )
+
+                active_goals = await find_active_goals(self._storage)
+                if active_goals:
+                    goal_ids = [g.id for g in active_goals]
+                    _goal_proximity = await compute_goal_proximity(
+                        self._storage,
+                        goal_ids,
+                        max_hops=getattr(self._config, "goal_max_hops", 3),
+                    )
+            except Exception:
+                logger.debug("Goal proximity computation failed", exc_info=True)
+
         fibers_matched = await self._find_matching_fibers(
             activations,
             valid_at=valid_at,
@@ -684,6 +704,7 @@ class ReflexPipeline:
             tag_mode=tag_mode,
             session_topics=_session_topics,
             created_before=as_of,
+            goal_proximity=_goal_proximity,
         )
         _phase_timings["fibers"] = (time.perf_counter() - start_time) * 1000
 
@@ -1477,6 +1498,7 @@ class ReflexPipeline:
                     query_tokens=query_tokens,
                     tag_mode=tag_mode,
                     created_before=as_of,
+                    goal_proximity=_goal_proximity,
                 )
 
         # Strategy B: No activations at all (no_anchors / empty_landscape).
@@ -1509,6 +1531,7 @@ class ReflexPipeline:
                             query_tokens=query_tokens,
                             tag_mode=tag_mode,
                             created_before=as_of,
+                            goal_proximity=_goal_proximity,
                         )
                         # Update activations for subgraph extraction
                         activations = new_activations
@@ -2437,6 +2460,7 @@ class ReflexPipeline:
         tag_mode: str = "and",
         session_topics: set[str] | None = None,
         created_before: datetime | None = None,
+        goal_proximity: dict[str, float] | None = None,
     ) -> list[Fiber]:
         """Find fibers that contain activated neurons (batch query).
 
@@ -2476,6 +2500,8 @@ class ReflexPipeline:
         _recent_boost = self._config.recent_access_boost
         _recent_window_hrs = self._config.recent_access_window_days * 24.0
         _session_topics = session_topics or set()
+        _goal_proximity = goal_proximity or {}
+        _goal_proximity_boost = getattr(self._config, "goal_proximity_boost", 0.25)
         _now = utcnow()
 
         def _fiber_score(fiber: Fiber) -> float:
@@ -2535,6 +2561,13 @@ class ReflexPipeline:
                         denom = min(len(_session_topics), len(all_fiber_tags))
                         affinity = topic_overlap / max(denom, 1)
                         score += affinity * _topic_affinity_boost
+
+            # --- Goal-directed recall: proximity to active goals ---
+            if _goal_proximity and _goal_proximity_boost > 0:
+                goal_neurons = [nid for nid in fiber.neuron_ids if nid in _goal_proximity]
+                if goal_neurons:
+                    max_prox = max(_goal_proximity[nid] for nid in goal_neurons)
+                    score += max_prox * _goal_proximity_boost
 
             # --- T1.5: Recent-access boost (multiplicative, review fix M3) ---
             if _recent_boost > 0 and fiber.last_conducted:

@@ -64,6 +64,57 @@ class Neuron:
         """Confidence level (0.0-1.0). Grounded neurons default to 1.0."""
         return float(self.metadata.get("_confidence", 0.5))
 
+    # -- Goal neuron properties (metadata-backed, zero migration) --
+
+    @property
+    def goal_state(self) -> str | None:
+        """Goal state: 'active', 'paused', or 'completed'. None if not a goal."""
+        return self.metadata.get("_goal_state")
+
+    @property
+    def goal_priority(self) -> int:
+        """Goal priority (1-10, default 5)."""
+        return int(self.metadata.get("_goal_priority", 5))
+
+    @property
+    def goal_keywords(self) -> list[str]:
+        """Keywords extracted from goal for EMA seeding."""
+        kw = self.metadata.get("_goal_keywords")
+        return list(kw) if isinstance(kw, (list, tuple)) else []
+
+    @property
+    def is_active_goal(self) -> bool:
+        """Whether this neuron is an active goal."""
+        return self.goal_state == "active"
+
+    def with_goal_state(
+        self,
+        state: str,
+        priority: int = 5,
+        keywords: list[str] | None = None,
+    ) -> Neuron:
+        """Create a new Neuron with updated goal state.
+
+        Args:
+            state: Goal state ('active', 'paused', 'completed')
+            priority: Goal priority 1-10
+            keywords: Keywords for EMA seeding
+
+        Returns:
+            New Neuron with goal metadata
+        """
+        _valid_states = ("active", "paused", "completed")
+        if state not in _valid_states:
+            msg = f"Invalid goal state '{state}', must be one of {_valid_states}"
+            raise ValueError(msg)
+        updates: dict[str, Any] = {
+            "_goal_state": state,
+            "_goal_priority": max(1, min(10, priority)),
+        }
+        if keywords is not None:
+            updates["_goal_keywords"] = keywords
+        return self.with_metadata(**updates)
+
     @classmethod
     def create(
         cls,

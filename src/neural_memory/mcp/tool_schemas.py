@@ -2065,4 +2065,44 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "required": ["action"],
         },
     },
+    {
+        "name": "nmem_goal",
+        "description": "Goal-directed recall — manage active goals that bias memory retrieval toward relevant context. "
+        "Active goals make recall relevance-based (proximity to goal) instead of just similarity-based.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["create", "list", "activate", "pause", "complete"],
+                    "description": "create=new goal, list=show goals, activate/pause/complete=change state",
+                },
+                "goal": {
+                    "type": "string",
+                    "description": "Goal description (required for create). e.g. 'optimize API latency for sync-hub'",
+                },
+                "goal_id": {
+                    "type": "string",
+                    "description": "Goal ID (required for activate/pause/complete)",
+                },
+                "priority": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10,
+                    "description": "Goal priority 1-10 (default 5). Higher = stronger recall boost",
+                },
+                "keywords": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Keywords for topic EMA seeding (auto-extracted if omitted)",
+                },
+                "state": {
+                    "type": "string",
+                    "enum": ["active", "paused", "completed"],
+                    "description": "Filter by state (list only)",
+                },
+            },
+            "required": ["action"],
+        },
+    },
 ]
