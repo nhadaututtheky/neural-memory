@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -18,7 +17,6 @@ from neural_memory.core.brain import Brain, BrainConfig
 from neural_memory.core.fiber import Fiber
 from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.engine.sufficiency import check_sufficiency
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -118,9 +116,7 @@ class TestAmbiguousSpreadThreshold:
     def test_entropy_3_5_no_longer_triggers(self) -> None:
         """Entropy ~3.5 is below 4.0 threshold → should pass now."""
         # 15 neurons with mild spread → entropy around 3.5-3.9
-        acts = _make_activations(
-            [(f"n-{i}", 0.1 + 0.003 * i, 2, "a-0") for i in range(15)]
-        )
+        acts = _make_activations([(f"n-{i}", 0.1 + 0.003 * i, 2, "a-0") for i in range(15)])
         result = check_sufficiency(
             activations=acts,
             anchor_sets=[["a-0"]],
@@ -136,9 +132,7 @@ class TestAmbiguousSpreadThreshold:
 
     def test_very_high_entropy_still_triggers(self) -> None:
         """25 near-uniform neurons → entropy > 4.0 → should still trigger."""
-        acts = _make_activations(
-            [(f"n-{i}", 0.1 + 0.001 * i, 2, "a-0") for i in range(25)]
-        )
+        acts = _make_activations([(f"n-{i}", 0.1 + 0.001 * i, 2, "a-0") for i in range(25)])
         result = check_sufficiency(
             activations=acts,
             anchor_sets=[["a-0"]],
@@ -191,7 +185,7 @@ class TestFamiliarityFallbackIntegration:
         )
         await storage.add_fiber(f1)
 
-        yield storage, n1, n2
+        return storage, n1, n2
 
     async def test_familiarity_result_has_correct_synthesis_method(self, storage_with_data):
         """When familiarity fallback triggers, synthesis_method must be 'familiarity'."""
