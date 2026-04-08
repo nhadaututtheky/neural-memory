@@ -517,7 +517,11 @@ class ReflexPipeline:
         activations = self._apply_lateral_inhibition(activations)
 
         # 4.6 Stabilization: iterative dampening until convergence
-        activations, _stab_report = stabilize(activations, StabilizationConfig())
+        activations, _stab_report = stabilize(
+            activations,
+            StabilizationConfig(),
+            density_scaling=self._config.graph_density_scaling_enabled,
+        )
 
         # 4.7 Deprioritize disputed neurons (conflict resolution)
         activations, disputed_ids = await self._deprioritize_disputed(activations)
@@ -552,6 +556,7 @@ class ReflexPipeline:
             stab_neurons_removed=_stab_report.neurons_removed,
             query_intent=stimulus.intent.value,
             calibration=_gate_calibration,
+            density_scaling=self._config.graph_density_scaling_enabled,
         )
 
         if not _sufficiency.sufficient:
@@ -1583,6 +1588,11 @@ class ReflexPipeline:
         different query aspects.
         """
         k = self._config.lateral_inhibition_k
+        # Density scaling: increase K for large graphs so that more winners
+        # survive, preventing collateral suppression of correct neurons.
+        # Homeostatic synaptic scaling — dense networks need more active units.
+        if self._config.graph_density_scaling_enabled and len(activations) > k:
+            k = max(k, min(k * 3, int(math.sqrt(len(activations)) * 2)))
         factor = self._config.lateral_inhibition_factor
         threshold = self._config.activation_threshold
 

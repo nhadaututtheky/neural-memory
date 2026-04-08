@@ -61,6 +61,8 @@ class StabilizationReport:
 def stabilize(
     activations: dict[str, ActivationResult],
     config: StabilizationConfig | None = None,
+    *,
+    density_scaling: bool = False,
 ) -> tuple[dict[str, ActivationResult], StabilizationReport]:
     """Stabilize activation landscape through iterative dampening.
 
@@ -70,9 +72,15 @@ def stabilize(
     3. Homeostatic norm: soft-scale mean toward target
     4. Convergence: if max|delta| < threshold, stop
 
+    When ``density_scaling`` is True, the noise floor is reduced for
+    large activation sets (homeostatic synaptic scaling — Turrigiano 2008).
+    Dense graphs naturally produce weaker per-neuron activations, so the
+    noise floor must be lower to avoid killing valid signals.
+
     Args:
         activations: Current activation results from the pipeline
         config: Stabilization parameters (uses defaults if None)
+        density_scaling: Scale noise floor based on neuron count
 
     Returns:
         Tuple of (stabilized activations, stabilization report)
@@ -93,11 +101,17 @@ def stabilize(
     total_removed = 0
     max_delta = 0.0
 
+    # Density-aware noise floor: scale down for large graphs
+    effective_noise_floor = config.noise_floor
+    if density_scaling and len(levels) > 50:
+        density_factor = min(1.0, len(levels) / 500.0)
+        effective_noise_floor = config.noise_floor * (1.0 - 0.5 * density_factor)
+
     for iteration in range(config.max_iterations):
         prev_levels = dict(levels)
 
         # Step 1: Noise floor — zero out sub-threshold activations
-        to_remove = [nid for nid, lv in levels.items() if lv < config.noise_floor]
+        to_remove = [nid for nid, lv in levels.items() if lv < effective_noise_floor]
         for nid in to_remove:
             del levels[nid]
         total_removed += len(to_remove)

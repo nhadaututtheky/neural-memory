@@ -256,6 +256,7 @@ def check_sufficiency(
     query_intent: str = "",
     calibration: dict[str, GateCalibration] | None = None,
     prev_metrics: SufficiencyMetrics | None = None,
+    density_scaling: bool = False,
 ) -> SufficiencyResult:
     """Evaluate whether retrieval has sufficient signal for reconstruction.
 
@@ -328,8 +329,18 @@ def check_sufficiency(
     # Apply profile entropy_tolerance and min_top_activation_factor
     _entropy_threshold = 4.0 * profile.entropy_tolerance
     _top_act_threshold_ambiguous = 0.3 * profile.min_top_activation_factor
+    # Density scaling: normalize entropy by max possible entropy for this neuron count.
+    # High absolute entropy with 500 neurons is expected; only flag when RELATIVE
+    # entropy is high (homeostatic synaptic scaling — Turrigiano 2008).
+    _effective_entropy = m.activation_entropy
+    if density_scaling and m.neuron_count >= 4:
+        _max_entropy = math.log2(m.neuron_count)
+        _relative_entropy = m.activation_entropy / _max_entropy
+        # Convert back to absolute scale for threshold comparison:
+        # relative 0.8 with 500 neurons → effective = 0.8 * 4.0 = 3.2 (below 4.0, passes)
+        _effective_entropy = _relative_entropy * 4.0
     if (
-        m.activation_entropy >= _entropy_threshold
+        _effective_entropy >= _entropy_threshold
         and m.focus_ratio < 0.2
         and m.neuron_count >= 15
         and m.top_activation < _top_act_threshold_ambiguous
