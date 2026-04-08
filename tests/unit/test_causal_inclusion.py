@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import pytest
 
+from neural_memory.core.synapse import SynapseType
 from neural_memory.engine.causal_inclusion import (
     CausalContext,
     format_causal_supplement,
 )
 from neural_memory.engine.causal_traversal import CausalChain, CausalStep
-from neural_memory.core.synapse import SynapseType
-
 
 # ---------------------------------------------------------------------------
 # format_causal_supplement
@@ -77,17 +76,13 @@ class TestFormatCausalSupplement:
             CausalChain(
                 seed_neuron_id="n1",
                 direction="causes",
-                steps=(
-                    CausalStep("n2", "Cause A", SynapseType.CAUSED_BY, 0.8, 0),
-                ),
+                steps=(CausalStep("n2", "Cause A", SynapseType.CAUSED_BY, 0.8, 0),),
                 total_weight=0.8,
             ),
             CausalChain(
                 seed_neuron_id="n1",
                 direction="effects",
-                steps=(
-                    CausalStep("n3", "Effect B", SynapseType.LEADS_TO, 0.7, 0),
-                ),
+                steps=(CausalStep("n3", "Effect B", SynapseType.LEADS_TO, 0.7, 0),),
                 total_weight=0.7,
             ),
         ]

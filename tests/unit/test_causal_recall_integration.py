@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-
 from neural_memory.core.brain import BrainConfig
-from neural_memory.engine.session_state import SessionManager, SessionState
+from neural_memory.engine.session_state import SessionManager
 
 
 class TestBrainConfigCausalFields:
@@ -88,25 +86,21 @@ class TestCausalSupplementFormat:
     """Integration: causal supplement text format is LLM-friendly."""
 
     def test_supplement_lines_are_labeled(self) -> None:
+        from neural_memory.core.synapse import SynapseType
         from neural_memory.engine.causal_inclusion import format_causal_supplement
         from neural_memory.engine.causal_traversal import CausalChain, CausalStep
-        from neural_memory.core.synapse import SynapseType
 
         chains = [
             CausalChain(
                 seed_neuron_id="n1",
                 direction="causes",
-                steps=(
-                    CausalStep("n2", "Config was wrong", SynapseType.CAUSED_BY, 0.9, 0),
-                ),
+                steps=(CausalStep("n2", "Config was wrong", SynapseType.CAUSED_BY, 0.9, 0),),
                 total_weight=0.9,
             ),
             CausalChain(
                 seed_neuron_id="n1",
                 direction="effects",
-                steps=(
-                    CausalStep("n3", "Deploy failed", SynapseType.LEADS_TO, 0.85, 0),
-                ),
+                steps=(CausalStep("n3", "Deploy failed", SynapseType.LEADS_TO, 0.85, 0),),
                 total_weight=0.85,
             ),
         ]
