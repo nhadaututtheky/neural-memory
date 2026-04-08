@@ -197,8 +197,9 @@ class TrainHandler:
         pinned = action == "pin"
         count = await storage.pin_fibers(fiber_ids, pinned=pinned)
 
-        # Auto-promote tier to HOT when pinning
+        # Auto-promote tier to HOT when pinning + ground anchor neurons
         promoted = 0
+        grounded_count = 0
         if pinned:
             from neural_memory.core.memory_types import MemoryTier
 
@@ -208,6 +209,29 @@ class TrainHandler:
                     await storage.update_typed_memory(tm.with_tier(MemoryTier.HOT))
                     promoted += 1
 
+                # Ground anchor neuron — canonical truth, resists decay + conflicts
+                try:
+                    fiber = await storage.get_fiber(fid)
+                    if fiber:
+                        anchor = await storage.get_neuron(fiber.anchor_neuron_id)
+                        if anchor and not anchor.grounded:
+                            await storage.update_neuron(anchor.with_grounded(True))
+                            grounded_count += 1
+                except Exception:
+                    logger.debug("Failed to ground anchor for fiber %s", fid, exc_info=True)
+        else:
+            # Unpin: remove grounding from anchor neurons
+            for fid in fiber_ids:
+                try:
+                    fiber = await storage.get_fiber(fid)
+                    if fiber:
+                        anchor = await storage.get_neuron(fiber.anchor_neuron_id)
+                        if anchor and anchor.grounded:
+                            await storage.update_neuron(anchor.with_grounded(False))
+                            grounded_count += 1
+                except Exception:
+                    logger.debug("Failed to unground anchor for fiber %s", fid, exc_info=True)
+
         result: dict[str, Any] = {
             "updated": count,
             "message": f"{action}ned {count} fiber(s)",
@@ -215,4 +239,8 @@ class TrainHandler:
         if promoted:
             result["tier_promoted"] = promoted
             result["message"] += f", promoted {promoted} to HOT tier"
+        if grounded_count:
+            result["grounded"] = grounded_count
+            action_verb = "grounded" if pinned else "ungrounded"
+            result["message"] += f", {action_verb} {grounded_count} anchor neuron(s)"
         return result

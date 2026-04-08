@@ -65,6 +65,15 @@ async def try_auto_resolve(
             auto_resolved=True,
         )
 
+    # Rule 0 (highest priority): Grounded neurons always win
+    if existing_neuron.grounded:
+        return AutoResolution(
+            conflict=conflict,
+            resolution="keep_existing",
+            reason="existing neuron is grounded (canonical truth)",
+            auto_resolved=True,
+        )
+
     # Get creation time and freshness of existing neuron
     existing_created_at = existing_neuron.created_at
     now = utcnow()

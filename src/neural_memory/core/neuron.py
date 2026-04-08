@@ -54,6 +54,16 @@ class Neuron:
     created_at: datetime = field(default_factory=utcnow)
     ephemeral: bool = False
 
+    @property
+    def grounded(self) -> bool:
+        """Whether this neuron is a grounded truth (resists decay and conflicts)."""
+        return bool(self.metadata.get("_grounded", False))
+
+    @property
+    def confidence(self) -> float:
+        """Confidence level (0.0-1.0). Grounded neurons default to 1.0."""
+        return float(self.metadata.get("_confidence", 0.5))
+
     @classmethod
     def create(
         cls,
@@ -63,6 +73,8 @@ class Neuron:
         neuron_id: str | None = None,
         content_hash: int = 0,
         ephemeral: bool = False,
+        grounded: bool = False,
+        confidence: float | None = None,
     ) -> Neuron:
         """
         Factory method to create a new Neuron.
@@ -78,11 +90,17 @@ class Neuron:
         Returns:
             A new Neuron instance
         """
+        final_metadata = dict(metadata) if metadata else {}
+        if grounded:
+            final_metadata["_grounded"] = True
+            final_metadata["_confidence"] = 1.0 if confidence is None else confidence
+        elif confidence is not None:
+            final_metadata["_confidence"] = confidence
         return cls(
             id=neuron_id or str(uuid4()),
             type=type,
             content=content,
-            metadata=metadata or {},
+            metadata=final_metadata,
             content_hash=content_hash,
             created_at=utcnow(),
             ephemeral=ephemeral,
@@ -107,6 +125,23 @@ class Neuron:
             created_at=self.created_at,
             ephemeral=self.ephemeral,
         )
+
+    def with_grounded(self, grounded: bool = True, confidence: float = 1.0) -> Neuron:
+        """Create a new Neuron with updated grounding status."""
+        updates: dict[str, Any] = {"_grounded": grounded, "_confidence": confidence}
+        if not grounded:
+            # Remove grounding keys when ungrounding
+            new_meta = {k: v for k, v in self.metadata.items() if k not in ("_grounded", "_confidence")}
+            return Neuron(
+                id=self.id,
+                type=self.type,
+                content=self.content,
+                metadata=new_meta,
+                content_hash=self.content_hash,
+                created_at=self.created_at,
+                ephemeral=self.ephemeral,
+            )
+        return self.with_metadata(**updates)
 
 
 @dataclass(frozen=True)

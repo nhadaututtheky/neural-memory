@@ -381,6 +381,14 @@ async def resolve_conflicts(
         if existing_neuron is None:
             continue
 
+        # Grounded neurons are canonical truth — skip conflict resolution
+        if existing_neuron.grounded:
+            logger.debug(
+                "Skipping conflict resolution for grounded neuron %s",
+                conflict.existing_neuron_id,
+            )
+            continue
+
         is_error_resolution = _is_error_memory(existing_neuron, existing_memory_type)
 
         # 1. Get existing neuron state for confidence reduction

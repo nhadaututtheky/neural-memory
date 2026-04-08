@@ -101,6 +101,14 @@ class DecayManager:
         if hasattr(storage, "get_pinned_neuron_ids"):
             pinned_neuron_ids = await storage.get_pinned_neuron_ids()
 
+        # Preload grounded neuron IDs — grounded neurons resist all decay
+        grounded_neuron_ids: set[str] = set()
+        try:
+            all_neurons = await storage.find_neurons(limit=5000)
+            grounded_neuron_ids = {n.id for n in all_neurons if n.grounded}
+        except Exception:
+            logger.debug("Grounded neuron preload failed (non-critical)", exc_info=True)
+
         # Preload neuron→tier mapping for tier-aware decay
         from neural_memory.core.memory_types import TIER_DECAY_FLOORS, TIER_DECAY_MULTIPLIERS
 
@@ -144,8 +152,8 @@ class DecayManager:
         report.neurons_processed = len(states)
 
         for state in states:
-            # Skip neurons belonging to pinned (KB) fibers
-            if state.neuron_id in pinned_neuron_ids:
+            # Skip neurons belonging to pinned (KB) fibers or grounded neurons
+            if state.neuron_id in pinned_neuron_ids or state.neuron_id in grounded_neuron_ids:
                 continue
             # Use last_activated if available, otherwise fall back to created_at
             if state.last_activated is None:
