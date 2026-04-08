@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.36.0] — 2026-04-08
+
+### Added
+
+- **Familiarity fallback recall** — dual-process theory (Yonelinas 1994): when recollection fails (sufficiency gate INSUFFICIENT), NM now tries familiarity-based recall with relaxed activation thresholds before returning empty. Two strategies: (A) halved activation threshold for weak signals, (B) broader keyword-based anchor search for no_anchors gate. Results tagged `synthesis_method="familiarity"` with confidence capped at 0.4
+- **Codex CLI support** — `nmem setup rules --ide codex` generates `codex.md` with hook-like instructions for OpenAI Codex CLI, ensuring persistent memory usage across sessions (closes #127)
+
+### Improved
+
+- **Sufficiency gate tuning** — `unstable_noise` threshold tightened (0.3 → 0.2) and `ambiguous_spread` entropy base raised (3.0 → 4.0) to reduce false-INSUFFICIENT decisions that caused empty retrieval
+
+### Tests
+
+- 11 new tests: familiarity config defaults, gate threshold changes, integration tests for fallback behavior
+
 ## [4.35.0] — 2026-04-07
 
 ### Added
