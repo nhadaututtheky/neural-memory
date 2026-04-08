@@ -38,6 +38,11 @@ IDE_TARGETS: dict[str, dict[str, str]] = {
         "name": "Gemini",
         "description": "Gemini Code Assist / Gemini CLI rules",
     },
+    "codex": {
+        "file": "codex.md",
+        "name": "Codex CLI (OpenAI)",
+        "description": "OpenAI Codex CLI instructions file",
+    },
     "agents": {
         "file": "AGENTS.md",
         "name": "AGENTS.md (cross-platform)",
@@ -131,6 +136,89 @@ Prevention: add cookie format integration test."
 """
 
 
+def _get_codex_rules_content() -> str:
+    """Generate Codex CLI-specific rules with hook-like behavior.
+
+    Codex CLI reads codex.md as system instructions. Since Codex doesn't
+    support event hooks like Claude Code, we embed the hook behavior
+    directly into the instructions so Codex triggers them proactively.
+    """
+    return """\
+# Neural Memory Integration — Codex CLI
+
+This project uses [Neural Memory](https://github.com/nhadaututtheky/neural-memory) \
+for persistent AI memory across sessions. Neural Memory is available as an MCP server.
+
+## Hooks (Execute Automatically)
+
+Codex does not have built-in lifecycle hooks. Instead, treat these as \
+**mandatory actions** that you MUST execute at the specified trigger points.
+
+### Hook 1: Session Start (BEFORE any code work)
+
+**Trigger**: Beginning of every session, before reading files or writing code.
+
+```
+nmem_recall("current project context")
+nmem_recall("<topic related to user's request>")
+nmem_recap()
+```
+
+This loads cross-session decisions, patterns, and known issues. \
+Skipping this means you will repeat past mistakes or contradict prior decisions.
+
+### Hook 2: After Each Task Completion
+
+**Trigger**: After completing a feature, fixing a bug, or making a decision.
+
+```
+nmem_remember(
+    content="<what happened and why — use causal language>",
+    type="<decision|error|insight|workflow|preference|instruction|fact>",
+    tags=["<project>", "<topic>"],
+    context={"reason": "...", "alternatives": ["..."]}
+)
+```
+
+### Hook 3: Session End
+
+**Trigger**: Before finishing the session or when the user says "done".
+
+```
+nmem_auto(action="process", summary="<1-2 sentence session summary>")
+```
+
+## Memory Types
+
+| Type | When to Use | Example |
+|------|------------|---------|
+| decision | Chose X over Y | "Chose React Query over SWR because..." |
+| error | Bug root cause + fix | "Auth broke because new cookie format, fixed by..." |
+| insight | Pattern or learning | "This codebase uses repository pattern for..." |
+| workflow | Process or steps | "Deploy: build -> test -> push to staging" |
+| preference | User/team preference | "User prefers dark mode on all dashboards" |
+| instruction | Rule to follow | "Always run linter before commit because..." |
+| fact | Verified information | "API endpoint is /v2/users, rate limit 100/min" |
+
+## Quality Rules
+
+- Max 1-3 sentences per memory
+- ALWAYS include WHY: "because...", "after...", "over X instead of Y"
+- ALWAYS include tags with project name
+- Use `context` dict for structured data — NM merges it into rich content
+- NEVER store flat facts without reasoning
+- NEVER store code/file contents (derivable from codebase)
+
+## Maintenance
+
+| Action | When | Command |
+|--------|------|---------|
+| Check brain health | Weekly | `nmem_health()` |
+| Consolidate memories | Weekly | `nmem_consolidate()` |
+| Review queue | Monthly | `nmem_review(action="queue")` |
+"""
+
+
 def generate_rules_file(
     target_dir: Path,
     ide: str,
@@ -156,7 +244,7 @@ def generate_rules_file(
     if file_path.exists() and not force:
         return "exists"
 
-    content = _get_rules_content()
+    content = _get_codex_rules_content() if ide == "codex" else _get_rules_content()
     file_path.write_text(content, encoding="utf-8")
     return "created"
 

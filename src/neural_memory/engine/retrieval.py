@@ -555,6 +555,35 @@ class ReflexPipeline:
         )
 
         if not _sufficiency.sufficient:
+            # Dual-process fallback: try familiarity recall before giving up
+            if getattr(self._config, "familiarity_fallback_enabled", True):
+                _fam_result = await self._familiarity_recall(
+                    stimulus=stimulus,
+                    activations=activations,
+                    anchor_sets=anchor_sets,
+                    co_activations=co_activations,
+                    depth=depth,
+                    query=query,
+                    tags=tags,
+                    tag_mode=tag_mode,
+                    valid_at=valid_at,
+                    as_of=as_of,
+                    max_tokens=max_tokens,
+                    start_time=start_time,
+                    phase_timings=_phase_timings,
+                    sufficiency_gate=_sufficiency.gate,
+                )
+                if _fam_result is not None:
+                    # Flush pending writes before returning familiarity result
+                    if self._write_queue.pending_count > 0:
+                        try:
+                            await self._write_queue.flush(self._storage)
+                        except Exception:
+                            logger.debug(
+                                "Deferred write flush failed (non-critical)", exc_info=True
+                            )
+                    return _fam_result
+
             _early_latency = (time.perf_counter() - start_time) * 1000
             _phase_timings["early_exit"] = _early_latency
             _early_result = RetrievalResult(
@@ -1395,6 +1424,153 @@ class ReflexPipeline:
                     weight=initial_weight,
                 )
                 self._write_queue.defer_synapse_create(synapse)
+
+    async def _familiarity_recall(
+        self,
+        stimulus: Stimulus,
+        activations: dict[str, ActivationResult],
+        anchor_sets: list[list[str]],
+        co_activations: list[CoActivation],
+        depth: DepthLevel,
+        query: str,
+        tags: set[str] | None,
+        tag_mode: str,
+        valid_at: datetime | None,
+        as_of: datetime | None,
+        max_tokens: int,
+        start_time: float,
+        phase_timings: dict[str, float],
+        sufficiency_gate: str,
+    ) -> RetrievalResult | None:
+        """Familiarity-based recall — weaker signal, lower confidence.
+
+        Dual-process theory (Yonelinas 1994): when recollection (full
+        activation) fails, fall back to familiarity (relaxed thresholds,
+        vague recognition). Returns None if familiarity also fails.
+        """
+        max_fibers = self._config.familiarity_max_fibers
+        confidence_cap = self._config.familiarity_confidence_cap
+
+        fibers_matched: list[Fiber] = []
+
+        # Strategy A: We have activations but they were too weak for sufficiency.
+        # Relax the activation threshold by 50% and try fiber matching.
+        if activations and sufficiency_gate not in ("no_anchors", "empty_landscape"):
+            relaxed_threshold = self._config.activation_threshold * 0.5
+            # Filter activations above relaxed threshold
+            relaxed_activations = {
+                nid: act
+                for nid, act in activations.items()
+                if act.activation_level >= relaxed_threshold
+            }
+            if relaxed_activations:
+                query_tokens = set(query.lower().split())
+                fibers_matched = await self._find_matching_fibers(
+                    relaxed_activations,
+                    valid_at=valid_at,
+                    tags=tags,
+                    query_tokens=query_tokens,
+                    tag_mode=tag_mode,
+                    created_before=as_of,
+                )
+
+        # Strategy B: No activations at all (no_anchors / empty_landscape).
+        # Try broader content-based anchor search with query keywords,
+        # then run a lightweight activation pass.
+        if not fibers_matched and stimulus.keywords:
+            broader_anchor_ids: list[str] = []
+            for kw in list(stimulus.keywords)[:3]:
+                try:
+                    found = await self._storage.find_neurons(content_contains=kw, limit=3)
+                    broader_anchor_ids.extend(n.id for n in found)
+                except Exception:
+                    pass
+
+            # Deduplicate
+            broader_anchor_ids = list(dict.fromkeys(broader_anchor_ids))
+
+            if broader_anchor_ids:
+                try:
+                    new_activations, _trace = await self._activator.activate(
+                        broader_anchor_ids[:10],
+                        min_activation=self._config.activation_threshold * 0.5,
+                    )
+                    if new_activations:
+                        query_tokens = set(query.lower().split())
+                        fibers_matched = await self._find_matching_fibers(
+                            new_activations,
+                            valid_at=valid_at,
+                            tags=tags,
+                            query_tokens=query_tokens,
+                            tag_mode=tag_mode,
+                            created_before=as_of,
+                        )
+                        # Update activations for subgraph extraction
+                        activations = new_activations
+                except Exception:
+                    logger.debug("Familiarity broader activation failed", exc_info=True)
+
+        if not fibers_matched:
+            return None
+
+        # Cap fibers
+        fibers_matched = fibers_matched[:max_fibers]
+
+        phase_timings["familiarity"] = (time.perf_counter() - start_time) * 1000
+
+        # Build result with capped confidence
+        neuron_ids, synapse_ids = await self._activator.get_activated_subgraph(
+            activations,
+            min_activation=self._config.activation_threshold * 0.5,
+            max_neurons=30,
+        )
+        subgraph = Subgraph(
+            neuron_ids=neuron_ids,
+            synapse_ids=synapse_ids,
+            anchor_ids=[a for anchors in anchor_sets for a in anchors],
+        )
+
+        reconstruction = await reconstruct_answer(
+            self._storage,
+            activations,
+            [],  # no intersections for familiarity
+            fibers_matched,
+        )
+
+        _encryptor = self._get_encryptor()
+        _brain_id = self._storage.brain_id or "" if _encryptor else ""
+
+        context, tokens_used = await format_context(
+            self._storage,
+            activations,
+            fibers_matched,
+            max_tokens,
+            encryptor=_encryptor,
+            brain_id=_brain_id,
+        )
+
+        _latency = (time.perf_counter() - start_time) * 1000
+
+        return RetrievalResult(
+            answer=reconstruction.answer,
+            confidence=min(reconstruction.confidence, confidence_cap),
+            depth_used=depth,
+            neurons_activated=len(activations),
+            fibers_matched=[f.id for f in fibers_matched],
+            subgraph=subgraph,
+            context=context,
+            latency_ms=_latency,
+            tokens_used=tokens_used,
+            co_activations=co_activations,
+            contributing_neurons=reconstruction.contributing_neuron_ids,
+            synthesis_method="familiarity",
+            metadata={
+                "query_intent": stimulus.intent.value,
+                "familiarity_fallback": True,
+                "original_gate": sufficiency_gate,
+                "phase_timings_ms": phase_timings,
+            },
+        )
 
     def _apply_lateral_inhibition(
         self,

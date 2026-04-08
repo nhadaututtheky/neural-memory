@@ -312,7 +312,7 @@ def check_sufficiency(
         )
 
     # Gate 3: unstable_noise
-    if not m.stab_converged and m.stab_neurons_removed > m.neuron_count and m.top_activation < 0.3:
+    if not m.stab_converged and m.stab_neurons_removed > m.neuron_count and m.top_activation < 0.2:
         return SufficiencyResult(
             sufficient=False,
             confidence=min(conf, 0.1),
@@ -326,7 +326,7 @@ def check_sufficiency(
 
     # Gate 4: ambiguous_spread
     # Apply profile entropy_tolerance and min_top_activation_factor
-    _entropy_threshold = 3.0 * profile.entropy_tolerance
+    _entropy_threshold = 4.0 * profile.entropy_tolerance
     _top_act_threshold_ambiguous = 0.3 * profile.min_top_activation_factor
     if (
         m.activation_entropy >= _entropy_threshold
