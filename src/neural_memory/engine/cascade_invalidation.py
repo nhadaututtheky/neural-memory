@@ -106,6 +106,10 @@ async def cascade_staleness(
                 continue
             visited.add(neuron.id)
 
+            # Grounded neurons are truth anchors — never cascade stale
+            if neuron.metadata.get("_grounded"):
+                continue
+
             next_depth = depth + 1
             max_depth_reached = max(max_depth_reached, next_depth)
 

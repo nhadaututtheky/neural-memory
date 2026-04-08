@@ -204,6 +204,8 @@ async def reconsolidate_on_recall(
         "_context_trail": trail,
         "_reconsolidation_count": recon_count,
     }
+    # Clear stale mark — reconsolidated memory absorbed fresh context
+    new_meta.pop("_stale", None)
 
     updated_neuron = Neuron(
         id=neuron.id,
