@@ -1743,6 +1743,31 @@ class BuildFiberStep:
 
         await storage.add_fiber(fiber)
 
+        # ── Session cortical column ──
+        # Create a "column" fiber aggregating all neurons from this encode,
+        # providing a session-level retrieval path (Mountcastle 1957).
+        if getattr(config, "session_columns_enabled", True) and len(neuron_ids) >= 3:
+            # Truncated content as column summary for keyword matching
+            col_summary = ctx.content[:500] if len(ctx.content) > 500 else ctx.content
+            col_metadata = {
+                **fiber_metadata,
+                "_column": True,
+            }
+            column_fiber = Fiber.create(
+                neuron_ids=neuron_ids,
+                synapse_ids=synapse_ids,
+                anchor_neuron_id=ctx.anchor_neuron.id,
+                time_start=ctx.timestamp,
+                time_end=ctx.timestamp,
+                summary=col_summary,
+                auto_tags=ctx.auto_tags,
+                agent_tags=ctx.agent_tags,
+                metadata=col_metadata,
+                pathway=pathway,
+            )
+            column_fiber = column_fiber.with_salience(min(1.0, salience * 0.9))
+            await storage.add_fiber(column_fiber)
+
         # Record tag co-occurrence for drift detection
         if ctx.merged_tags and len(ctx.merged_tags) >= 2:
             try:

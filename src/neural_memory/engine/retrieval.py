@@ -1515,6 +1515,46 @@ class ReflexPipeline:
                 except Exception:
                     logger.debug("Familiarity broader activation failed", exc_info=True)
 
+        # Strategy C: Column fiber summary search (cortical column pattern completion).
+        # If both A and B failed, search column fiber summaries for query keywords.
+        if not fibers_matched and stimulus.keywords:
+            try:
+                column_fibers = await self._storage.find_fibers(
+                    metadata_key="_column",
+                    limit=20,
+                )
+                if column_fibers:
+                    _q_tokens = {kw.lower() for kw in stimulus.keywords}
+                    scored_cols: list[tuple[float, Fiber]] = []
+                    for cf in column_fibers:
+                        if valid_at is not None and not _fiber_valid_at(cf, valid_at):
+                            continue
+                        summary = (cf.summary or "").lower()
+                        if not summary:
+                            continue
+                        hits = sum(1 for t in _q_tokens if t in summary)
+                        if hits > 0:
+                            score = hits / max(len(_q_tokens), 1)
+                            scored_cols.append((score, cf))
+                    scored_cols.sort(key=lambda x: x[0], reverse=True)
+                    fibers_matched = [f for _, f in scored_cols[:max_fibers]]
+
+                    # Build minimal activations from column fiber neurons
+                    if fibers_matched and not activations:
+                        col_neuron_ids = set()
+                        for f in fibers_matched:
+                            col_neuron_ids.update(f.neuron_ids)
+                        for nid in list(col_neuron_ids)[:30]:
+                            activations[nid] = ActivationResult(
+                                neuron_id=nid,
+                                activation_level=0.3,
+                                hop_distance=0,
+                                path=[nid],
+                                source_anchor=nid,
+                            )
+            except Exception:
+                logger.debug("Column fiber summary search failed", exc_info=True)
+
         if not fibers_matched:
             return None
 
@@ -2511,6 +2551,10 @@ class ReflexPipeline:
             # --- T4.2: Stale penalty for outdated version references ---
             if fiber_meta.get("_stale"):
                 score *= 0.8  # -20% penalty for outdated version references
+
+            # --- Column fiber boost: complete episodic traces rank higher ---
+            if fiber_meta.get("_column"):
+                score *= 1.3
 
             # --- Context-dependent retrieval: match encoding vs query context ---
             if getattr(self._config, "context_retrieval_enabled", True):

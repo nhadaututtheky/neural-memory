@@ -157,6 +157,8 @@ class BrainConfig:
     familiarity_confidence_cap: float = 0.4
     # Graph density scaling (homeostatic synaptic scaling for large graphs)
     graph_density_scaling_enabled: bool = True
+    # Session cortical columns (episodic session-level retrieval)
+    session_columns_enabled: bool = True
     # Interference forgetting (memory competition detection)
     interference_detection_enabled: bool = False
     fan_effect_threshold: int = 15
