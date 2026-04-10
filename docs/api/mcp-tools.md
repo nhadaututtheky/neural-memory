@@ -1,7 +1,7 @@
 # MCP Tools Reference
 
 Complete reference for all NeuralMemory MCP tools.
-**56 tools** available via MCP stdio transport.
+**58 tools** available via MCP stdio transport.
 
 !!! tip
     Tools are called as MCP tool calls, not CLI commands. In Claude Code, call `nmem_recall` directly — do not run `nmem recall` in terminal.
@@ -74,6 +74,8 @@ Complete reference for all NeuralMemory MCP tools.
   - [`nmem_boundaries`](#nmem_boundaries)
   - [`nmem_milestone`](#nmem_milestone)
   - [`nmem_store`](#nmem_store)
+  - [`nmem_goal`](#nmem_goal)
+  - [`nmem_causal`](#nmem_causal)
 
 ---
 
@@ -137,6 +139,8 @@ Query memories via spreading activation. Use when you need past context, decisio
 | `domain` | string | No | — | Domain scope filter. When set, HOT context injection only includes boundaries tagged with this domain (plus unscoped ... |
 | `as_of` | string | No | — | ISO datetime for time-travel recall. Returns only memories that existed at that point in time (created_at <= as_of) a... |
 | `simhash_threshold` | integer | No | — | SimHash pre-filter Hamming distance cutoff. Neurons with content_hash farther than this threshold from the query hash... |
+| `min_arousal` | number | No | — | Filter: only return memories with arousal (emotional intensity) >= this value. Arousal is detected at encoding time (... |
+| `valence` | string (`positive`, `negative`, `neutral`) | No | — | Filter: only return memories with this emotional valence. Valence is detected at encoding via sentiment analysis. Use... |
 | `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
 | `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
@@ -755,8 +759,9 @@ Manage memory lifecycle: view compression states, freeze/thaw individual memorie
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `action` | string (`status`, `recover`, `freeze`, `thaw`) | Yes | — | status=show lifecycle distribution, recover=rehydrate compressed memory, freeze=prevent compression, thaw=resume norm... |
+| `action` | string (`status`, `recover`, `freeze`, `thaw`, `at_risk`) | Yes | — | status=show lifecycle distribution, recover=rehydrate compressed memory, freeze=prevent compression, thaw=resume norm... |
 | `id` | string | No | — | Neuron ID (required for recover/freeze/thaw). For recover, fiber_id is also accepted. |
+| `within_days` | integer | No | default: 7 | For at_risk: number of days to look ahead for expiring memories (default: 7). |
 | `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
 | `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
@@ -853,6 +858,35 @@ Brain Store — browse, preview, import, and export community knowledge brains. 
 | `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
 | `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
+### `nmem_goal`
+
+Goal-directed recall — manage active goals that bias memory retrieval toward relevant context. Active goals make recall relevance-based (proximity to goal) instead of just similarity-based.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `action` | string (`create`, `list`, `subgoals`, `activate`, `pause`, `complete`) | Yes | — | create=new goal, list=show goals, subgoals=list children of a goal, activate/pause/complete=change state |
+| `goal` | string | No | — | Goal description (required for create). e.g. 'optimize API latency for sync-hub' |
+| `goal_id` | string | No | — | Goal ID (required for activate/pause/complete/subgoals) |
+| `priority` | integer | No | — | Goal priority 1-10 (default 5). Higher = stronger recall boost |
+| `parent_goal_id` | string | No | — | Parent goal ID (create only). Makes this a subgoal that inherits parent priority boost |
+| `keywords` | array[string] | No | — | Keywords for topic EMA seeding (auto-extracted if omitted) |
+| `state` | string (`active`, `paused`, `completed`) | No | — | Filter by state (list only) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
+
+### `nmem_causal`
+
+Trace causal chains and temporal event sequences through the memory graph. Use 'trace' to follow CAUSED_BY/LEADS_TO synapses, 'sequence' to follow BEFORE/AFTER temporal order.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `action` | string (`trace`, `sequence`) | Yes | — | trace=follow causal synapses (CAUSED_BY/LEADS_TO), sequence=follow temporal synapses (BEFORE/AFTER) |
+| `neuron_id` | string | Yes | — | Starting neuron ID for traversal |
+| `direction` | string | No | — | For trace: 'causes' (what caused this) or 'effects' (what this caused). For sequence: 'forward' (what happened next) ... |
+| `max_depth` | integer | No | default: 5 | Maximum traversal depth (default: 5) |
+| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
+
 ---
 
-*Auto-generated by `scripts/gen_mcp_docs.py` from `tool_schemas.py` — 56 tools.*
+*Auto-generated by `scripts/gen_mcp_docs.py` from `tool_schemas.py` — 58 tools.*

@@ -216,6 +216,20 @@ class RecallHandler:
             except (TypeError, ValueError):
                 return {"error": f"Invalid min_trust: {raw_min_trust}"}
 
+        min_arousal: float | None = None
+        raw_min_arousal = args.get("min_arousal")
+        if raw_min_arousal is not None:
+            try:
+                min_arousal = float(raw_min_arousal)
+            except (TypeError, ValueError):
+                return {"error": f"Invalid min_arousal: {raw_min_arousal}"}
+
+        valence_filter: str | None = args.get("valence")
+        if valence_filter is not None:
+            valence_filter = str(valence_filter).lower().strip()
+            if valence_filter not in ("positive", "negative", "neutral"):
+                return {"error": f"Invalid valence: {valence_filter}. Must be positive/negative/neutral."}
+
         # Inject session context for richer recall on vague queries
         effective_query = query
         try:
@@ -434,6 +448,43 @@ class RecallHandler:
                     "Post-filter (trust/tier) failed, returning unfiltered results", exc_info=True
                 )
 
+        # Post-filter by arousal and/or valence (stored in fiber metadata)
+        needs_emotion_filter = (min_arousal is not None or valence_filter is not None)
+        if needs_emotion_filter and result.fibers_matched:
+            try:
+                emotion_passing: set[str] = set()
+                for fid in result.fibers_matched:
+                    fiber = await storage.get_fiber(fid)
+                    if not fiber:
+                        emotion_passing.add(fid)  # Include if fiber not found
+                        continue
+
+                    # Arousal filter
+                    if min_arousal is not None:
+                        fiber_arousal = fiber.metadata.get("_arousal", 0.0)
+                        if not (isinstance(fiber_arousal, (int, float)) and fiber_arousal >= min_arousal):
+                            continue
+
+                    # Valence filter
+                    if valence_filter is not None:
+                        fiber_valence = fiber.metadata.get("_valence", "")
+                        if fiber_valence != valence_filter:
+                            continue
+
+                    emotion_passing.add(fid)
+
+                filtered_fibers = [f for f in result.fibers_matched if f in emotion_passing]
+                result = (
+                    result._replace(fibers_matched=filtered_fibers)
+                    if hasattr(result, "_replace")
+                    else result
+                )
+            except Exception:
+                logger.warning(
+                    "Post-filter (arousal/valence) failed, returning unfiltered results",
+                    exc_info=True,
+                )
+
         # Exact mode: return raw neuron contents without truncation
         if recall_mode == "exact" and result.fibers_matched:
             exact_items: list[dict[str, Any]] = []
@@ -511,6 +562,18 @@ class RecallHandler:
                 "intersection_boost": round(result.score_breakdown.intersection_boost, 4),
                 "freshness_boost": round(result.score_breakdown.freshness_boost, 4),
                 "frequency_boost": round(result.score_breakdown.frequency_boost, 4),
+            }
+
+        # Unified confidence score (metacognitive assessment)
+        if result.confidence_score is not None:
+            cs = result.confidence_score
+            response["confidence_score"] = {
+                "overall": cs.overall,
+                "retrieval": cs.retrieval,
+                "content_quality": cs.content_quality,
+                "fidelity": cs.fidelity,
+                "freshness": cs.freshness,
+                "familiarity_penalty": cs.familiarity_penalty,
             }
 
         # Surface conflict info from retrieval

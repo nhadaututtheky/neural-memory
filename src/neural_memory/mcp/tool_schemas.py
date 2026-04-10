@@ -391,6 +391,21 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "this threshold from the query hash are excluded before spreading activation. "
                     "0 = disabled (default). Lower values = stricter filtering. Overrides brain config for this query.",
                 },
+                "min_arousal": {
+                    "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 1.0,
+                    "description": "Filter: only return memories with arousal (emotional intensity) >= this value. "
+                    "Arousal is detected at encoding time (0.0=neutral, 1.0=maximum intensity). "
+                    "Use to find emotionally significant memories (e.g. incidents, breakthroughs).",
+                },
+                "valence": {
+                    "type": "string",
+                    "enum": ["positive", "negative", "neutral"],
+                    "description": "Filter: only return memories with this emotional valence. "
+                    "Valence is detected at encoding via sentiment analysis. "
+                    "Use to find e.g. only frustrations (negative) or breakthroughs (positive).",
+                },
             },
             "required": ["query"],
         },
@@ -1823,14 +1838,21 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["status", "recover", "freeze", "thaw"],
+                    "enum": ["status", "recover", "freeze", "thaw", "at_risk"],
                     "description": "status=show lifecycle distribution, recover=rehydrate compressed memory, "
-                    "freeze=prevent compression, thaw=resume normal lifecycle",
+                    "freeze=prevent compression, thaw=resume normal lifecycle, "
+                    "at_risk=show memories expiring soon (forgetting curve)",
                 },
                 "id": {
                     "type": "string",
                     "description": "Neuron ID (required for recover/freeze/thaw). "
                     "For recover, fiber_id is also accepted.",
+                },
+                "within_days": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 90,
+                    "description": "For at_risk: number of days to look ahead for expiring memories (default: 7).",
                 },
             },
             "required": ["action"],
@@ -2074,8 +2096,9 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["create", "list", "activate", "pause", "complete"],
-                    "description": "create=new goal, list=show goals, activate/pause/complete=change state",
+                    "enum": ["create", "list", "subgoals", "activate", "pause", "complete"],
+                    "description": "create=new goal, list=show goals, subgoals=list children of a goal, "
+                    "activate/pause/complete=change state",
                 },
                 "goal": {
                     "type": "string",
@@ -2083,13 +2106,17 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 },
                 "goal_id": {
                     "type": "string",
-                    "description": "Goal ID (required for activate/pause/complete)",
+                    "description": "Goal ID (required for activate/pause/complete/subgoals)",
                 },
                 "priority": {
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 10,
                     "description": "Goal priority 1-10 (default 5). Higher = stronger recall boost",
+                },
+                "parent_goal_id": {
+                    "type": "string",
+                    "description": "Parent goal ID (create only). Makes this a subgoal that inherits parent priority boost",
                 },
                 "keywords": {
                     "type": "array",
@@ -2103,6 +2130,39 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 },
             },
             "required": ["action"],
+        },
+    },
+    {
+        "name": "nmem_causal",
+        "description": "Trace causal chains and temporal event sequences through the memory graph. "
+        "Use 'trace' to follow CAUSED_BY/LEADS_TO synapses, 'sequence' to follow BEFORE/AFTER temporal order.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["trace", "sequence"],
+                    "description": "trace=follow causal synapses (CAUSED_BY/LEADS_TO), "
+                    "sequence=follow temporal synapses (BEFORE/AFTER)",
+                },
+                "neuron_id": {
+                    "type": "string",
+                    "description": "Starting neuron ID for traversal",
+                },
+                "direction": {
+                    "type": "string",
+                    "description": "For trace: 'causes' (what caused this) or 'effects' (what this caused). "
+                    "For sequence: 'forward' (what happened next) or 'backward' (what happened before). "
+                    "Defaults: trace→'causes', sequence→'forward'.",
+                },
+                "max_depth": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10,
+                    "description": "Maximum traversal depth (default: 5)",
+                },
+            },
+            "required": ["action", "neuron_id"],
         },
     },
 ]

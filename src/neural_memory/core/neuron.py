@@ -87,11 +87,17 @@ class Neuron:
         """Whether this neuron is an active goal."""
         return self.goal_state == "active"
 
+    @property
+    def parent_goal_id(self) -> str | None:
+        """ID of the parent goal (via SUBGOAL_OF synapse). Cached in metadata."""
+        return self.metadata.get("_parent_goal_id")
+
     def with_goal_state(
         self,
         state: str,
         priority: int = 5,
         keywords: list[str] | None = None,
+        parent_goal_id: str | None = None,
     ) -> Neuron:
         """Create a new Neuron with updated goal state.
 
@@ -99,6 +105,7 @@ class Neuron:
             state: Goal state ('active', 'paused', 'completed')
             priority: Goal priority 1-10
             keywords: Keywords for EMA seeding
+            parent_goal_id: Optional parent goal ID for hierarchy
 
         Returns:
             New Neuron with goal metadata
@@ -113,6 +120,8 @@ class Neuron:
         }
         if keywords is not None:
             updates["_goal_keywords"] = keywords
+        if parent_goal_id is not None:
+            updates["_parent_goal_id"] = parent_goal_id
         return self.with_metadata(**updates)
 
     @classmethod

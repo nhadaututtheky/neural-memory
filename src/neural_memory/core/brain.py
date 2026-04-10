@@ -145,6 +145,8 @@ class BrainConfig:
     replay_enabled: bool = True
     replay_ltp_factor: float = 1.1
     replay_ltd_factor: float = 0.98
+    replay_window_hours: float = 24.0  # How far back to look for recent fibers
+    replay_max_episodes: int = 20  # Max episodes per replay run
     # Working memory chunking (group retrieval output)
     chunking_enabled: bool = True
     max_chunks: int = 5
@@ -175,10 +177,26 @@ class BrainConfig:
     causal_auto_include: bool = True
     causal_auto_include_max_hops: int = 2
     anti_redundancy_penalty: float = 0.3
+    # Unified confidence scoring weights (sum should ≈ 1.0)
+    confidence_weight_retrieval: float = 0.35
+    confidence_weight_quality: float = 0.25
+    confidence_weight_fidelity: float = 0.20
+    confidence_weight_freshness: float = 0.20
     # Cascade staleness: propagate stale marks through causal graph
     cascade_staleness_enabled: bool = True
     # Stratum-aware MMR diversity: cap per lifecycle stage
     stratum_diversity_cap: float = 0.4  # max 40% of results from one stratum
+    # Preference-aware retrieval (boost preference-establishing sessions)
+    preference_detection_enabled: bool = True
+    preference_boost: float = 1.5  # multiplier for preference-tagged fibers
+    preference_domain_boost: float = 0.2  # additive boost for domain keyword overlap
+    # Temporal query routing (event anchor boost for temporal questions)
+    temporal_routing_enabled: bool = True
+    temporal_event_anchor_boost: float = 0.3  # additive boost per event anchor match
+    # Role-aware scoring (boost fibers matching query role target)
+    role_aware_scoring_enabled: bool = True
+    role_match_boost: float = 1.3  # multiplier for matching role
+    role_mismatch_penalty: float = 0.9  # multiplier for mismatching role
 
     def with_updates(self, **kwargs: Any) -> BrainConfig:
         """Create a new config with updated values."""

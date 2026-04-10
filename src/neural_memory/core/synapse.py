@@ -88,6 +88,9 @@ class SynapseType(StrEnum):
     # Decision intelligence — evolution tracking
     EVOLVES_FROM = "evolves_from"  # New decision -> Prior decision (same domain)
 
+    # Goal hierarchy
+    SUBGOAL_OF = "subgoal_of"  # Child goal -> Parent goal (decomposition)
+
     # Code-semantic relationships
     IMPORTS = "imports"  # Module -> Module (import dependency)
     CALLS = "calls"  # Function -> Function (invocation)
@@ -158,6 +161,7 @@ SYNAPSE_ROLES: dict[SynapseType, SynapseRole] = {
     SynapseType.PREDICTED: SynapseRole.STRUCTURAL,
     SynapseType.DERIVED_FROM: SynapseRole.STRUCTURAL,
     SynapseType.REGULATES: SynapseRole.STRUCTURAL,
+    SynapseType.SUBGOAL_OF: SynapseRole.STRUCTURAL,
     # ── Lateral: bidirectional co-occurrence ───────────────────────
     SynapseType.CO_OCCURS: SynapseRole.LATERAL,
     SynapseType.RELATED_TO: SynapseRole.LATERAL,

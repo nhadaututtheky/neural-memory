@@ -65,6 +65,9 @@ async def detect_interference(
 ) -> list[InterferenceResult]:
     """Detect memories that may interfere with a new memory.
 
+    Pinned and grounded neurons are exempt from interference detection —
+    they represent verified knowledge that should not be weakened.
+
     Args:
         new_neuron: Newly encoded neuron
         storage: Storage backend
@@ -80,11 +83,23 @@ async def detect_interference(
     if not enabled:
         return []
 
+    # Pinned/grounded neurons are exempt from interference
+    if new_neuron.grounded:
+        return []
+
     new_hash = simhash(new_neuron.content)
     new_tags = set(new_neuron.metadata.get("tags", [])) if new_neuron.metadata else set()
 
     if not new_tags:
         return []
+
+    # Preload pinned neuron IDs to exempt from interference
+    pinned_ids: set[str] = set()
+    if hasattr(storage, "get_pinned_neuron_ids"):
+        try:
+            pinned_ids = await storage.get_pinned_neuron_ids()
+        except Exception:
+            logger.debug("Failed to load pinned neuron IDs for interference check")
 
     # Find neurons with overlapping tags (paginated to handle large brains)
     candidates: list[Neuron] = []
@@ -97,6 +112,9 @@ async def detect_interference(
             break
         for n in batch:
             if n.metadata and set(n.metadata.get("tags", [])) & new_tags:
+                # Skip pinned and grounded neurons — they are protected
+                if n.id in pinned_ids or n.grounded:
+                    continue
                 candidates.append(n)
                 if len(candidates) >= target:
                     break
@@ -187,8 +205,21 @@ async def resolve_interference(
     fan_effects_flagged = 0
     _goal_ids = goal_neuron_ids or set()
 
+    # Preload pinned neuron IDs to protect from weight reduction
+    pinned_ids: set[str] = set()
+    if hasattr(storage, "get_pinned_neuron_ids"):
+        try:
+            pinned_ids = await storage.get_pinned_neuron_ids()
+        except Exception:
+            logger.debug("Failed to load pinned neuron IDs for interference resolution")
+
     for r in results:
         if r.interference_type == InterferenceType.RETROACTIVE:
+            # Skip weight reduction for pinned neurons
+            if r.neuron_id in pinned_ids:
+                logger.debug("Skipping interference for pinned neuron %s", r.neuron_id[:12])
+                continue
+
             if not dry_run:
                 syn = Synapse.create(
                     source_id=new_neuron.id,

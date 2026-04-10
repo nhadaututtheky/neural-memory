@@ -67,9 +67,14 @@ async def hippocampal_replay(
     ltp_factor = float(ltp_factor) if isinstance(ltp_factor, (int, float)) else 1.1
     ltd_factor = float(ltd_factor) if isinstance(ltd_factor, (int, float)) else 0.98
 
-    # Find recent fibers (last 24h)
+    # Configurable replay window and episode cap
+    window_hours = getattr(config, "replay_window_hours", 24.0)
+    window_hours = float(window_hours) if isinstance(window_hours, (int, float)) else 24.0
+    max_episodes = getattr(config, "replay_max_episodes", 20)
+    max_episodes = int(max_episodes) if isinstance(max_episodes, (int, float)) else 20
+
     now = utcnow()
-    window_start = now - timedelta(hours=24)
+    window_start = now - timedelta(hours=window_hours)
 
     recent_fibers = await storage.find_fibers(
         time_overlaps=(window_start, now),
@@ -88,8 +93,7 @@ async def hippocampal_replay(
     total_strengthened = 0
     total_weakened = 0
 
-    # Replay up to 20 episodes
-    replay_count = min(20, len(recent_fibers))
+    replay_count = min(max_episodes, len(recent_fibers))
     selected = recent_fibers[:replay_count]
 
     # Shuffle to add variability (like real replay)

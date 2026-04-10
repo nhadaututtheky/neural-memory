@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from neural_memory import __version__
+from neural_memory.engine.scheduler import SchedulerCore
 from neural_memory.server.auth import APIKeyMiddleware
 from neural_memory.server.models import HealthResponse, ReadyResponse
 from neural_memory.server.rate_limit import RateLimitMiddleware
@@ -50,36 +51,72 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.storage = storage
     app.state.startup_time = time.monotonic()
 
-    # Start background daemons
+    # Start background daemons via unified scheduler
     config = get_config()
     maint = config.maintenance
     background_tasks: list[asyncio.Task[None]] = []
+    scheduler: SchedulerCore | None = None
 
-    if maint.enabled and maint.scheduled_consolidation_enabled:
-        background_tasks.append(asyncio.create_task(_consolidation_loop(storage, maint)))
-        _logger.info(
-            "Background consolidation daemon started: every %dh",
-            maint.scheduled_consolidation_interval_hours,
-        )
+    try:
+        from neural_memory.engine.scheduler_factory import build_scheduler
 
-    if maint.enabled and maint.decay_enabled:
-        background_tasks.append(asyncio.create_task(_decay_loop(storage, config, maint)))
-        _logger.info(
-            "Background decay daemon started: every %dh",
-            maint.decay_interval_hours,
-        )
+        scheduler_tasks: dict[str, Any] = {}
 
-    if maint.enabled and maint.reindex_enabled and maint.reindex_paths:
-        background_tasks.append(asyncio.create_task(_reindex_loop(storage, config, maint)))
-        _logger.info(
-            "Background re-index daemon started: every %dh, paths=%s",
-            maint.reindex_interval_hours,
-            maint.reindex_paths,
-        )
+        # Build single-run task closures for the scheduler
+        async def _run_consolidation() -> None:
+            await _consolidation_once(storage, maint)
 
-    if maint.enabled and maint.notifications_enabled and maint.notifications_webhook_url:
-        background_tasks.append(asyncio.create_task(_notification_loop(storage, config, maint)))
-        _logger.info("Background notification daemon started")
+        async def _run_decay() -> None:
+            await _decay_once(storage, config)
+
+        async def _run_reindex() -> None:
+            await _reindex_once(storage, config, maint)
+
+        async def _run_notifications() -> None:
+            await _notification_once(storage, config, maint)
+
+        scheduler_tasks["consolidation"] = _run_consolidation
+        scheduler_tasks["decay"] = _run_decay
+        if maint.reindex_paths:
+            scheduler_tasks["reindex"] = _run_reindex
+        if maint.notifications_webhook_url:
+            scheduler_tasks["notifications"] = _run_notifications
+
+        scheduler = build_scheduler(tasks=scheduler_tasks, config=maint)
+        await scheduler.start()
+        app.state.scheduler = scheduler
+        _logger.info("Unified scheduler started for FastAPI")
+    except Exception:
+        _logger.warning("Unified scheduler failed, falling back to legacy loops", exc_info=True)
+        scheduler = None
+
+        if maint.enabled and maint.scheduled_consolidation_enabled:
+            background_tasks.append(asyncio.create_task(_consolidation_loop(storage, maint)))
+            _logger.info(
+                "Background consolidation daemon started: every %dh",
+                maint.scheduled_consolidation_interval_hours,
+            )
+
+        if maint.enabled and maint.decay_enabled:
+            background_tasks.append(asyncio.create_task(_decay_loop(storage, config, maint)))
+            _logger.info(
+                "Background decay daemon started: every %dh",
+                maint.decay_interval_hours,
+            )
+
+        if maint.enabled and maint.reindex_enabled and maint.reindex_paths:
+            background_tasks.append(asyncio.create_task(_reindex_loop(storage, config, maint)))
+            _logger.info(
+                "Background re-index daemon started: every %dh, paths=%s",
+                maint.reindex_interval_hours,
+                maint.reindex_paths,
+            )
+
+        if maint.enabled and maint.notifications_enabled and maint.notifications_webhook_url:
+            background_tasks.append(
+                asyncio.create_task(_notification_loop(storage, config, maint))
+            )
+            _logger.info("Background notification daemon started")
 
     # File watcher daemon
     watcher_config = config.watcher
@@ -131,6 +168,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if hasattr(app.state, "file_watcher"):
         app.state.file_watcher.stop()
 
+    # Stop unified scheduler
+    if scheduler is not None:
+        await scheduler.stop()
+
+    # Stop legacy background tasks (fallback path)
     for task in background_tasks:
         if not task.done():
             task.cancel()
@@ -419,6 +461,147 @@ async def _send_webhook(url: str, payload: dict[str, Any], logger: Any) -> None:
 
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, partial(_do_post))
+
+
+# ── Single-run task functions for SchedulerCore ──
+# These extract the loop body from the legacy _*_loop() functions above.
+# The SchedulerCore handles the interval/sleep/retry logic.
+
+
+async def _consolidation_once(storage: NeuralStorage, maint: Any) -> None:
+    """Run a single consolidation cycle."""
+    import logging
+
+    from neural_memory.engine.consolidation import ConsolidationStrategy
+    from neural_memory.engine.consolidation_delta import run_with_delta
+
+    _logger = logging.getLogger(__name__)
+    strategies = [ConsolidationStrategy(s) for s in maint.scheduled_consolidation_strategies]
+
+    brain_id = storage.brain_id
+    if not brain_id:
+        _logger.debug("Consolidation skipped: no brain context set")
+        return
+
+    delta = await run_with_delta(storage, brain_id, strategies=strategies)
+    _logger.info(
+        "Background consolidation complete: %s | purity delta: %+.1f",
+        delta.report.summary(),
+        delta.purity_delta,
+    )
+
+
+async def _decay_once(storage: NeuralStorage, config: Any) -> None:
+    """Run a single decay cycle."""
+    import logging
+
+    from neural_memory.engine.lifecycle import DecayManager
+
+    _logger = logging.getLogger(__name__)
+
+    brain_id = storage.brain_id
+    if not brain_id:
+        _logger.debug("Decay skipped: no brain context set")
+        return
+
+    decay_rate = config.brain.decay_rate if hasattr(config, "brain") else 0.1
+    manager = DecayManager(decay_rate=decay_rate)
+    report = await manager.apply_decay(storage)
+    _logger.info("Background decay complete: %s", report.summary())
+
+
+async def _reindex_once(storage: NeuralStorage, config: Any, maint: Any) -> None:
+    """Run a single re-index cycle."""
+    import logging
+    from pathlib import Path
+
+    from neural_memory.engine.doc_trainer import DocTrainer
+    from neural_memory.engine.file_watcher import FileWatcher, WatchConfig
+    from neural_memory.engine.watch_state import WatchStateTracker
+
+    _logger = logging.getLogger(__name__)
+    extensions = set(maint.reindex_extensions)
+
+    brain_id = storage.brain_id
+    if not brain_id:
+        _logger.debug("Re-index skipped: no brain context set")
+        return
+
+    brain = await storage.get_brain(brain_id)
+    if not brain:
+        return
+
+    db = getattr(storage, "_db", None)
+    if db is None or not hasattr(db, "execute"):
+        return
+
+    tracker = WatchStateTracker(db)
+    trainer = DocTrainer(storage, brain.config)
+    total_files = 0
+    total_ingested = 0
+
+    for path_str in maint.reindex_paths:
+        path = Path(path_str).expanduser().resolve()
+        if not path.is_dir():
+            _logger.warning("Re-index path not found: %s", path)
+            continue
+
+        watch_config = WatchConfig(
+            watch_paths=(str(path),),
+            extensions=frozenset(extensions),
+        )
+        watcher = FileWatcher(trainer, tracker, watch_config)
+        results = await watcher.process_path(path)
+        total_files += len(results)
+        total_ingested += sum(1 for r in results if r.success and not r.skipped)
+
+    _logger.info(
+        "Background re-index complete: %d files scanned, %d ingested",
+        total_files,
+        total_ingested,
+    )
+
+
+async def _notification_once(storage: NeuralStorage, config: Any, maint: Any) -> None:
+    """Run a single notification check cycle."""
+    import logging
+
+    _logger = logging.getLogger(__name__)
+
+    brain_id = storage.brain_id
+    if not brain_id:
+        return
+
+    from neural_memory.engine.diagnostics import DiagnosticsEngine
+
+    engine = DiagnosticsEngine(storage)
+    report = await engine.analyze(brain_id)
+
+    grade_order = {"A": 0, "B": 1, "C": 2, "D": 3, "F": 4}
+    threshold_level = grade_order.get(maint.notifications_health_threshold.upper(), 3)
+
+    alerts: list[dict[str, str]] = []
+
+    grade_level = grade_order.get(report.grade, 0)
+    if grade_level >= threshold_level:
+        alerts.append(
+            {
+                "type": "health_alert",
+                "message": (
+                    f"Brain health dropped to {report.grade} "
+                    f"(purity: {report.purity_score:.0f}%). "
+                    f"{len(report.warnings)} warning(s)."
+                ),
+                "grade": report.grade,
+            }
+        )
+
+    if alerts:
+        await _send_webhook(
+            maint.notifications_webhook_url,
+            {"brain_id": brain_id, "alerts": alerts, "source": "neural-memory"},
+            _logger,
+        )
 
 
 def create_app(

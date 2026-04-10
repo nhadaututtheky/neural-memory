@@ -46,6 +46,9 @@ class Config:
     # Allows non-localhost requests from these networks (for Docker/container deployments)
     trusted_networks: list[str] = field(default_factory=list)
 
+    # Brain access control (opt-in, default off for single-user mode)
+    enforce_brain_acl: bool = False
+
     @classmethod
     def from_env(cls) -> Config:
         """Load configuration from environment variables."""
@@ -102,6 +105,7 @@ class Config:
                 "NEURAL_MEMORY_TRUSTED_NETWORKS",
                 [],
             ),
+            enforce_brain_acl=get_bool("NEURAL_MEMORY_ENFORCE_ACL", False),
         )
 
 

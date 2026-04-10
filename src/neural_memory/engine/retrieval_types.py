@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from neural_memory.engine.reflex_activation import CoActivation
+
+if TYPE_CHECKING:
+    from neural_memory.engine.confidence import ConfidenceScore
 
 
 class DepthLevel(IntEnum):
@@ -93,3 +96,4 @@ class RetrievalResult:
     score_breakdown: ScoreBreakdown | None = None
     contributing_neurons: list[str] = field(default_factory=list)
     synthesis_method: str = "single"
+    confidence_score: ConfidenceScore | None = None

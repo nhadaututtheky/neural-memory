@@ -85,9 +85,21 @@ async def get_storage(
     raise NotImplementedError("Storage not configured")
 
 
+async def get_user_id(
+    request: Request,
+) -> str | None:
+    """Extract user ID from request headers.
+
+    Returns X-User-Id header value, or None for anonymous requests.
+    Used by brain ACL enforcement when enforce_brain_acl is enabled.
+    """
+    return request.headers.get("X-User-Id") or None
+
+
 async def get_brain(
     storage: Annotated[NeuralStorage, Depends(get_storage)],
     brain_id: Annotated[str | None, Header(alias="X-Brain-ID")] = None,
+    user_id: Annotated[str | None, Depends(get_user_id)] = None,
 ) -> Brain:
     """Dependency to get and validate brain from header.
 
@@ -98,6 +110,8 @@ async def get_brain(
     The ``get_storage`` dependency already resolves the correct
     brain-specific storage instance based on the same header, so
     ``storage`` here is connected to the right DB file.
+
+    When enforce_brain_acl is enabled, checks read access before returning.
     """
     if brain_id is None:
         from neural_memory.unified_config import get_config
@@ -110,6 +124,15 @@ async def get_brain(
         brain = await storage.find_brain_by_name(brain_id)
     if brain is None:
         raise HTTPException(status_code=404, detail="Brain not found")
+
+    # ACL enforcement (opt-in)
+    from neural_memory.engine.brain_acl import AccessDeniedError, require_read
+    from neural_memory.utils.config import get_config as get_app_config
+
+    try:
+        require_read(brain, user_id, enforce=get_app_config().enforce_brain_acl)
+    except AccessDeniedError:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     # Set brain context using the actual brain ID
     storage.set_brain(brain.id)

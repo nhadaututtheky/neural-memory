@@ -380,4 +380,54 @@ class LifecycleHandler:
                     return {"error": "Failed to thaw neuron"}
                 return {"frozen": False, "neuron_id": neuron_id}
 
-        return {"error": f"Unknown action: {action}. Valid: status, recover, freeze, thaw"}
+        if action == "at_risk":
+            within_days = 7
+            raw_days = args.get("within_days")
+            if raw_days is not None:
+                try:
+                    within_days = max(1, min(90, int(raw_days)))
+                except (TypeError, ValueError):
+                    return {"error": f"Invalid within_days: {raw_days}"}
+
+            try:
+                expiring_count = await storage.get_expiring_memory_count(within_days=within_days)
+                expired_count = await storage.get_expired_memory_count()
+            except Exception:
+                logger.error("nmem_lifecycle at_risk failed", exc_info=True)
+                return {"error": "Failed to query at-risk memories"}
+
+            # Fetch details of at-risk memories (limit to 20 for readability)
+            at_risk_items: list[dict[str, Any]] = []
+            try:
+                # Get fibers to check, limited to recent ones
+                fibers = await storage.find_fibers(limit=100)
+                if fibers:
+                    fiber_ids = [f.id for f in fibers]
+                    expiring = await storage.get_expiring_memories_for_fibers(
+                        fiber_ids=fiber_ids, within_days=within_days
+                    )
+                    for tm in expiring[:20]:
+                        at_risk_items.append({
+                            "fiber_id": tm.fiber_id,
+                            "memory_type": tm.memory_type,
+                            "expires_at": tm.expires_at.isoformat() if tm.expires_at else None,
+                            "tier": getattr(tm, "tier", "warm"),
+                        })
+            except Exception:
+                logger.debug("at_risk detail fetch failed", exc_info=True)
+
+            return {
+                "brain": brain.id,
+                "within_days": within_days,
+                "expiring_soon": expiring_count,
+                "already_expired": expired_count,
+                "at_risk_memories": at_risk_items,
+                "hint": (
+                    f"{expiring_count} memories will expire within {within_days} days. "
+                    "Use nmem_consolidate or nmem_pin to preserve important ones."
+                    if expiring_count > 0
+                    else f"No memories at risk of expiry within {within_days} days."
+                ),
+            }
+
+        return {"error": f"Unknown action: {action}. Valid: status, recover, freeze, thaw, at_risk"}

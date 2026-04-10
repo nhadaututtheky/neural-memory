@@ -561,10 +561,16 @@ class ReflexPipeline:
                 active_goals = await find_active_goals(self._storage)
                 if active_goals:
                     goal_ids = [g.id for g in active_goals]
+                    goal_priorities = {g.id: g.goal_priority for g in active_goals}
+                    _parent_map = {
+                        g.id: g.parent_goal_id for g in active_goals
+                    }
                     _goal_proximity = await compute_goal_proximity(
                         self._storage,
                         goal_ids,
                         max_hops=getattr(self._config, "goal_max_hops", 3),
+                        goal_priorities=goal_priorities,
+                        parent_map=_parent_map,
                     )
             except Exception:
                 logger.debug("Goal proximity computation failed", exc_info=True)
@@ -708,6 +714,32 @@ class ReflexPipeline:
                 _session_topics = {t for t, w in top_topics.items() if w > 0.3}
             except Exception:
                 pass
+
+        # Preference query detection for preference-aware scoring
+        _is_preference_query = False
+        if getattr(self._config, "preference_detection_enabled", True):
+            from neural_memory.engine.preference_detector import is_preference_query
+
+            _is_preference_query = is_preference_query(query)
+
+        # Temporal query detection for event anchor boosting
+        _temporal_event_anchors: set[str] = set()
+        if getattr(self._config, "temporal_routing_enabled", True):
+            from neural_memory.engine.temporal_query import detect_temporal_query
+
+            _temporal_signal = detect_temporal_query(query)
+            if _temporal_signal is not None:
+                _temporal_event_anchors = set(_temporal_signal.event_anchors)
+
+        # Role-aware scoring: detect if query targets assistant or user content
+        _role_target: str | None = None
+        if getattr(self._config, "role_aware_scoring_enabled", True):
+            from neural_memory.engine.role_query import detect_role_target
+
+            _role_result = detect_role_target(query)
+            if _role_result is not None:
+                _role_target = _role_result.value  # "assistant" or "user"
+
         fibers_matched = await self._find_matching_fibers(
             activations,
             valid_at=valid_at,
@@ -718,6 +750,9 @@ class ReflexPipeline:
             created_before=as_of,
             goal_proximity=_goal_proximity,
             session_state=_session_state,
+            is_preference_query=_is_preference_query,
+            temporal_event_anchors=_temporal_event_anchors,
+            role_target=_role_target,
         )
         _phase_timings["fibers"] = (time.perf_counter() - start_time) * 1000
 
@@ -1039,6 +1074,34 @@ class ReflexPipeline:
                 _session_state.record_surfaced([f.id for f in fibers_matched])
             except Exception:
                 logger.debug("Record surfaced fibers failed (non-critical)", exc_info=True)
+
+        # Compute unified confidence score (non-critical)
+        try:
+            from neural_memory.engine.confidence import ConfidenceWeights, compute_confidence
+
+            _top_fiber = fibers_matched[0] if fibers_matched else None
+            _fiber_meta = (_top_fiber.metadata or {}) if _top_fiber else {}
+            _fidelity = str(_fiber_meta.get("_fidelity_layer", "detail"))
+            _quality = float(_fiber_meta.get("_quality_score", 5.0))
+            _is_fam = result.synthesis_method == "familiarity"
+
+            _conf_weights = ConfidenceWeights(
+                retrieval=getattr(self._config, "confidence_weight_retrieval", 0.35),
+                content_quality=getattr(self._config, "confidence_weight_quality", 0.25),
+                fidelity=getattr(self._config, "confidence_weight_fidelity", 0.20),
+                freshness=getattr(self._config, "confidence_weight_freshness", 0.20),
+            )
+            result.confidence_score = compute_confidence(
+                retrieval_score=result.confidence,
+                sufficiency_confidence=_sufficiency.confidence,
+                quality_score=_quality,
+                fidelity_layer=_fidelity,
+                created_at=_top_fiber.created_at if _top_fiber else None,
+                is_familiarity_fallback=_is_fam,
+                weights=_conf_weights,
+            )
+        except Exception:
+            logger.debug("Confidence score computation failed (non-critical)", exc_info=True)
 
         return result
 
@@ -2515,6 +2578,9 @@ class ReflexPipeline:
         created_before: datetime | None = None,
         goal_proximity: dict[str, float] | None = None,
         session_state: SessionState | None = None,
+        is_preference_query: bool = False,
+        temporal_event_anchors: set[str] | None = None,
+        role_target: str | None = None,
     ) -> list[Fiber]:
         """Find fibers that contain activated neurons (batch query).
 
@@ -2557,6 +2623,14 @@ class ReflexPipeline:
         _goal_proximity = goal_proximity or {}
         _goal_proximity_boost = getattr(self._config, "goal_proximity_boost", 0.25)
         _anti_redundancy = getattr(self._config, "anti_redundancy_penalty", 0.3)
+        _preference_boost = getattr(self._config, "preference_boost", 1.5)
+        _preference_domain_boost = getattr(self._config, "preference_domain_boost", 0.2)
+        _is_pref_query = is_preference_query
+        _event_anchors = temporal_event_anchors or set()
+        _event_anchor_boost = getattr(self._config, "temporal_event_anchor_boost", 0.3)
+        _role_target = role_target
+        _role_match_boost = getattr(self._config, "role_match_boost", 1.3)
+        _role_mismatch_penalty = getattr(self._config, "role_mismatch_penalty", 0.9)
         _session_state = session_state
         _now = utcnow()
 
@@ -2651,6 +2725,45 @@ class ReflexPipeline:
             if fiber_meta.get("_stale"):
                 score *= 0.8  # -20% penalty for outdated version references
 
+            # --- Preference-aware boost: preference fibers rank higher for preference queries ---
+            if _is_pref_query and _preference_boost > 1.0:
+                if "preference" in fiber_tags:
+                    score *= _preference_boost
+                # Domain keyword overlap: additive boost for matching domains
+                if _preference_domain_boost > 0 and query_tokens:
+                    pref_domain = fiber_meta.get("_preference_domain")
+                    if isinstance(pref_domain, list) and pref_domain:
+                        domain_set = {d.lower() for d in pref_domain}
+                        domain_overlap = len(query_tokens & domain_set)
+                        if domain_overlap > 0:
+                            score += _preference_domain_boost * min(domain_overlap, 3) / 3
+
+            # --- Temporal event anchor boost: fibers mentioning query events rank higher ---
+            if _event_anchors and _event_anchor_boost > 0:
+                fiber_content_lower = (fiber.summary or "").lower()
+                if not fiber_content_lower:
+                    # Fall back to anchor neuron content via metadata
+                    fiber_content_lower = str(fiber_meta.get("_content", "")).lower()
+                anchor_hits = sum(1 for a in _event_anchors if a in fiber_content_lower)
+                if anchor_hits > 0:
+                    score += _event_anchor_boost * min(anchor_hits, 3) / 3
+
+            # --- Role-aware scoring: boost fibers matching the query's role target ---
+            if _role_target and _role_match_boost > 1.0:
+                # Check fiber's role tag (set during benchmark ingest as "role:user"/"role:assistant")
+                fiber_role = None
+                if f"role:{_role_target}" in fiber_tags:
+                    fiber_role = _role_target
+                elif "role:assistant" in fiber_tags:
+                    fiber_role = "assistant"
+                elif "role:user" in fiber_tags:
+                    fiber_role = "user"
+
+                if fiber_role == _role_target:
+                    score *= _role_match_boost
+                elif fiber_role is not None:
+                    score *= _role_mismatch_penalty
+
             # --- Column fiber boost: complete episodic traces rank higher ---
             if fiber_meta.get("_column"):
                 score *= 1.3
@@ -2665,7 +2778,14 @@ class ReflexPipeline:
                     )
 
                     enc_ctx = ContextFingerprint.from_dict(stored_fp)
+                    # Use session's top topic as project context for matching
+                    _ret_project = ""
+                    if session_state is not None:
+                        top = session_state.get_topic_weights(limit=1)
+                        if top:
+                            _ret_project = next(iter(top))
                     ret_ctx = ContextFingerprint(
+                        project_name=_ret_project,
                         dominant_topics=tuple(sorted(query_tokens)[:10]),
                     )
                     ctx_mult = context_match_score(enc_ctx, ret_ctx)

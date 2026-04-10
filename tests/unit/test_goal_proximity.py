@@ -168,7 +168,10 @@ class TestComputeGoalProximity:
         }
         storage = _mock_storage_with_graph(edges)
 
-        result = await compute_goal_proximity(storage, ["goal"], max_hops=3)
+        # With explicit priority 10, weight=1.0 → scores match base proximity
+        result = await compute_goal_proximity(
+            storage, ["goal"], max_hops=3, goal_priorities={"goal": 10}
+        )
 
         assert result["goal"] == pytest.approx(1.0)  # hop 0
         assert result["A"] == pytest.approx(0.5)  # hop 1
@@ -204,7 +207,9 @@ class TestComputeGoalProximity:
         }
         storage = _mock_storage_with_graph(edges)
 
-        result = await compute_goal_proximity(storage, ["goal"], max_hops=3)
+        result = await compute_goal_proximity(
+            storage, ["goal"], max_hops=3, goal_priorities={"goal": 10}
+        )
 
         assert result["goal"] == pytest.approx(1.0)
         assert result["A"] == pytest.approx(0.5)
@@ -223,7 +228,9 @@ class TestComputeGoalProximity:
         }
         storage = _mock_storage_with_graph(edges)
 
-        result = await compute_goal_proximity(storage, ["g1", "g2"], max_hops=3)
+        result = await compute_goal_proximity(
+            storage, ["g1", "g2"], max_hops=3, goal_priorities={"g1": 10, "g2": 10}
+        )
 
         assert result["B"] == pytest.approx(0.5)  # hop 1 from g2, not hop 2 from g1
 
@@ -233,7 +240,9 @@ class TestComputeGoalProximity:
         storage = AsyncMock()
         storage.get_neighbors = AsyncMock(side_effect=Exception("network error"))
 
-        result = await compute_goal_proximity(storage, ["goal"], max_hops=3)
+        result = await compute_goal_proximity(
+            storage, ["goal"], max_hops=3, goal_priorities={"goal": 10}
+        )
         # Goal itself is still scored (hop 0)
         assert result["goal"] == pytest.approx(1.0)
 
