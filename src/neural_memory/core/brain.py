@@ -197,6 +197,9 @@ class BrainConfig:
     role_aware_scoring_enabled: bool = True
     role_match_boost: float = 1.3  # multiplier for matching role
     role_mismatch_penalty: float = 0.9  # multiplier for mismatching role
+    # Abstraction-level constraint (spreading activation gate)
+    abstraction_constraint_enabled: bool = False
+    abstraction_max_distance: int = 1
 
     def with_updates(self, **kwargs: Any) -> BrainConfig:
         """Create a new config with updated values."""

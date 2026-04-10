@@ -246,11 +246,16 @@ class SpreadingActivation:
         # Neighbor cache: avoid re-fetching neighbors for the same neuron
         neighbor_cache: dict[str, list[tuple[Neuron, Synapse]]] = {}
 
+        # Neuron object cache for abstraction constraint lookups
+        neuron_objects: dict[str, Neuron] = {}
+
         # Priority queue for BFS with activation ordering
         queue: list[ActivationState] = []
 
         # Initialize with anchor neurons (batch fetch)
         anchor_neurons_map = await self._storage.get_neurons_batch(list(anchor_neurons))
+        neuron_objects.update(anchor_neurons_map)
+
         for anchor_id in anchor_neurons:
             if anchor_id not in anchor_neurons_map:
                 continue
@@ -333,6 +338,10 @@ class SpreadingActivation:
                     min_weight=0.1,
                 )
                 neighbor_cache[current.neuron_id] = neighbors
+                # Populate neuron_objects with newly seen neighbors
+                for _nn, _s in neighbors:
+                    if _nn.id not in neuron_objects:
+                        neuron_objects[_nn.id] = _nn
 
             # Batch-prefetch neuron states for uncached neighbors
             uncached_ids = [n.id for n, _ in neighbors if n.id not in freq_cache]
@@ -357,6 +366,18 @@ class SpreadingActivation:
                 # Skip neurons in refractory cooldown
                 if neighbor_neuron.id in refractory_ids:
                     continue
+                # Abstraction constraint: skip if level distance exceeds max
+                if self._config.abstraction_constraint_enabled:
+                    current_neuron_obj = neuron_objects.get(current.neuron_id)
+                    if current_neuron_obj is not None:
+                        from neural_memory.engine.abstraction import can_activate  # noqa: PLC0415
+
+                        if not can_activate(
+                            current_neuron_obj,
+                            neighbor_neuron,
+                            self._config.abstraction_max_distance,
+                        ):
+                            continue
                 # Frequency boost: frequently accessed neurons conduct stronger
                 # (myelination metaphor — well-used pathways transmit faster)
                 freq = freq_cache.get(neighbor_neuron.id, 0)

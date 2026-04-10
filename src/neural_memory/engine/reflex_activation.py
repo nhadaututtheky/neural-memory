@@ -15,6 +15,7 @@ from neural_memory.utils.timeutils import utcnow
 if TYPE_CHECKING:
     from neural_memory.core.brain import BrainConfig
     from neural_memory.core.fiber import Fiber
+    from neural_memory.core.neuron import Neuron
     from neural_memory.storage.base import NeuralStorage
 
 
@@ -99,6 +100,19 @@ class ReflexActivation:
         results: dict[str, ActivationResult] = {}
         trace = ActivationTrace(max_hop_allowed=len(fibers))
 
+        # Pre-fetch neuron objects for abstraction constraint checks (only when enabled).
+        neuron_objects: dict[str, "Neuron"] = {}
+        if self._config.abstraction_constraint_enabled and fibers:
+            from neural_memory.core.neuron import Neuron  # noqa: F401, PLC0415
+
+            all_pathway_ids: set[str] = set(anchor_neurons)
+            for fiber in fibers:
+                all_pathway_ids.update(fiber.pathway)
+            try:
+                neuron_objects = await self._storage.get_neurons_batch(list(all_pathway_ids))
+            except Exception:
+                neuron_objects = {}
+
         # Initialize anchor neurons
         for anchor_id in anchor_neurons:
             initial_level = (
@@ -139,6 +153,7 @@ class ReflexActivation:
                     decay_rate=decay_rate,
                     time_factor=time_factor,
                     trace=trace,
+                    neuron_objects=neuron_objects,
                 )
 
                 # Spread backward in pathway
@@ -151,6 +166,7 @@ class ReflexActivation:
                     decay_rate=decay_rate,
                     time_factor=time_factor,
                     trace=trace,
+                    neuron_objects=neuron_objects,
                 )
 
         return results, trace
@@ -165,6 +181,7 @@ class ReflexActivation:
         decay_rate: float,
         time_factor: float,
         trace: ActivationTrace | None = None,
+        neuron_objects: dict[str, "Neuron"] | None = None,
     ) -> None:
         """
         Conduct activation along a fiber pathway in one direction.
@@ -177,16 +194,31 @@ class ReflexActivation:
             anchor_id: The source anchor neuron
             decay_rate: Decay rate per hop
             time_factor: Time-based conductivity factor
+            trace: Optional activation trace for diagnostics
+            neuron_objects: Pre-fetched neuron objects for abstraction constraint checks
         """
         anchor_result = results.get(anchor_id)
         current_level = anchor_result.activation_level if anchor_result else 1.0
         path = [fiber.pathway[start_pos]]
         pos = start_pos + direction
         hops = 0
+        prev_neuron_id = fiber.pathway[start_pos]
 
         while 0 <= pos < len(fiber.pathway):
             hops += 1
             neuron_id = fiber.pathway[pos]
+
+            # Abstraction constraint: skip if level distance from previous node exceeds max
+            if self._config.abstraction_constraint_enabled and neuron_objects:
+                from neural_memory.engine.abstraction import can_activate  # noqa: PLC0415
+
+                prev_obj = neuron_objects.get(prev_neuron_id)
+                curr_obj = neuron_objects.get(neuron_id)
+                if prev_obj is not None and curr_obj is not None:
+                    if not can_activate(prev_obj, curr_obj, self._config.abstraction_max_distance):
+                        pos += direction
+                        prev_neuron_id = neuron_id
+                        continue
 
             # Trail decay: level decays by rate, scaled by conductivity and time
             current_level = current_level * (1 - decay_rate) * fiber.conductivity * time_factor
@@ -213,6 +245,7 @@ class ReflexActivation:
                     source_anchor=anchor_id,
                 )
 
+            prev_neuron_id = neuron_id
             pos += direction
 
     def _compute_time_factor(

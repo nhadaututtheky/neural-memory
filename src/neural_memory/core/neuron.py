@@ -55,6 +55,22 @@ class Neuron:
     ephemeral: bool = False
 
     @property
+    def abstraction_level(self) -> int:
+        """Abstraction level (0=unassigned, 1=concrete, 2=abstract, 3=meta)."""
+        return int(self.metadata.get("_abstraction_level", 0))
+
+    def with_abstraction_level(self, level: int) -> Neuron:
+        """Create a new Neuron with the given abstraction level.
+
+        Args:
+            level: Abstraction level (0=unassigned, 1=concrete, 2=abstract, 3=meta)
+
+        Returns:
+            New Neuron with updated abstraction level in metadata
+        """
+        return self.with_metadata(_abstraction_level=level)
+
+    @property
     def grounded(self) -> bool:
         """Whether this neuron is a grounded truth (resists decay and conflicts)."""
         return bool(self.metadata.get("_grounded", False))
