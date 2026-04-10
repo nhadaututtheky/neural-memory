@@ -230,3 +230,11 @@ integrations/neuralmemory/coverage/
 npm-package/.mcpregistry_github_token
 npm-package/.mcpregistry_registry_token
 mcp-publisher.exe
+
+# Benchmark
+scripts/benchmark/results/
+scripts/benchmark/data/
+scripts/benchmark_*_results.json
+
+# Test artifacts
+*.brain

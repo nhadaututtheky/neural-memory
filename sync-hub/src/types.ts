@@ -93,6 +93,63 @@ export interface DeviceRecord {
   last_sync_sequence: number;
 }
 
+// --- Team types ---
+
+export const TeamRole = {
+  OWNER: "owner",
+  ADMIN: "admin",
+  EDITOR: "editor",
+  VIEWER: "viewer",
+} as const;
+export type TeamRole = (typeof TeamRole)[keyof typeof TeamRole];
+
+export interface Team {
+  id: string;
+  name: string;
+  owner_id: string;
+  max_seats: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TeamMember {
+  team_id: string;
+  user_id: string;
+  role: TeamRole;
+  invited_by: string | null;
+  joined_at: string;
+}
+
+export interface TeamInvite {
+  id: string;
+  team_id: string;
+  email: string;
+  role: TeamRole;
+  token: string;
+  status: string;
+  invited_by: string;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface TeamBrain {
+  team_id: string;
+  brain_id: string;
+  added_by: string;
+  created_at: string;
+}
+
+export interface AuditEntry {
+  id: number;
+  team_id: string;
+  user_id: string;
+  action: string;
+  brain_id: string | null;
+  details: string;
+  ip: string | null;
+  created_at: string;
+}
+
 // --- Auth context (attached by middleware) ---
 
 export interface AuthContext {
