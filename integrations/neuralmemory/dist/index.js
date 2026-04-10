@@ -219,7 +219,7 @@ function getOrCreateMcpClient(cfg, logger) {
 // ── Plugin definition ──────────────────────────────────────
 const plugin = {
     id: "neuralmemory",
-    name: "NeuralMemory",
+    name: "Neural Memory",
     description: "Brain-inspired persistent memory for AI agents — neurons, synapses, and fibers",
     version: "1.16.0",
     kind: "memory",

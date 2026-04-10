@@ -322,7 +322,7 @@ const plugin: OpenClawPluginDefinition = {
   name: "Neural Memory",
   description:
     "Brain-inspired persistent memory for AI agents — neurons, synapses, and fibers",
-  version: "1.16.0",
+  version: "1.16.1",
   kind: "memory",
 
   register(api: OpenClawPluginApi): void {
