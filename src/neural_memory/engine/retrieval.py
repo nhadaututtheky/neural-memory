@@ -2923,8 +2923,8 @@ class ReflexPipeline:
                 break
 
             # T1.3: SimHash dedup — skip near-duplicate content
-            anchor = anchor_neurons.get(fiber.anchor_neuron_id)
-            fiber_hash = anchor.content_hash if anchor else 0
+            anchor_neuron = anchor_neurons.get(fiber.anchor_neuron_id)
+            fiber_hash = anchor_neuron.content_hash if anchor_neuron else 0
             if fiber_hash != 0 and any(
                 h != 0 and is_near_duplicate(fiber_hash, h) for h in selected_hashes
             ):

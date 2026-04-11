@@ -376,7 +376,7 @@ async def format_context_budgeted(
 
         compiled = compile_context(
             raw_chunks,
-            query_terms=list(query_terms),
+            query_terms=list(query_terms or []),
             dedup_threshold=cfg.compiler_dedup_threshold,
         )
         # Build override map — only for fibers that survived compilation.
