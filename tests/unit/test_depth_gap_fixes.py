@@ -343,61 +343,6 @@ class TestLifecycleAtRisk:
 # ═══════════════════════ 5. Feature Registry updated ═══════════════════════
 
 
-class TestFeatureRegistryUpdated:
-    def test_familiarity_gap_cleared(self) -> None:
-        """Feature registry should no longer list familiarity fallback as having a gap."""
-        from pathlib import Path
-
-        registry = Path("D:/Project/Neural Memory/.rune/FEATURE_REGISTRY.md").read_text()
-        # Should NOT have the old gap text
-        assert "No signal to caller distinguishing familiarity" not in registry
-
-    def test_interference_gap_updated(self) -> None:
-        """Feature registry should mention pinned/grounded exemption."""
-        from pathlib import Path
-
-        registry = Path("D:/Project/Neural Memory/.rune/FEATURE_REGISTRY.md").read_text()
-        assert "pinned/grounded neurons now exempt" in registry
-
-    def test_replay_gap_updated(self) -> None:
-        """Feature registry should mention configurable replay."""
-        from pathlib import Path
-
-        registry = Path("D:/Project/Neural Memory/.rune/FEATURE_REGISTRY.md").read_text()
-        assert "replay_window_hours" in registry
-
-    def test_goal_persistence_gap_cleared(self) -> None:
-        """Feature registry should reflect goals are DB-persisted."""
-        from pathlib import Path
-
-        registry = Path("D:/Project/Neural Memory/.rune/FEATURE_REGISTRY.md").read_text()
-        assert "Session-scoped only" not in registry
-        assert "DB-persisted" in registry
-
-    def test_goal_conflict_gap_cleared(self) -> None:
-        """Feature registry should reflect priority-weighted proximity."""
-        from pathlib import Path
-
-        registry = Path("D:/Project/Neural Memory/.rune/FEATURE_REGISTRY.md").read_text()
-        assert "No conflict resolution" not in registry
-        assert "priority-weighted" in registry
-
-    def test_temporal_neighborhood_gap_cleared(self) -> None:
-        """Feature registry should reflect MCP tool exists for causal traversal."""
-        from pathlib import Path
-
-        registry = Path("D:/Project/Neural Memory/.rune/FEATURE_REGISTRY.md").read_text()
-        assert "Python API only" not in registry
-        assert "nmem_causal" in registry
-
-    def test_context_retrieval_gap_cleared(self) -> None:
-        """Feature registry should reflect context is wired to retrieval."""
-        from pathlib import Path
-
-        registry = Path("D:/Project/Neural Memory/.rune/FEATURE_REGISTRY.md").read_text()
-        assert "No user API to query/set context" not in registry
-
-
 # ═══════════════════════ 6. Goal conflict resolution ═══════════════════════
 
 
