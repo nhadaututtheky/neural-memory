@@ -28,7 +28,7 @@ def _check_cross_encoder() -> bool:
     global _CROSS_ENCODER_AVAILABLE
     if _CROSS_ENCODER_AVAILABLE is None:
         try:
-            from sentence_transformers import CrossEncoder  # noqa: F401
+            from sentence_transformers import CrossEncoder
 
             _CROSS_ENCODER_AVAILABLE = True
         except ImportError:

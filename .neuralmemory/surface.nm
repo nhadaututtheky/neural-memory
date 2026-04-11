@@ -4,10 +4,10 @@
 # Auto-generated from brain.db | Editable by human
 # ═══════════════════════════════════════════════════
 ---
-brain: my-brain.v2
-updated: 2026-04-10T12:19:17
-neurons: 3780
-synapses: 13970
+brain: consolidation_test
+updated: 2026-04-11T05:28:47
+neurons: 0
+synapses: 0
 token_budget: 1200
 depth_available: [surface, detail, deep]
 ---
@@ -17,110 +17,33 @@ depth_available: [surface, detail, deep]
 # Agent: scan this section to understand the knowledge landscape.
 # Format: [id] content (type) {p:N} →edge→ [target_id_or_text]
 
-[c2] SHIP FIRST
-Brainstorm session 2026-03-01: Analyzed memU (11.6k stars) vs NM.… (concept) {p:6}
-  →involves→ "StepContext"
-  →involves→ "DECISION"
-  →involves→ "LLM"
-  →involves→ "tool_memory"
+[e1] gamma (entity) {p:4}
+  →related_to→ "alpha"
 
-[c3] [SESSION] Project: Neural Memory
-Turns: 11 | Cost: $42.618 | Duration:… (concept) {p:6}
-  →has_value→ "Cost = $42.618"
-  →involves→ "Cost = $42.618"
-  →involves→ "$42.618"
-  →involves→ "Frontend"
-  →co_occurs→ "[SESSION] Project: Neural Memory
-Turns: 4 | Cost: $41.903…"
+[e2] beta (entity) {p:4}
+  →related_to→ [e1] "gamma"
 
-[c4] [SESSION] Project: Neural Memory
-Turns: 42 | Cost: $59.421 | Duration:… (concept) {p:6}
-  →involves→ "CommandPalette"
-  →has_value→ "[SESSION] Project = Neural Memory
-Turns: 42"
-  →involves→ "[SESSION] Project = Neural Memory
-Turns: 42"
-  →related_to→ "[SESSION] Project = Neural Memory
-Turns: 42"
-  →has_value→ "Duration = 350s
-
-Key exchanges:
-A: Now the Vietnamese…"
-
-[c5] [SESSION] Project: Neural Memory
-Turns: 11 | Cost: $40.029 | Duration:… (concept) {p:6}
-  →has_value→ "[SESSION] Project = Neural Memory
-Turns: 11"
-  →involves→ "[SESSION] Project = Neural Memory
-Turns: 11"
-  →related_to→ "[SESSION] Project = Neural Memory
-Turns: 11"
-  →has_value→ "A2 = File Watcher"
-  →involves→ "A2 = File Watcher"
-
-[c6] [SESSION] Project: Companion
-Turns: 39 | Cost: $21.860 | Duration: 618s
-
-Key… (concept) {p:6}
-  →involves→ "check unused imports:"
-  →has_value→ "Duration = 618s
-
-Key exchanges:
-A: Now find where the tab…"
-  →involves→ "Duration = 618s
-
-Key exchanges:
-A: Now find where the tab…"
-
-[c7] [SESSION] Project: Neural Memory
-Turns: 8 | Cost: $38.261 | Duration: 88s
-
-Key… (concept) {p:6}
-  →involves→ "$9"
-  →involves→ "ProGate"
-  →involves→ "$19"
+[e3] alpha (entity) {p:4}
+  →related_to→ [e2] "beta"
 
 # ── CLUSTERS ───────────────────────────────────────
 # Auto-detected topic groups from brain.db entity co-occurrence.
 # Agent: use clusters to scope recall queries.
 
-@session: [01053702-2f08-4b84-bb07-9503196ea0dc, 05d6c659-ab07-4ced-a1cf-f2eb5380b158] "[SESSION] Project = Neural Memory
-Turns:, [SESSION] Project: Neural Memory
-Turns: "
-@distribution: [027937c0-6799-42e9-800f-5c87310ac48c, 097b4aa6-9166-448c-9d54-1d012501c0f3] "Distribution, Minor"
-
-# ── SIGNALS ────────────────────────────────────────
-# Active alerts, unresolved items, pending decisions.
-# Agent: check this FIRST each session for urgent context.
-
-~ [_decision:chosen:karpathy llm wiki pattern (local filesystem + llm, agent:claude-code, apr,…
-~ [agent:claude-code, check nh, error, error message, message]
-! [$33.323, _structured:key_value, auto-summary, ci quality gates, companion turns]
-! [$4.768, _structured:key_value, auto-summary, brain_package, git workflows]
-! [$3.213, _structured:key_value, auto-summary, neural memory turns, project neural memory]
-! [$2.813, _structured:key_value, auto-summary, brain_ratings, brainregistryclient]
-! [$0.494, _structured:key_value, auto-summary, neural memory turns, postgresql]
-! [$29.793, _structured:key_value, agent operational health monitor, auto-summary, companion turns]
-! [$29.615, _structured:key_value, auto-summary, handlestop, only]
-! [$16.2k, $3.5k, $6.9k, $9.4k, $95.189]
+@gamma: [n-1, n-2, n-3] "gamma, alpha, beta"
 
 # ── DEPTH MAP ──────────────────────────────────────
 # When surface isn't enough, this tells agent WHERE to dig.
 # Format: [id] → depth_hint (context)
 
-[c2] → NEEDS_DEEP (13 synapses in brain.db, recall "SHIP FIRST
-Brainstorm session…")
-[c3] → NEEDS_DEEP (18 synapses in brain.db, recall "[SESSION] Project: Neural…")
-[c4] → NEEDS_DEEP (22 synapses in brain.db, recall "[SESSION] Project: Neural…")
-[c5] → NEEDS_DEEP (28 synapses in brain.db, recall "[SESSION] Project: Neural…")
-[c6] → NEEDS_DEEP (18 synapses in brain.db, recall "[SESSION] Project: Companion
-Turns: 39…")
-[c7] → NEEDS_DEEP (18 synapses in brain.db, recall "[SESSION] Project: Neural…")
+[e1] → SUFFICIENT (1 edges, fully represented)
+[e2] → SUFFICIENT (1 edges, fully represented)
+[e3] → SUFFICIENT (1 edges, fully represented)
 
 # ── META ───────────────────────────────────────────
 # Stats for agent to gauge brain richness
 
-coverage: 0.01
-staleness: 0.11
-last_consolidation: 2026-04-10T12:19:17
-top_entities: [[SESSION], [SESSION], [SESSION], $82.592, E2E]
+coverage: 1.0
+staleness: 0.0
+last_consolidation: 2026-04-11T05:28:47
+top_entities: [gamma, beta, alpha]

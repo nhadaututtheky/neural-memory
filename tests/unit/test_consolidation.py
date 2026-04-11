@@ -317,7 +317,7 @@ async def test_run_strategies_across_tiers(
     """Strategies from different tiers execute in correct tier order."""
     execution_order: list[str] = []
 
-    original_prune = engine_cls._prune if (engine_cls := ConsolidationEngine) else None  # noqa: F841
+    original_prune = engine_cls._prune if (engine_cls := ConsolidationEngine) else None
 
     # Patch strategies to record execution order
     engine = ConsolidationEngine(consolidation_storage)

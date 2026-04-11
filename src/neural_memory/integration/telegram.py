@@ -133,7 +133,7 @@ class TelegramClient:
         data.add_field("chat_id", chat_id)
         data.add_field(
             "document",
-            open(file_path, "rb"),  # noqa: SIM115
+            open(file_path, "rb"),
             filename=file_path.name,
             content_type="application/octet-stream",
         )

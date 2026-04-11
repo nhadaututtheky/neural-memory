@@ -28,7 +28,7 @@ class PostgresBaseMixin:
 
     async def _query(self, sql: str, *args: Any, timeout: float = 30.0) -> Any:
         """Execute a write query. Returns last result."""
-        import asyncpg  # noqa: TC002
+        import asyncpg
 
         conn: asyncpg.Connection = await self._pool.acquire()
         try:
@@ -38,7 +38,7 @@ class PostgresBaseMixin:
 
     async def _query_ro(self, sql: str, *args: Any, timeout: float = 30.0) -> list[Any]:
         """Execute a read query. Returns list of records."""
-        import asyncpg  # noqa: TC002
+        import asyncpg
 
         conn: asyncpg.Connection = await self._pool.acquire()
         try:
@@ -48,7 +48,7 @@ class PostgresBaseMixin:
 
     async def _query_one(self, sql: str, *args: Any, timeout: float = 30.0) -> Any | None:
         """Execute a read query expecting at most one row."""
-        import asyncpg  # noqa: TC002
+        import asyncpg
 
         conn: asyncpg.Connection = await self._pool.acquire()
         try:
@@ -60,7 +60,7 @@ class PostgresBaseMixin:
         self, sql: str, args_list: list[tuple[Any, ...]], timeout: float = 30.0
     ) -> None:
         """Execute a parameterized query for each args tuple in one connection."""
-        import asyncpg  # noqa: TC002
+        import asyncpg
 
         conn: asyncpg.Connection = await self._pool.acquire()
         try:

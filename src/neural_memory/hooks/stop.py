@@ -510,24 +510,24 @@ def main() -> None:
             sys.exit(0)
 
     if not text or len(text.strip()) < 50:
-        print("No substantial content to capture", file=sys.stderr)  # noqa: T201
+        print("No substantial content to capture", file=sys.stderr)
         sys.exit(0)
 
     try:
         result = asyncio.run(capture_text(text))
         saved = result.get("saved", 0)
         if saved > 0:
-            print(  # noqa: T201
+            print(
                 f"[NeuralMemory] Session end: captured {saved} memories",
                 file=sys.stderr,
             )
         else:
-            print(  # noqa: T201
+            print(
                 f"[NeuralMemory] Session end: {result.get('message', 'no memories')}",
                 file=sys.stderr,
             )
     except Exception as exc:
-        print(f"[NeuralMemory] Stop hook error: {exc}", file=sys.stderr)  # noqa: T201
+        print(f"[NeuralMemory] Stop hook error: {exc}", file=sys.stderr)
         sys.exit(0)  # Never block session termination
 
 

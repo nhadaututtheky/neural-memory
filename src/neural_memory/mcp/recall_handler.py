@@ -228,7 +228,9 @@ class RecallHandler:
         if valence_filter is not None:
             valence_filter = str(valence_filter).lower().strip()
             if valence_filter not in ("positive", "negative", "neutral"):
-                return {"error": f"Invalid valence: {valence_filter}. Must be positive/negative/neutral."}
+                return {
+                    "error": f"Invalid valence: {valence_filter}. Must be positive/negative/neutral."
+                }
 
         # Inject session context for richer recall on vague queries
         effective_query = query
@@ -455,7 +457,7 @@ class RecallHandler:
                 )
 
         # Post-filter by arousal and/or valence (stored in fiber metadata)
-        needs_emotion_filter = (min_arousal is not None or valence_filter is not None)
+        needs_emotion_filter = min_arousal is not None or valence_filter is not None
         if needs_emotion_filter and result.fibers_matched:
             try:
                 emotion_passing: set[str] = set()
@@ -468,7 +470,9 @@ class RecallHandler:
                     # Arousal filter
                     if min_arousal is not None:
                         fiber_arousal = fiber.metadata.get("_arousal", 0.0)
-                        if not (isinstance(fiber_arousal, (int, float)) and fiber_arousal >= min_arousal):
+                        if not (
+                            isinstance(fiber_arousal, (int, float)) and fiber_arousal >= min_arousal
+                        ):
                             continue
 
                     # Valence filter

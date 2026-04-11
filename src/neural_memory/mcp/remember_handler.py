@@ -112,7 +112,7 @@ class RememberHandler:
 
             # Language mismatch detected — build hint
             try:
-                import sentence_transformers as _st  # noqa: F401
+                import sentence_transformers as _st
 
                 return (
                     f"Your query is in {'Vietnamese' if query_lang == 'vi' else 'English'} "

@@ -77,7 +77,7 @@ def _dedup_groups(
     for chunk in chunks:
         fp = simhash(chunk.content)
         placed = False
-        for i, (rep_fp, group_members) in enumerate(groups):
+        for _i, (rep_fp, group_members) in enumerate(groups):
             if hamming_distance(fp, rep_fp) <= threshold:
                 group_members.append(chunk)
                 placed = True

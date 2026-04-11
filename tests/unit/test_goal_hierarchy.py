@@ -59,9 +59,7 @@ class TestNeuronParentGoalId:
 
     def test_with_goal_state_sets_parent(self) -> None:
         n = Neuron.create(type=NeuronType.INTENT, content="child goal")
-        updated = n.with_goal_state(
-            "active", priority=6, parent_goal_id="parent-456"
-        )
+        updated = n.with_goal_state("active", priority=6, parent_goal_id="parent-456")
         assert updated.parent_goal_id == "parent-456"
         assert updated.goal_state == "active"
         assert updated.goal_priority == 6
@@ -98,11 +96,13 @@ class TestGoalHandlerSubgoals:
         storage.add_synapse = AsyncMock()
         handler.get_storage = AsyncMock(return_value=storage)
 
-        result = await handler._goal_create({
-            "goal": "Implement scheduler",
-            "priority": 7,
-            "parent_goal_id": parent.id,
-        })
+        result = await handler._goal_create(
+            {
+                "goal": "Implement scheduler",
+                "priority": 7,
+                "parent_goal_id": parent.id,
+            }
+        )
 
         assert result.get("parent_goal_id") == parent.id
         assert result["state"] == "active"
@@ -122,10 +122,12 @@ class TestGoalHandlerSubgoals:
         storage.get_neuron = AsyncMock(return_value=None)
         handler.get_storage = AsyncMock(return_value=storage)
 
-        result = await handler._goal_create({
-            "goal": "Child goal",
-            "parent_goal_id": "nonexistent",
-        })
+        result = await handler._goal_create(
+            {
+                "goal": "Child goal",
+                "parent_goal_id": "nonexistent",
+            }
+        )
         assert "error" in result
 
     @pytest.mark.asyncio
@@ -138,10 +140,12 @@ class TestGoalHandlerSubgoals:
         storage.get_neuron = AsyncMock(return_value=non_goal)
         handler.get_storage = AsyncMock(return_value=storage)
 
-        result = await handler._goal_create({
-            "goal": "Child goal",
-            "parent_goal_id": non_goal.id,
-        })
+        result = await handler._goal_create(
+            {
+                "goal": "Child goal",
+                "parent_goal_id": non_goal.id,
+            }
+        )
         assert "error" in result
         assert "not a goal" in result["error"]
 
@@ -169,18 +173,26 @@ class TestGoalHandlerSubgoals:
         )
 
         syn1 = Synapse.create(
-            source_id=child1.id, target_id=parent.id,
-            type=SynapseType.SUBGOAL_OF, weight=0.8,
+            source_id=child1.id,
+            target_id=parent.id,
+            type=SynapseType.SUBGOAL_OF,
+            weight=0.8,
         )
         syn2 = Synapse.create(
-            source_id=child2.id, target_id=parent.id,
-            type=SynapseType.SUBGOAL_OF, weight=0.8,
+            source_id=child2.id,
+            target_id=parent.id,
+            type=SynapseType.SUBGOAL_OF,
+            weight=0.8,
         )
 
         storage = AsyncMock()
-        storage.get_neuron = AsyncMock(side_effect=lambda nid: {
-            parent.id: parent, child1.id: child1, child2.id: child2,
-        }.get(nid))
+        storage.get_neuron = AsyncMock(
+            side_effect=lambda nid: {
+                parent.id: parent,
+                child1.id: child1,
+                child2.id: child2,
+            }.get(nid)
+        )
         storage.get_synapses = AsyncMock(return_value=[syn1, syn2])
         handler.get_storage = AsyncMock(return_value=storage)
 
@@ -208,14 +220,19 @@ class TestGoalHandlerSubgoals:
             metadata={"_goal_state": "active", "_goal_priority": 5},
         )
         syn = Synapse.create(
-            source_id=child.id, target_id=parent.id,
-            type=SynapseType.SUBGOAL_OF, weight=0.8,
+            source_id=child.id,
+            target_id=parent.id,
+            type=SynapseType.SUBGOAL_OF,
+            weight=0.8,
         )
 
         storage = AsyncMock()
-        storage.get_neuron = AsyncMock(side_effect=lambda nid: {
-            parent.id: parent, child.id: child,
-        }.get(nid))
+        storage.get_neuron = AsyncMock(
+            side_effect=lambda nid: {
+                parent.id: parent,
+                child.id: child,
+            }.get(nid)
+        )
         storage.get_synapses = AsyncMock(return_value=[syn])
         handler.get_storage = AsyncMock(return_value=storage)
 
@@ -236,29 +253,21 @@ class TestEffectivePriority:
 
     def test_parent_boosts(self) -> None:
         # Child priority 4, parent priority 10 → inherited = 10 * 0.8 = 8
-        weight = _effective_priority(
-            "child", {"child": 4, "parent": 10}, {"child": "parent"}
-        )
+        weight = _effective_priority("child", {"child": 4, "parent": 10}, {"child": "parent"})
         assert weight == pytest.approx(0.8)  # max(4, 8) = 8 → 8/10
 
     def test_child_higher_than_inherited(self) -> None:
         # Child priority 9, parent priority 6 → inherited = 4.8, child wins
-        weight = _effective_priority(
-            "child", {"child": 9, "parent": 6}, {"child": "parent"}
-        )
+        weight = _effective_priority("child", {"child": 9, "parent": 6}, {"child": "parent"})
         assert weight == pytest.approx(0.9)
 
     def test_parent_not_in_priorities(self) -> None:
         # Parent exists in map but not in priorities dict → no inheritance
-        weight = _effective_priority(
-            "child", {"child": 5}, {"child": "parent"}
-        )
+        weight = _effective_priority("child", {"child": 5}, {"child": "parent"})
         assert weight == pytest.approx(0.5)
 
     def test_caps_at_1(self) -> None:
-        weight = _effective_priority(
-            "child", {"child": 10, "parent": 10}, {"child": "parent"}
-        )
+        weight = _effective_priority("child", {"child": 10, "parent": 10}, {"child": "parent"})
         assert weight == pytest.approx(1.0)
 
 
@@ -287,14 +296,18 @@ class TestGoalProximityWithInheritance:
 
         # Without parent: priority 3 → weight 0.3
         result_no_parent = await compute_goal_proximity(
-            storage, ["sub"], max_hops=1,
+            storage,
+            ["sub"],
+            max_hops=1,
             goal_priorities={"sub": 3},
         )
         assert result_no_parent["sub"] == pytest.approx(0.3)
 
         # With parent: inherited = 10 * 0.8 = 8, effective = max(3, 8) = 8 → weight 0.8
         result_with_parent = await compute_goal_proximity(
-            storage, ["sub"], max_hops=1,
+            storage,
+            ["sub"],
+            max_hops=1,
             goal_priorities={"sub": 3, "parent": 10},
             parent_map={"sub": "parent"},
         )
@@ -355,7 +368,10 @@ class TestConfidenceScore:
         """Custom weights should change the scoring."""
         # All weight on retrieval
         weights = ConfidenceWeights(
-            retrieval=1.0, content_quality=0.0, fidelity=0.0, freshness=0.0,
+            retrieval=1.0,
+            content_quality=0.0,
+            fidelity=0.0,
+            freshness=0.0,
         )
         score = compute_confidence(
             retrieval_score=0.9,

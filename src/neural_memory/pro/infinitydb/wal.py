@@ -130,7 +130,7 @@ class WriteAheadLog:
             # Count existing entries and find last seq
             self._scan_existing()
             # Open for append
-            self._file = open(self._path, "ab")  # noqa: SIM115
+            self._file = open(self._path, "ab")
         else:
             self._create_new()
 
@@ -139,7 +139,7 @@ class WriteAheadLog:
 
     def _create_new(self) -> None:
         """Create a fresh WAL file with header."""
-        self._file = open(self._path, "wb")  # noqa: SIM115
+        self._file = open(self._path, "wb")
         self._file.write(WAL_MAGIC)
         self._file.flush()
         self._seq = 0

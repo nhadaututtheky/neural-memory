@@ -107,32 +107,32 @@ def get_missing_dependencies(extensions: frozenset[str] | set[str]) -> list[str]
 
     if extensions & {".pdf"}:
         try:
-            import pymupdf4llm  # noqa: F401
+            import pymupdf4llm
         except ImportError:
             missing.append("pymupdf4llm")
 
     if extensions & {".docx"}:
         try:
-            import docx  # noqa: F401
+            import docx
         except ImportError:
             missing.append("python-docx")
 
     if extensions & {".pptx"}:
         try:
-            import pptx  # noqa: F401
+            import pptx
         except ImportError:
             missing.append("python-pptx")
 
     if extensions & {".html", ".htm"}:
         try:
-            import bs4  # noqa: F401
-            import markdownify  # noqa: F401
+            import bs4
+            import markdownify
         except ImportError:
             missing.append("beautifulsoup4 markdownify")
 
     if extensions & {".xlsx"}:
         try:
-            import openpyxl  # noqa: F401
+            import openpyxl
         except ImportError:
             missing.append("openpyxl")
 
@@ -236,7 +236,7 @@ def _extract_docx(file_path: Path) -> str:
     """Extract DOCX to markdown using python-docx."""
     try:
         from docx import Document
-        from docx.enum.text import WD_ALIGN_PARAGRAPH  # noqa: F401
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
     except ImportError:
         raise ExtractionError(
             "DOCX extraction requires python-docx. Install with: pip install neural-memory[extract]"

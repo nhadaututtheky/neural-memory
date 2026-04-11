@@ -6,7 +6,6 @@ import pytest
 
 from neural_memory.engine.embedding.vector_index import SQLiteVectorIndex, is_available
 
-
 pytestmark = pytest.mark.skipif(not is_available(), reason="hnswlib not installed")
 
 
@@ -122,7 +121,7 @@ class TestPersistence:
         assert idx2.count == 50
         # Search should return valid neuron IDs
         results = idx2.search([1.0, 0.0, 0.0, 0.0], k=5)
-        for nid, sim in results:
+        for nid, _sim in results:
             assert nid.startswith("neuron-")
         idx2.close()
 

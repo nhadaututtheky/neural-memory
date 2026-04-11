@@ -163,7 +163,7 @@ def _warn_pyvi_missing() -> None:
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=DeprecationWarning, module="pyvi")
             warnings.filterwarnings("ignore", category=DeprecationWarning, module="numpy")
-            from pyvi import ViTokenizer  # noqa: F401
+            from pyvi import ViTokenizer
     except ImportError:
         logger.warning(
             "Vietnamese text detected in auto-capture but pyvi is not installed — "

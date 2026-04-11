@@ -81,9 +81,7 @@ class VectorSearchMixin:
         index = self._ensure_vector_index()
         if index is None or index.count == 0:
             if not self._vector_cold_start_warned:
-                logger.info(
-                    "No vector index found. Run `nmem embed` to enable semantic search."
-                )
+                logger.info("No vector index found. Run `nmem embed` to enable semantic search.")
                 self._vector_cold_start_warned = True
             return []
         return index.search(query_vector, k=k)

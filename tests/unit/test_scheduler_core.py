@@ -130,9 +130,7 @@ class TestOpCounter:
     async def test_tick_triggers_at_threshold(self) -> None:
         scheduler = SchedulerCore()
         tracker = CallTracker()
-        scheduler.register(
-            "counter_task", tracker, TriggerType.OP_COUNTER, op_threshold=3
-        )
+        scheduler.register("counter_task", tracker, TriggerType.OP_COUNTER, op_threshold=3)
 
         # Ticks 1, 2 — not enough
         scheduler.tick()
@@ -148,9 +146,7 @@ class TestOpCounter:
     async def test_tick_fires_at_threshold(self) -> None:
         scheduler = SchedulerCore()
         tracker = CallTracker()
-        scheduler.register(
-            "counter_task", tracker, TriggerType.OP_COUNTER, op_threshold=3
-        )
+        scheduler.register("counter_task", tracker, TriggerType.OP_COUNTER, op_threshold=3)
 
         scheduler.tick()
         scheduler.tick()
@@ -164,9 +160,7 @@ class TestOpCounter:
     async def test_tick_resets_counter(self) -> None:
         scheduler = SchedulerCore()
         tracker = CallTracker()
-        scheduler.register(
-            "counter_task", tracker, TriggerType.OP_COUNTER, op_threshold=2
-        )
+        scheduler.register("counter_task", tracker, TriggerType.OP_COUNTER, op_threshold=2)
 
         # First cycle
         scheduler.tick()
@@ -211,9 +205,7 @@ class TestEventTrigger:
     async def test_trigger_fires_matching_event(self) -> None:
         scheduler = SchedulerCore()
         tracker = CallTracker()
-        scheduler.register(
-            "end_task", tracker, TriggerType.EVENT, event_name="session_end"
-        )
+        scheduler.register("end_task", tracker, TriggerType.EVENT, event_name="session_end")
 
         await scheduler.trigger("session_end")
 
@@ -222,9 +214,7 @@ class TestEventTrigger:
     async def test_trigger_skips_non_matching(self) -> None:
         scheduler = SchedulerCore()
         tracker = CallTracker()
-        scheduler.register(
-            "end_task", tracker, TriggerType.EVENT, event_name="session_end"
-        )
+        scheduler.register("end_task", tracker, TriggerType.EVENT, event_name="session_end")
 
         await scheduler.trigger("other_event")
 
@@ -245,9 +235,7 @@ class TestEventTrigger:
     async def test_trigger_skips_disabled(self) -> None:
         scheduler = SchedulerCore()
         tracker = CallTracker()
-        scheduler.register(
-            "disabled", tracker, TriggerType.EVENT, event_name="test", enabled=False
-        )
+        scheduler.register("disabled", tracker, TriggerType.EVENT, event_name="test", enabled=False)
 
         await scheduler.trigger("test")
 

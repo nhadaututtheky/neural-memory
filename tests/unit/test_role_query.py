@@ -25,13 +25,19 @@ class TestDetectRoleTargetAssistant:
         assert detect_role_target("What was your recommendation?") == RoleTarget.ASSISTANT
 
     def test_your_advice(self) -> None:
-        assert detect_role_target("Can you remind me of your advice on testing?") == RoleTarget.ASSISTANT
+        assert (
+            detect_role_target("Can you remind me of your advice on testing?")
+            == RoleTarget.ASSISTANT
+        )
 
     def test_what_did_you_tell(self) -> None:
         assert detect_role_target("What did you tell me about React?") == RoleTarget.ASSISTANT
 
     def test_can_you_remind_me(self) -> None:
-        assert detect_role_target("Can you remind me what you said about databases?") == RoleTarget.ASSISTANT
+        assert (
+            detect_role_target("Can you remind me what you said about databases?")
+            == RoleTarget.ASSISTANT
+        )
 
     def test_you_mentioned(self) -> None:
         assert detect_role_target("You mentioned a tool for deployment") == RoleTarget.ASSISTANT
@@ -61,7 +67,9 @@ class TestDetectRoleTargetUser:
         assert detect_role_target("Something I said about Python") == RoleTarget.USER
 
     def test_what_i_mentioned(self) -> None:
-        assert detect_role_target("Do you remember what I mentioned about Docker?") == RoleTarget.USER
+        assert (
+            detect_role_target("Do you remember what I mentioned about Docker?") == RoleTarget.USER
+        )
 
     def test_my_question(self) -> None:
         assert detect_role_target("My question was about databases") == RoleTarget.USER

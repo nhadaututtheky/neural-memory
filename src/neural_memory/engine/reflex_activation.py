@@ -101,10 +101,8 @@ class ReflexActivation:
         trace = ActivationTrace(max_hop_allowed=len(fibers))
 
         # Pre-fetch neuron objects for abstraction constraint checks (only when enabled).
-        neuron_objects: dict[str, "Neuron"] = {}
+        neuron_objects: dict[str, Neuron] = {}
         if self._config.abstraction_constraint_enabled and fibers:
-            from neural_memory.core.neuron import Neuron  # noqa: F401, PLC0415
-
             all_pathway_ids: set[str] = set(anchor_neurons)
             for fiber in fibers:
                 all_pathway_ids.update(fiber.pathway)
@@ -181,7 +179,7 @@ class ReflexActivation:
         decay_rate: float,
         time_factor: float,
         trace: ActivationTrace | None = None,
-        neuron_objects: dict[str, "Neuron"] | None = None,
+        neuron_objects: dict[str, Neuron] | None = None,
     ) -> None:
         """
         Conduct activation along a fiber pathway in one direction.
@@ -210,7 +208,7 @@ class ReflexActivation:
 
             # Abstraction constraint: skip if level distance from previous node exceeds max
             if self._config.abstraction_constraint_enabled and neuron_objects:
-                from neural_memory.engine.abstraction import can_activate  # noqa: PLC0415
+                from neural_memory.engine.abstraction import can_activate
 
                 prev_obj = neuron_objects.get(prev_neuron_id)
                 curr_obj = neuron_objects.get(neuron_id)

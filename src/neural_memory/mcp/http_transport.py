@@ -142,7 +142,7 @@ async def run_http_server(port: int = 8765, host: str = "127.0.0.1") -> None:
     uv_server = uvicorn.Server(config)
 
     logger.info("NeuralMemory MCP HTTP transport on http://%s:%d/mcp", host, port)
-    print(  # noqa: T201
+    print(
         f"NeuralMemory MCP server (HTTP) listening on http://{host}:{port}/mcp",
         flush=True,
     )

@@ -145,7 +145,7 @@ class TestToolTiers:
 class TestServerTierIntegration:
     """Test that MCPServer.get_tools() respects tier config."""
 
-    def _make_server(self, tier: str) -> MCPServer:  # noqa: F821
+    def _make_server(self, tier: str) -> MCPServer:
         from neural_memory.mcp.server import MCPServer
 
         with patch("neural_memory.mcp.server.get_config") as mock:

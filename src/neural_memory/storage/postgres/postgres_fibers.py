@@ -96,7 +96,7 @@ class PostgresFiberMixin(PostgresBaseMixin):
 
         if contains_neuron is not None:
             params.append(contains_neuron)
-            query += f" AND id IN (SELECT fiber_id FROM fiber_neurons WHERE brain_id = $1 AND neuron_id = ${len(params)})"  # noqa: S608
+            query += f" AND id IN (SELECT fiber_id FROM fiber_neurons WHERE brain_id = $1 AND neuron_id = ${len(params)})"
 
         if time_overlaps is not None:
             start, end = time_overlaps
@@ -187,7 +187,7 @@ class PostgresFiberMixin(PostgresBaseMixin):
         if order_by not in _allowed_order:
             order_by = "created_at"
         order_dir = "DESC" if descending else "ASC"
-        query = f"SELECT * FROM fibers WHERE brain_id = $1 ORDER BY {order_by} {order_dir} LIMIT $2"  # noqa: S608
+        query = f"SELECT * FROM fibers WHERE brain_id = $1 ORDER BY {order_by} {order_dir} LIMIT $2"
         rows = await self._query_ro(query, brain_id, limit)
         return [row_to_fiber(r) for r in rows]
 
@@ -363,7 +363,7 @@ class PostgresFiberMixin(PostgresBaseMixin):
                   WHERE f.brain_id = $1
                     AND f.summary IS NOT NULL
                     AND {where_clause}
-                  ORDER BY f.salience DESC LIMIT ${len(params)}"""  # noqa: S608
+                  ORDER BY f.salience DESC LIMIT ${len(params)}"""
         rows = await self._query_ro(sql, *params)
         return [row_to_fiber(r) for r in rows]
 

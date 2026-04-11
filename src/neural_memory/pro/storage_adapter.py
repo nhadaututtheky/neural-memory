@@ -33,7 +33,7 @@ from neural_memory.utils.timeutils import utcnow
 logger = logging.getLogger(__name__)
 
 # Sentinel for sorting fibers without created_at (naive UTC, far past)
-_EPOCH = datetime(2000, 1, 1)  # noqa: DTZ001
+_EPOCH = datetime(2000, 1, 1)
 
 if TYPE_CHECKING:
     from neural_memory.core.brain import BrainSnapshot

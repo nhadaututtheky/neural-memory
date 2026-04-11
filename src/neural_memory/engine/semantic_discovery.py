@@ -91,7 +91,7 @@ def _auto_detect_provider() -> tuple[str, str]:
 
     # 2. Check sentence-transformers (local)
     try:
-        import sentence_transformers  # noqa: F401
+        import sentence_transformers
 
         return ("sentence_transformer", "paraphrase-multilingual-MiniLM-L12-v2")
     except ImportError:

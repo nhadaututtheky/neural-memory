@@ -335,10 +335,7 @@ async def format_context_budgeted(
     # formatting. Does NOT mutate fiber objects or add new storage calls.
     compiled_content: dict[str, str] = {}
     _should_compile = (
-        compile
-        and cfg.enable_compiler
-        and bool(query_terms)
-        and bool(selected_fibers)
+        compile and cfg.enable_compiler and bool(query_terms) and bool(selected_fibers)
     )
     if _should_compile:
         from neural_memory.engine.context_compiler import CompiledChunk, compile_context
@@ -354,9 +351,7 @@ async def format_context_budgeted(
                 raw_text = _maybe_decrypt_inline(fiber.summary, fiber.metadata)
             else:
                 anchor = anchor_map.get(fiber.anchor_neuron_id)
-                raw_text = (
-                    _maybe_decrypt_inline(anchor.content, fiber.metadata) if anchor else ""
-                )
+                raw_text = _maybe_decrypt_inline(anchor.content, fiber.metadata) if anchor else ""
             if not raw_text:
                 continue
 
@@ -459,8 +454,7 @@ async def format_context(
             {
                 f.anchor_neuron_id
                 for f in fibers[:5]
-                if not f.summary
-                and (_compiled_content is None or f.id not in _compiled_content)
+                if not f.summary and (_compiled_content is None or f.id not in _compiled_content)
             }
         )
         anchor_map = await storage.get_neurons_batch(anchor_ids) if anchor_ids else {}

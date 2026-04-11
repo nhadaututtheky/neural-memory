@@ -120,9 +120,7 @@ def compute_confidence(
         "sufficiency_confidence": round(sufficiency_confidence, 4),
         "quality_score": round(quality_score, 2),
         "fidelity_layer": fidelity,
-        "age_days": round((now - created_at).total_seconds() / 86400.0, 1)
-        if created_at
-        else -1,
+        "age_days": round((now - created_at).total_seconds() / 86400.0, 1) if created_at else -1,
         "is_familiarity_fallback": 1.0 if is_familiarity_fallback else 0.0,
     }
     if extra_signals:

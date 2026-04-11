@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Naive UTC sentinel for sorting (project convention: naive UTC datetimes)
-_DATETIME_MIN = datetime.min  # noqa: DTZ901
+_DATETIME_MIN = datetime.min
 
 
 class EvolutionHandler:

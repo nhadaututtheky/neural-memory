@@ -89,7 +89,7 @@ class DBTrainHandler:
         cwd = Path.cwd().resolve()
         home_dir = Path.home().resolve()
         temp_dir = Path(tempfile.gettempdir()).resolve()
-        system_tmp = Path("/tmp").resolve()  # noqa: S108
+        system_tmp = Path("/tmp").resolve()
         allowed_roots = (cwd, home_dir, temp_dir, system_tmp)
         if not any(db_path.is_relative_to(root) for root in allowed_roots):
             return {"error": "Invalid database path: must be within working directory or user home"}

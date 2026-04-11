@@ -58,7 +58,7 @@ def _normalize(scores: dict[str, float]) -> dict[str, float]:
     spread = hi - lo
 
     if spread < 1e-12:
-        return {k: 1.0 for k in scores}
+        return dict.fromkeys(scores, 1.0)
 
     return {k: (v - lo) / spread for k, v in scores.items()}
 
@@ -144,7 +144,6 @@ _INTENT_WEIGHTS: dict[str, FusionWeights] = {
     # Temporal intents: graph structure (time neurons, sequential synapses) is key
     "ask_when": FusionWeights(graph=0.6, semantic=0.2, lexical=0.2),
     "ask_pattern": FusionWeights(graph=0.6, semantic=0.2, lexical=0.2),
-    # General: balanced
     "recall": FusionWeights(graph=0.4, semantic=0.35, lexical=0.25),
     "unknown": FusionWeights(graph=0.5, semantic=0.3, lexical=0.2),
     # Legacy aliases for direct use

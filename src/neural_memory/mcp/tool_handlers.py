@@ -23,8 +23,6 @@ from __future__ import annotations
 
 # Re-export frequently imported symbols that other modules
 # import from this file (e.g., recall_handler imports ReflexPipeline).
-from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline  # noqa: F401
-
 # Domain handler mixins
 from neural_memory.mcp.budget_handler import BudgetHandler
 from neural_memory.mcp.evolution_handler import EvolutionHandler
@@ -39,12 +37,6 @@ from neural_memory.mcp.tier_handler import TierHandler
 
 # Re-export shared utilities for backward compatibility.
 # Many handlers and tests import these from tool_handlers.
-from neural_memory.mcp.tool_handler_utils import (  # noqa: F401
-    _build_citation_audit,
-    _get_brain_or_error,
-    _parse_tags,
-    _require_brain_id,
-)
 
 
 class ToolHandler(

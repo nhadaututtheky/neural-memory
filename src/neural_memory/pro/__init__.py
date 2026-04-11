@@ -16,9 +16,9 @@ def is_pro_deps_installed() -> bool:
     pip install neural-memory[pro]
     """
     try:
-        import hnswlib as _hnswlib  # noqa: F401
-        import msgpack as _msgpack  # noqa: F401
-        import numpy as _np  # noqa: F401
+        import hnswlib as _hnswlib
+        import msgpack as _msgpack
+        import numpy as _np
     except ImportError:
         return False
     return True
@@ -28,15 +28,15 @@ def get_missing_deps() -> list[str]:
     """Return list of missing Pro dependencies (should be empty after install)."""
     missing: list[str] = []
     try:
-        import numpy as _np  # noqa: F401
+        import numpy as _np
     except ImportError:
         missing.append("numpy")
     try:
-        import hnswlib as _hnswlib  # noqa: F401
+        import hnswlib as _hnswlib
     except ImportError:
         missing.append("hnswlib")
     try:
-        import msgpack as _msgpack  # noqa: F401
+        import msgpack as _msgpack
     except ImportError:
         missing.append("msgpack")
     return missing

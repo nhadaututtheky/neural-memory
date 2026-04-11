@@ -55,8 +55,8 @@ class MemoryEncryptor:
         if not username:
             return
         # Remove inherited permissions, grant only current user full control
-        subprocess.run(  # noqa: S603
-            ["icacls", str(path), "/inheritance:r", "/grant:r", f"{username}:(R,W)"],  # noqa: S607
+        subprocess.run(
+            ["icacls", str(path), "/inheritance:r", "/grant:r", f"{username}:(R,W)"],
             capture_output=True,
             check=False,
         )

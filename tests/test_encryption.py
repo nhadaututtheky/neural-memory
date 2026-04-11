@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 try:
-    import cryptography  # noqa: F401
+    import cryptography
 
     _HAS_CRYPTOGRAPHY = True
 except ImportError:

@@ -412,7 +412,9 @@ class TestGoalPriorityWeightedProximity:
         storage = AsyncMock()
 
         # Both goals connect to same neighbor at hop 1
-        async def mock_neighbors(nid: str, direction: str = "both", **kwargs: object) -> list[tuple[MagicMock, MagicMock]]:
+        async def mock_neighbors(
+            nid: str, direction: str = "both", **kwargs: object
+        ) -> list[tuple[MagicMock, MagicMock]]:
             if nid in ("goal-high", "goal-low"):
                 syn = MagicMock()
                 syn.weight = 0.5
@@ -423,12 +425,14 @@ class TestGoalPriorityWeightedProximity:
 
         # High-priority goal (10) should give stronger scores
         scores_high = await compute_goal_proximity(
-            storage, ["goal-high"],
+            storage,
+            ["goal-high"],
             goal_priorities={"goal-high": 10},
         )
 
         scores_low = await compute_goal_proximity(
-            storage, ["goal-low"],
+            storage,
+            ["goal-low"],
             goal_priorities={"goal-low": 1},
         )
 
@@ -444,7 +448,9 @@ class TestGoalPriorityWeightedProximity:
 
         storage = AsyncMock()
 
-        async def mock_neighbors(nid: str, direction: str = "both", **kwargs: object) -> list[tuple[MagicMock, MagicMock]]:
+        async def mock_neighbors(
+            nid: str, direction: str = "both", **kwargs: object
+        ) -> list[tuple[MagicMock, MagicMock]]:
             if nid in ("g1", "g2"):
                 syn = MagicMock()
                 return [(neighbor, syn)]
@@ -453,7 +459,8 @@ class TestGoalPriorityWeightedProximity:
         storage.get_neighbors = mock_neighbors
 
         scores = await compute_goal_proximity(
-            storage, ["g1", "g2"],
+            storage,
+            ["g1", "g2"],
             goal_priorities={"g1": 2, "g2": 8},
         )
 

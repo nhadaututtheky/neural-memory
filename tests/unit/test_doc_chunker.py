@@ -5,8 +5,6 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-import pytest  # noqa: F401 — needed for tmp_path fixture
-
 from neural_memory.engine.doc_chunker import chunk_markdown, discover_files
 
 

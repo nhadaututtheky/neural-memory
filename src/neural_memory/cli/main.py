@@ -67,14 +67,14 @@ def _app_callback(
 
 
 # Register sub-apps (brain, project, shared)
-from neural_memory.cli.commands.brain import brain_app  # noqa: E402
-from neural_memory.cli.commands.config_cmd import config_app  # noqa: E402
-from neural_memory.cli.commands.habits import habits_app  # noqa: E402
-from neural_memory.cli.commands.project import project_app  # noqa: E402
-from neural_memory.cli.commands.shared import shared_app  # noqa: E402
-from neural_memory.cli.commands.storage import storage_app  # noqa: E402
-from neural_memory.cli.commands.telegram import app as telegram_app  # noqa: E402
-from neural_memory.cli.commands.version import version_app  # noqa: E402
+from neural_memory.cli.commands.brain import brain_app
+from neural_memory.cli.commands.config_cmd import config_app
+from neural_memory.cli.commands.habits import habits_app
+from neural_memory.cli.commands.project import project_app
+from neural_memory.cli.commands.shared import shared_app
+from neural_memory.cli.commands.storage import storage_app
+from neural_memory.cli.commands.telegram import app as telegram_app
+from neural_memory.cli.commands.version import version_app
 
 app.add_typer(brain_app, name="brain")
 app.add_typer(config_app, name="config")
@@ -89,7 +89,7 @@ app.add_typer(telegram_app, name="telegram")
 app.add_typer(shared_app, name="sync")
 
 # Register top-level commands
-from neural_memory.cli.commands import (  # noqa: E402
+from neural_memory.cli.commands import (
     codebase,
     info,
     listing,

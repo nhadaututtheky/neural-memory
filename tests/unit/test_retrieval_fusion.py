@@ -168,8 +168,16 @@ class TestSelectWeights:
     def test_weights_sum_approximately_one(self) -> None:
         """All presets should have weights summing to ~1.0."""
         for intent in (
-            "ask_what", "ask_when", "ask_why", "recall", "unknown",
-            "factual", "semantic", "temporal", "causal", "exploratory",
+            "ask_what",
+            "ask_when",
+            "ask_why",
+            "recall",
+            "unknown",
+            "factual",
+            "semantic",
+            "temporal",
+            "causal",
+            "exploratory",
         ):
             w = select_weights(intent)
             assert w.graph + w.semantic + w.lexical == pytest.approx(1.0, abs=0.01)

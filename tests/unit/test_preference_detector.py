@@ -25,7 +25,9 @@ class TestDetectPreferenceSignalsUser:
         assert "premiere" in result.domain_keywords or "editing" in result.domain_keywords
 
     def test_favorite_pattern(self) -> None:
-        result = detect_preference_signals("My favorite IDE is VS Code with Vim keybindings", "user")
+        result = detect_preference_signals(
+            "My favorite IDE is VS Code with Vim keybindings", "user"
+        )
         assert result is not None
         assert result.pattern_matches >= 1
 
@@ -196,7 +198,9 @@ class TestPreferenceSignalModel:
         assert raised, "PreferenceSignal should be frozen"
 
     def test_fields(self) -> None:
-        signal = PreferenceSignal(confidence=0.8, domain_keywords=("django", "python"), pattern_matches=2)
+        signal = PreferenceSignal(
+            confidence=0.8, domain_keywords=("django", "python"), pattern_matches=2
+        )
         assert signal.confidence == 0.8
         assert signal.domain_keywords == ("django", "python")
         assert signal.pattern_matches == 2

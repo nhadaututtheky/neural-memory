@@ -103,9 +103,7 @@ class TestFindFibersBatch:
         mixin = _make_mixin()
         mixin._query_ro = AsyncMock(return_value=[])
 
-        await mixin.find_fibers_batch(
-            ["n1"], tags={"python", "async"}, tag_mode="and"
-        )
+        await mixin.find_fibers_batch(["n1"], tags={"python", "async"}, tag_mode="and")
         sql = mixin._query_ro.call_args[0][0]
         assert "@>" in sql  # JSONB containment for AND mode
 
@@ -114,9 +112,7 @@ class TestFindFibersBatch:
         mixin = _make_mixin()
         mixin._query_ro = AsyncMock(return_value=[])
 
-        await mixin.find_fibers_batch(
-            ["n1"], tags={"python", "async"}, tag_mode="or"
-        )
+        await mixin.find_fibers_batch(["n1"], tags={"python", "async"}, tag_mode="or")
         sql = mixin._query_ro.call_args[0][0]
         assert "?|" in sql  # ANY key exists for OR mode
 
@@ -237,10 +233,12 @@ class TestStatsMethodsPg:
     @pytest.mark.asyncio
     async def test_get_fiber_stage_counts(self) -> None:
         mixin = _make_mixin()
-        mixin._query_ro = AsyncMock(return_value=[
-            {"stage": "episodic", "cnt": 10},
-            {"stage": "semantic", "cnt": 5},
-        ])
+        mixin._query_ro = AsyncMock(
+            return_value=[
+                {"stage": "episodic", "cnt": 10},
+                {"stage": "semantic", "cnt": 5},
+            ]
+        )
 
         result = await mixin.get_fiber_stage_counts("brain-test")
         assert result == {"episodic": 10, "semantic": 5}
@@ -291,10 +289,12 @@ class TestKeywordDfPg:
     @pytest.mark.asyncio
     async def test_get_keyword_df_batch(self) -> None:
         mixin = _make_mixin()
-        mixin._query_ro = AsyncMock(return_value=[
-            {"keyword": "python", "fiber_count": 15},
-            {"keyword": "async", "fiber_count": 8},
-        ])
+        mixin._query_ro = AsyncMock(
+            return_value=[
+                {"keyword": "python", "fiber_count": 15},
+                {"keyword": "async", "fiber_count": 8},
+            ]
+        )
 
         result = await mixin.get_keyword_df_batch(["python", "async", "missing"])
         assert result == {"python": 15, "async": 8}

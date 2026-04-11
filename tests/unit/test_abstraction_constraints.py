@@ -26,7 +26,6 @@ from neural_memory.engine.abstraction import (
 )
 from neural_memory.engine.activation import SpreadingActivation
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -101,8 +100,14 @@ def test_default_levels_values_are_1_2_or_3() -> None:
 
 
 def test_concrete_types_are_level_1() -> None:
-    concrete = {NeuronType.TIME, NeuronType.SPATIAL, NeuronType.ENTITY, NeuronType.ACTION,
-                NeuronType.STATE, NeuronType.SENSORY}
+    concrete = {
+        NeuronType.TIME,
+        NeuronType.SPATIAL,
+        NeuronType.ENTITY,
+        NeuronType.ACTION,
+        NeuronType.STATE,
+        NeuronType.SENSORY,
+    }
     for t in concrete:
         assert DEFAULT_ABSTRACTION_LEVELS[t] == 1, f"{t} should be level 1"
 
@@ -439,9 +444,7 @@ async def test_reflex_activation_blocks_skipped_level_pathway() -> None:
     fiber = _make_fiber([entity.id, meta.id])
 
     storage = MagicMock()
-    storage.get_neurons_batch = AsyncMock(
-        return_value={entity.id: entity, meta.id: meta}
-    )
+    storage.get_neurons_batch = AsyncMock(return_value={entity.id: entity, meta.id: meta})
 
     config = BrainConfig(
         abstraction_constraint_enabled=True,
@@ -469,9 +472,7 @@ async def test_reflex_activation_constraint_disabled_allows_all() -> None:
     fiber = _make_fiber([entity.id, meta.id])
 
     storage = MagicMock()
-    storage.get_neurons_batch = AsyncMock(
-        return_value={entity.id: entity, meta.id: meta}
-    )
+    storage.get_neurons_batch = AsyncMock(return_value={entity.id: entity, meta.id: meta})
 
     config = BrainConfig(
         abstraction_constraint_enabled=False,

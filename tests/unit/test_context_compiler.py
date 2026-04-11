@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from neural_memory.engine.context_compiler import (
     CompiledChunk,
-    compile_context,
     _dedup_groups,
     _merge_group,
     _rescore,
+    compile_context,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -134,7 +134,8 @@ def test_max_extra_sentences_cap() -> None:
     merged = _merge_group([primary, secondary], max_extra_sentences=2)
     # Count how many of the secondary sentences appear
     appended_count = sum(
-        1 for s in ["Sentence two", "Sentence three", "Sentence four", "Sentence five"]
+        1
+        for s in ["Sentence two", "Sentence three", "Sentence four", "Sentence five"]
         if s in merged.content
     )
     assert appended_count <= 2

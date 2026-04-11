@@ -407,12 +407,14 @@ class LifecycleHandler:
                         fiber_ids=fiber_ids, within_days=within_days
                     )
                     for tm in expiring[:20]:
-                        at_risk_items.append({
-                            "fiber_id": tm.fiber_id,
-                            "memory_type": tm.memory_type,
-                            "expires_at": tm.expires_at.isoformat() if tm.expires_at else None,
-                            "tier": getattr(tm, "tier", "warm"),
-                        })
+                        at_risk_items.append(
+                            {
+                                "fiber_id": tm.fiber_id,
+                                "memory_type": tm.memory_type,
+                                "expires_at": tm.expires_at.isoformat() if tm.expires_at else None,
+                                "tier": getattr(tm, "tier", "warm"),
+                            }
+                        )
             except Exception:
                 logger.debug("at_risk detail fetch failed", exc_info=True)
 

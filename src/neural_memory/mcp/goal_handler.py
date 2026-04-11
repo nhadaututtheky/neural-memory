@@ -187,18 +187,18 @@ class GoalHandler:
             child = await storage.get_neuron(syn.source_id)
             if child is None or child.goal_state is None:
                 continue
-            subgoals.append({
-                "goal_id": child.id,
-                "goal": child.content[:200],
-                "state": child.goal_state,
-                "priority": child.goal_priority,
-            })
+            subgoals.append(
+                {
+                    "goal_id": child.id,
+                    "goal": child.content[:200],
+                    "state": child.goal_state,
+                    "priority": child.goal_priority,
+                }
+            )
 
         subgoals.sort(key=lambda g: (-g["priority"], g["goal"]))
 
-        all_completed = len(subgoals) > 0 and all(
-            s["state"] == "completed" for s in subgoals
-        )
+        all_completed = len(subgoals) > 0 and all(s["state"] == "completed" for s in subgoals)
         hint = ""
         if all_completed:
             hint = f"All {len(subgoals)} subgoal(s) completed. Consider completing parent goal."

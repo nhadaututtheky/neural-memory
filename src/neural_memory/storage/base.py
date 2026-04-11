@@ -40,13 +40,13 @@ class NeuralStorage(ABC):
 
     # ========== Batch Operations ==========
 
-    def disable_auto_save(self) -> None:  # noqa: B027
+    def disable_auto_save(self) -> None:
         """Disable auto-save for batch operations. No-op by default."""
 
-    def enable_auto_save(self) -> None:  # noqa: B027
+    def enable_auto_save(self) -> None:
         """Re-enable auto-save after batch operations. No-op by default."""
 
-    async def batch_save(self) -> None:  # noqa: B027
+    async def batch_save(self) -> None:
         """Flush pending writes from batch mode. No-op by default."""
 
     # ========== Neuron Operations ==========
@@ -627,7 +627,7 @@ class NeuralStorage(ABC):
 
     # ========== Lifecycle ==========
 
-    async def close(self) -> None:  # noqa: B027
+    async def close(self) -> None:
         """Close storage connections. No-op by default."""
 
     # ========== Brain Operations ==========
@@ -991,7 +991,7 @@ class NeuralStorage(ABC):
 
     # ========== Maturation Operations ==========
 
-    async def save_maturation(self, record: MaturationRecord) -> None:  # noqa: B027
+    async def save_maturation(self, record: MaturationRecord) -> None:
         """Save or update a maturation record.
 
         Default no-op — backends that support maturation should override.

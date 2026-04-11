@@ -370,7 +370,7 @@ class SpreadingActivation:
                 if self._config.abstraction_constraint_enabled:
                     current_neuron_obj = neuron_objects.get(current.neuron_id)
                     if current_neuron_obj is not None:
-                        from neural_memory.engine.abstraction import can_activate  # noqa: PLC0415
+                        from neural_memory.engine.abstraction import can_activate
 
                         if not can_activate(
                             current_neuron_obj,

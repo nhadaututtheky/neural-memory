@@ -15,9 +15,9 @@ import logging
 import os
 from typing import Any
 
-from starlette.requests import Request  # noqa: TC002
+from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
-from starlette.types import ASGIApp  # noqa: TC002
+from starlette.types import ASGIApp
 
 logger = logging.getLogger(__name__)
 

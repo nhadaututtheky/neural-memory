@@ -55,7 +55,7 @@ async def test_migrate_single_brain(
         pg_port=5432,
         pg_database="neuralmemory",
         pg_user="postgres",
-        pg_password="secret",  # noqa: S106
+        pg_password="secret",
         brain_name="test-brain",
     )
 
@@ -142,7 +142,7 @@ async def test_migrate_passes_pg_params(mock_sqlite_cls, mock_pg_cls):
         pg_port=5433,
         pg_database="mydb",
         pg_user="admin",
-        pg_password="pass123",  # noqa: S106
+        pg_password="pass123",
         embedding_dim=768,
         brain_name="x",
     )
@@ -152,7 +152,7 @@ async def test_migrate_passes_pg_params(mock_sqlite_cls, mock_pg_cls):
         port=5433,
         database="mydb",
         user="admin",
-        password="pass123",  # noqa: S106
+        password="pass123",
         embedding_dim=768,
     )
 

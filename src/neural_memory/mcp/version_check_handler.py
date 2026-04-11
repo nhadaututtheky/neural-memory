@@ -211,11 +211,11 @@ async def _fetch_latest_version() -> str | None:
         try:
             if not _PYPI_URL.startswith("https://"):
                 return None
-            req = urllib.request.Request(  # noqa: S310
+            req = urllib.request.Request(
                 _PYPI_URL,
                 headers={"Accept": "application/json"},
             )
-            with urllib.request.urlopen(req, timeout=_REQUEST_TIMEOUT) as resp:  # noqa: S310
+            with urllib.request.urlopen(req, timeout=_REQUEST_TIMEOUT) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 version: str | None = data.get("info", {}).get("version")
                 return version

@@ -264,14 +264,33 @@ class MCPServer(
         return tools
 
     # Tools that modify brain state (need write access when ACL is enabled)
-    _WRITE_TOOLS: frozenset[str] = frozenset({
-        "nmem_remember", "nmem_remember_batch", "nmem_edit", "nmem_forget",
-        "nmem_consolidate", "nmem_pin", "nmem_goal", "nmem_import",
-        "nmem_train", "nmem_train_db", "nmem_lifecycle", "nmem_refine",
-        "nmem_report_outcome", "nmem_tier", "nmem_boundaries", "nmem_milestone",
-        "nmem_store", "nmem_evidence", "nmem_hypothesize", "nmem_predict",
-        "nmem_verify", "nmem_schema", "nmem_provenance",
-    })
+    _WRITE_TOOLS: frozenset[str] = frozenset(
+        {
+            "nmem_remember",
+            "nmem_remember_batch",
+            "nmem_edit",
+            "nmem_forget",
+            "nmem_consolidate",
+            "nmem_pin",
+            "nmem_goal",
+            "nmem_import",
+            "nmem_train",
+            "nmem_train_db",
+            "nmem_lifecycle",
+            "nmem_refine",
+            "nmem_report_outcome",
+            "nmem_tier",
+            "nmem_boundaries",
+            "nmem_milestone",
+            "nmem_store",
+            "nmem_evidence",
+            "nmem_hypothesize",
+            "nmem_predict",
+            "nmem_verify",
+            "nmem_schema",
+            "nmem_provenance",
+        }
+    )
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Dispatch a tool call to the appropriate handler."""

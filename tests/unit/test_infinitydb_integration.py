@@ -18,7 +18,7 @@ from neural_memory.unified_config import UnifiedConfig, _get_infinitydb_storage
 
 _pro_deps_available = True
 try:
-    import numpy  # noqa: F401
+    import numpy
 except ImportError:
     _pro_deps_available = False
 

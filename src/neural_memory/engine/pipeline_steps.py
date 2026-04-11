@@ -40,13 +40,13 @@ from neural_memory.core.fiber import Fiber
 from neural_memory.core.memory_types import suggest_memory_type
 from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
+from neural_memory.engine.abstraction import assign_abstraction_level
 from neural_memory.engine.pipeline import PipelineContext
 from neural_memory.extraction.entities import EntityExtractor, EntityType
 from neural_memory.extraction.keywords import extract_keywords, extract_weighted_keywords
 from neural_memory.extraction.relations import RelationExtractor
 from neural_memory.extraction.sentiment import SentimentExtractor, Valence
 from neural_memory.extraction.temporal import TemporalExtractor
-from neural_memory.engine.abstraction import assign_abstraction_level
 from neural_memory.utils.simhash import is_near_duplicate, simhash
 from neural_memory.utils.tag_normalizer import TagNormalizer
 
@@ -148,29 +148,33 @@ class ExtractTimeNeuronsStep:
             existing = await _find_similar_time_neuron(storage, hint.midpoint)
             if existing:
                 continue
-            neuron = assign_abstraction_level(Neuron.create(
-                type=NeuronType.TIME,
-                content=hint.original,
-                metadata={
-                    "absolute_start": hint.absolute_start.isoformat(),
-                    "absolute_end": hint.absolute_end.isoformat(),
-                    "granularity": hint.granularity.value,
-                },
-            ))
+            neuron = assign_abstraction_level(
+                Neuron.create(
+                    type=NeuronType.TIME,
+                    content=hint.original,
+                    metadata={
+                        "absolute_start": hint.absolute_start.isoformat(),
+                        "absolute_end": hint.absolute_end.isoformat(),
+                        "granularity": hint.granularity.value,
+                    },
+                )
+            )
             await storage.add_neuron(neuron)
             ctx.time_neurons.append(neuron)
             ctx.neurons_created.append(neuron)
 
         # Always create a timestamp neuron for reference time
-        timestamp_neuron = assign_abstraction_level(Neuron.create(
-            type=NeuronType.TIME,
-            content=ctx.timestamp.strftime("%Y-%m-%d %H:%M"),
-            metadata={
-                "absolute_start": ctx.timestamp.isoformat(),
-                "absolute_end": ctx.timestamp.isoformat(),
-                "granularity": "minute",
-            },
-        ))
+        timestamp_neuron = assign_abstraction_level(
+            Neuron.create(
+                type=NeuronType.TIME,
+                content=ctx.timestamp.strftime("%Y-%m-%d %H:%M"),
+                metadata={
+                    "absolute_start": ctx.timestamp.isoformat(),
+                    "absolute_end": ctx.timestamp.isoformat(),
+                    "granularity": "minute",
+                },
+            )
+        )
         await storage.add_neuron(timestamp_neuron)
         ctx.time_neurons.append(timestamp_neuron)
         ctx.neurons_created.append(timestamp_neuron)
@@ -248,12 +252,14 @@ class ExtractEntityNeuronsStep:
             if entity.unit:
                 meta["unit"] = entity.unit
 
-            neuron = assign_abstraction_level(Neuron.create(
-                type=neuron_type,
-                content=entity.text,
-                metadata=meta,
-                content_hash=simhash(entity.text),
-            ))
+            neuron = assign_abstraction_level(
+                Neuron.create(
+                    type=neuron_type,
+                    content=entity.text,
+                    metadata=meta,
+                    content_hash=simhash(entity.text),
+                )
+            )
             await storage.add_neuron(neuron)
             ctx.entity_neurons.append(neuron)
             ctx.neurons_created.append(neuron)
@@ -323,7 +329,9 @@ class ExtractConceptNeuronsStep:
                 # Track for relation extraction only (not for synapse creation)
                 ctx.existing_concept_neurons.append(existing_map[keyword])
                 continue
-            neuron = assign_abstraction_level(Neuron.create(type=NeuronType.CONCEPT, content=keyword))
+            neuron = assign_abstraction_level(
+                Neuron.create(type=NeuronType.CONCEPT, content=keyword)
+            )
             await storage.add_neuron(neuron)
             ctx.concept_neurons.append(neuron)
             ctx.neurons_created.append(neuron)
@@ -381,7 +389,9 @@ class ExtractActionNeuronsStep:
         for action_text in valid_actions:
             if action_text in existing_map:
                 continue
-            neuron = assign_abstraction_level(Neuron.create(type=NeuronType.ACTION, content=action_text))
+            neuron = assign_abstraction_level(
+                Neuron.create(type=NeuronType.ACTION, content=action_text)
+            )
             await storage.add_neuron(neuron)
             ctx.action_neurons.append(neuron)
             ctx.neurons_created.append(neuron)
@@ -439,7 +449,9 @@ class ExtractIntentNeuronsStep:
         for intent_text in valid_intents:
             if intent_text in existing_map:
                 continue
-            neuron = assign_abstraction_level(Neuron.create(type=NeuronType.INTENT, content=intent_text))
+            neuron = assign_abstraction_level(
+                Neuron.create(type=NeuronType.INTENT, content=intent_text)
+            )
             await storage.add_neuron(neuron)
             ctx.intent_neurons.append(neuron)
             ctx.neurons_created.append(neuron)
@@ -552,19 +564,21 @@ class StructuredDataEncoderStep:
                 continue
 
             cell_content = f"{name} = {value}"
-            cell_neuron = assign_abstraction_level(Neuron.create(
-                type=NeuronType.ENTITY,
-                content=cell_content,
-                metadata={
-                    "entity_type": "entity",
-                    "_verbatim": True,
-                    "raw_value": value,
-                    "field_name": name,
-                    "field_type": field_type,
-                    "_structured_cell": True,
-                },
-                content_hash=simhash(cell_content),
-            ))
+            cell_neuron = assign_abstraction_level(
+                Neuron.create(
+                    type=NeuronType.ENTITY,
+                    content=cell_content,
+                    metadata={
+                        "entity_type": "entity",
+                        "_verbatim": True,
+                        "raw_value": value,
+                        "field_name": name,
+                        "field_type": field_type,
+                        "_structured_cell": True,
+                    },
+                    content_hash=simhash(cell_content),
+                )
+            )
             await storage.add_neuron(cell_neuron)
             ctx.neurons_created.append(cell_neuron)
             ctx.entity_neurons.append(cell_neuron)
@@ -603,20 +617,22 @@ class StructuredDataEncoderStep:
                 continue
 
             cell_content = f"{name}: {value}"
-            cell_neuron = assign_abstraction_level(Neuron.create(
-                type=NeuronType.ENTITY,
-                content=cell_content,
-                metadata={
-                    "entity_type": "entity",
-                    "_verbatim": True,
-                    "raw_value": value,
-                    "field_name": name,
-                    "field_type": field_type,
-                    "_structured_cell": True,
-                    "_table_format": fmt,
-                },
-                content_hash=simhash(cell_content),
-            ))
+            cell_neuron = assign_abstraction_level(
+                Neuron.create(
+                    type=NeuronType.ENTITY,
+                    content=cell_content,
+                    metadata={
+                        "entity_type": "entity",
+                        "_verbatim": True,
+                        "raw_value": value,
+                        "field_name": name,
+                        "field_type": field_type,
+                        "_structured_cell": True,
+                        "_table_format": fmt,
+                    },
+                    content_hash=simhash(cell_content),
+                )
+            )
             await storage.add_neuron(cell_neuron)
             ctx.neurons_created.append(cell_neuron)
             ctx.entity_neurons.append(cell_neuron)
@@ -909,17 +925,19 @@ class CreateAnchorStep:
             }
             anchor_neuron = dedup_reused
             # Create alias neuron pointing to existing anchor
-            alias_neuron = assign_abstraction_level(Neuron.create(
-                type=NeuronType.CONCEPT,
-                content=anchor_content,
-                metadata={
-                    "is_anchor": True,
-                    "timestamp": ctx.timestamp.isoformat(),
-                    "_dedup_alias_of": anchor_neuron.id,
-                    **alias_metadata,
-                },
-                content_hash=ctx.content_hash,
-            ))
+            alias_neuron = assign_abstraction_level(
+                Neuron.create(
+                    type=NeuronType.CONCEPT,
+                    content=anchor_content,
+                    metadata={
+                        "is_anchor": True,
+                        "timestamp": ctx.timestamp.isoformat(),
+                        "_dedup_alias_of": anchor_neuron.id,
+                        **alias_metadata,
+                    },
+                    content_hash=ctx.content_hash,
+                )
+            )
             await storage.add_neuron(alias_neuron)
             ctx.neurons_created.append(alias_neuron)
 
@@ -943,17 +961,19 @@ class CreateAnchorStep:
 
             raw_kws = extract_keywords(ctx.content)[:10]
 
-            anchor_neuron = assign_abstraction_level(Neuron.create(
-                type=NeuronType.CONCEPT,
-                content=anchor_content,
-                metadata={
-                    "is_anchor": True,
-                    "timestamp": ctx.timestamp.isoformat(),
-                    **({"_raw_keywords": raw_kws} if raw_kws else {}),
-                    **ctx.effective_metadata,
-                },
-                content_hash=ctx.content_hash,
-            ))
+            anchor_neuron = assign_abstraction_level(
+                Neuron.create(
+                    type=NeuronType.CONCEPT,
+                    content=anchor_content,
+                    metadata={
+                        "is_anchor": True,
+                        "timestamp": ctx.timestamp.isoformat(),
+                        **({"_raw_keywords": raw_kws} if raw_kws else {}),
+                        **ctx.effective_metadata,
+                    },
+                    content_hash=ctx.content_hash,
+                )
+            )
             await storage.add_neuron(anchor_neuron)
             ctx.neurons_created.append(anchor_neuron)
             ctx.anchor_neuron = anchor_neuron
@@ -1221,11 +1241,13 @@ class EmotionStep:
             if existing:
                 emotion_neuron = existing[0]
             else:
-                emotion_neuron = assign_abstraction_level(Neuron.create(
-                    type=NeuronType.STATE,
-                    content=emotion_tag,
-                    metadata={"emotion_category": True},
-                ))
+                emotion_neuron = assign_abstraction_level(
+                    Neuron.create(
+                        type=NeuronType.STATE,
+                        content=emotion_tag,
+                        metadata={"emotion_category": True},
+                    )
+                )
                 await storage.add_neuron(emotion_neuron)
                 ctx.neurons_created.append(emotion_neuron)
 

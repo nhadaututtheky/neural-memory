@@ -113,9 +113,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             )
 
         if maint.enabled and maint.notifications_enabled and maint.notifications_webhook_url:
-            background_tasks.append(
-                asyncio.create_task(_notification_loop(storage, config, maint))
-            )
+            background_tasks.append(asyncio.create_task(_notification_loop(storage, config, maint)))
             _logger.info("Background notification daemon started")
 
     # File watcher daemon
@@ -452,9 +450,9 @@ async def _send_webhook(url: str, payload: dict[str, Any], logger: Any) -> None:
             return
 
         data = json.dumps(payload).encode("utf-8")
-        req = Request(url, data=data, headers={"Content-Type": "application/json"})  # noqa: S310
+        req = Request(url, data=data, headers={"Content-Type": "application/json"})
         try:
-            with urlopen(req, timeout=10) as resp:  # noqa: S310
+            with urlopen(req, timeout=10) as resp:
                 logger.debug("Webhook sent: %d", resp.status)
         except Exception as e:
             logger.warning("Webhook failed: %s", e)

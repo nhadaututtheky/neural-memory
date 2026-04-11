@@ -275,7 +275,7 @@ def main() -> None:
             resolved = Path(transcript_path).resolve()
             allowed_dir = Path.home().resolve() / ".claude"
             if not resolved.is_relative_to(allowed_dir):
-                print("Transcript path outside allowed directory, skipping", file=sys.stderr)  # noqa: T201
+                print("Transcript path outside allowed directory, skipping", file=sys.stderr)
                 sys.exit(0)
             text = read_transcript_tail(transcript_path)
         else:
@@ -284,24 +284,24 @@ def main() -> None:
 
     if not text or len(text.strip()) < 50:
         # Too little content to analyze
-        print("No substantial content to flush", file=sys.stderr)  # noqa: T201
+        print("No substantial content to flush", file=sys.stderr)
         sys.exit(0)
 
     try:
         result = asyncio.run(flush_text(text))
         saved = result.get("saved", 0)
         if saved > 0:
-            print(  # noqa: T201
+            print(
                 f"[NeuralMemory] Pre-compact flush: captured {saved} memories",
                 file=sys.stderr,
             )
         else:
-            print(  # noqa: T201
+            print(
                 f"[NeuralMemory] Pre-compact flush: {result.get('message', 'no memories')}",
                 file=sys.stderr,
             )
     except Exception:
-        print("[NeuralMemory] Pre-compact flush failed", file=sys.stderr)  # noqa: T201
+        print("[NeuralMemory] Pre-compact flush failed", file=sys.stderr)
         sys.exit(0)  # Don't block compaction on errors
 
 

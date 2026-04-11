@@ -562,9 +562,7 @@ class ReflexPipeline:
                 if active_goals:
                     goal_ids = [g.id for g in active_goals]
                     goal_priorities = {g.id: g.goal_priority for g in active_goals}
-                    _parent_map = {
-                        g.id: g.parent_goal_id for g in active_goals
-                    }
+                    _parent_map = {g.id: g.parent_goal_id for g in active_goals}
                     _goal_proximity = await compute_goal_proximity(
                         self._storage,
                         goal_ids,
@@ -2703,9 +2701,7 @@ class ReflexPipeline:
             if query_intent:
                 _weights = select_weights(query_intent)
 
-            fusion_results = fuse_scores(
-                _graph_fiber, _semantic_fiber, _lexical_fiber, _weights
-            )
+            fusion_results = fuse_scores(_graph_fiber, _semantic_fiber, _lexical_fiber, _weights)
             _fusion_scores = {r.fiber_id: r.fused_score for r in fusion_results}
 
         def _fiber_score(fiber: Fiber) -> float:
@@ -2734,9 +2730,9 @@ class ReflexPipeline:
                 if activated:
                     coverage = len(activated) / max(len(fiber.neuron_ids), 1)
                     max_act = max(activations[nid].activation_level for nid in activated)
-                    mean_act = sum(
-                        activations[nid].activation_level for nid in activated
-                    ) / len(activated)
+                    mean_act = sum(activations[nid].activation_level for nid in activated) / len(
+                        activated
+                    )
                     activation_signal = max_act * 0.5 + coverage * 0.3 + mean_act * 0.2
                     activation_signal = max(0.05, activation_signal)
                 else:

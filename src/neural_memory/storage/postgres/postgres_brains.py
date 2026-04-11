@@ -469,7 +469,7 @@ class PostgresBrainMixin(PostgresBaseMixin):
         )
         for table in tables:
             await self._query(
-                f"DELETE FROM {table} WHERE brain_id = $1",  # noqa: S608
+                f"DELETE FROM {table} WHERE brain_id = $1",
                 brain_id,
             )
         await self._query("DELETE FROM brains WHERE id = $1", brain_id)

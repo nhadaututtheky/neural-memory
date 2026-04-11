@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.44.0] — 2026-04-11
+
+### Added
+
+- **Engine**: abstraction constraints — level-gated spreading activation prevents low-abstraction nodes from activating high-abstraction concepts
+- **Engine**: context compiler — cross-fiber deduplication, merge, and query re-scoring for tighter recall windows
+- **Engine**: hybrid retrieval fusion — tri-modal scoring combining graph spreading activation, semantic (vector), and lexical (BM25) signals
+- **Engine**: depth gap features — ACL per-neuron access control, confidence scores, preference/temporal/role query filters, scheduler, goal hierarchy
+- **Embedding**: hybrid vector retrieval for SQLite — HNSW sidecar index, `VectorSearchMixin`, `EmbeddingStep` pipeline integration
+- **Benchmark**: LongMemEval benchmark suite — evaluation scripts for long-horizon memory recall quality
+- **Sync Hub**: teams schema, queries, routes, and types for multi-user organization support
+
+### Distribution
+
+- **OpenClaw**: bumped plugin to 1.16.1
+- **npm MCP**: added `publish-npm-mcp` CI job for automated npm wrapper publishing
+
 ## [4.43.0] — 2026-04-09
 
 ### Improved
