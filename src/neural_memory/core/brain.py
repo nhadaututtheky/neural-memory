@@ -200,6 +200,13 @@ class BrainConfig:
     # Abstraction-level constraint (spreading activation gate)
     abstraction_constraint_enabled: bool = False
     abstraction_max_distance: int = 1
+    # Hybrid retrieval fusion (tri-modal: graph + semantic + lexical)
+    retrieval_fusion_enabled: bool = True
+    retrieval_fusion_weights: tuple[tuple[str, float], ...] = (
+        ("graph", 0.5),
+        ("semantic", 0.3),
+        ("lexical", 0.2),
+    )
 
     def with_updates(self, **kwargs: Any) -> BrainConfig:
         """Create a new config with updated values."""

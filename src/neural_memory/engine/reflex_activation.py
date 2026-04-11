@@ -217,7 +217,6 @@ class ReflexActivation:
                 if prev_obj is not None and curr_obj is not None:
                     if not can_activate(prev_obj, curr_obj, self._config.abstraction_max_distance):
                         pos += direction
-                        prev_neuron_id = neuron_id
                         continue
 
             # Trail decay: level decays by rate, scaled by conductivity and time

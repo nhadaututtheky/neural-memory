@@ -753,6 +753,8 @@ class ReflexPipeline:
             is_preference_query=_is_preference_query,
             temporal_event_anchors=_temporal_event_anchors,
             role_target=_role_target,
+            ranked_lists=ranked_lists,
+            query_intent=stimulus.intent.value,
         )
         _phase_timings["fibers"] = (time.perf_counter() - start_time) * 1000
 
@@ -2581,6 +2583,8 @@ class ReflexPipeline:
         is_preference_query: bool = False,
         temporal_event_anchors: set[str] | None = None,
         role_target: str | None = None,
+        ranked_lists: list[list[RankedAnchor]] | None = None,
+        query_intent: str | None = None,
     ) -> list[Fiber]:
         """Find fibers that contain activated neurons (batch query).
 
@@ -2634,6 +2638,76 @@ class ReflexPipeline:
         _session_state = session_state
         _now = utcnow()
 
+        # --- Hybrid retrieval fusion: pre-compute per-fiber fused scores ---
+        _fusion_scores: dict[str, float] = {}
+        _fusion_enabled = getattr(self._config, "retrieval_fusion_enabled", True)
+        if _fusion_enabled and ranked_lists:
+            from neural_memory.engine.retrieval_fusion import (
+                FusionWeights,
+                fuse_scores,
+                select_weights,
+            )
+
+            # Build neuron-level scores per channel from ranked_lists
+            _semantic_neuron_scores: dict[str, float] = {}
+            _lexical_neuron_scores: dict[str, float] = {}
+            for rlist in ranked_lists:
+                for anchor in rlist:
+                    # Use raw score if available, otherwise 1/(rank) as proxy
+                    score = anchor.score if anchor.score > 0 else 1.0 / anchor.rank
+                    if anchor.retriever == "embedding":
+                        prev = _semantic_neuron_scores.get(anchor.neuron_id, 0.0)
+                        _semantic_neuron_scores[anchor.neuron_id] = max(prev, score)
+                    elif anchor.retriever in ("text_relevance", "keyword", "fuzzy"):
+                        prev = _lexical_neuron_scores.get(anchor.neuron_id, 0.0)
+                        _lexical_neuron_scores[anchor.neuron_id] = max(prev, score)
+
+            # Build per-fiber channel scores (max neuron score per fiber per channel)
+            _graph_fiber: dict[str, float] = {}
+            _semantic_fiber: dict[str, float] = {}
+            _lexical_fiber: dict[str, float] = {}
+            for fiber in fibers:
+                fid = fiber.id
+                # Graph: max activation level of fiber's neurons
+                act_levels = [
+                    activations[nid].activation_level
+                    for nid in fiber.neuron_ids
+                    if nid in activations
+                ]
+                if act_levels:
+                    _graph_fiber[fid] = max(act_levels)
+                # Semantic: max embedding score of fiber's neurons
+                sem_levels = [
+                    _semantic_neuron_scores[nid]
+                    for nid in fiber.neuron_ids
+                    if nid in _semantic_neuron_scores
+                ]
+                if sem_levels:
+                    _semantic_fiber[fid] = max(sem_levels)
+                # Lexical: max keyword/BM25 score of fiber's neurons
+                lex_levels = [
+                    _lexical_neuron_scores[nid]
+                    for nid in fiber.neuron_ids
+                    if nid in _lexical_neuron_scores
+                ]
+                if lex_levels:
+                    _lexical_fiber[fid] = max(lex_levels)
+
+            # Select weights based on query intent or config
+            _cfg_weights = dict(self._config.retrieval_fusion_weights)
+            _weights = FusionWeights(
+                graph=_cfg_weights.get("graph", 0.5),
+                semantic=_cfg_weights.get("semantic", 0.3),
+                lexical=_cfg_weights.get("lexical", 0.2),
+            )
+            if query_intent:
+                _weights = select_weights(query_intent)
+
+            fusion_results = fuse_scores(
+                _graph_fiber, _semantic_fiber, _lexical_fiber, _weights
+            )
+            _fusion_scores = {r.fiber_id: r.fused_score for r in fusion_results}
+
         def _fiber_score(fiber: Fiber) -> float:
             # --- Base quality: salience * recency * conductivity ---
             recency = 0.5
@@ -2651,17 +2725,22 @@ class ReflexPipeline:
                 base_score *= (1.0 - fw) + fw * age_result.score
 
             # --- Activation relevance: how well does this fiber match the query? ---
-            activated = [nid for nid in fiber.neuron_ids if nid in activations]
-            if activated:
-                coverage = len(activated) / max(len(fiber.neuron_ids), 1)
-                max_act = max(activations[nid].activation_level for nid in activated)
-                mean_act = sum(activations[nid].activation_level for nid in activated) / len(
-                    activated
-                )
-                activation_signal = max_act * 0.5 + coverage * 0.3 + mean_act * 0.2
-                activation_signal = max(0.05, activation_signal)
+            # When fusion is enabled, use fused tri-modal score as activation signal
+            fused = _fusion_scores.get(fiber.id) if _fusion_scores else None
+            if fused is not None:
+                activation_signal = max(0.05, fused)
             else:
-                activation_signal = 0.05
+                activated = [nid for nid in fiber.neuron_ids if nid in activations]
+                if activated:
+                    coverage = len(activated) / max(len(fiber.neuron_ids), 1)
+                    max_act = max(activations[nid].activation_level for nid in activated)
+                    mean_act = sum(
+                        activations[nid].activation_level for nid in activated
+                    ) / len(activated)
+                    activation_signal = max_act * 0.5 + coverage * 0.3 + mean_act * 0.2
+                    activation_signal = max(0.05, activation_signal)
+                else:
+                    activation_signal = 0.05
 
             # --- Stage bonus: semantic memories are more consolidated/reliable ---
             stage = getattr(fiber, "stage", None) or (fiber.metadata or {}).get("_stage")
