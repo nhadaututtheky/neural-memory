@@ -820,7 +820,8 @@ class RecallHandler:
         if self.config.proactive.enabled:
             try:
                 proactive_hints = await self._get_proactive_hints(
-                    result, storage,
+                    result,
+                    storage,
                 )
                 if proactive_hints:
                     response["proactive_hints"] = proactive_hints

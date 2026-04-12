@@ -104,11 +104,13 @@ def reflect_on_session(
             neuron_type = "insight"
             priority = 5
 
-        pattern_neurons.append({
-            "type": neuron_type,
-            "content": f"[Session reflection] {desc}",
-            "priority": priority,
-        })
+        pattern_neurons.append(
+            {
+                "type": neuron_type,
+                "content": f"[Session reflection] {desc}",
+                "priority": priority,
+            }
+        )
 
     # Build summary
     topics_str = ", ".join(session_topics[:5]) if session_topics else "various"

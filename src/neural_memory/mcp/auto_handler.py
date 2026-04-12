@@ -543,9 +543,7 @@ class AutoHandler:
             if "error" not in result
         ]
 
-    async def _apply_significance(
-        self, items: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+    async def _apply_significance(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Score items for significance and adjust priorities.
 
         Near-duplicate items (surprise=0.0) are filtered out entirely.

@@ -305,9 +305,7 @@ class EternalHandler:
 
         return predictions if predictions else None
 
-    async def _get_global_recap_context(
-        self, topic: str | None = None
-    ) -> str | None:
+    async def _get_global_recap_context(self, topic: str | None = None) -> str | None:
         """Fetch global brain preferences/instructions for recap context.
 
         Queries the _global brain for cross-project preferences and instructions,

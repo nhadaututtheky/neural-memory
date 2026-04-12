@@ -355,9 +355,19 @@ class RememberHandler:
 
         try:
             return await self._remember_save(
-                args, content, mem_type, storage, brain, layer_decision,
-                is_auto_capture, redacted_matches, remaining_matches,
-                sensitive_detected, should_encrypt, encrypted_content, encryption_meta,
+                args,
+                content,
+                mem_type,
+                storage,
+                brain,
+                layer_decision,
+                is_auto_capture,
+                redacted_matches,
+                remaining_matches,
+                sensitive_detected,
+                should_encrypt,
+                encrypted_content,
+                encryption_meta,
             )
         finally:
             if global_storage is not None:
