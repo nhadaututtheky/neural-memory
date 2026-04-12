@@ -1794,6 +1794,11 @@ class UnifiedConfig:
                 "Invalid brain name: must contain only "
                 "alphanumeric characters, hyphens, underscores, or dots"
             )
+        if brain_name == GLOBAL_BRAIN_NAME:
+            raise ValueError(
+                f"Cannot switch to reserved brain '{GLOBAL_BRAIN_NAME}'. "
+                "The global brain is managed automatically for cross-project memories."
+            )
         self.current_brain = brain_name
         self.save()
 

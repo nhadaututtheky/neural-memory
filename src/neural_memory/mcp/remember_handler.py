@@ -68,10 +68,12 @@ class RememberHandler:
         """Get storage for the global brain (cross-project layer).
 
         Creates the global brain if it doesn't exist. Returns None if
-        global brain cannot be initialized.
+        global brain cannot be initialized. Caller must close the returned
+        storage when done.
         """
         from neural_memory.unified_config import GLOBAL_BRAIN_NAME
 
+        storage = None
         try:
             await self.config.ensure_global_brain()
 
@@ -90,6 +92,11 @@ class RememberHandler:
             return None
         except Exception:
             logger.debug("Failed to get global storage", exc_info=True)
+            if storage is not None:
+                try:
+                    await storage.close()
+                except Exception:
+                    pass
             return None
 
     async def _check_cross_language_hint(
@@ -338,9 +345,44 @@ class RememberHandler:
                         if err:
                             return err
                         layer_decision = None  # reset — saved to project
+            elif layer_decision.layer == MemoryLayer.SESSION:
+                # SESSION layer = ephemeral flag (handled downstream)
+                # Don't report layer=session if ephemeral was already set
+                if not bool(args.get("ephemeral", False)):
+                    layer_decision = None  # auto-routing to session without ephemeral — skip
         except Exception:
             logger.debug("Layer routing failed, using project brain", exc_info=True)
 
+        try:
+            return await self._remember_save(
+                args, content, mem_type, storage, brain, layer_decision,
+                is_auto_capture, redacted_matches, remaining_matches,
+                sensitive_detected, should_encrypt, encrypted_content, encryption_meta,
+            )
+        finally:
+            if global_storage is not None:
+                try:
+                    await global_storage.close()
+                except Exception:
+                    logger.debug("Global storage cleanup failed", exc_info=True)
+
+    async def _remember_save(
+        self,
+        args: dict[str, Any],
+        content: str,
+        mem_type: MemoryType,
+        storage: NeuralStorage,
+        brain: Any,
+        layer_decision: Any,
+        is_auto_capture: bool,
+        redacted_matches: list[Any],
+        remaining_matches: list[Any],
+        sensitive_detected: bool,
+        should_encrypt: bool,
+        encrypted_content: str | None,
+        encryption_meta: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Inner save logic for _remember — extracted for global storage cleanup."""
         # Phase A: Merge structured context into content
         raw_context = args.get("context")
         if raw_context and isinstance(raw_context, dict):
@@ -836,13 +878,6 @@ class RememberHandler:
         # Layer routing info
         if layer_decision is not None:
             response["layer"] = layer_decision.to_dict()
-
-        # Clean up global storage if we opened one
-        if global_storage is not None:
-            try:
-                await global_storage.close()
-            except Exception:
-                logger.debug("Global storage cleanup failed", exc_info=True)
 
         return response
 
