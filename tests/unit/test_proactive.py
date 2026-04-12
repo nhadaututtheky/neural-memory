@@ -24,7 +24,6 @@ from neural_memory.engine.proactive import (
 )
 from neural_memory.unified_config import ProactiveConfig
 
-
 # ── ProactiveHint ─────────────────────────────────────────────────────
 
 
@@ -145,7 +144,9 @@ class TestSelectProactiveHints:
         )
 
         hints = await select_proactive_hints(
-            priming, storage, result_neuron_ids={"n1"},
+            priming,
+            storage,
+            result_neuron_ids={"n1"},
         )
         assert len(hints) == 1
         assert hints[0].neuron_id == "n2"

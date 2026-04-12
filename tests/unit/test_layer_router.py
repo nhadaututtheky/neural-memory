@@ -144,10 +144,10 @@ class TestGlobalBrainConfig:
 
     def test_list_brains_hides_global_by_default(self) -> None:
         """list_brains() should have include_global parameter."""
-        from neural_memory.unified_config import UnifiedConfig
-
         # Just verify the method signature accepts include_global
         import inspect
+
+        from neural_memory.unified_config import UnifiedConfig
 
         sig = inspect.signature(UnifiedConfig.list_brains)
         assert "include_global" in sig.parameters

@@ -26,6 +26,7 @@ class TestLayeredRecallRouting:
         assert "layer" in props
         assert props["layer"]["enum"] == ["auto", "project", "global"]
 
+
 class TestCrossBrainGlobalVisibility:
     """Test that cross_brain_recall can see _global brain."""
 
@@ -131,7 +132,7 @@ class TestGlobalRecapContext:
             new_callable=AsyncMock,
             return_value=("_global", [], 1, "Always use dark mode"),
         ) as mock_query:
-            result = await EternalHandler._get_global_recap_context(handler, topic="UI preferences")
+            await EternalHandler._get_global_recap_context(handler, topic="UI preferences")
             assert mock_query.called
             call_kwargs = mock_query.call_args
             assert "UI preferences" in str(call_kwargs)

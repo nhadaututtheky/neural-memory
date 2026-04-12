@@ -22,7 +22,6 @@ from neural_memory.engine.significance import (
     score_significance,
 )
 
-
 # ── is_correction ────────────────────────────────────────────────────
 
 
@@ -319,10 +318,12 @@ class TestProactiveConfigSignificance:
     def test_significance_from_dict(self) -> None:
         from neural_memory.unified_config import ProactiveConfig
 
-        config = ProactiveConfig.from_dict({
-            "significance_enabled": False,
-            "correction_boost": 3.0,
-        })
+        config = ProactiveConfig.from_dict(
+            {
+                "significance_enabled": False,
+                "correction_boost": 3.0,
+            }
+        )
         assert config.significance_enabled is False
         assert config.correction_boost == 3.0
         assert config.novelty_boost == 1.5  # default

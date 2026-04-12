@@ -16,11 +16,9 @@ import pytest
 
 from neural_memory.engine.session_reflection import (
     MAX_REFLECTION_NEURONS,
-    MIN_SESSION_MEMORIES,
     SessionReflection,
     reflect_on_session,
 )
-
 
 # ── SessionReflection dataclass ──────────────────────────────────────
 
