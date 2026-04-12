@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.45.0] — 2026-04-12
+
+### Added
+
+- **Reflex Arc**: always-on neurons pinned via `_reflex` metadata flag, injected into every recall context before spreading activation. SimHash conflict detection (hamming ≤ 10) auto-supersedes old reflexes via SUPERSEDES synapse. MCP tool `nmem_reflex` (pin/unpin/list), max 20 per brain, `exclude_reflexes` param on `nmem_recall`
+- **Thought Chains**: `include_paths` param on `nmem_recall` exposes existing activation paths — returns top-5 neurons with activation scores showing how each result was reached. Zero new modules, reuses `ActivationResult` data
+- **Déjà Vu**: scar tissue detection extending `PredictionErrorStep`. Finds SimHash-similar neurons (hamming ≤ 12) participating in causal chains (`caused_by`/`leads_to`/`resolved_by` synapses). Warnings surfaced in `nmem_remember` response as `deja_vu_warnings`
+
+### Tests
+
+- 42 new tests: reflex arc (25), reflex MCP (12), déjà vu detection (7), déjà vu pipeline integration (2), thought chains (covered via existing recall tests)
+- MCP tool count: 58 → 59 (`nmem_reflex`)
+
 ## [4.44.0] — 2026-04-11
 
 ### Added
