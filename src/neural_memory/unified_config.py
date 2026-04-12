@@ -40,6 +40,9 @@ _SYNC_ID_MAX_LEN = 128
 _TOML_SAFE_STRING = re.compile(r"^[a-zA-Z0-9_\-\./ ]*$")
 _TOML_STR_MAX_LEN = 128
 
+# Global brain: cross-project preferences/instructions stored here
+GLOBAL_BRAIN_NAME = "_global"
+
 
 def get_neuralmemory_dir() -> Path:
     """Get NeuralMemory data directory.
@@ -1738,15 +1741,51 @@ class UnifiedConfig:
             raise ValueError("Invalid brain name: path traversal detected")
         return db_path
 
-    def list_brains(self) -> list[str]:
-        """List available brains (SQLite .db files + InfinityDB directories)."""
+    def list_brains(self, include_global: bool = False) -> list[str]:
+        """List available brains (SQLite .db files + InfinityDB directories).
+
+        Args:
+            include_global: If True, include the hidden _global brain.
+                Defaults to False to keep brain list clean.
+        """
         if not self.brains_dir.exists():
             return []
         # SQLite: brains/*.db
         db_brains = {p.stem for p in self.brains_dir.glob("*.db")}
         # InfinityDB: brains/<name>/brain.inf
         inf_brains = {p.parent.name for p in self.brains_dir.glob("*/brain.inf")}
-        return sorted(db_brains | inf_brains)
+        all_brains = db_brains | inf_brains
+        if not include_global:
+            all_brains.discard(GLOBAL_BRAIN_NAME)
+        return sorted(all_brains)
+
+    def has_global_brain(self) -> bool:
+        """Check if the global brain exists."""
+        return self.get_brain_db_path(GLOBAL_BRAIN_NAME).exists()
+
+    async def ensure_global_brain(self) -> None:
+        """Create the global brain if it doesn't exist.
+
+        The global brain stores cross-project knowledge (preferences,
+        instructions) that should persist across all projects.
+        """
+        if self.has_global_brain():
+            return
+
+        from neural_memory.storage.sqlite_store import SQLiteStorage
+
+        db_path = self.get_brain_db_path(GLOBAL_BRAIN_NAME)
+        storage = SQLiteStorage(db_path)
+        try:
+            await storage.initialize()
+
+            from neural_memory.core.brain import Brain, BrainConfig
+
+            brain = Brain.create(name=GLOBAL_BRAIN_NAME, config=BrainConfig())
+            await storage.save_brain(brain)
+            logger.info("Created global brain at %s", db_path)
+        finally:
+            await storage.close()
 
     def switch_brain(self, brain_name: str) -> None:
         """Switch to a different brain and save config."""

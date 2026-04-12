@@ -64,6 +64,34 @@ class RememberHandler:
 
     # ──────────────────── Helpers ────────────────────
 
+    async def _get_global_storage(self) -> NeuralStorage | None:
+        """Get storage for the global brain (cross-project layer).
+
+        Creates the global brain if it doesn't exist. Returns None if
+        global brain cannot be initialized.
+        """
+        from neural_memory.unified_config import GLOBAL_BRAIN_NAME
+
+        try:
+            await self.config.ensure_global_brain()
+
+            from neural_memory.storage.sqlite_store import SQLiteStorage
+
+            db_path = self.config.get_brain_db_path(GLOBAL_BRAIN_NAME)
+            storage = SQLiteStorage(db_path)
+            await storage.initialize()
+
+            brain = await storage.find_brain_by_name(GLOBAL_BRAIN_NAME)
+            if brain:
+                storage.set_brain(brain.id)
+                return storage
+
+            await storage.close()
+            return None
+        except Exception:
+            logger.debug("Failed to get global storage", exc_info=True)
+            return None
+
     async def _check_cross_language_hint(
         self,
         query: str,
@@ -284,6 +312,34 @@ class RememberHandler:
                 return {"error": f"Invalid memory type: {args['type']}"}
         else:
             mem_type = suggest_memory_type(content)
+
+        # Layer routing: determine save destination (project vs global brain)
+        layer_decision = None
+        global_storage = None
+        try:
+            from neural_memory.engine.layer_router import MemoryLayer, route_memory
+
+            layer_decision = route_memory(
+                memory_type=mem_type.value,
+                is_ephemeral=bool(args.get("ephemeral", False)),
+                explicit_layer=args.get("layer"),
+            )
+
+            if layer_decision.layer == MemoryLayer.GLOBAL:
+                global_storage = await self._get_global_storage()
+                if global_storage is not None:
+                    storage = global_storage
+                    brain, err = await _get_brain_or_error(storage)
+                    if err:
+                        # Fall back to project brain if global brain has issues
+                        logger.debug("Global brain error, falling back to project")
+                        storage = await self.get_storage()
+                        brain, err = await _get_brain_or_error(storage)
+                        if err:
+                            return err
+                        layer_decision = None  # reset — saved to project
+        except Exception:
+            logger.debug("Layer routing failed, using project brain", exc_info=True)
 
         # Phase A: Merge structured context into content
         raw_context = args.get("context")
@@ -776,6 +832,17 @@ class RememberHandler:
         alert_info = await self._surface_pending_alerts()
         if alert_info:
             response.update(alert_info)
+
+        # Layer routing info
+        if layer_decision is not None:
+            response["layer"] = layer_decision.to_dict()
+
+        # Clean up global storage if we opened one
+        if global_storage is not None:
+            try:
+                await global_storage.close()
+            except Exception:
+                logger.debug("Global storage cleanup failed", exc_info=True)
 
         return response
 
