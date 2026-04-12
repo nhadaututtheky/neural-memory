@@ -111,6 +111,38 @@ class StatsHandler:
             "tier_distribution": tier_distribution,
         }
 
+        # Layer status: show global brain stats if it exists
+        try:
+            from neural_memory.unified_config import GLOBAL_BRAIN_NAME
+
+            global_db = self.config.get_brain_db_path(GLOBAL_BRAIN_NAME)
+            if global_db.exists():
+                from neural_memory.storage.sqlite_store import SQLiteStorage
+
+                global_storage = SQLiteStorage(global_db)
+                try:
+                    await global_storage.initialize()
+                    global_brain = await global_storage.find_brain_by_name(GLOBAL_BRAIN_NAME)
+                    if global_brain:
+                        global_storage.set_brain(global_brain.id)
+                        global_stats = await global_storage.get_enhanced_stats(global_brain.id)
+                        response["layers"] = {
+                            "project": {
+                                "brain": brain.name,
+                                "neuron_count": stats["neuron_count"],
+                                "fiber_count": stats["fiber_count"],
+                            },
+                            "global": {
+                                "brain": GLOBAL_BRAIN_NAME,
+                                "neuron_count": global_stats["neuron_count"],
+                                "fiber_count": global_stats["fiber_count"],
+                            },
+                        }
+                finally:
+                    await global_storage.close()
+        except Exception:
+            logger.debug("Layer stats failed (non-critical)", exc_info=True)
+
         # Upgrade URL for free users — agents use this to guide purchase
         if not storage_info["is_pro"]:
             from neural_memory.mcp.sync_handler import PRO_LANDING_URL
