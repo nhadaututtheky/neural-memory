@@ -119,8 +119,9 @@ class StatsHandler:
             if global_db.exists():
                 from neural_memory.storage.sqlite_store import SQLiteStorage
 
-                global_storage = SQLiteStorage(global_db)
+                global_storage = None
                 try:
+                    global_storage = SQLiteStorage(global_db)
                     await global_storage.initialize()
                     global_brain = await global_storage.find_brain_by_name(GLOBAL_BRAIN_NAME)
                     if global_brain:
@@ -129,17 +130,18 @@ class StatsHandler:
                         response["layers"] = {
                             "project": {
                                 "brain": brain.name,
-                                "neuron_count": stats["neuron_count"],
-                                "fiber_count": stats["fiber_count"],
+                                "neuron_count": stats.get("neuron_count", 0),
+                                "fiber_count": stats.get("fiber_count", 0),
                             },
                             "global": {
                                 "brain": GLOBAL_BRAIN_NAME,
-                                "neuron_count": global_stats["neuron_count"],
-                                "fiber_count": global_stats["fiber_count"],
+                                "neuron_count": global_stats.get("neuron_count", 0),
+                                "fiber_count": global_stats.get("fiber_count", 0),
                             },
                         }
                 finally:
-                    await global_storage.close()
+                    if global_storage is not None:
+                        await global_storage.close()
         except Exception:
             logger.debug("Layer stats failed (non-critical)", exc_info=True)
 
