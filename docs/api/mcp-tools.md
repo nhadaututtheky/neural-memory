@@ -855,12 +855,14 @@ Brain growth milestones (100, 250, 500...10K neurons). Check for new achievement
 
 ### `nmem_store`
 
-Brain Store — browse, preview, import, and export community knowledge brains. Share curated brains with the community or import others' expertise.
+Brain Store — browse, preview, import, export, and delete knowledge brains. Share curated brains with the community or import others' expertise.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `action` | string (`browse`, `preview`, `import`, `export`, `publish`) | Yes | — | browse=search community brain registry, preview=view brain details before import, import=download and import a brain,... |
+| `action` | string (`browse`, `preview`, `import`, `export`, `publish`, `delete`) | Yes | — | browse=search community brain registry, preview=view brain details before import, import=download and import a brain,... |
 | `brain_name` | string | No | — | Brain name in registry (required for preview/import) |
+| `brain_id` | string | No | — | Local brain ID to delete (required for delete action) |
+| `confirm` | boolean | No | — | Must be true to actually delete. Without it, returns a preview of what would be deleted. |
 | `search` | string | No | — | Search query for browse (matches name, description, tags) |
 | `category` | string (`programming`, `devops`, `writing`, `science`, `personal`, `security`, `data`, `design`, `general`) | No | — | Filter by category (browse) or set category (export) |
 | `tag` | string | No | — | Filter by tag (browse only) |

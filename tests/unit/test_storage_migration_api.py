@@ -48,6 +48,7 @@ def _mock_config(
     cfg.data_dir = data_dir
     cfg.is_pro.return_value = is_pro
     cfg.save = MagicMock()
+    cfg.postgres = MagicMock(host="", database="", port=5432, user="", password="")
     return cfg
 
 
@@ -122,7 +123,7 @@ class TestStartMigration:
         ):
             resp = client.post(
                 "/api/dashboard/storage/migrate",
-                json={"direction": "to_postgres"},
+                json={"direction": "to_redis"},
             )
             assert resp.status_code == 422
 
@@ -256,7 +257,7 @@ class TestSetBackend:
     def test_rejects_invalid_backend(self, client: TestClient) -> None:
         resp = client.post(
             "/api/dashboard/storage/backend",
-            json={"backend": "postgres"},
+            json={"backend": "redis"},
         )
         assert resp.status_code == 422
 
