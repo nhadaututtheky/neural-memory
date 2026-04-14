@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.46.0] — 2026-04-14
+
+### Added
+
+- **Brain Store delete**: new `delete` action in `nmem_store` MCP tool — preview what would be deleted, then confirm to permanently remove a brain and all associated data
+- **PostgreSQL storage switch (CLI)**: `nmem storage switch postgres` validates config and tests connection before switching
+- **PostgreSQL storage switch (Dashboard)**: extended storage status, backend switch, and migration API endpoints to support postgres
+- **Connection test endpoint**: `POST /api/dashboard/storage/test-connection` for testing PostgreSQL connectivity from the dashboard
+- **PostgreSQL migration**: dashboard migration pipeline now supports `to_postgres` direction via export/import snapshot
+
+### Fixed
+
+- **Brain delete orphans**: `clear()` now deletes from all 12 brain-scoped tables (was missing `brain_versions`, `sync_states`, `alerts`, `change_log`, `devices`, `merkle_hashes`)
+- **Brain delete atomicity**: `clear()` wrapped in a transaction — partial failures now roll back cleanly
+- **Migration source selection**: migration task now reads current backend from config instead of inferring from direction (fixes postgres→sqlite path)
+- **Credential leak prevention**: PostgreSQL connection errors in HTTP responses sanitized — no password exposure, details logged server-side only
+
 ## [4.45.2] — 2026-04-13
 
 ### Fixed
