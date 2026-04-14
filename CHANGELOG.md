@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.47.0] — 2026-04-15
+
+### Added
+
+- **Compact response mode**: `remember` and `recall` default to `compact=true`, returning only essential fields (saves 200-800 tokens per call). Set `compact=false` for full metadata
+- **Empty brain early exit**: `recall` skips the full pipeline when brain has 0 neurons — eliminates 8+ async ops for new users
+- **SimHash always-on dedup** (v4.46.1): zero-cost SimHash dedup runs on every `remember`, even when full dedup is disabled
+- **Stem-based keyword matching** (v4.46.1): cross-inflection matching in context compiler ("optimizing" ↔ "optimization")
+
+### Improved
+
+- **`clean_for_prompt` default changed**: `true` (was `false`) — recall responses skip section headers and type tags by default
+- **Activation threshold raised**: `0.2` → `0.3` across all backends and presets — reduces noise, fewer weak activations waste tokens
+- **Composite score rebalanced** (v4.46.1): activation 25% + priority 25% + frequency 20% + conductivity 15% + freshness 15%
+- **Freshness weight enabled** (v4.46.1): default `0.15` (was `0.0`) — stale memories naturally deprioritized
+- **BALANCED preset activation threshold**: `0.2` → `0.3` to match new defaults
+
+### Tests
+
+- 6717 unit tests pass, 0 failures
+
 ## [4.46.0] — 2026-04-14
 
 ### Added
