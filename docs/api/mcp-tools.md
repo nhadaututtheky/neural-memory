@@ -101,7 +101,7 @@ Store a memory. Auto-detects type, auto-resolves contradicted errors (RESOLVED_B
 | `source_id` | string | No | — | Link this memory to a registered source. Creates a SOURCE_OF synapse for provenance tracking. |
 | `context` | object | No | — | Structured context dict merged into content server-side using type-specific templates. Keys like 'reason', 'alternati... |
 | `ephemeral` | boolean | No | — | Session-scoped memory: auto-expires after TTL (default 24h), never synced to cloud, excluded from consolidation. Use ... |
-| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
+| `compact` | boolean | No | — | Compact response: return only success + fiber_id + memory_type, skip verbose metadata. Saves 200-400 tokens. Default:... |
 | `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_remember_batch`
@@ -135,7 +135,8 @@ Query memories via spreading activation. Use when you need past context, decisio
 | `include_citations` | boolean | No | default: true | Include citation and audit trail in exact recall results (default: true). |
 | `recall_token_budget` | integer | No | — | When set, activates budget-aware fiber selection: ranks fibers by value-per-token and selects the most efficient ones... |
 | `permanent_only` | boolean | No | — | Exclude ephemeral (session-scoped) memories from results. Default: false (include all). |
-| `clean_for_prompt` | boolean | No | — | Return clean bullet-point text without section headers or neuron-type tags. Use when injecting recall output into pro... |
+| `clean_for_prompt` | boolean | No | — | Return clean bullet-point text without section headers or neuron-type tags. Default: true. |
+| `compact` | boolean | No | — | Compact mode: return only core answer + confidence, skip all optional metadata (thought_chains, sources, cognitive_ch... |
 | `tier` | string (`hot`, `warm`, `cold`) | No | — | Filter results by memory tier. Only return memories matching this tier. |
 | `domain` | string | No | — | Domain scope filter. When set, HOT context injection only includes boundaries tagged with this domain (plus unscoped ... |
 | `as_of` | string | No | — | ISO datetime for time-travel recall. Returns only memories that existed at that point in time (created_at <= as_of) a... |
@@ -145,7 +146,6 @@ Query memories via spreading activation. Use when you need past context, decisio
 | `layer` | string (`auto`, `project`, `global`) | No | — | Layer scope: 'auto' (default) merges project + global brains, 'project' restricts to current brain only, 'global' que... |
 | `exclude_reflexes` | boolean | No | — | Exclude reflex (always-on) neurons from this recall. Default: false. |
 | `include_paths` | boolean | No | — | Include activation paths (thought chains) showing how each neuron was reached. Returns top-5 paths with neuron conten... |
-| `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
 | `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_show`
