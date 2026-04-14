@@ -27,7 +27,7 @@ class BrainConfig:
 
     decay_rate: float = 0.1
     reinforcement_delta: float = 0.05
-    activation_threshold: float = 0.2
+    activation_threshold: float = 0.3
     max_spread_hops: int = 4
     max_context_tokens: int = 1500
     default_synapse_weight: float = 0.5

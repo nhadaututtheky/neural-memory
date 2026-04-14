@@ -167,6 +167,21 @@ class RecallHandler:
         if not brain:
             return {"error": "No brain configured"}
 
+        # Early exit: empty brain → skip full pipeline (saves 8+ async ops)
+        try:
+            stats = await storage.get_stats(brain_id)
+            if stats.get("neuron_count", 0) == 0:
+                return {
+                    "answer": "No memories stored yet. Use nmem_remember to save your first memory.",
+                    "confidence": 0.0,
+                    "neurons_activated": 0,
+                    "fibers_matched": 0,
+                    "depth_used": args.get("depth", 1),
+                    "tokens_used": 0,
+                }
+        except Exception:
+            pass  # Non-critical — continue with normal flow
+
         query = args.get("query")
         if not query or not isinstance(query, str):
             return {"error": "query is required and must be a string"}
@@ -213,7 +228,7 @@ class RecallHandler:
         if tag_mode not in ("and", "or"):
             return {"error": f"Invalid tag_mode: {tag_mode}. Must be 'and' or 'or'."}
         include_citations = args.get("include_citations", True)
-        clean_for_prompt = bool(args.get("clean_for_prompt", False))
+        clean_for_prompt = bool(args.get("clean_for_prompt", True))
         min_trust: float | None = None
         raw_min_trust = args.get("min_trust")
         if raw_min_trust is not None:
@@ -607,6 +622,13 @@ class RecallHandler:
                 "depth_used": result.depth_used.value,
                 "tokens_used": result.tokens_used,
             }
+
+        # Compact mode: return core response only, skip all optional enrichment
+        # Saves ~200-800 tokens of metadata overhead + several async ops
+        compact = bool(args.get("compact", True))
+        if compact:
+            await self._record_tool_action("recall", query[:100])
+            return response
 
         # Thought Chains: expose activation paths (opt-in)
         if args.get("include_paths") and result.metadata:

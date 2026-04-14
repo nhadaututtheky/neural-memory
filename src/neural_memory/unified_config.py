@@ -212,7 +212,7 @@ class BrainSettings:
 
     decay_rate: float = 0.1
     reinforcement_delta: float = 0.05
-    activation_threshold: float = 0.2
+    activation_threshold: float = 0.3
     max_spread_hops: int = 4
     max_context_tokens: int = 1500
     freshness_weight: float = 0.15
@@ -234,7 +234,7 @@ class BrainSettings:
         return cls(
             decay_rate=data.get("decay_rate", 0.1),
             reinforcement_delta=data.get("reinforcement_delta", 0.05),
-            activation_threshold=data.get("activation_threshold", 0.2),
+            activation_threshold=data.get("activation_threshold", 0.3),
             max_spread_hops=data.get("max_spread_hops", 4),
             max_context_tokens=data.get("max_context_tokens", 1500),
             freshness_weight=data.get("freshness_weight", 0.15),

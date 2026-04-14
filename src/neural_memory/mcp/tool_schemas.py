@@ -197,6 +197,10 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "never synced to cloud, excluded from consolidation. "
                     "Use for scratch notes, debugging context, temporary reasoning.",
                 },
+                "compact": {
+                    "type": "boolean",
+                    "description": "Compact response: return only success + fiber_id + memory_type, skip verbose metadata. Saves 200-400 tokens. Default: true. Set false for full response.",
+                },
             },
             "required": ["content"],
         },
@@ -363,7 +367,11 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 },
                 "clean_for_prompt": {
                     "type": "boolean",
-                    "description": "Return clean bullet-point text without section headers or neuron-type tags. Use when injecting recall output into prompts to prevent self-referential noise on re-ingest. Default: false.",
+                    "description": "Return clean bullet-point text without section headers or neuron-type tags. Default: true.",
+                },
+                "compact": {
+                    "type": "boolean",
+                    "description": "Compact mode: return only core answer + confidence, skip all optional metadata (thought_chains, sources, cognitive_chunks, etc). Saves 200-800 tokens. Default: true. Set false for full metadata.",
                 },
                 "tier": {
                     "type": "string",

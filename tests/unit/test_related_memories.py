@@ -151,7 +151,7 @@ class TestRelatedMemoryDiscovery:
             )
             mock_activation.return_value = mock_activator
 
-            response = await server._remember({"content": "test content"})
+            response = await server._remember({"content": "test content", "compact": False})
 
         assert response["success"] is True
         assert "related_memories" not in response
@@ -234,7 +234,7 @@ class TestRelatedMemoryDiscovery:
             )
             mock_activation.return_value = mock_activator
 
-            response = await server._remember({"content": "new content"})
+            response = await server._remember({"content": "new content", "compact": False})
 
         assert response["success"] is True
         assert "related_memories" in response
@@ -280,7 +280,7 @@ class TestRelatedMemoryDiscovery:
             mock_activator.activate = AsyncMock(side_effect=RuntimeError("activation failed"))
             mock_activation.return_value = mock_activator
 
-            response = await server._remember({"content": "test content"})
+            response = await server._remember({"content": "test content", "compact": False})
 
         assert response["success"] is True
         assert "related_memories" not in response
@@ -350,7 +350,7 @@ class TestRelatedMemoryDiscovery:
             mock_activator.activate = AsyncMock(return_value=(activations, ActivationTrace()))
             mock_activation.return_value = mock_activator
 
-            response = await server._remember({"content": "content"})
+            response = await server._remember({"content": "content", "compact": False})
 
         assert response["success"] is True
         assert "related_memories" in response

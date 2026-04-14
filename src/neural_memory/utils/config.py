@@ -29,7 +29,7 @@ class Config:
 
     # Brain defaults
     default_decay_rate: float = 0.1
-    default_activation_threshold: float = 0.2
+    default_activation_threshold: float = 0.3
     default_max_spread_hops: int = 4
     default_max_context_tokens: int = 1500
 
@@ -94,7 +94,7 @@ class Config:
             falkordb_username=os.getenv("NEURAL_MEMORY_FALKORDB_USERNAME"),
             falkordb_password=os.getenv("NEURAL_MEMORY_FALKORDB_PASSWORD"),
             default_decay_rate=get_float("NEURAL_MEMORY_DECAY_RATE", 0.1),
-            default_activation_threshold=get_float("NEURAL_MEMORY_ACTIVATION_THRESHOLD", 0.2),
+            default_activation_threshold=get_float("NEURAL_MEMORY_ACTIVATION_THRESHOLD", 0.3),
             default_max_spread_hops=get_int("NEURAL_MEMORY_MAX_SPREAD_HOPS", 4),
             default_max_context_tokens=get_int("NEURAL_MEMORY_MAX_CONTEXT_TOKENS", 1500),
             cors_origins=get_list(

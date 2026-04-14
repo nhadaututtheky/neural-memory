@@ -159,7 +159,7 @@ def row_to_brain(record: Any) -> Brain:
     config = BrainConfig(
         decay_rate=config_data.get("decay_rate", 0.1),
         reinforcement_delta=config_data.get("reinforcement_delta", 0.05),
-        activation_threshold=config_data.get("activation_threshold", 0.2),
+        activation_threshold=config_data.get("activation_threshold", 0.3),
         max_spread_hops=config_data.get("max_spread_hops", 4),
         max_context_tokens=config_data.get("max_context_tokens", 1500),
         default_synapse_weight=config_data.get("default_synapse_weight", 0.5),

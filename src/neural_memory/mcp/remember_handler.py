@@ -676,6 +676,38 @@ class RememberHandler:
             context=raw_context if isinstance(raw_context, dict) else None,
         )
 
+        # Compact mode: minimal response for agent efficiency (saves ~200-400 tokens)
+        compact = bool(args.get("compact", True))
+        if compact:
+            compact_response: dict[str, Any] = {
+                "success": True,
+                "fiber_id": result.fiber.id,
+                "memory_type": mem_type.value,
+            }
+            # Only surface critical warnings in compact mode
+            if redacted_matches:
+                compact_response["auto_redacted"] = True
+            try:
+                conflicts_detected = int(result.conflicts_detected)
+            except (TypeError, ValueError, AttributeError):
+                conflicts_detected = 0
+            if conflicts_detected > 0:
+                compact_response["conflicts_detected"] = conflicts_detected
+            dedup_alias_of = result.fiber.metadata.get("_dedup_alias_of")
+            if dedup_alias_of is None and result.neurons_created:
+                for neuron in result.neurons_created:
+                    dedup_alias_of = neuron.metadata.get("_dedup_alias_of")
+                    if dedup_alias_of:
+                        break
+            if dedup_alias_of:
+                compact_response["dedup_hint"] = (
+                    "Similar memory exists — consider nmem_edit to update"
+                )
+            deja_vu = (result.fiber.metadata or {}).get("_deja_vu")
+            if deja_vu:
+                compact_response["deja_vu_warnings"] = len(deja_vu)
+            return compact_response
+
         response: dict[str, Any] = {
             "success": True,
             "fiber_id": result.fiber.id,

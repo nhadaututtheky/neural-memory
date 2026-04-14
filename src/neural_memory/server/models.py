@@ -126,7 +126,7 @@ class BrainConfigModel(BaseModel):
 
     decay_rate: float = Field(0.1, ge=0, le=1)
     reinforcement_delta: float = Field(0.05, ge=0, le=0.5)
-    activation_threshold: float = Field(0.2, ge=0, le=1)
+    activation_threshold: float = Field(0.3, ge=0, le=1)
     max_spread_hops: int = Field(4, ge=1, le=10)
     max_context_tokens: int = Field(1500, ge=100, le=10000)
 
