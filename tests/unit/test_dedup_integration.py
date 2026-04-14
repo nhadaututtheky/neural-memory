@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 from neural_memory.core.synapse import SynapseType
 from neural_memory.engine.consolidation import ConsolidationStrategy
+from neural_memory.engine.dedup import build_dedup_pipeline
 from neural_memory.engine.dedup.prompts import DEDUP_SYSTEM_PROMPT, format_dedup_prompt
 from neural_memory.unified_config import DedupSettings
 
@@ -33,6 +36,41 @@ class TestDedupSettings:
         cfg = DedupSettings.from_dict({})
         assert cfg.enabled is False
         assert cfg.simhash_threshold == 7
+
+
+class TestBuildDedupPipeline:
+    """Tests for build_dedup_pipeline — SimHash always on."""
+
+    def test_simhash_only_when_disabled(self) -> None:
+        """When dedup.enabled=False, still get SimHash-only pipeline."""
+        settings = DedupSettings(enabled=False)
+        storage = MagicMock()
+        pipeline = build_dedup_pipeline(settings, storage)
+        assert pipeline is not None
+        assert pipeline._config.enabled is True
+        assert pipeline._config.llm_enabled is False
+        assert pipeline._config.simhash_threshold == 7
+
+    def test_full_pipeline_when_enabled(self) -> None:
+        """When dedup.enabled=True, get full pipeline with user settings."""
+        settings = DedupSettings(enabled=True, simhash_threshold=5)
+        storage = MagicMock()
+        pipeline = build_dedup_pipeline(settings, storage)
+        assert pipeline is not None
+        assert pipeline._config.enabled is True
+        assert pipeline._config.simhash_threshold == 5
+
+    def test_returns_none_on_broken_settings(self) -> None:
+        """Gracefully returns None if settings object is malformed."""
+        pipeline = build_dedup_pipeline(object(), MagicMock())
+        assert pipeline is None
+
+    def test_simhash_threshold_from_settings(self) -> None:
+        """SimHash-only mode respects custom threshold from config."""
+        settings = DedupSettings(enabled=False, simhash_threshold=12)
+        pipeline = build_dedup_pipeline(settings, MagicMock())
+        assert pipeline is not None
+        assert pipeline._config.simhash_threshold == 12
 
 
 class TestConsolidationDedupStrategy:

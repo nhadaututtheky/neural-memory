@@ -68,7 +68,14 @@ async def encode_memory(
             "Remove secrets before storing.",
         )
 
-    encoder = MemoryEncoder(storage, brain.config)
+    # SimHash dedup always runs (pure Python, zero cost).
+    # Full dedup (embedding + LLM) only when [dedup] enabled = true.
+    from neural_memory.engine.dedup import build_dedup_pipeline
+    from neural_memory.unified_config import get_config
+
+    dedup_pipeline = build_dedup_pipeline(get_config().dedup, storage)
+
+    encoder = MemoryEncoder(storage, brain.config, dedup_pipeline=dedup_pipeline)
 
     tags = set(request.tags) if request.tags else None
 
