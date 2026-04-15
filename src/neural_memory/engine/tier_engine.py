@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from neural_memory.core.memory_types import MemoryTier, MemoryType
+from neural_memory.core.synapse import SynapseType
 from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
@@ -152,7 +153,7 @@ def compute_decay_strength(
         # Power-law decay: frequently accessed memories decay slower
         # b decreases with more accesses (better retention)
         b = max(0.1, 0.5 - 0.02 * min(state.access_frequency, 20))
-        return (days_since + 1.0) ** (-b)
+        return float((days_since + 1.0) ** (-b))
     else:
         # Hyperbolic fallback for cold-start
         return 1.0 / (1.0 + days_since / 30.0)
@@ -221,7 +222,7 @@ class TierEngine:
             causal_count = 0
             try:
                 causal_synapses = await self._storage.get_synapses(
-                    source_id=fiber.anchor_neuron_id, type="CAUSED_BY"
+                    source_id=fiber.anchor_neuron_id, type=SynapseType.CAUSED_BY
                 )
                 causal_count = len(causal_synapses)
             except Exception:
