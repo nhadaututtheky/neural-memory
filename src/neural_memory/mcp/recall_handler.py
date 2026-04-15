@@ -633,6 +633,7 @@ class RecallHandler:
         # Thought Chains: expose activation paths (opt-in)
         if args.get("include_paths") and result.metadata:
             activation_levels = result.metadata.get("activation_levels", {})
+            activation_paths = result.metadata.get("activation_paths", {})
             if activation_levels:
                 # Sort by activation level, take top 5
                 top_ids = sorted(
@@ -641,13 +642,17 @@ class RecallHandler:
                 chains: list[dict[str, Any]] = []
                 for nid in top_ids:
                     neuron = await storage.get_neuron(nid)
-                    chains.append(
-                        {
-                            "neuron_id": nid,
-                            "content": neuron.content[:200] if neuron else "",
-                            "activation": round(activation_levels[nid], 4),
-                        }
-                    )
+                    chain_entry: dict[str, Any] = {
+                        "neuron_id": nid,
+                        "content": neuron.content[:200] if neuron else "",
+                        "activation": round(activation_levels[nid], 4),
+                    }
+                    # Add hop-by-hop path if available
+                    path = activation_paths.get(nid, [])
+                    if len(path) > 1:
+                        chain_entry["hops"] = len(path) - 1
+                        chain_entry["path"] = path
+                    chains.append(chain_entry)
                 if chains:
                     response["thought_chains"] = chains
 

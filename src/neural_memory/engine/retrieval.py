@@ -893,6 +893,9 @@ class ReflexPipeline:
                 "activation_levels": {
                     nid: round(ar.activation_level, 4) for nid, ar in activations.items()
                 },
+                "activation_paths": {
+                    nid: ar.path for nid, ar in activations.items() if ar.path
+                },
                 "phase_timings_ms": _phase_timings,
                 "reflex_count": _reflex_count,
             },
