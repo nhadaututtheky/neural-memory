@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "neural-memory"
-version = "4.48.0"
+version = "4.49.0"
 description = "Persistent memory for AI agents — 56 MCP tools, spreading activation recall, neuroscience-inspired consolidation. Works with Claude, GPT, Gemini."
 readme = "README.md"
 license = "MIT"

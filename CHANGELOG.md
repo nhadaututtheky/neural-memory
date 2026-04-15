@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.49.0] — 2026-04-15
+
+### Added
+
+- **Negation conflict detection**: detects contradictions like "we use Redis" vs "we do NOT use Redis" — new `NEGATION_CONFLICT` type with 11 negation patterns (not, never, stopped, no longer, removed, disabled, dropped, deprecated, don't, won't, no)
+- **Temporal supersession**: conflicts are now classified as `SUPERSEDED` (>24h gap), `SAME_SESSION_CORRECTION` (<1h), or `TRUE_CONTRADICTION` — superseded conflicts auto-resolve as keep_new
+- **Entity matching**: tech term extraction via CamelCase/kebab-case/acronym regex + alias normalization (postgres→postgresql, k8s→kubernetes, mongo→mongodb)
+- **Multi-factor tier promotion** (v4.48): composite score `0.4*recency + 0.3*frequency + 0.2*importance + 0.1*causal` replaces single access_frequency threshold
+- **Power-law memory decay** (v4.48): `S(t) = (t+1)^(-b)` for frequently accessed memories, hyperbolic fallback for cold-start
+- **SM-2 spaced repetition** (v4.48): ease_factor (1.3-3.0) adjusts per-item difficulty, graduated failure (drop 1-2 boxes vs hard reset)
+
+### Improved
+
+- **Conflict MCP responses**: `nmem_conflicts list` and `check` now include `temporal_classification` field
+- **CONTRADICTS synapse metadata**: includes temporal classification for audit trail
+- **Subject matching**: now normalizes tech aliases before comparison (PostgreSQL = Postgres = pg)
+
+### Tests
+
+- 16 new conflict tests: negation (5), temporal (5), entity matching (4), auto-resolve supersession (2)
+- 59 total conflict detection tests pass
+
+## [4.48.0] — 2026-04-15
+
+### Added
+
+- **Explainable recall**: activation paths now surfaced to MCP via `include_paths` parameter — hop-by-hop gain scores visible in recall responses
+- **FalkorDB removed**: ~3,900 LOC deleted — consolidates on SQLite (default) + PostgreSQL (opt-in) + InfinityDB (Pro)
+
+### Improved
+
+- **CI compatibility**: all GitHub Actions bumped to Node.js 24 compatible versions (checkout v5, setup-python v6, etc.)
+- **Schema v39**: migration adds `ease_factor` column to review_schedules table
+
 ## [4.47.0] — 2026-04-15
 
 ### Added
