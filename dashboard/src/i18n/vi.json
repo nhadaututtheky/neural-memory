@@ -14,11 +14,13 @@
     "storage": "Lưu trữ",
     "tierAnalytics": "Phân tích Tier",
     "settings": "Cài đặt",
-    "store": "Cửa hàng Brain"
+    "store": "Cửa hàng Brain",
+    "livingBrain": "Não Sống"
   },
   "common": {
     "confirm": "Xác nhận",
     "cancel": "Hủy",
+    "close": "Đóng",
     "delete": "Xóa",
     "loading": "Đang tải...",
     "active": "Đang dùng",
@@ -127,7 +129,48 @@
     "time": "thời gian",
     "action": "hành động",
     "state": "trạng thái",
-    "other": "khác"
+    "other": "khác",
+    "view2D": "2D",
+    "view3D": "Não Sống"
+  },
+  "livingBrain": {
+    "title": "Não Sống",
+    "subtitle": "Đồ thị neuron 3D tương tác",
+    "loading": "Đang lắp ráp các neuron...",
+    "empty": "Chưa có neuron nào để trực quan hóa.",
+    "webglUnavailable": "Trình duyệt không hỗ trợ chế độ 3D.",
+    "modeGroup": "Chế độ xem đồ thị",
+    "detailPanel": "Chi tiết neuron",
+    "content": "Nội dung",
+    "connections": "kết nối",
+    "neighbors": "Neuron liên kết",
+    "stats": {
+      "label": "Thống kê não",
+      "neurons": "neuron",
+      "synapses": "synapse",
+      "active": "hoạt động",
+      "pulses": "xung"
+    },
+    "settings": {
+      "button": "Cài đặt",
+      "label": "Cài đặt hiển thị",
+      "effects": "Hiệu ứng",
+      "brainShell": "Vỏ não",
+      "activationPulse": "Xung hoạt hóa",
+      "labels": "Nhãn neuron"
+    },
+    "share": {
+      "button": "Lưu PNG",
+      "label": "Xuất ảnh não",
+      "done": "Đã lưu",
+      "error": "Xuất lỗi"
+    },
+    "upsell": {
+      "badge": "Pro",
+      "title": "Não Sống là tính năng Pro",
+      "body": "Khám phá bộ nhớ của bạn dưới dạng bộ não 3D — có vùng vỏ não, xung hoạt hóa và ảnh chia sẻ.",
+      "cta": "Nâng cấp Pro"
+    }
   },
   "timeline": {
     "title": "Dòng thời gian",

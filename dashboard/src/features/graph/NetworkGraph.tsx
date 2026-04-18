@@ -3,17 +3,7 @@ import Graph from "graphology"
 import Sigma from "sigma"
 import forceAtlas2 from "graphology-layout-forceatlas2"
 import type { GraphResponse } from "@/api/types"
-
-const TYPE_COLORS: Record<string, string> = {
-  concept: "#6366f1",
-  entity: "#06b6d4",
-  time: "#f59e0b",
-  action: "#059669",
-  state: "#8b5cf6",
-  other: "#a8a29e",
-  relation: "#ec4899",
-  attribute: "#14b8a6",
-}
+import { NEURON_TYPE_COLORS as TYPE_COLORS } from "@/lib/neuron-colors"
 
 interface NetworkGraphProps {
   data: GraphResponse

@@ -1,0 +1,1 @@
+import{j as o,g as r}from"./index-DcLPR3Z3.js";function m({className:e,...s}){return o.jsxDEV("div",{className:r("animate-pulse rounded-md bg-muted",e),...s},void 0,!1,{fileName:"D:/Project/Neural Memory/dashboard/src/components/ui/skeleton.tsx",lineNumber:8,columnNumber:5},this)}export{m as S};

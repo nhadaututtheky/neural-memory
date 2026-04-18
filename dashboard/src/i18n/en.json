@@ -14,11 +14,13 @@
     "storage": "Storage",
     "tierAnalytics": "Tier Analytics",
     "settings": "Settings",
-    "store": "Brain Store"
+    "store": "Brain Store",
+    "livingBrain": "Living Brain"
   },
   "common": {
     "confirm": "Confirm",
     "cancel": "Cancel",
+    "close": "Close",
     "delete": "Delete",
     "loading": "Loading...",
     "active": "Active",
@@ -127,7 +129,48 @@
     "time": "time",
     "action": "action",
     "state": "state",
-    "other": "other"
+    "other": "other",
+    "view2D": "2D",
+    "view3D": "3D Living"
+  },
+  "livingBrain": {
+    "title": "Living Brain",
+    "subtitle": "3D interactive neural graph",
+    "loading": "Assembling neurons...",
+    "empty": "No neurons to visualize yet.",
+    "webglUnavailable": "3D view not available in this browser.",
+    "modeGroup": "Graph view mode",
+    "detailPanel": "Neuron details",
+    "content": "Content",
+    "connections": "connections",
+    "neighbors": "Neighbors",
+    "stats": {
+      "label": "Brain statistics",
+      "neurons": "neurons",
+      "synapses": "synapses",
+      "active": "active",
+      "pulses": "pulses"
+    },
+    "settings": {
+      "button": "Settings",
+      "label": "Display settings",
+      "effects": "Visual effects",
+      "brainShell": "Brain shell",
+      "activationPulse": "Activation pulse",
+      "labels": "Neuron labels"
+    },
+    "share": {
+      "button": "Share PNG",
+      "label": "Export brain snapshot",
+      "done": "Saved",
+      "error": "Export failed"
+    },
+    "upsell": {
+      "badge": "Pro",
+      "title": "Living Brain is a Pro feature",
+      "body": "Explore your memories as a 3D anatomical brain — cortical zones, activation pulses, and shareable snapshots.",
+      "cta": "Upgrade to Pro"
+    }
   },
   "timeline": {
     "title": "Timeline",

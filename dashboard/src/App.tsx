@@ -14,6 +14,7 @@ const VisualizePage = lazy(() => import("@/features/visualize/VisualizePage"))
 const StoragePage = lazy(() => import("@/features/storage/StoragePage"))
 const StorePage = lazy(() => import("@/features/store/StorePage"))
 const TierAnalyticsPage = lazy(() => import("@/features/tier-analytics/TierAnalyticsPage"))
+const LivingBrainPage = lazy(() => import("@/features/living-brain/LivingBrainPage"))
 
 function SuspensePage({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
@@ -26,6 +27,7 @@ export default function App() {
         <Route index element={<SuspensePage><OverviewPage /></SuspensePage>} />
         <Route path="insights" element={<SuspensePage><InsightsPage /></SuspensePage>} />
         <Route path="graph" element={<SuspensePage><GraphPage /></SuspensePage>} />
+        <Route path="living-brain" element={<SuspensePage><LivingBrainPage /></SuspensePage>} />
         <Route path="diagrams" element={<SuspensePage><DiagramsPage /></SuspensePage>} />
         <Route path="visualize" element={<SuspensePage><VisualizePage /></SuspensePage>} />
         <Route path="oracle" element={<SuspensePage><OraclePage /></SuspensePage>} />

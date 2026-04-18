@@ -1,11 +1,15 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { useGraph } from "@/api/hooks/useDashboard"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { NetworkGraph } from "./NetworkGraph"
+import { ModeToggle, type GraphMode } from "@/features/living-brain/components/ModeToggle"
 import { useTranslation } from "react-i18next"
+
+const MODE_STORAGE_KEY = "nm.graph.mode"
 
 const LIMIT_OPTIONS = [100, 250, 500, 1000] as const
 
@@ -29,7 +33,26 @@ export default function GraphPage() {
   const [limit, setLimit] = useState<number>(250)
   const { data: graph, isLoading } = useGraph(limit)
   const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null)
+  const [mode, setMode] = useState<GraphMode>(() => {
+    if (typeof window === "undefined") return "2d"
+    return (window.localStorage.getItem(MODE_STORAGE_KEY) as GraphMode) ?? "2d"
+  })
+  const navigate = useNavigate()
   const { t } = useTranslation()
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(MODE_STORAGE_KEY, mode)
+    }
+  }, [mode])
+
+  const handleModeChange = useCallback(
+    (next: GraphMode) => {
+      setMode(next)
+      if (next === "3d") navigate("/living-brain")
+    },
+    [navigate],
+  )
 
   const handleNodeClick = useCallback((id: string, content: string, type: string) => {
     setSelectedNode({ id, content, type })
@@ -41,6 +64,7 @@ export default function GraphPage() {
       <div className="flex items-center justify-between shrink-0">
         <h1 className="font-display text-2xl font-bold">{t("graph.title")}</h1>
         <div className="flex items-center gap-2">
+          <ModeToggle mode={mode} onChange={handleModeChange} />
           <span className="text-sm text-muted-foreground">{t("graph.nodes")}</span>
           {LIMIT_OPTIONS.map((opt) => (
             <Button
