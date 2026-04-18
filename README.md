@@ -345,3 +345,7 @@ You can also [sponsor](https://github.com/sponsors/nhadaututtheky) the project.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Download History
+
+[![Download History](https://skill-history.com/chart/nhadaututtheky/neural-memory.svg)](https://skill-history.com/nhadaututtheky/neural-memory)
