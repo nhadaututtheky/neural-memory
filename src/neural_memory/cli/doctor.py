@@ -25,6 +25,29 @@ WARN = "warn"
 FAIL = "fail"
 SKIP = "skip"
 
+# Priority tiers (used to group output so users know which warnings actually matter)
+TIER_CORE = "core"  # required for basic operation
+TIER_RECOMMENDED = "recommended"  # recommended for full power (embeddings, MCP, hooks)
+TIER_OPTIONAL = "optional"  # nice-to-have (surface snapshot, pro plugin, etc.)
+
+# Check name → tier mapping. Unassigned defaults to RECOMMENDED.
+_CHECK_TIERS: dict[str, str] = {
+    "Python version": TIER_CORE,
+    "Configuration": TIER_CORE,
+    "Brain database": TIER_CORE,
+    "Dependencies": TIER_CORE,
+    "Schema version": TIER_CORE,
+    "CLI tools": TIER_CORE,
+    "Embedding provider": TIER_RECOMMENDED,
+    "MCP configuration": TIER_RECOMMENDED,
+    "MCP server": TIER_RECOMMENDED,
+    "Hooks": TIER_RECOMMENDED,
+    "Dedup": TIER_OPTIONAL,
+    "Knowledge surface": TIER_OPTIONAL,
+    "Config freshness": TIER_OPTIONAL,
+    "Pro features": TIER_OPTIONAL,
+}
+
 QUICKSTART_URL = "https://nhadaututtheky.github.io/neural-memory/guides/quickstart/"
 
 
@@ -56,12 +79,21 @@ def run_doctor(*, json_output: bool = False, fix: bool = False) -> dict[str, Any
     if fix:
         checks = _auto_fix(checks)
 
+    # Annotate each check with its priority tier
+    for c in checks:
+        c["tier"] = _CHECK_TIERS.get(c.get("name", ""), TIER_RECOMMENDED)
+
+    core_warn_fail = sum(
+        1 for c in checks if c["tier"] == TIER_CORE and c["status"] in (WARN, FAIL)
+    )
+
     result = {
         "checks": checks,
         "passed": sum(1 for c in checks if c["status"] == OK),
         "warnings": sum(1 for c in checks if c["status"] == WARN),
         "failed": sum(1 for c in checks if c["status"] == FAIL),
         "total": len(checks),
+        "core_issues": core_warn_fail,
     }
 
     if not json_output:
@@ -281,7 +313,10 @@ def _check_schema_version() -> dict[str, Any]:
                 "name": "Schema version",
                 "status": WARN,
                 "detail": f"v{version} (latest: v{CURRENT_VERSION})",
-                "fix": "Schema will auto-migrate on next use",
+                "fix": (
+                    "Auto-migrates on next read/write — run any command "
+                    "(e.g. 'nmem recall \"test\"' or 'nmem doctor --fix') to trigger now"
+                ),
             }
         return {
             "name": "Schema version",
@@ -759,7 +794,7 @@ def _fix_config_freshness() -> dict[str, Any]:
 
 
 def _render_results(result: dict[str, Any]) -> None:
-    """Render diagnostic results to terminal."""
+    """Render diagnostic results to terminal, grouped by priority tier."""
     typer.echo()
     typer.secho("  NeuralMemory Doctor", bold=True)
     typer.secho("  ───────────────────", dim=True)
@@ -772,17 +807,31 @@ def _render_results(result: dict[str, Any]) -> None:
         SKIP: typer.style("[--]", fg=typer.colors.BRIGHT_BLACK),
     }
 
-    for check in result["checks"]:
-        icon = icons.get(check["status"], icons[SKIP])
-        typer.echo(f"  {icon} {check['name']:<22}{check['detail']}")
-        if "fix" in check:
-            typer.secho(f"       Fix: {check['fix']}", dim=True)
+    tier_labels = {
+        TIER_CORE: ("CORE", "required for basic operation"),
+        TIER_RECOMMENDED: ("RECOMMENDED", "full-power setup"),
+        TIER_OPTIONAL: ("OPTIONAL", "nice-to-have, not needed for basic use"),
+    }
 
-    typer.echo()
+    for tier in (TIER_CORE, TIER_RECOMMENDED, TIER_OPTIONAL):
+        tier_checks = [c for c in result["checks"] if c.get("tier") == tier]
+        if not tier_checks:
+            continue
+        label, hint = tier_labels[tier]
+        typer.secho(f"  [{label}] ", fg=typer.colors.CYAN, bold=True, nl=False)
+        typer.secho(hint, dim=True)
+        for check in tier_checks:
+            icon = icons.get(check["status"], icons[SKIP])
+            typer.echo(f"    {icon} {check['name']:<22}{check['detail']}")
+            if "fix" in check:
+                typer.secho(f"         Fix: {check['fix']}", dim=True)
+        typer.echo()
+
     passed = result["passed"]
     total = result["total"]
     warns = result["warnings"]
     fails = result["failed"]
+    core_issues = result.get("core_issues", 0)
 
     summary_parts = [f"{passed}/{total} passed"]
     if warns:
@@ -796,6 +845,13 @@ def _render_results(result: dict[str, Any]) -> None:
         else (typer.colors.YELLOW if warns > 0 else typer.colors.GREEN)
     )
     typer.secho(f"  {', '.join(summary_parts)}", fg=color, bold=True)
+
+    if (warns > 0 or fails > 0) and core_issues == 0:
+        typer.secho(
+            "  All CORE checks green — warnings are in RECOMMENDED/OPTIONAL tiers.",
+            fg=typer.colors.GREEN,
+            dim=True,
+        )
 
     # Suggest guide if there are issues
     if warns > 0 or fails > 0:

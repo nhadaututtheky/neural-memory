@@ -136,6 +136,7 @@ nmem recall [OPTIONS]
 |--------|------|----------|---------|-------------|
 | `query` | text | Yes | — | (positional argument) |
 | `--depth / -d` | integer | No | — | Search depth (0=instant, 1=context, 2=habit, 3=deep) |
+| `--limit / -l` | integer | No | — | Cap matched memories (approximate; maps to max_tokens ~200/memory) |
 | `--max-tokens / -m` | integer | No | `500` | Max tokens in response |
 | `--min-confidence / -c` | float | No | `0.0` | Minimum confidence threshold (0.0-1.0) |
 | `--shared / -S` | boolean | No | `False` | Use shared/remote storage for this command |

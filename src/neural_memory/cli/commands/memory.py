@@ -402,6 +402,14 @@ def recall(
         int | None,
         typer.Option("--depth", "-d", help="Search depth (0=instant, 1=context, 2=habit, 3=deep)"),
     ] = None,
+    limit: Annotated[
+        int | None,
+        typer.Option(
+            "--limit",
+            "-l",
+            help="Cap matched memories (approximate; maps to max_tokens ~200/memory)",
+        ),
+    ] = None,
     max_tokens: Annotated[
         int, typer.Option("--max-tokens", "-m", help="Max tokens in response")
     ] = 500,
@@ -423,7 +431,7 @@ def recall(
 
     Examples:
         nmem recall "What did I do with auth?"
-        nmem recall "meetings with Alice" --depth 2
+        nmem recall "meetings with Alice" --depth 2 --limit 3
         nmem recall "Why did the build fail?" --show-routing
         nmem recall "project status" --min-confidence 0.5
     """
@@ -447,11 +455,15 @@ def recall(
         depth_level = (
             DepthLevel(depth) if depth is not None else DepthLevel(min(route.suggested_depth, 3))
         )
+        # --limit N ≈ N memories * 200 tokens each, but never exceed --max-tokens
+        effective_max_tokens = (
+            min(max_tokens, max(100, limit * 200)) if limit is not None else max_tokens
+        )
         pipeline = ReflexPipeline(storage, brain.config)
         result = await pipeline.query(
             query=query,
             depth=depth_level,
-            max_tokens=max_tokens,
+            max_tokens=effective_max_tokens,
             reference_time=utcnow(),
         )
 
@@ -468,12 +480,16 @@ def recall(
             result.fibers_matched or [],
         )
 
+        fibers_matched_display = result.fibers_matched
+        if limit is not None:
+            fibers_matched_display = (result.fibers_matched or [])[:limit]
+
         response = {
             "answer": result.context or "No relevant memories found.",
             "confidence": result.confidence,
             "depth_used": result.depth_used.value,
             "neurons_activated": result.neurons_activated,
-            "fibers_matched": result.fibers_matched,
+            "fibers_matched": fibers_matched_display,
             "latency_ms": result.latency_ms,
         }
 

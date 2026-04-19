@@ -135,6 +135,35 @@ class TestVietnameseKeywordExtraction:
         assert "máy tính" in keyword_texts
         assert "xách tay" in keyword_texts
 
+    def test_tokenize_does_not_leak_pyvi_warnings(self) -> None:
+        """Issue #132: pyvi emits np.VisibleDeprecationWarning (UserWarning subclass).
+
+        Narrow filters on DeprecationWarning miss it. The scoped suppression inside
+        _tokenize_vietnamese must silence ALL warnings during the pyvi import path.
+        """
+        import warnings as warnings_mod
+
+        try:
+            import pyvi  # noqa: F401
+        except ImportError:
+            pytest.skip("pyvi not installed")
+
+        from neural_memory.extraction.keywords import _tokenize_vietnamese
+
+        with warnings_mod.catch_warnings(record=True) as caught:
+            warnings_mod.simplefilter("always")
+            _tokenize_vietnamese("Hôm nay trời đẹp quá")
+
+        pyvi_warnings = [
+            w
+            for w in caught
+            if "pyvi" in str(w.filename).lower() or "numpy" in str(w.message).lower()
+        ]
+        assert pyvi_warnings == [], (
+            f"pyvi suppression leaked {len(pyvi_warnings)} warnings: "
+            f"{[str(w.message) for w in pyvi_warnings]}"
+        )
+
 
 class TestEncoderLanguagePassthrough:
     """Tests for language parameter propagation through MemoryEncoder."""

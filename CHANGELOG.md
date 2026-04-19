@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.51.4] — 2026-04-19
+
+### Fixed
+
+- **Issue #132 — `nmem recall --limit` restored** (Bé Mi): `recall` now accepts `--limit` / `-l N` again as an approximate cap. Internally mapped to `max_tokens = max(100, N * 200)` and truncates the displayed `fibers_matched` list to `N`. Default `None` preserves previous behaviour when the flag is omitted.
+- **Issue #132 — pyvi warning leak**: `_tokenize_vietnamese()` and the auto-capture pyvi probe now wrap the import in `warnings.simplefilter("ignore")`. The previous `DeprecationWarning` filter missed `numpy.VisibleDeprecationWarning`, which is a `UserWarning` subclass, so pyvi's first tokenization still emitted a warning. Broadened to silence all warnings during the pyvi import path.
+- **Issue #132 — doctor schema-migration hint**: the auto-fix message for "Schema version mismatch" no longer claims a `--fix` flag exists. Now reads: `"Auto-migrates on next read/write — run any command (e.g. 'nmem recall \"test\"' or 'nmem doctor --fix') to trigger now"`.
+
+### Improved
+
+- **Issue #132 — doctor tiered output**: `nmem doctor` now groups findings into three priority tiers so users can distinguish "broken" from "missing optional":
+  - `CORE` — schema, Python version, brain database, permissions (must be green)
+  - `RECOMMENDED` — hooks, MCP server (should be green for best UX)
+  - `OPTIONAL` — Pro features, hub status (informational)
+  Each tier renders under its own header. Exit code stays driven by core-issue count only.
+
+### Tests
+
+- `tests/unit/test_recall_limit.py` — regression test confirming `recall()` exposes a `--limit` parameter with `None` default and `int | None` annotation.
+- `tests/unit/test_vietnamese_keywords.py::test_tokenize_does_not_leak_pyvi_warnings` — asserts no pyvi/numpy warnings escape `_tokenize_vietnamese()` (skips if pyvi not installed).
+- `tests/unit/test_doctor_enhanced.py` — new `TestPriorityTiers` + `TestSchemaMigrationHint` classes covering tier assignments and the new migration message.
+
 ## [4.51.3] — 2026-04-19
 
 ### Changed

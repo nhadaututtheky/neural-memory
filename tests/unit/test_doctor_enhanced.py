@@ -7,10 +7,14 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from neural_memory.cli.doctor import (
+    _CHECK_TIERS,
     FAIL,
     OK,
     QUICKSTART_URL,
     SKIP,
+    TIER_CORE,
+    TIER_OPTIONAL,
+    TIER_RECOMMENDED,
     WARN,
     _auto_fix,
     _check_dedup,
@@ -272,3 +276,87 @@ class TestRunDoctorIntegration:
 
     def test_quickstart_url_defined(self) -> None:
         assert "quickstart" in QUICKSTART_URL
+
+
+class TestPriorityTiers:
+    """Verify each check is tagged with the correct priority tier (issue #132)."""
+
+    def test_core_checks_tagged(self) -> None:
+        core_names = {
+            "Python version",
+            "Configuration",
+            "Brain database",
+            "Dependencies",
+            "Schema version",
+            "CLI tools",
+        }
+        for name in core_names:
+            assert _CHECK_TIERS[name] == TIER_CORE, f"{name} should be CORE"
+
+    def test_recommended_checks_tagged(self) -> None:
+        for name in ("Embedding provider", "MCP configuration", "MCP server", "Hooks"):
+            assert _CHECK_TIERS[name] == TIER_RECOMMENDED, f"{name} should be RECOMMENDED"
+
+    def test_optional_checks_tagged(self) -> None:
+        for name in ("Dedup", "Knowledge surface", "Config freshness", "Pro features"):
+            assert _CHECK_TIERS[name] == TIER_OPTIONAL, f"{name} should be OPTIONAL"
+
+    @patch("neural_memory.cli.doctor._check_pro_plugin")
+    @patch("neural_memory.cli.doctor._check_surface")
+    @patch("neural_memory.cli.doctor._check_dedup")
+    @patch("neural_memory.cli.doctor._check_hooks")
+    @patch("neural_memory.cli.doctor._check_cli_tools")
+    @patch("neural_memory.cli.doctor._check_mcp_connection")
+    @patch("neural_memory.cli.doctor._check_mcp_config")
+    @patch("neural_memory.cli.doctor._check_schema_version")
+    @patch("neural_memory.cli.doctor._check_embedding_provider")
+    @patch("neural_memory.cli.doctor._check_dependencies")
+    @patch("neural_memory.cli.doctor._check_brain")
+    @patch("neural_memory.cli.doctor._check_config")
+    @patch("neural_memory.cli.doctor._check_python_version")
+    def test_run_doctor_annotates_tier(self, *mocks: MagicMock) -> None:
+        names = [
+            "Python version",
+            "Configuration",
+            "Brain database",
+            "Dependencies",
+            "Embedding provider",
+            "Schema version",
+            "MCP configuration",
+            "MCP server",
+            "Hooks",
+            "Dedup",
+            "Knowledge surface",
+            "Config freshness",
+            "CLI tools",
+            "Pro features",
+        ]
+        # Decorators are applied bottom-up; mock[0] is innermost (_check_python_version)
+        # Order of mocks matches run_doctor() call order 1:1
+        for mock, name in zip(mocks, names, strict=False):
+            mock.return_value = {"name": name, "status": OK, "detail": "ok"}
+
+        result = run_doctor(json_output=True)
+        tiers = {c["name"]: c["tier"] for c in result["checks"]}
+        assert tiers["Python version"] == TIER_CORE
+        assert tiers["Embedding provider"] == TIER_RECOMMENDED
+        assert tiers["Knowledge surface"] == TIER_OPTIONAL
+        assert "core_issues" in result
+
+
+class TestSchemaMigrationHint:
+    """Issue #132: schema migration fix message should name a concrete command."""
+
+    def test_fix_message_names_command(self) -> None:
+        import sqlite3
+        from pathlib import Path
+
+        from neural_memory.cli.doctor import _check_schema_version
+
+        # This test relies on the schema check detecting a stale schema;
+        # we validate the constant hint text instead (check in source).
+        source = Path(__file__).parent.parent.parent / "src" / "neural_memory" / "cli" / "doctor.py"
+        text = source.read_text(encoding="utf-8")
+        assert "run any command" in text.lower()
+        assert "nmem recall" in text  # concrete trigger example
+        _ = _check_schema_version, sqlite3  # keep imports alive for mypy

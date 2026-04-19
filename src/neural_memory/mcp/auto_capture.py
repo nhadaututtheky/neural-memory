@@ -161,9 +161,13 @@ def _warn_pyvi_missing() -> None:
         import warnings
 
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=DeprecationWarning, module="pyvi")
-            warnings.filterwarnings("ignore", category=DeprecationWarning, module="numpy")
-            from pyvi import ViTokenizer
+            # pyvi emits NumPy VisibleDeprecationWarning (UserWarning subclass, NOT
+            # DeprecationWarning) during pickle.load at module import. Narrow
+            # category filters miss it — suppress everything in this scoped block.
+            warnings.simplefilter("ignore")
+            import pyvi  # probe-only import to trigger ImportError if missing
+
+        del pyvi
     except ImportError:
         logger.warning(
             "Vietnamese text detected in auto-capture but pyvi is not installed — "

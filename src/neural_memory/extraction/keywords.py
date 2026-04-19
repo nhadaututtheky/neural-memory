@@ -226,11 +226,13 @@ def _tokenize_vietnamese(text: str) -> str | None:
         import warnings
 
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=DeprecationWarning, module="pyvi")
-            warnings.filterwarnings("ignore", category=DeprecationWarning, module="numpy")
+            # pyvi emits NumPy VisibleDeprecationWarning (UserWarning subclass, NOT
+            # DeprecationWarning) during pickle.load at module import. Narrow
+            # category filters miss it — suppress everything in this scoped block.
+            warnings.simplefilter("ignore")
             from pyvi import ViTokenizer
 
-            return ViTokenizer.tokenize(text)  # type: ignore[no-any-return]
+        return ViTokenizer.tokenize(text)  # type: ignore[no-any-return]
     except ImportError:
         if not _PYVI_WARNED:
             logger.warning(
