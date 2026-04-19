@@ -24,6 +24,7 @@ from uuid import uuid4
 from neural_memory.core.fiber import Fiber
 from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
+from neural_memory.engine.abstraction import induce_abstraction
 from neural_memory.engine.clustering import UnionFind
 from neural_memory.utils.simhash import is_near_duplicate as _simhash_near_dup
 from neural_memory.utils.timeutils import ensure_naive_utc, utcnow
@@ -33,6 +34,19 @@ if TYPE_CHECKING:
     from neural_memory.unified_config import TierConfig
 
 logger = logging.getLogger(__name__)
+
+
+# Causal synapses encode explanatory structure — never prune manually-created ones,
+# even if weight decays below threshold. Inferred causal links (metadata._inferred=True)
+# remain prunable since they may be noisy.
+_CAUSAL_SYNAPSE_TYPES = frozenset(
+    {
+        SynapseType.CAUSED_BY,
+        SynapseType.LEADS_TO,
+        SynapseType.ENABLES,
+        SynapseType.PREVENTS,
+    }
+)
 
 
 class ConsolidationStrategy(StrEnum):
@@ -72,6 +86,10 @@ class ConsolidationConfig:
     merge_overlap_threshold: float = 0.5
     merge_max_fiber_size: int = 50
     merge_temporal_halflife_seconds: float = 7200.0
+    # When a MERGE groups 5+ fibers, induce an abstract CONCEPT neuron
+    # summarizing the cluster (CLS pattern — exemplars remain intact).
+    enable_dynamic_abstraction: bool = True
+    abstraction_cluster_min_size: int = 5
     summarize_min_cluster_size: int = 3
     summarize_tag_overlap_threshold: float = 0.4
     infer_co_activation_threshold: int = 3
@@ -119,6 +137,7 @@ class ConsolidationReport:
     fibers_removed: int = 0
     fibers_created: int = 0
     summaries_created: int = 0
+    concepts_created: int = 0
     stages_advanced: int = 0
     patterns_extracted: int = 0
     synapses_inferred: int = 0
@@ -157,6 +176,7 @@ class ConsolidationReport:
             f"  Duplicates found: {self.duplicates_found}",
             f"  Semantic synapses: {self.semantic_synapses_created}",
             f"  Memories promoted: {self.memories_promoted}",
+            f"  Concepts created: {self.concepts_created}",
             f"  Fibers compressed: {self.fibers_compressed}",
             f"  Tokens saved: {self.tokens_saved}",
             f"  Duration: {self.duration_ms:.1f}ms",
@@ -537,6 +557,14 @@ class ConsolidationEngine:
             if synapse.source_id in pinned_neuron_ids or synapse.target_id in pinned_neuron_ids:
                 continue
 
+            # Protect causal synapses — they encode "why" and must survive decay.
+            # Inferred ones can still be pruned (may be noisy), but manually-created
+            # causal links are never removed even if weak.
+            if synapse.type in _CAUSAL_SYNAPSE_TYPES and not synapse.metadata.get(
+                "_inferred", False
+            ):
+                continue
+
             # Apply time-based decay before checking weight threshold
             decayed = synapse.time_decay(reference_time=reference_time)
 
@@ -904,6 +932,40 @@ class ConsolidationEngine:
                 if original_summaries:
                     merge_metadata["_original_summaries"] = original_summaries
 
+            # T3: Dynamic abstraction — induce a CONCEPT neuron for large clusters.
+            # Kept as a parallel structure: cluster neurons are NOT deleted (CLS).
+            abstract_neuron: Neuron | None = None
+            abstract_links: list[Synapse] = []
+            if (
+                is_summary
+                and self._config.enable_dynamic_abstraction
+                and len(member_fibers) >= self._config.abstraction_cluster_min_size
+            ):
+                cluster_neurons = [
+                    anchor_neurons[f.anchor_neuron_id]
+                    for f in member_fibers
+                    if f.anchor_neuron_id in anchor_neurons
+                ]
+                if len(cluster_neurons) >= 2:
+                    try:
+                        abstract_neuron = induce_abstraction(cluster_neurons)
+                        merge_metadata["_abstract_neuron_id"] = abstract_neuron.id
+                        # IS_A link from each exemplar → abstract so traversal can reach it.
+                        for exemplar in cluster_neurons:
+                            abstract_links.append(
+                                Synapse.create(
+                                    source_id=exemplar.id,
+                                    target_id=abstract_neuron.id,
+                                    type=SynapseType.IS_A,
+                                    weight=0.6,
+                                    metadata={"_abstraction_induced": True},
+                                )
+                            )
+                    except Exception as exc:
+                        logger.warning("Skipping abstraction induction: %s", exc)
+                        abstract_neuron = None
+                        abstract_links = []
+
             # Build summary from anchor neuron content (not just "Merged from N")
             anchor_ids_for_summary = list(dict.fromkeys(f.anchor_neuron_id for f in member_fibers))[
                 :3
@@ -959,6 +1021,20 @@ class ConsolidationEngine:
                     # are mid-transaction in another process.  Skip this merge.
                     logger.warning("Skipping fiber merge %s: %s", merged_fiber.id, exc)
                     continue
+
+                # T3: Persist abstract neuron + IS_A links (best-effort, non-fatal).
+                if abstract_neuron is not None:
+                    try:
+                        await self._storage.add_neuron(abstract_neuron)
+                        for link in abstract_links:
+                            try:
+                                await self._storage.add_synapse(link)
+                            except Exception as link_exc:
+                                logger.debug("Abstraction IS_A link skipped: %s", link_exc)
+                        report.concepts_created += 1
+                    except Exception as neuron_exc:
+                        logger.warning("Abstraction neuron persistence skipped: %s", neuron_exc)
+
                 if is_summary:
                     # T4.4: Demote originals to COLD instead of deleting
                     for fiber in member_fibers:
@@ -1524,8 +1600,15 @@ class ConsolidationEngine:
         report: ConsolidationReport,
         dry_run: bool,
     ) -> None:
-        """Run dream exploration for hidden connections."""
+        """Run dream exploration for hidden connections.
+
+        Also scans the dream output for hub neurons (appearing in 3+ new
+        synapses) and creates SEMANTIC_LINK-style RELATED_TO synapses between
+        the top hubs — these represent concepts that co-emerged during
+        exploration without an existing explicit link.
+        """
         import logging
+        from collections import Counter as _Counter
 
         from neural_memory.engine.dream import dream
 
@@ -1551,12 +1634,41 @@ class ConsolidationEngine:
             except ValueError:
                 logger.debug("Dream synapse already exists, skipping")
 
+        # T4: Hub-entity pattern extraction. A neuron appearing in 3+ new
+        # dream synapses is a recurring topic — link the top two hubs
+        # semantically so future recall can bridge them.
+        if len(result.synapses_created) >= 3:
+            participation: _Counter[str] = _Counter()
+            for synapse in result.synapses_created:
+                participation[synapse.source_id] += 1
+                participation[synapse.target_id] += 1
+            hubs = [nid for nid, count in participation.most_common(3) if count >= 3]
+            if len(hubs) >= 2:
+                hub_link = Synapse.create(
+                    source_id=hubs[0],
+                    target_id=hubs[1],
+                    type=SynapseType.RELATED_TO,
+                    weight=0.4,
+                    metadata={"_dream": True, "_semantic_discovery": True, "_hub": True},
+                )
+                try:
+                    await self._storage.add_synapse(hub_link)
+                    report.patterns_extracted += 1
+                except (ValueError, Exception) as exc:
+                    logger.debug("Dream hub link skipped: %s", exc)
+
     async def _replay(
         self,
         report: ConsolidationReport,
         dry_run: bool,
     ) -> None:
-        """Run hippocampal replay — LTP/LTD on recent fibers."""
+        """Run hippocampal replay — LTP/LTD on recent fibers.
+
+        After delegating to the replay engine, counts how many strengthened
+        synapses touch abstraction-level concept neurons. These are the
+        CLS semantic targets — tracking them lets us know when episodic
+        replay is reinforcing existing abstractions (Hebbian on semantics).
+        """
         from neural_memory.engine.hippocampal_replay import hippocampal_replay
 
         brain_id = self._storage.current_brain_id
@@ -1574,6 +1686,21 @@ class ConsolidationEngine:
         report.extra["replay_episodes"] = result.episodes_replayed
         report.extra["replay_ltp"] = result.synapses_strengthened
         report.extra["replay_ltd"] = result.synapses_weakened
+
+        # T4: Semantic reinforcement signal — if replay strengthened links,
+        # count how many concept-level neurons exist in the brain so users
+        # know the abstraction surface. Cheap read, no writes.
+        if not dry_run and result.synapses_strengthened > 0:
+            try:
+                concept_neurons = await self._storage.find_neurons(
+                    type=NeuronType.CONCEPT,
+                    limit=500,
+                )
+                induced = sum(1 for n in concept_neurons if n.metadata.get("_abstraction_induced"))
+                report.extra["replay_semantic_neurons"] = len(concept_neurons)
+                report.extra["replay_induced_concepts"] = induced
+            except Exception as exc:
+                logger.debug("Replay semantic census skipped: %s", exc)
 
     async def _schema(
         self,

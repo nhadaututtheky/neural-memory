@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.51.2] — 2026-04-19
+
+### Added
+
+- **Storage Evolution Phase 3 — Consolidation + Abstraction Upgrade**:
+  - **Causal prune guard**: `PRUNE` strategy now skips `CAUSED_BY` / `LEADS_TO` / `ENABLES` / `PREVENTS` synapses unless they carry `_inferred=True`. Causal knowledge survives decay sweeps; auto-inferred causal noise remains prunable.
+  - **Dynamic abstraction induction**: new `engine.abstraction.induce_abstraction(cluster)` condenses a cluster of episodic neurons into one CONCEPT neuron (abstraction level 2) using stopword-filtered term-frequency extraction. Content template: `"[N] memories about [TOPIC]: [TERMS]. Key: [exemplar]"`. Exemplar chosen by highest `goal_priority` (ties by recency). Metadata traces `_abstraction_source_ids`, `_abstraction_terms`, `_abstraction_exemplar_id`, `_abstraction_induced=True`.
+  - **MERGE strategy wiring**: large summaries (cluster size ≥ `abstraction_cluster_min_size`, default 5) now persist the abstract neuron and wire `IS_A` links (weight 0.6) from each cluster exemplar → abstract. Gated by `ConsolidationConfig.enable_dynamic_abstraction` (default True). `ConsolidationReport.concepts_created` surfaces the count.
+  - **DREAM hub extraction**: post-delegation pass identifies neurons participating in ≥3 consolidation events, creates `RELATED_TO` synapses between the top two hubs with `_hub=True` / `_semantic_discovery=True` metadata. Feeds `report.patterns_extracted`.
+  - **REPLAY semantic census**: queries all `CONCEPT` neurons (limit 500), counts those with `_abstraction_induced=True`, stores snapshot in `report.extra`.
+
+### Tests
+
+- `tests/unit/test_storage_evolution_phase3.py` — 14 tests covering causal prune guard set contents, inferred-causal exclusion, manual-causal protection, `induce_abstraction` template + metadata + stopword/short-token filtering + exemplar priority + content truncation, and MERGE config surfaces.
+
 ## [4.51.1] — 2026-04-19
 
 ### Fixed
