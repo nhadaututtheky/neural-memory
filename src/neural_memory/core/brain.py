@@ -82,6 +82,10 @@ class BrainConfig:
     ppr_damping: float = 0.15
     ppr_iterations: int = 20
     ppr_epsilon: float = 1e-6
+    # PPR: dampening factor for DREAM hub synapses (_hub=True) during push.
+    # 1.0 = no dampening; 0.5 halves hub edge influence so synthesized hub
+    # links don't hijack random walks at the expense of genuine edges.
+    hub_edge_dampening: float = 0.5
     # Cascading retrieval: fiber summary tier + sufficiency gate
     fiber_summary_tier_enabled: bool = True
     sufficiency_threshold: float = 0.7

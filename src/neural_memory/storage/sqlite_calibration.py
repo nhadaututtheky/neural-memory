@@ -328,11 +328,16 @@ class SQLiteCalibrationMixin:
     # Graph density: avg synapses per neuron for strategy auto-selection
     # ------------------------------------------------------------------
 
-    async def get_graph_density(self) -> float:
+    async def get_graph_density(self, exclude_hubs: bool = False) -> float:
         """Compute average synapses per neuron for the current brain.
 
+        Args:
+            exclude_hubs: When True, filter out synapses whose metadata
+                contains ``_hub`` (DREAM-generated hub links). This yields
+                the organic graph density, unaffected by consolidation
+                artefacts.
+
         Returns 0.0 if no neurons exist.
-        Used by retrieval engine to auto-select activation strategy.
         """
         conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
@@ -346,10 +351,17 @@ class SQLiteCalibrationMixin:
         if neuron_count == 0:
             return 0.0
 
-        cursor = await conn.execute(
-            "SELECT COUNT(*) FROM synapses WHERE brain_id = ?",
-            (brain_id,),
-        )
+        if exclude_hubs:
+            cursor = await conn.execute(
+                "SELECT COUNT(*) FROM synapses "
+                "WHERE brain_id = ? AND json_extract(metadata, '$._hub') IS NULL",
+                (brain_id,),
+            )
+        else:
+            cursor = await conn.execute(
+                "SELECT COUNT(*) FROM synapses WHERE brain_id = ?",
+                (brain_id,),
+            )
         row = await cursor.fetchone()
         synapse_count = row[0] if row else 0
 

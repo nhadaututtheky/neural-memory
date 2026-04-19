@@ -107,6 +107,9 @@ class PPRActivation:
 
         # Neighbor cache to avoid re-fetching
         neighbor_cache: dict[str, list[tuple[str, float]]] = {}
+        # DREAM hub edges (`_hub=True` metadata) are synthesized by consolidation;
+        # dampening their effective weight prevents artefacts from hijacking walks.
+        hub_dampening = getattr(self._config, "hub_edge_dampening", 1.0)
         # Track hop distance for each neuron (best path)
         hop_distance: dict[str, int] = dict.fromkeys(anchor_neurons, 0)
         # Track path from nearest seed
@@ -144,11 +147,17 @@ class PPRActivation:
                 )
                 for nid in uncached:
                     synapses = synapses_map.get(nid, [])
-                    neighbors = [
-                        (s.target_id, s.weight)
-                        for s in synapses
-                        if s.weight >= 0.1  # skip near-zero edges
-                    ]
+                    neighbors = []
+                    for s in synapses:
+                        if s.weight < 0.1:  # skip near-zero edges
+                            continue
+                        effective = s.weight
+                        meta = getattr(s, "metadata", None) or {}
+                        if meta.get("_hub"):
+                            effective *= hub_dampening
+                        if effective < 1e-9:
+                            continue
+                        neighbors.append((s.target_id, effective))
                     neighbor_cache[nid] = neighbors
 
             new_residual: dict[str, float] = defaultdict(float)

@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.52.2] — 2026-04-20
+
+### Improved — DREAM Hubs Now Consumed by Retrieval
+
+Closes the Section 9 integration gap **DREAM hubs + graph density scaling** — hub synapses were being *written* by consolidation but never *read* back by retrieval.
+
+- **Graph density excludes DREAM hubs by default for strategy selection.** `get_graph_density()` grows an `exclude_hubs: bool = False` parameter on both the SQL mixin (`storage/sql/mixins/calibration.py`) and the legacy SQLite backend (`storage/sqlite_calibration.py`). When True, it filters out synapses whose metadata contains `_hub=True` via `json_extract(metadata, '$._hub') IS NULL` / `metadata->>'_hub' IS NULL`. `retrieval._auto_select_strategy()` now calls with `exclude_hubs=True` so DREAM's synthesized hub links don't inflate density and trick the engine into picking PPR on graphs that are organically sparse.
+- **PPR dampens hub edges during push.** `PPRActivation` multiplies the effective weight of `_hub=True` synapses by `BrainConfig.hub_edge_dampening` (default `0.5`) when building the neighbor cache. Hub edges still carry activation — they just can't hijack random walks at the expense of genuine edges. Setting the config to `1.0` disables the dampening for users who want the pre-v4.52.2 behavior.
+- **New config field.** `BrainConfig.hub_edge_dampening: float = 0.5`. Documented inline.
+
+### Docs
+
+- `.rune/FEATURE_REGISTRY.md` Section 2c (DREAM hub extraction) and Section 9 (DREAM hubs + graph density scaling) updated to reflect the fix — the gap moves from OPEN → FIXED v4.52.2.
+
+### Tests
+
+- `tests/unit/test_v4_52_2_hub_aware_retrieval.py` — 8 tests: density computation with/without hub exclusion on a real SQLite brain, `_auto_select_strategy` passes `exclude_hubs=True`, PPR hub dampening (hub target gets less activation than plain target at equal base weight), dampening disabled when factor=1.0, default config value.
+
 ## [4.52.1] — 2026-04-20
 
 ### Improved — Activation Decay Integrated into Consolidation

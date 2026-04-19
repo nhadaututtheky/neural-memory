@@ -1154,7 +1154,10 @@ class ReflexPipeline:
         # Use activation_strategy = "hnsw_hybrid" in config to opt in.
 
         try:
-            density = await self._storage.get_graph_density()  # type: ignore[attr-defined]
+            # exclude_hubs=True: DREAM hub synapses are consolidation
+            # artefacts; including them inflates density and misclassifies
+            # organic-sparse graphs as dense.
+            density = await self._storage.get_graph_density(exclude_hubs=True)  # type: ignore[attr-defined]
         except Exception:
             return "classic"  # Fallback if storage doesn't support it
 

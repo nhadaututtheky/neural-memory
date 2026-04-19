@@ -311,11 +311,17 @@ class CalibrationMixin:
     # Graph density: avg synapses per neuron for strategy auto-selection
     # ------------------------------------------------------------------
 
-    async def get_graph_density(self) -> float:
+    async def get_graph_density(self, exclude_hubs: bool = False) -> float:
         """Compute average synapses per neuron for the current brain.
 
+        Args:
+            exclude_hubs: When True, filter out synapses whose metadata
+                contains ``_hub`` (DREAM-generated hub links). This yields
+                the *organic* graph density, unaffected by consolidation
+                artefacts. Used by retrieval engine to pick an activation
+                strategy that reflects the user's real graph.
+
         Returns 0.0 if no neurons exist.
-        Used by retrieval engine to auto-select activation strategy.
         """
         d = self._dialect
         brain_id = self._get_brain_id()
@@ -328,8 +334,12 @@ class CalibrationMixin:
         if neuron_count == 0:
             return 0.0
 
+        if exclude_hubs:
+            hub_filter = f" AND {d.json_extract('metadata', '_hub')} IS NULL"
+        else:
+            hub_filter = ""
         row = await d.fetch_one(
-            f"SELECT COUNT(*) as cnt FROM synapses WHERE brain_id = {d.ph(1)}",
+            f"SELECT COUNT(*) as cnt FROM synapses WHERE brain_id = {d.ph(1)}{hub_filter}",
             [brain_id],
         )
         synapse_count = row.get("cnt", 0) if row else 0
