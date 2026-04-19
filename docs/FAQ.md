@@ -78,7 +78,7 @@ Follow this decision tree:
 4. **Slow performance?**
     - Check: `nmem health` → look for "consolidation needed" warnings
     - Run: `nmem consolidate` to compact the brain
-    - Past 10K memories? Consider [Neural Memory Pro](../guides/pro.md) for HNSW-accelerated recall
+    - Past 10K memories? Consider [Neural Memory Pro](guides/pro-quickstart.md) for HNSW-accelerated recall
 
 5. **Import/export issues?**
     - Export: `nmem export --format json > backup.json`
