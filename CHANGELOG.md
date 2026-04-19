@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.52.1] — 2026-04-20
+
+### Improved — Activation Decay Integrated into Consolidation
+
+- **`DECAY` is now a first-class consolidation strategy (Tier 0)**. Previously the Ebbinghaus decay pass only ran on the scheduled 12h cycle, so every consolidation between those cycles worked off stale activation + synapse weights. Old memories kept their full activation and crowded fresh ones out of recall. `ConsolidationEngine` now runs `DecayManager.apply_decay()` as a dedicated first tier before `PRUNE` — so PRUNE sees the actually-decayed activation and can drop items below its threshold on the same run.
+- **Safe by construction.** DECAY sits in its own frozenset tier (before the PRUNE/LEARN_HABITS/DEDUP tier) so execution order is explicit, not frozenset-hash-dependent. `min_age_days` in `DecayManager` still guards against double-decaying recently-touched memories. `dry_run=True` propagates correctly — the report records stats without persisting changes. Failures from the decay pass are logged and swallowed (`logger.warning`) so a storage backend issue cannot take consolidation down with it.
+- **Report surface.** `ConsolidationReport.extra["decay"]` carries `{neurons_processed, neurons_decayed, synapses_processed, synapses_decayed, duration_ms}` so callers (dashboard, MCP clients, pre-ship checks) can inspect what the decay pass did without a second round-trip.
+
+### Docs
+
+- `.rune/FEATURE_REGISTRY.md` Section 10 updates: freshness weight tweaks marked DONE (already at 15% / 0.15 default on `BrainConfig`) — the "stale" audit from the v4.52.0 review found these shipped separately. Decay ↔ consolidation gap moves from OPEN → FIXED. Context compiler keyword boost marked DONE (already case-normalized).
+
+### Tests
+
+- `tests/unit/test_v4_52_1_decay_in_consolidation.py` — 7 tests covering the DECAY enum, tier ordering (DECAY < PRUNE), dispatch wiring, report surface (DECAY alone + ALL), dry_run propagation, and non-fatal failure handling.
+
 ## [4.52.0] — 2026-04-20
 
 ### Improved — 3 Cross-Feature Wirings

@@ -52,6 +52,7 @@ _CAUSAL_SYNAPSE_TYPES = frozenset(
 class ConsolidationStrategy(StrEnum):
     """Available consolidation strategies."""
 
+    DECAY = "decay"  # Ebbinghaus decay pass (activation + synapse weight)
     PRUNE = "prune"
     MERGE = "merge"
     SUMMARIZE = "summarize"
@@ -245,6 +246,9 @@ class ConsolidationEngine:
     # can safely run concurrently. Tiers execute sequentially because
     # later tiers depend on results from earlier ones.
     STRATEGY_TIERS: tuple[frozenset[ConsolidationStrategy], ...] = (
+        # Tier 0: DECAY runs first so decayed activation can drop items
+        # below prune thresholds in the next tier.
+        frozenset({ConsolidationStrategy.DECAY}),
         frozenset(
             {
                 ConsolidationStrategy.PRUNE,
@@ -307,6 +311,7 @@ class ConsolidationEngine:
     ) -> None:
         """Dispatch a single strategy to its implementation method."""
         dispatch: dict[ConsolidationStrategy, Callable[[], Awaitable[None]]] = {
+            ConsolidationStrategy.DECAY: lambda: self._decay(report, reference_time, dry_run),
             ConsolidationStrategy.PRUNE: lambda: self._prune(report, reference_time, dry_run),
             ConsolidationStrategy.MERGE: lambda: self._merge(report, dry_run),
             ConsolidationStrategy.SUMMARIZE: lambda: self._summarize(report, dry_run),
@@ -503,6 +508,43 @@ class ConsolidationEngine:
             logger.info("Surface regenerated after consolidation")
         except Exception:
             logger.warning("Surface regeneration after consolidation failed", exc_info=True)
+
+    async def _decay(
+        self,
+        report: ConsolidationReport,
+        reference_time: datetime,
+        dry_run: bool,
+    ) -> None:
+        """Apply Ebbinghaus decay to neurons + synapses before pruning.
+
+        Previously decay only ran on the scheduled 12h cycle, so between
+        those cycles old memories kept their full activation and crowded
+        out fresh ones during recall. Running decay as Tier 0 of
+        consolidation keeps activation honest with the consolidation
+        cadence (typically a few hours). Dispatch is idempotent:
+        DecayManager's `min_age_days` constraint and per-access
+        timestamps prevent double-decay.
+        """
+        if not self._storage.current_brain_id:
+            return
+        from neural_memory.engine.lifecycle import DecayManager
+
+        manager = DecayManager()
+        try:
+            decay_report = await manager.apply_decay(
+                self._storage, reference_time=reference_time, dry_run=dry_run
+            )
+        except Exception:
+            logger.warning("Consolidation: decay pass failed (non-fatal)", exc_info=True)
+            return
+
+        report.extra["decay"] = {
+            "neurons_processed": decay_report.neurons_processed,
+            "neurons_decayed": decay_report.neurons_decayed,
+            "synapses_processed": decay_report.synapses_processed,
+            "synapses_decayed": decay_report.synapses_decayed,
+            "duration_ms": decay_report.duration_ms,
+        }
 
     async def _prune(
         self,
