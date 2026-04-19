@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.51.3] — 2026-04-19
+
+### Changed
+
+- **Storage ABC slim-down** — split `NeuralStorage` (1900-LOC monolithic ABC) into a layered hierarchy without touching any caller or backend:
+  - `CoreStorage(ABC)` — 29 genuinely abstract methods covering CRUD, graph traversal, fibers, brain meta, lifecycle, stats. `_get_brain_id()` now ships with a concrete default (reads `self.brain_id`, raises `ValueError` if unset). A new backend only needs to fill these 29 slots to be usable, and ABC enforces the contract at instantiation time.
+  - `ExtendedStorage` (plain class) — optional domains (typed memory, alerts, drift, versioning, sync hub, bulk enumeration, ghost tracking, etc.) with every method defaulting to `raise NotImplementedError`. Backends override piecewise.
+  - `NeuralStorage(CoreStorage, ExtendedStorage)` — canonical union used throughout the codebase; existing inheritance chains (`SQLiteStorage`, `SQLStorage`, `PostgreSQLStorage`, `InMemoryStorage`, `SharedStorage`) are unchanged.
+- Tightened contract after review: `set_brain` is now a true `@abstractmethod` (previously a stub); `get_all_neuron_states`, `get_all_synapses`, `find_brain_by_name`, and `batch_update_ghost_shown` moved from CoreStorage stubs to `ExtendedStorage` (truthful tier — `SharedStorage` and similar proxy backends genuinely do not support them).
+
 ## [4.51.2] — 2026-04-19
 
 ### Added
