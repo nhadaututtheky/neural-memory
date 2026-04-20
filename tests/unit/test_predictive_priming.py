@@ -62,6 +62,7 @@ class FakeNeuron:
     id: str
     content: str
     type: Any = None
+    metadata: dict[str, Any] | None = None
 
 
 @dataclass
