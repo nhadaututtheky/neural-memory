@@ -279,3 +279,68 @@ class TestFormatContextBudgetedWithRelatedCompression:
         )
         # Legacy path: all 300 bars should fit within the generous budget
         assert context.count("bar") >= 250
+
+    @pytest.mark.asyncio
+    async def test_clean_for_prompt_path_applies_compression(
+        self, mock_storage: AsyncMock
+    ) -> None:
+        """clean_for_prompt=True (MCP default) must still honor compression.
+
+        Gap found in review: MCP recall_handler hard-codes `clean_for_prompt=True`,
+        so if compression silently skipped that path the real-world savings would
+        not materialize. This pins the contract.
+        """
+        from neural_memory.engine.retrieval_context import format_context_budgeted
+
+        long_content = " ".join(["baz"] * 500)
+        n = _make_neuron("n_long", long_content, age_days=0.1)
+        mock_storage.get_neurons_batch = AsyncMock(return_value={"n_long": n})
+
+        activations = {"n_long": _make_activation("n_long", 0.9)}
+        cfg = BudgetConfig(
+            enable_related_compression=True,
+            related_neuron_max_tokens=80,
+        )
+        context, _, _ = await format_context_budgeted(
+            storage=mock_storage,
+            activations=activations,
+            fibers=[],
+            max_tokens=2000,
+            budget_config=cfg,
+            clean_for_prompt=True,
+        )
+        # No "## Related Information" header in clean mode.
+        assert "## Related Information" not in context
+        assert "## Relevant Memories" not in context
+        # Compression still caps the content — way less than 500 baz.
+        assert context.count("baz") < 150
+        # Clean mode: no [CONCEPT] neuron-type tag prefix.
+        assert "[concept]" not in context.lower()
+
+    @pytest.mark.asyncio
+    async def test_format_context_direct_call_uses_default_config(
+        self, mock_storage: AsyncMock
+    ) -> None:
+        """ReflexPipeline calls format_context() directly — no BudgetConfig.
+
+        `format_context()` is called without `_budget_config` in two places in
+        `engine/retrieval.py`. Those callers must still benefit from the
+        default compression (enable_related_compression=True). This test pins
+        that the bare call applies compression using sensible defaults.
+        """
+        from neural_memory.engine.retrieval_context import format_context
+
+        long_content = " ".join(["qux"] * 500)
+        n = _make_neuron("n_long", long_content, age_days=0.1)
+        mock_storage.get_neurons_batch = AsyncMock(return_value={"n_long": n})
+
+        activations = {"n_long": _make_activation("n_long", 0.9)}
+        context, _ = await format_context(
+            storage=mock_storage,
+            activations=activations,
+            fibers=[],
+            max_tokens=2000,
+            # No _budget_config — must fall back to default BudgetConfig().
+        )
+        # Default cap is 150 tokens; 500 qux words would blow past that.
+        assert context.count("qux") < 200

@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Performance — Related Information Section Compression (-48% Recall Tokens)
+
+Baseline measurement on a real brain (my-brain.v2, 20 queries) found **85.9% of recall context tokens** were emitted by the `## Related Information` section — individual neurons that bypassed the context compiler entirely. The cross-fiber SimHash layer was already at 0% redundancy, so the real bottleneck was this uncompressed per-neuron loop.
+
+- **`_compress_related_neurons()` helper in `engine/retrieval_context.py`.** Applies the same recipe the compiler already uses on fibers: age-tier `compress_for_recall()`, hard per-neuron content cap, SimHash + Hamming distance dedup (intra-section + cross-section against already-emitted fiber text). TIME neurons are still filtered. Disabled path preserves legacy output byte-for-byte for rollback.
+- **Two new `BudgetConfig` fields (engine/token_budget.py).** `enable_related_compression: bool = True` (instant kill-switch) and `related_neuron_max_tokens: int = 150` (per-neuron content cap).
+- **Wired through both entry points.** `format_context_budgeted()` threads the config down via a new internal `_budget_config` param; direct `format_context()` callers in `ReflexPipeline` (encode + familiarity paths) pick up the default config so they benefit without a signature change.
+- **Real-brain result (same 20 queries):** mean total 699 → 362 tokens (-48.2%), Related section 601 → 273 (-54.6%), Related P95 1296 → 598 (-53.9%).
+
+### Tests
+
+- `tests/unit/test_retrieval_context_related_compression.py` — 11 tests covering age compression, content cap, TIME filter, cross-section + intra-section SimHash dedup, `max_neurons` cap, disabled-path legacy preservation, `clean_for_prompt=True` compression (MCP default), and direct `format_context()` call with default config.
+
+### Tooling
+
+- `scripts/measure_token_breakdown.py` — baseline tool that splits recall context into fibers / related / other sections and reports mean/P50/P95 tokens per section. Rerun after any retrieval change to catch recall-token regressions.
+
 ## [4.52.2] — 2026-04-20
 
 ### Improved — DREAM Hubs Now Consumed by Retrieval
