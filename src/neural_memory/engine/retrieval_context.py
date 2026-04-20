@@ -221,9 +221,115 @@ def select_within_budget(
 
 if TYPE_CHECKING:
     from neural_memory.core.fiber import Fiber
+    from neural_memory.core.neuron import Neuron
     from neural_memory.engine.token_budget import BudgetAllocation, BudgetConfig
     from neural_memory.safety.encryption import MemoryEncryptor
     from neural_memory.storage.base import NeuralStorage
+
+
+def _compress_related_neurons(
+    sorted_results: list[ActivationResult],
+    neuron_map: dict[str, Neuron],
+    emitted_fiber_texts: list[str],
+    config: BudgetConfig,
+    max_neurons: int,
+) -> list[tuple[Neuron, str]]:
+    """Compress + dedup neurons for the '## Related Information' section.
+
+    Applied only when `config.enable_related_compression` is True. Otherwise
+    returns raw (neuron, content) pairs preserving legacy format_context
+    behavior (TIME neurons still filtered).
+
+    Steps (in order, per neuron, highest activation first):
+      1. Skip TIME neurons (implicit in retrieval output).
+      2. Apply age-tier `compress_for_recall()` — same tiers used for fibers.
+      3. Hard cap at `config.related_neuron_max_tokens` via sentence
+         truncation + word clipping (same pattern as fiber truncation).
+      4. Drop if SimHash is near any already-emitted fiber text
+         (cross-section dedup — eliminates the "SESSION neuron mirrors
+         fiber summary" pattern observed in real brains).
+      5. Drop if SimHash is near any previously kept neuron (intra-section).
+      6. Stop at `max_neurons`.
+
+    Args:
+        sorted_results: ActivationResults sorted by activation DESC.
+        neuron_map: {neuron_id: Neuron} lookup.
+        emitted_fiber_texts: Content of fibers already formatted into
+            the "## Relevant Memories" section — used for cross-section
+            dedup.
+        config: BudgetConfig — controls toggle, threshold, max tokens.
+        max_neurons: Hard cap on output list length (matches the old
+            `sorted_activations[:20]` slice).
+
+    Returns:
+        List of (Neuron, compressed_content) pairs, ordered by activation.
+    """
+
+    kept_pairs: list[tuple[Neuron, str]] = []
+
+    if not config.enable_related_compression:
+        # Legacy path — no compression, no dedup, only TIME filter.
+        for result in sorted_results[:max_neurons]:
+            neuron = neuron_map.get(result.neuron_id)
+            if neuron is None or neuron.type == NeuronType.TIME:
+                continue
+            kept_pairs.append((neuron, neuron.content))
+        return kept_pairs
+
+    from neural_memory.utils.simhash import hamming_distance, simhash
+
+    threshold = config.compiler_dedup_threshold
+    max_toks = config.related_neuron_max_tokens
+
+    fiber_hashes = [simhash(t) for t in emitted_fiber_texts if t and t.strip()]
+    kept_hashes: list[int] = []
+
+    for result in sorted_results:
+        if len(kept_pairs) >= max_neurons:
+            break
+        neuron = neuron_map.get(result.neuron_id)
+        if neuron is None or neuron.type == NeuronType.TIME:
+            continue
+
+        # compress_for_recall tolerates created_at=None; only pass real
+        # datetimes so MagicMock/stub neurons in tests stay uncompressed.
+        effective_created_at = (
+            neuron.created_at if isinstance(neuron.created_at, datetime) else None
+        )
+        content = compress_for_recall(
+            neuron.content,
+            summary=None,
+            created_at=effective_created_at,
+        )
+        if not content:
+            continue
+
+        # Hard cap: sentence truncation first (preserves readability),
+        # then word clip as fallback.
+        if _estimate_tokens(content) > max_toks:
+            content = _truncate_to_sentences(content, max_sentences=3)
+            if _estimate_tokens(content) > max_toks:
+                max_words = max(1, int(max_toks / _TOKEN_RATIO))
+                words = content.split()
+                if len(words) > max_words:
+                    content = " ".join(words[:max_words]) + "..."
+
+        if not content.strip():
+            continue
+
+        h = simhash(content)
+
+        # Cross-section dedup — neuron ≈ existing fiber → drop.
+        if any(hamming_distance(h, fh) <= threshold for fh in fiber_hashes):
+            continue
+        # Intra-section dedup — near any previously kept neuron → drop.
+        if any(hamming_distance(h, kh) <= threshold for kh in kept_hashes):
+            continue
+
+        kept_pairs.append((neuron, content))
+        kept_hashes.append(h)
+
+    return kept_pairs
 
 
 async def format_context_budgeted(
@@ -405,6 +511,7 @@ async def format_context_budgeted(
         brain_id=brain_id,
         clean_for_prompt=clean_for_prompt,
         _compiled_content=compiled_content if compiled_content else None,
+        _budget_config=cfg,
     )
 
     return formatted, token_estimate, allocation
@@ -419,6 +526,7 @@ async def format_context(
     brain_id: str = "",
     clean_for_prompt: bool = False,
     _compiled_content: dict[str, str] | None = None,
+    _budget_config: BudgetConfig | None = None,
 ) -> tuple[str, int]:
     """Format activated memories into context for agent injection.
 
@@ -430,6 +538,10 @@ async def format_context(
             by the compile step in format_context_budgeted. When a fiber_id
             is present here, its compiled content is used instead of the raw
             anchor/summary content. Not part of the public API.
+        _budget_config: Internal — forwarded from format_context_budgeted so
+            the Related Information section can honor
+            `enable_related_compression` + `related_neuron_max_tokens`.
+            Not part of the public API.
 
     Returns:
         Tuple of (formatted_context, token_estimate).
@@ -500,7 +612,7 @@ async def format_context(
             token_estimate += _estimate_tokens(line)
             lines.append(line)
 
-    # Add individual activated neurons (batch fetch)
+    # Add individual activated neurons (batch fetch + compression/dedup)
     if token_estimate < max_tokens:
         if not clean_for_prompt:
             lines.append("\n## Related Information\n")
@@ -511,22 +623,32 @@ async def format_context(
             reverse=True,
         )
 
-        top_ids = [r.neuron_id for r in sorted_activations[:20]]
+        # Fetch more than strictly needed so post-dedup pool still fills.
+        top_ids = [r.neuron_id for r in sorted_activations[:40]]
         neuron_map = await storage.get_neurons_batch(top_ids)
 
-        for result in sorted_activations[:20]:
-            neuron = neuron_map.get(result.neuron_id)
-            if neuron is None:
-                continue
+        # Collect already-emitted fiber texts for cross-section dedup.
+        # Lines so far include "## Relevant Memories" header + fiber bullets.
+        emitted_fiber_texts = [line[2:] for line in lines if line.startswith("- ")]
 
-            # Skip time neurons in context (they're implicit)
-            if neuron.type == NeuronType.TIME:
-                continue
+        if _budget_config is None:
+            from neural_memory.engine.token_budget import BudgetConfig
 
+            _budget_config = BudgetConfig()
+
+        compressed_pairs = _compress_related_neurons(
+            sorted_results=list(sorted_activations),
+            neuron_map=neuron_map,
+            emitted_fiber_texts=emitted_fiber_texts,
+            config=_budget_config,
+            max_neurons=20,
+        )
+
+        for neuron, content in compressed_pairs:
             if clean_for_prompt:
-                line = f"- {neuron.content}"
+                line = f"- {content}"
             else:
-                line = f"- [{neuron.type.value}] {neuron.content}"
+                line = f"- [{neuron.type.value}] {content}"
             token_estimate += _estimate_tokens(line)
 
             if token_estimate > max_tokens:

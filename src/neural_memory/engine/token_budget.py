@@ -60,6 +60,15 @@ class BudgetConfig:
     enable_compiler: bool = True
     # SimHash hamming distance threshold for near-duplicate detection
     compiler_dedup_threshold: int = 10
+    # Enable age-compression + SimHash dedup + content cap for individual
+    # neurons in the "## Related Information" section of recall output.
+    # Measurement showed this section consumes ~86% of context tokens while
+    # bypassing all compression. See plan-related-info-compression.md.
+    enable_related_compression: bool = True
+    # Hard cap on per-neuron content tokens when related compression is on.
+    # Neurons exceeding this are truncated via _truncate_to_sentences then
+    # word-clipped. Default 150 tokens (neurons should be atomic facts).
+    related_neuron_max_tokens: int = 150
 
 
 def estimate_fiber_tokens(
