@@ -281,9 +281,7 @@ class TestFormatContextBudgetedWithRelatedCompression:
         assert context.count("bar") >= 250
 
     @pytest.mark.asyncio
-    async def test_clean_for_prompt_path_applies_compression(
-        self, mock_storage: AsyncMock
-    ) -> None:
+    async def test_clean_for_prompt_path_applies_compression(self, mock_storage: AsyncMock) -> None:
         """clean_for_prompt=True (MCP default) must still honor compression.
 
         Gap found in review: MCP recall_handler hard-codes `clean_for_prompt=True`,
