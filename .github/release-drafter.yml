@@ -1,0 +1,144 @@
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+
+categories:
+  - title: '### Added'
+    labels:
+      - 'feature'
+      - 'enhancement'
+    collapse-after: 10
+  - title: '### Changed'
+    labels:
+      - 'chore'
+      - 'maintenance'
+      - 'dependencies'
+      - 'refactor'
+      - 'performance'
+      - 'perf'
+  - title: '### Fixed'
+    labels:
+      - 'bug'
+      - 'fix'
+      - 'bugfix'
+    collapse-after: 10
+  - title: '### Security'
+    labels:
+      - 'security'
+  - title: '### Documentation'
+    labels:
+      - 'documentation'
+      - 'docs'
+  - title: '### Breaking Changes'
+    labels:
+      - 'breaking'
+      - 'breaking-change'
+
+autolabeler:
+  - label: 'feature'
+    title:
+      - '/^feat(\(.+\))?:/i'
+  - label: 'bug'
+    title:
+      - '/^fix(\(.+\))?:/i'
+  - label: 'documentation'
+    title:
+      - '/^docs(\(.+\))?:/i'
+    files:
+      - '*.md'
+      - 'docs/**/*'
+  - label: 'chore'
+    title:
+      - '/^chore(\(.+\))?:/i'
+      - '/^build(\(.+\))?:/i'
+  - label: 'refactor'
+    title:
+      - '/^refactor(\(.+\))?:/i'
+  - label: 'performance'
+    title:
+      - '/^perf(\(.+\))?:/i'
+  - label: 'test'
+    title:
+      - '/^test(\(.+\))?:/i'
+  - label: 'dependencies'
+    title:
+      - '/^deps(\(.+\))?:/i'
+    files:
+      - 'pyproject.toml'
+      - 'dashboard/package.json'
+      - 'dashboard/package-lock.json'
+      - 'integrations/neuralmemory/package.json'
+  - label: 'ci'
+    title:
+      - '/^ci(\(.+\))?:/i'
+    files:
+      - '.github/**/*'
+  - label: 'security'
+    title:
+      - '/^security(\(.+\))?:/i'
+  - label: 'breaking-change'
+    title:
+      - '/^.+!:/i'
+    body:
+      - '/BREAKING CHANGE:/i'
+
+version-resolver:
+  major:
+    labels:
+      - 'breaking'
+      - 'breaking-change'
+  minor:
+    labels:
+      - 'feature'
+      - 'enhancement'
+  patch:
+    labels:
+      - 'bug'
+      - 'fix'
+      - 'bugfix'
+      - 'chore'
+      - 'documentation'
+      - 'refactor'
+      - 'performance'
+  default: patch
+
+exclude-labels:
+  - 'skip-changelog'
+  - 'no-changelog'
+
+template: |
+  $CHANGES
+
+  ### Contributors
+
+  $CONTRIBUTORS
+
+  **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
+
+change-template: '- $TITLE @$AUTHOR (#$NUMBER)'
+change-title-escapes: '\<*_&'
+
+no-changes-template: '- No changes'
+
+replacers:
+  - search: '/^feat(\(.+\))?: /i'
+    replace: ''
+  - search: '/^fix(\(.+\))?: /i'
+    replace: ''
+  - search: '/^docs(\(.+\))?: /i'
+    replace: ''
+  - search: '/^chore(\(.+\))?: /i'
+    replace: ''
+  - search: '/^refactor(\(.+\))?: /i'
+    replace: ''
+  - search: '/^perf(\(.+\))?: /i'
+    replace: ''
+  - search: '/^test(\(.+\))?: /i'
+    replace: ''
+  - search: '/^ci(\(.+\))?: /i'
+    replace: ''
+  - search: '/^build(\(.+\))?: /i'
+    replace: ''
+  - search: '/^deps(\(.+\))?: /i'
+    replace: ''
+  - search: '/^security(\(.+\))?: /i'
+    replace: ''
