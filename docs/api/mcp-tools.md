@@ -895,14 +895,19 @@ Goal-directed recall — manage active goals that bias memory retrieval toward r
 
 ### `nmem_causal`
 
-Trace causal chains and temporal event sequences through the memory graph. Use 'trace' to follow CAUSED_BY/LEADS_TO synapses, 'sequence' to follow BEFORE/AFTER temporal order.
+Trace causal chains and temporal event sequences through the memory graph. Use 'trace' to follow CAUSED_BY/LEADS_TO synapses, 'sequence' to follow BEFORE/AFTER, 'temporal_range' to list fibers within a time window, 'temporal_neighborhood' to find fibers temporally adjacent to a given fiber.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `action` | string (`trace`, `sequence`) | Yes | — | trace=follow causal synapses (CAUSED_BY/LEADS_TO), sequence=follow temporal synapses (BEFORE/AFTER) |
-| `neuron_id` | string | Yes | — | Starting neuron ID for traversal |
+| `action` | string (`trace`, `sequence`, `temporal_range`, `temporal_neighborhood`) | Yes | — | trace=follow causal synapses (CAUSED_BY/LEADS_TO), sequence=follow temporal synapses (BEFORE/AFTER), temporal_range=f... |
+| `neuron_id` | string | No | — | Starting neuron ID (required for trace/sequence) |
 | `direction` | string | No | — | For trace: 'causes' (what caused this) or 'effects' (what this caused). For sequence: 'forward' (what happened next) ... |
-| `max_depth` | integer | No | default: 5 | Maximum traversal depth (default: 5) |
+| `max_depth` | integer | No | default: 5 | Maximum traversal depth for trace/sequence (default: 5) |
+| `start` | string | No | — | ISO-8601 start datetime for temporal_range (e.g., '2026-04-01T00:00:00'). Required for temporal_range. |
+| `end` | string | No | — | ISO-8601 end datetime for temporal_range. Required for temporal_range. |
+| `fiber_id` | string | No | — | Anchor fiber ID for temporal_neighborhood. Required for temporal_neighborhood. |
+| `window_hours` | number | No | — | Hours before/after anchor fiber to search (temporal_neighborhood only, default: 24) |
+| `limit` | integer | No | default: 50 | Maximum fibers to return for temporal queries (default: 50) |
 | `compact` | boolean | No | — | Return compact response (strip metadata hints, truncate lists). Saves 60-80% tokens. |
 | `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
