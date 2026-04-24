@@ -3,18 +3,63 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from neural_memory.mcp.tool_handler_utils import _require_brain_id
+from neural_memory.utils.timeutils import ensure_naive_utc
 
 if TYPE_CHECKING:
+    from neural_memory.core.fiber import Fiber
     from neural_memory.storage.base import NeuralStorage
 
 logger = logging.getLogger(__name__)
 
+
+def _clamp_int(raw: Any, *, default: int, lo: int, hi: int) -> int:
+    try:
+        return max(lo, min(hi, int(raw)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _clamp_float(raw: Any, *, default: float, lo: float, hi: float) -> float:
+    try:
+        return max(lo, min(hi, float(raw)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _parse_iso_datetime(raw: Any) -> datetime | None:
+    if not isinstance(raw, str) or not raw:
+        return None
+    value = raw.strip()
+    if value.endswith("Z"):
+        value = value[:-1] + "+00:00"
+    try:
+        return ensure_naive_utc(datetime.fromisoformat(value))
+    except ValueError:
+        return None
+
+
+def _fiber_summary(fiber: Fiber) -> dict[str, Any]:
+    return {
+        "fiber_id": fiber.id,
+        "summary": (fiber.summary or "")[:200],
+        "time_start": fiber.time_start.isoformat() if fiber.time_start else None,
+        "time_end": fiber.time_end.isoformat() if fiber.time_end else None,
+        "neuron_count": len(fiber.neuron_ids),
+        "salience": round(fiber.salience, 3),
+    }
+
+
 _MAX_GOAL_LEN = 500
 _MAX_KEYWORDS = 20
 _MAX_CAUSAL_DEPTH = 10
+_MAX_TEMPORAL_LIMIT = 200
+_DEFAULT_TEMPORAL_LIMIT = 50
+_DEFAULT_WINDOW_HOURS = 24.0
+_MAX_WINDOW_HOURS = 8760.0  # 1 year
 
 
 class GoalHandler:
@@ -246,86 +291,178 @@ class GoalHandler:
     # ──────── Causal / Temporal Traversal ────────
 
     async def _causal(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Trace causal chains and temporal event sequences through the memory graph."""
-        from neural_memory.engine.causal_traversal import (
-            trace_causal_chain,
-            trace_event_sequence,
-        )
-
+        """Trace causal chains, temporal sequences, and time-window fiber queries."""
         storage = await self.get_storage()
         _require_brain_id(storage)
 
         action = args.get("action", "trace")
+
+        if action == "trace":
+            return await self._causal_trace(storage, args)
+        if action == "sequence":
+            return await self._causal_sequence(storage, args)
+        if action == "temporal_range":
+            return await self._causal_temporal_range(storage, args)
+        if action == "temporal_neighborhood":
+            return await self._causal_temporal_neighborhood(storage, args)
+
+        return {
+            "error": (
+                f"Unknown action: {action}. "
+                "Valid: trace, sequence, temporal_range, temporal_neighborhood"
+            )
+        }
+
+    async def _causal_trace(self, storage: NeuralStorage, args: dict[str, Any]) -> dict[str, Any]:
+        from neural_memory.engine.causal_traversal import trace_causal_chain
+
         neuron_id = (args.get("neuron_id") or "").strip()
         if not neuron_id:
-            return {"error": "neuron_id is required"}
+            return {"error": "neuron_id is required for trace"}
 
         neuron = await storage.get_neuron(neuron_id)
         if neuron is None:
             return {"error": f"Neuron not found: {neuron_id}"}
 
-        try:
-            max_depth = max(1, min(_MAX_CAUSAL_DEPTH, int(args.get("max_depth", 5))))
-        except (ValueError, TypeError):
-            max_depth = 5
+        direction = args.get("direction", "causes")
+        if direction not in ("causes", "effects"):
+            return {"error": f"Invalid direction: {direction}. Must be 'causes' or 'effects'."}
 
-        if action == "trace":
-            direction = args.get("direction", "causes")
-            if direction not in ("causes", "effects"):
-                return {"error": f"Invalid direction: {direction}. Must be 'causes' or 'effects'."}
+        max_depth = _clamp_int(args.get("max_depth"), default=5, lo=1, hi=_MAX_CAUSAL_DEPTH)
 
-            chain = await trace_causal_chain(
-                storage, neuron_id, direction=direction, max_depth=max_depth
-            )
+        chain = await trace_causal_chain(
+            storage, neuron_id, direction=direction, max_depth=max_depth
+        )
 
-            steps = [
-                {
-                    "neuron_id": s.neuron_id,
-                    "content": s.content[:200],
-                    "synapse_type": s.synapse_type.value,
-                    "weight": round(s.weight, 3),
-                    "depth": s.depth,
-                }
-                for s in chain.steps
-            ]
-
-            return {
-                "seed": neuron_id,
-                "seed_content": neuron.content[:100],
-                "direction": direction,
-                "steps": steps,
-                "total_weight": round(chain.total_weight, 4),
-                "chain_length": len(steps),
+        steps = [
+            {
+                "neuron_id": s.neuron_id,
+                "content": s.content[:200],
+                "synapse_type": s.synapse_type.value,
+                "weight": round(s.weight, 3),
+                "depth": s.depth,
             }
+            for s in chain.steps
+        ]
 
-        elif action == "sequence":
-            direction = args.get("direction", "forward")
-            if direction not in ("forward", "backward"):
-                return {
-                    "error": f"Invalid direction: {direction}. Must be 'forward' or 'backward'."
-                }
+        return {
+            "seed": neuron_id,
+            "seed_content": neuron.content[:100],
+            "direction": direction,
+            "steps": steps,
+            "total_weight": round(chain.total_weight, 4),
+            "chain_length": len(steps),
+        }
 
-            seq = await trace_event_sequence(
-                storage, neuron_id, direction=direction, max_steps=max_depth
-            )
+    async def _causal_sequence(
+        self, storage: NeuralStorage, args: dict[str, Any]
+    ) -> dict[str, Any]:
+        from neural_memory.engine.causal_traversal import trace_event_sequence
 
-            events = [
-                {
-                    "neuron_id": e.neuron_id,
-                    "content": e.content[:200],
-                    "fiber_id": e.fiber_id,
-                    "timestamp": e.timestamp.isoformat() if e.timestamp else None,
-                    "position": e.position,
-                }
-                for e in seq.events
-            ]
+        neuron_id = (args.get("neuron_id") or "").strip()
+        if not neuron_id:
+            return {"error": "neuron_id is required for sequence"}
 
-            return {
-                "seed": neuron_id,
-                "seed_content": neuron.content[:100],
-                "direction": direction,
-                "events": events,
-                "sequence_length": len(events),
+        neuron = await storage.get_neuron(neuron_id)
+        if neuron is None:
+            return {"error": f"Neuron not found: {neuron_id}"}
+
+        direction = args.get("direction", "forward")
+        if direction not in ("forward", "backward"):
+            return {"error": f"Invalid direction: {direction}. Must be 'forward' or 'backward'."}
+
+        max_depth = _clamp_int(args.get("max_depth"), default=5, lo=1, hi=_MAX_CAUSAL_DEPTH)
+
+        seq = await trace_event_sequence(
+            storage, neuron_id, direction=direction, max_steps=max_depth
+        )
+
+        events = [
+            {
+                "neuron_id": e.neuron_id,
+                "content": e.content[:200],
+                "fiber_id": e.fiber_id,
+                "timestamp": e.timestamp.isoformat() if e.timestamp else None,
+                "position": e.position,
             }
+            for e in seq.events
+        ]
 
-        return {"error": f"Unknown action: {action}. Valid: trace, sequence"}
+        return {
+            "seed": neuron_id,
+            "seed_content": neuron.content[:100],
+            "direction": direction,
+            "events": events,
+            "sequence_length": len(events),
+        }
+
+    async def _causal_temporal_range(
+        self, storage: NeuralStorage, args: dict[str, Any]
+    ) -> dict[str, Any]:
+        from neural_memory.engine.causal_traversal import query_temporal_range
+
+        start_raw = args.get("start")
+        end_raw = args.get("end")
+        if not start_raw or not end_raw:
+            return {"error": "start and end (ISO-8601) are required for temporal_range"}
+
+        start = _parse_iso_datetime(start_raw)
+        end = _parse_iso_datetime(end_raw)
+        if start is None or end is None:
+            return {"error": "Invalid ISO-8601 datetime in start/end"}
+        if start > end:
+            return {"error": "start must be <= end"}
+
+        limit = _clamp_int(
+            args.get("limit"),
+            default=_DEFAULT_TEMPORAL_LIMIT,
+            lo=1,
+            hi=_MAX_TEMPORAL_LIMIT,
+        )
+
+        fibers = await query_temporal_range(storage, start, end, limit=limit)
+
+        return {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "fibers": [_fiber_summary(f) for f in fibers],
+            "count": len(fibers),
+        }
+
+    async def _causal_temporal_neighborhood(
+        self, storage: NeuralStorage, args: dict[str, Any]
+    ) -> dict[str, Any]:
+        from neural_memory.engine.causal_traversal import query_temporal_neighborhood
+
+        fiber_id = (args.get("fiber_id") or "").strip()
+        if not fiber_id:
+            return {"error": "fiber_id is required for temporal_neighborhood"}
+
+        anchor = await storage.get_fiber(fiber_id)
+        if anchor is None:
+            return {"error": f"Fiber not found: {fiber_id}"}
+
+        window_hours = _clamp_float(
+            args.get("window_hours"),
+            default=_DEFAULT_WINDOW_HOURS,
+            lo=0.1,
+            hi=_MAX_WINDOW_HOURS,
+        )
+        limit = _clamp_int(
+            args.get("limit"),
+            default=10,
+            lo=1,
+            hi=_MAX_TEMPORAL_LIMIT,
+        )
+
+        fibers = await query_temporal_neighborhood(
+            storage, fiber_id, window_hours=window_hours, limit=limit
+        )
+
+        return {
+            "anchor_fiber_id": fiber_id,
+            "anchor_time_start": anchor.time_start.isoformat() if anchor.time_start else None,
+            "window_hours": window_hours,
+            "fibers": [_fiber_summary(f) for f in fibers],
+            "count": len(fibers),
+        }

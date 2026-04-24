@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `nmem_causal` temporal query actions
+
+Wires the previously-dead `query_temporal_range()` + `query_temporal_neighborhood()` engine functions in `engine/causal_traversal.py` through to the MCP surface. Two new actions on `nmem_causal`:
+
+- **`temporal_range`** — list fibers whose time window intersects `[start, end]` (ISO-8601), sorted chronologically. Required params: `start`, `end`. Optional: `limit` (default 50, max 200).
+- **`temporal_neighborhood`** — list fibers temporally adjacent to an anchor fiber, excluding the anchor. Required param: `fiber_id`. Optional: `window_hours` (default 24, max 8760), `limit` (default 10, max 200).
+
+The `_causal` handler is now a pure dispatcher; per-action validation moved into dedicated methods (`_causal_trace`, `_causal_sequence`, `_causal_temporal_range`, `_causal_temporal_neighborhood`). `neuron_id` is no longer in the JSON Schema `required` list — it is conditionally required only for `trace`/`sequence` and checked by the handler.
+
+### Tests
+
+- `tests/unit/test_depth_gap_fixes.py::TestCausalMCPTool` — 7 new cases covering schema shape, missing/invalid ISO bounds, reversed `start`/`end`, happy-path chronology for `temporal_range`, anchor-excluded neighborhood, and window-based filtering. Existing schema assertion updated to reflect conditional `neuron_id` requirement.
+
 ### Performance — Related Information Section Compression (-48% Recall Tokens)
 
 Baseline measurement on a real brain (my-brain.v2, 20 queries) found **85.9% of recall context tokens** were emitted by the `## Related Information` section — individual neurons that bypassed the context compiler entirely. The cross-fiber SimHash layer was already at 0% redundancy, so the real bottleneck was this uncompressed per-neuron loop.

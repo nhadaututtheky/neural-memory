@@ -2193,19 +2193,23 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "name": "nmem_causal",
         "description": "Trace causal chains and temporal event sequences through the memory graph. "
-        "Use 'trace' to follow CAUSED_BY/LEADS_TO synapses, 'sequence' to follow BEFORE/AFTER temporal order.",
+        "Use 'trace' to follow CAUSED_BY/LEADS_TO synapses, 'sequence' to follow BEFORE/AFTER, "
+        "'temporal_range' to list fibers within a time window, "
+        "'temporal_neighborhood' to find fibers temporally adjacent to a given fiber.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["trace", "sequence"],
+                    "enum": ["trace", "sequence", "temporal_range", "temporal_neighborhood"],
                     "description": "trace=follow causal synapses (CAUSED_BY/LEADS_TO), "
-                    "sequence=follow temporal synapses (BEFORE/AFTER)",
+                    "sequence=follow temporal synapses (BEFORE/AFTER), "
+                    "temporal_range=fibers in a time window (requires start, end), "
+                    "temporal_neighborhood=fibers near a fiber in time (requires fiber_id)",
                 },
                 "neuron_id": {
                     "type": "string",
-                    "description": "Starting neuron ID for traversal",
+                    "description": "Starting neuron ID (required for trace/sequence)",
                 },
                 "direction": {
                     "type": "string",
@@ -2217,10 +2221,36 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 10,
-                    "description": "Maximum traversal depth (default: 5)",
+                    "description": "Maximum traversal depth for trace/sequence (default: 5)",
+                },
+                "start": {
+                    "type": "string",
+                    "description": "ISO-8601 start datetime for temporal_range "
+                    "(e.g., '2026-04-01T00:00:00'). Required for temporal_range.",
+                },
+                "end": {
+                    "type": "string",
+                    "description": "ISO-8601 end datetime for temporal_range. Required for temporal_range.",
+                },
+                "fiber_id": {
+                    "type": "string",
+                    "description": "Anchor fiber ID for temporal_neighborhood. Required for temporal_neighborhood.",
+                },
+                "window_hours": {
+                    "type": "number",
+                    "minimum": 0.1,
+                    "maximum": 8760,
+                    "description": "Hours before/after anchor fiber to search "
+                    "(temporal_neighborhood only, default: 24)",
+                },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 200,
+                    "description": "Maximum fibers to return for temporal queries (default: 50)",
                 },
             },
-            "required": ["action", "neuron_id"],
+            "required": ["action"],
         },
     },
     {

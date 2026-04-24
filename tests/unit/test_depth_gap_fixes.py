@@ -432,7 +432,7 @@ class TestGoalPriorityWeightedProximity:
 class TestCausalMCPTool:
     @pytest.mark.asyncio
     async def test_causal_schema_exists(self) -> None:
-        """nmem_causal tool schema should exist with trace/sequence actions."""
+        """nmem_causal schema exposes trace/sequence/temporal_range/temporal_neighborhood."""
         from neural_memory.mcp.tool_schemas import _ALL_TOOL_SCHEMAS as TOOL_SCHEMAS
 
         causal_schema = None
@@ -442,10 +442,19 @@ class TestCausalMCPTool:
                 break
 
         assert causal_schema is not None
-        action_prop = causal_schema["inputSchema"]["properties"]["action"]
-        assert "trace" in action_prop["enum"]
-        assert "sequence" in action_prop["enum"]
-        assert "neuron_id" in causal_schema["inputSchema"]["required"]
+        props = causal_schema["inputSchema"]["properties"]
+        action_prop = props["action"]
+        assert set(action_prop["enum"]) == {
+            "trace",
+            "sequence",
+            "temporal_range",
+            "temporal_neighborhood",
+        }
+        # neuron_id is conditionally required (only for trace/sequence) — validated in handler
+        assert causal_schema["inputSchema"]["required"] == ["action"]
+        # Temporal params exposed
+        for key in ("start", "end", "fiber_id", "window_hours", "limit"):
+            assert key in props
 
     @pytest.mark.asyncio
     async def test_causal_trace_missing_neuron(self) -> None:
@@ -454,6 +463,7 @@ class TestCausalMCPTool:
 
         handler = MagicMock(spec=GoalHandler)
         handler._causal = GoalHandler._causal.__get__(handler)
+        handler._causal_trace = GoalHandler._causal_trace.__get__(handler)
 
         storage = AsyncMock()
         storage.brain_id = "test"
@@ -473,12 +483,233 @@ class TestCausalMCPTool:
 
         storage = AsyncMock()
         storage.brain_id = "test"
-        neuron = _make_neuron("test content", neuron_id="n1")
-        storage.get_neuron = AsyncMock(return_value=neuron)
         handler.get_storage = AsyncMock(return_value=storage)
 
         result = await handler._causal({"action": "bogus", "neuron_id": "n1"})
         assert "error" in result
+
+    @pytest.mark.asyncio
+    async def test_temporal_range_missing_bounds(self) -> None:
+        """temporal_range without start/end returns validation error."""
+        from neural_memory.mcp.goal_handler import GoalHandler
+
+        handler = MagicMock(spec=GoalHandler)
+        handler._causal = GoalHandler._causal.__get__(handler)
+        handler._causal_temporal_range = GoalHandler._causal_temporal_range.__get__(handler)
+
+        storage = AsyncMock()
+        storage.brain_id = "test"
+        handler.get_storage = AsyncMock(return_value=storage)
+
+        result = await handler._causal({"action": "temporal_range"})
+        assert "error" in result
+        assert "start" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_temporal_range_invalid_iso(self) -> None:
+        """Garbage datetime strings are rejected."""
+        from neural_memory.mcp.goal_handler import GoalHandler
+
+        handler = MagicMock(spec=GoalHandler)
+        handler._causal = GoalHandler._causal.__get__(handler)
+        handler._causal_temporal_range = GoalHandler._causal_temporal_range.__get__(handler)
+
+        storage = AsyncMock()
+        storage.brain_id = "test"
+        handler.get_storage = AsyncMock(return_value=storage)
+
+        result = await handler._causal(
+            {"action": "temporal_range", "start": "not-a-date", "end": "2026-04-01"}
+        )
+        assert "error" in result
+        assert "ISO-8601" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_temporal_range_start_after_end(self) -> None:
+        """start > end is rejected."""
+        from neural_memory.mcp.goal_handler import GoalHandler
+
+        handler = MagicMock(spec=GoalHandler)
+        handler._causal = GoalHandler._causal.__get__(handler)
+        handler._causal_temporal_range = GoalHandler._causal_temporal_range.__get__(handler)
+
+        storage = AsyncMock()
+        storage.brain_id = "test"
+        handler.get_storage = AsyncMock(return_value=storage)
+
+        result = await handler._causal(
+            {
+                "action": "temporal_range",
+                "start": "2026-04-10T00:00:00",
+                "end": "2026-04-01T00:00:00",
+            }
+        )
+        assert "error" in result
+        assert "<= end" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_temporal_range_happy_path(self) -> None:
+        """Valid temporal_range returns fiber list with summaries."""
+        from neural_memory.core.brain import Brain, BrainConfig
+        from neural_memory.core.fiber import Fiber
+        from neural_memory.core.neuron import Neuron, NeuronType
+        from neural_memory.mcp.goal_handler import GoalHandler
+        from neural_memory.storage.memory_store import InMemoryStorage
+
+        store = InMemoryStorage()
+        brain = Brain.create(name="temp", config=BrainConfig(), owner_id="t")
+        await store.save_brain(brain)
+        store.set_brain(brain.id)
+
+        anchor = Neuron.create(content="a", type=NeuronType.ACTION)
+        await store.add_neuron(anchor)
+
+        now = utcnow()
+        f1 = Fiber.create(
+            neuron_ids={anchor.id},
+            synapse_ids=set(),
+            anchor_neuron_id=anchor.id,
+            time_start=now - timedelta(days=2),
+            time_end=now - timedelta(days=2),
+            summary="earliest event",
+        )
+        f2 = Fiber.create(
+            neuron_ids={anchor.id},
+            synapse_ids=set(),
+            anchor_neuron_id=anchor.id,
+            time_start=now - timedelta(days=1),
+            time_end=now - timedelta(days=1),
+            summary="middle event",
+        )
+        await store.add_fiber(f1)
+        await store.add_fiber(f2)
+
+        handler = MagicMock(spec=GoalHandler)
+        handler._causal = GoalHandler._causal.__get__(handler)
+        handler._causal_temporal_range = GoalHandler._causal_temporal_range.__get__(handler)
+        handler.get_storage = AsyncMock(return_value=store)
+
+        result = await handler._causal(
+            {
+                "action": "temporal_range",
+                "start": (now - timedelta(days=3)).isoformat(),
+                "end": now.isoformat(),
+                "limit": 10,
+            }
+        )
+        assert "error" not in result
+        assert result["count"] == 2
+        # chronological order: earliest first
+        assert result["fibers"][0]["summary"] == "earliest event"
+        assert result["fibers"][1]["summary"] == "middle event"
+
+    @pytest.mark.asyncio
+    async def test_temporal_neighborhood_missing_fiber(self) -> None:
+        """temporal_neighborhood without fiber_id returns error."""
+        from neural_memory.mcp.goal_handler import GoalHandler
+
+        handler = MagicMock(spec=GoalHandler)
+        handler._causal = GoalHandler._causal.__get__(handler)
+        handler._causal_temporal_neighborhood = GoalHandler._causal_temporal_neighborhood.__get__(
+            handler
+        )
+
+        storage = AsyncMock()
+        storage.brain_id = "test"
+        handler.get_storage = AsyncMock(return_value=storage)
+
+        result = await handler._causal({"action": "temporal_neighborhood"})
+        assert "error" in result
+        assert "fiber_id" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_temporal_neighborhood_unknown_fiber(self) -> None:
+        """temporal_neighborhood with non-existent fiber returns error."""
+        from neural_memory.mcp.goal_handler import GoalHandler
+
+        handler = MagicMock(spec=GoalHandler)
+        handler._causal = GoalHandler._causal.__get__(handler)
+        handler._causal_temporal_neighborhood = GoalHandler._causal_temporal_neighborhood.__get__(
+            handler
+        )
+
+        storage = AsyncMock()
+        storage.brain_id = "test"
+        storage.get_fiber = AsyncMock(return_value=None)
+        handler.get_storage = AsyncMock(return_value=storage)
+
+        result = await handler._causal(
+            {"action": "temporal_neighborhood", "fiber_id": "nonexistent"}
+        )
+        assert "error" in result
+        assert "not found" in result["error"].lower()
+
+    @pytest.mark.asyncio
+    async def test_temporal_neighborhood_happy_path(self) -> None:
+        """temporal_neighborhood returns fibers around anchor, excluding anchor."""
+        from neural_memory.core.brain import Brain, BrainConfig
+        from neural_memory.core.fiber import Fiber
+        from neural_memory.core.neuron import Neuron, NeuronType
+        from neural_memory.mcp.goal_handler import GoalHandler
+        from neural_memory.storage.memory_store import InMemoryStorage
+
+        store = InMemoryStorage()
+        brain = Brain.create(name="temp2", config=BrainConfig(), owner_id="t")
+        await store.save_brain(brain)
+        store.set_brain(brain.id)
+
+        n = Neuron.create(content="n", type=NeuronType.ACTION)
+        await store.add_neuron(n)
+
+        now = utcnow()
+        anchor = Fiber.create(
+            neuron_ids={n.id},
+            synapse_ids=set(),
+            anchor_neuron_id=n.id,
+            time_start=now,
+            time_end=now,
+            summary="anchor",
+        )
+        nearby = Fiber.create(
+            neuron_ids={n.id},
+            synapse_ids=set(),
+            anchor_neuron_id=n.id,
+            time_start=now - timedelta(hours=3),
+            time_end=now - timedelta(hours=3),
+            summary="nearby",
+        )
+        far = Fiber.create(
+            neuron_ids={n.id},
+            synapse_ids=set(),
+            anchor_neuron_id=n.id,
+            time_start=now - timedelta(days=10),
+            time_end=now - timedelta(days=10),
+            summary="far",
+        )
+        await store.add_fiber(anchor)
+        await store.add_fiber(nearby)
+        await store.add_fiber(far)
+
+        handler = MagicMock(spec=GoalHandler)
+        handler._causal = GoalHandler._causal.__get__(handler)
+        handler._causal_temporal_neighborhood = GoalHandler._causal_temporal_neighborhood.__get__(
+            handler
+        )
+        handler.get_storage = AsyncMock(return_value=store)
+
+        result = await handler._causal(
+            {
+                "action": "temporal_neighborhood",
+                "fiber_id": anchor.id,
+                "window_hours": 24,
+            }
+        )
+        assert "error" not in result
+        assert result["anchor_fiber_id"] == anchor.id
+        summaries = [f["summary"] for f in result["fibers"]]
+        assert "nearby" in summaries
+        assert "anchor" not in summaries  # excluded
+        assert "far" not in summaries  # outside window
 
 
 # ═══════════════════════ 8. Valence recall filter ═══════════════════════
