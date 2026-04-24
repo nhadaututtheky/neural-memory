@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.53.0] — 2026-04-24
+
 ### Performance — Defer Post-Recall Side-Effects (~15-20% recall latency)
 
 Profile of `ReflexPipeline.query()` on a real brain (3,488 neurons) showed ~19ms of the critical path spent on four blocking DB-write blocks that don't contribute to the returned result: reinforcement + `batch_update_last_accessed`, calibration/retriever-outcome/depth-prior writes, deferred write queue flush, reconsolidation loop, and session summary persist.
