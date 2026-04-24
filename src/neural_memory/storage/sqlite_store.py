@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sqlite3
 from pathlib import Path
@@ -58,6 +59,18 @@ from neural_memory.storage.sqlite_typed import SQLiteTypedMemoryMixin
 from neural_memory.storage.sqlite_versioning import SQLiteVersioningMixin
 
 logger = logging.getLogger(__name__)
+
+
+async def _drain_pipeline_tasks(storage: Any) -> None:
+    """Await any background tasks registered by ReflexPipeline on this storage.
+
+    Ensures writes complete before we release the DB file handle — critical
+    on Windows where aiosqlite and tempfile cleanup race each other.
+    """
+    tasks = getattr(storage, "_pipeline_bg_tasks", None)
+    if not tasks:
+        return
+    await asyncio.gather(*list(tasks), return_exceptions=True)
 
 
 class SQLiteStorage(
@@ -165,7 +178,13 @@ class SQLiteStorage(
         await self._read_pool.initialize()
 
     async def close(self) -> None:
-        """Close database connection and reader pool."""
+        """Close database connection and reader pool.
+
+        Drains pending pipeline background tasks first so Windows tempfile
+        cleanup (and aiosqlite connection release) don't race a live writer.
+        """
+        await _drain_pipeline_tasks(self)
+
         if self._read_pool:
             await self._read_pool.close()
             self._read_pool = None

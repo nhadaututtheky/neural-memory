@@ -183,6 +183,47 @@ class ReflexPipeline:
                 epsilon=config.adaptive_depth_epsilon,
             )
 
+        # Background task tracker for fire-and-forget post-recall writes.
+        # Result returns before these writes land on disk; tests/shutdown
+        # can await pending tasks via flush_background_tasks().
+        self._background_tasks: set[asyncio.Task[None]] = set()
+
+    def _spawn_background(self, coro: Any, label: str) -> None:
+        """Fire a coroutine in the background; errors logged, never raised.
+
+        Also registers the task on the storage object so that backends
+        can drain pending pipeline writes in their close() method and
+        avoid file-handle locking on teardown (Windows tempfile cleanup).
+        """
+
+        async def _runner() -> None:
+            try:
+                await coro
+            except Exception:
+                logger.debug("Background task failed: %s", label, exc_info=True)
+
+        task = asyncio.create_task(_runner())
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+
+        # Publish to storage so its close() can drain us before releasing the file handle.
+        storage_tasks = getattr(self._storage, "_pipeline_bg_tasks", None)
+        if storage_tasks is None:
+            storage_tasks = set()
+            try:
+                self._storage._pipeline_bg_tasks = storage_tasks  # type: ignore[attr-defined]
+            except AttributeError:
+                # Storage is immutable / slots-based — best-effort skip.
+                return
+        storage_tasks.add(task)
+        task.add_done_callback(storage_tasks.discard)
+
+    async def flush_background_tasks(self) -> None:
+        """Await all pending background tasks. Use in tests or before shutdown."""
+        if not self._background_tasks:
+            return
+        await asyncio.gather(*list(self._background_tasks), return_exceptions=True)
+
     def set_warm_activations(self, warm: dict[str, float] | None) -> None:
         """Set warm activation levels for anchor boosting (from ActivationCache).
 
@@ -856,10 +897,10 @@ class ReflexPipeline:
 
         latency_ms = (time.perf_counter() - start_time) * 1000
 
-        # 8. Reinforce accessed memories (deferred to after response)
-        if activations and reconstruction.confidence > 0.3:
-            try:
-                top_neuron_ids = [
+        # 8. Reinforce accessed memories + 9. update last_accessed (background)
+        if activations:
+            _top_neuron_ids = (
+                [
                     nid
                     for nid, _ in heapq.nlargest(
                         10,
@@ -867,17 +908,20 @@ class ReflexPipeline:
                         key=lambda x: x[1].activation_level,
                     )
                 ]
-                top_synapse_ids = subgraph.synapse_ids[:20] if subgraph.synapse_ids else None
-                await self._reinforcer.reinforce(self._storage, top_neuron_ids, top_synapse_ids)
-            except Exception:
-                logger.debug("Reinforcement failed (non-critical)", exc_info=True)
+                if reconstruction.confidence > 0.3
+                else None
+            )
+            _top_synapse_ids = subgraph.synapse_ids[:20] if subgraph.synapse_ids else None
+            _all_activated_ids = list(activations.keys())
 
-        # 9. Track access time for lifecycle heat scoring (batch update, non-critical)
-        if activations:
-            try:
-                await self._storage.batch_update_last_accessed(list(activations.keys()))
-            except Exception:
-                logger.debug("batch_update_last_accessed failed (non-critical)", exc_info=True)
+            async def _bg_writes_and_access() -> None:
+                if _top_neuron_ids is not None:
+                    await self._reinforcer.reinforce(
+                        self._storage, _top_neuron_ids, _top_synapse_ids
+                    )
+                await self._storage.batch_update_last_accessed(_all_activated_ids)
+
+            self._spawn_background(_bg_writes_and_access(), "reinforce+last_accessed")
 
         result = RetrievalResult(
             answer=reconstruction.answer,
@@ -947,70 +991,77 @@ class ReflexPipeline:
             except Exception:
                 logger.debug("Priming cache update failed (non-critical)", exc_info=True)
 
-        # Record calibration feedback (non-critical)
-        try:
-            await self._storage.save_calibration_record(  # type: ignore[attr-defined]
-                gate=_sufficiency.gate,
-                predicted_sufficient=True,
-                actual_confidence=reconstruction.confidence,
-                actual_fibers=len(fibers_matched),
-                query_intent=stimulus.intent.value,
-            )
-        except Exception:
-            # AttributeError: storage doesn't have calibration mixin (e.g. InMemoryStorage)
-            logger.debug("Calibration record save failed (non-critical)", exc_info=True)
+        # Calibration + retriever outcomes + depth prior (all background DB writes)
+        _ranked_lists_snapshot = ranked_lists if (ranked_lists and fibers_matched) else None
+        _result_fiber_anchor_ids: set[str] = (
+            {next(iter(f.neuron_ids)) for f in fibers_matched if f.neuron_ids}
+            if _ranked_lists_snapshot
+            else set()
+        )
+        _adaptive_agent_signal: bool | None = None
+        if _depth_decision is not None and self._adaptive_selector is not None:
+            if _primed_neuron_ids and activations:
+                _adaptive_agent_signal = bool(_primed_neuron_ids & set(activations.keys()))
 
-        # Record retriever contribution outcomes for dynamic RRF weights (non-critical)
-        if ranked_lists and fibers_matched:
-            try:
-                # Which neurons ended up in final results?
-                result_neuron_ids = {
-                    next(iter(f.neuron_ids)) for f in fibers_matched if f.neuron_ids
-                }
-                for ranked_list in ranked_lists:
-                    if not ranked_list:
-                        continue
-                    rtype = ranked_list[0].retriever
-                    contributed = any(ra.neuron_id in result_neuron_ids for ra in ranked_list)
-                    await self._storage.save_retriever_outcome(  # type: ignore[attr-defined]
-                        retriever_type=rtype,
-                        contributed=contributed,
-                    )
-                # Periodic pruning: cap retriever_calibration per type (every ~100 saves)
-                import random as _rnd
-
-                if _rnd.random() < 0.01:  # ~1% chance per save → prunes ~every 100 saves
-                    try:
-                        await self._storage.prune_retriever_calibration()  # type: ignore[attr-defined]
-                    except Exception:
-                        pass
-            except Exception:
-                logger.debug("Retriever outcome save failed (non-critical)", exc_info=True)
-
-        # Record adaptive depth outcome (non-critical)
+        # Record depth_selection metadata in hot path (user-visible)
         if _depth_decision is not None:
             result.metadata["depth_selection"] = {
                 "method": _depth_decision.method,
                 "reason": _depth_decision.reason,
                 "exploration": _depth_decision.exploration,
             }
-            if self._adaptive_selector is not None:
+
+        async def _bg_calibration() -> None:
+            # save_calibration_record
+            try:
+                await self._storage.save_calibration_record(  # type: ignore[attr-defined]
+                    gate=_sufficiency.gate,
+                    predicted_sufficient=True,
+                    actual_confidence=reconstruction.confidence,
+                    actual_fibers=len(fibers_matched),
+                    query_intent=stimulus.intent.value,
+                )
+            except Exception:
+                logger.debug("Calibration record save failed (non-critical)", exc_info=True)
+
+            # save_retriever_outcome per ranked list + optional prune
+            if _ranked_lists_snapshot:
                 try:
-                    # Infer agent_used_result from priming hit rate:
-                    # If primed neurons appeared in result → agent is using the recall
-                    _agent_signal: bool | None = None
-                    if _primed_neuron_ids and activations:
-                        _result_nids = set(activations.keys())
-                        _agent_signal = bool(_primed_neuron_ids & _result_nids)
+                    for ranked_list in _ranked_lists_snapshot:
+                        if not ranked_list:
+                            continue
+                        rtype = ranked_list[0].retriever
+                        contributed = any(
+                            ra.neuron_id in _result_fiber_anchor_ids for ra in ranked_list
+                        )
+                        await self._storage.save_retriever_outcome(  # type: ignore[attr-defined]
+                            retriever_type=rtype,
+                            contributed=contributed,
+                        )
+                    import random as _rnd
+
+                    if _rnd.random() < 0.01:
+                        try:
+                            await self._storage.prune_retriever_calibration()  # type: ignore[attr-defined]
+                        except Exception:
+                            pass
+                except Exception:
+                    logger.debug("Retriever outcome save failed (non-critical)", exc_info=True)
+
+            # adaptive depth prior
+            if _depth_decision is not None and self._adaptive_selector is not None:
+                try:
                     await self._adaptive_selector.record_outcome(
                         stimulus=stimulus,
                         depth_used=depth,
                         confidence=reconstruction.confidence,
                         fibers_matched=len(fibers_matched),
-                        agent_used_result=_agent_signal,
+                        agent_used_result=_adaptive_agent_signal,
                     )
                 except Exception:
                     logger.debug("Depth prior update failed (non-critical)", exc_info=True)
+
+        self._spawn_background(_bg_calibration(), "calibration+retriever+depth")
 
         # Optionally attach workflow suggestions (non-critical)
         try:
@@ -1033,36 +1084,44 @@ class ReflexPipeline:
         except Exception:
             logger.debug("Workflow suggestion failed (non-critical)", exc_info=True)
 
-        # Flush deferred writes (fiber conductivity, Hebbian strengthening)
-        if self._write_queue.pending_count > 0:
-            try:
-                await self._write_queue.flush(self._storage)
-            except Exception:
-                logger.debug("Deferred write flush failed (non-critical)", exc_info=True)
+        # Deferred write queue flush + reconsolidation (both background DB writes)
+        _reconsolidation_fibers: list[Fiber] = (
+            list(fibers_matched[:5])
+            if getattr(self._config, "reconsolidation_enabled", True) and fibers_matched
+            else []
+        )
+        _query_tags_snapshot = set(stimulus.keywords) if stimulus.keywords else set()
+        _query_entities_snapshot = [e.text for e in stimulus.entities] if stimulus.entities else []
 
-        # Post-recall reconsolidation: recalled memories absorb current context
-        if getattr(self._config, "reconsolidation_enabled", True) and fibers_matched:
-            try:
-                from neural_memory.engine.reconsolidation import reconsolidate_on_recall
+        async def _bg_flush_and_reconsolidate() -> None:
+            if self._write_queue.pending_count > 0:
+                try:
+                    await self._write_queue.flush(self._storage)
+                except Exception:
+                    logger.debug("Deferred write flush failed (non-critical)", exc_info=True)
 
-                query_tags = set(stimulus.keywords) if stimulus.keywords else set()
-                query_entities = [e.text for e in stimulus.entities] if stimulus.entities else []
-                brain_id = getattr(self._storage, "_brain_id", "")
-                for fiber in fibers_matched[:5]:  # top 5 only
-                    if fiber.anchor_neuron_id:
-                        await reconsolidate_on_recall(
-                            fiber_id=fiber.id,
-                            anchor_neuron_id=fiber.anchor_neuron_id,
-                            query_tags=query_tags,
-                            query_entities=query_entities,
-                            storage=self._storage,
-                            config=self._config,
-                            brain_id=brain_id,
-                        )
-            except Exception:
-                logger.debug("Reconsolidation failed (non-critical)", exc_info=True)
+            if _reconsolidation_fibers:
+                try:
+                    from neural_memory.engine.reconsolidation import reconsolidate_on_recall
 
-        # Record session query (non-critical)
+                    brain_id = getattr(self._storage, "_brain_id", "")
+                    for fiber in _reconsolidation_fibers:
+                        if fiber.anchor_neuron_id:
+                            await reconsolidate_on_recall(
+                                fiber_id=fiber.id,
+                                anchor_neuron_id=fiber.anchor_neuron_id,
+                                query_tags=_query_tags_snapshot,
+                                query_entities=_query_entities_snapshot,
+                                storage=self._storage,
+                                config=self._config,
+                                brain_id=brain_id,
+                            )
+                except Exception:
+                    logger.debug("Reconsolidation failed (non-critical)", exc_info=True)
+
+        self._spawn_background(_bg_flush_and_reconsolidate(), "write_queue_flush+reconsolidation")
+
+        # Session recording: in-memory fast path in hot loop, persist deferred
         if session_id:
             try:
                 from neural_memory.engine.session_state import SessionManager
@@ -1083,24 +1142,32 @@ class ReflexPipeline:
                     result.metadata["session_topics"] = session_top_topics
                     result.metadata["session_query_count"] = session.query_count
 
-                # Periodic session summary persist
+                # Periodic session summary persist — defer DB write
                 if session.needs_persist():
-                    try:
-                        summary = session.to_summary_dict()
-                        await self._storage.save_session_summary(  # type: ignore[attr-defined]
-                            session_id=session.session_id,
-                            topics=summary["topics"],
-                            topic_weights=summary["topic_weights"],
-                            top_entities=summary["top_entities"],
-                            query_count=summary["query_count"],
-                            avg_confidence=summary["avg_confidence"],
-                            avg_depth=summary["avg_depth"],
-                            started_at=utcnow().isoformat(),
-                            ended_at=utcnow().isoformat(),
-                        )
-                        session.mark_persisted()
-                    except Exception:
-                        logger.debug("Session summary persist failed (non-critical)", exc_info=True)
+                    _summary_snapshot = session.to_summary_dict()
+                    _session_id_snapshot = session.session_id
+                    session.mark_persisted()  # mark now so rapid queries don't re-schedule
+
+                    async def _bg_save_session_summary() -> None:
+                        try:
+                            await self._storage.save_session_summary(  # type: ignore[attr-defined]
+                                session_id=_session_id_snapshot,
+                                topics=_summary_snapshot["topics"],
+                                topic_weights=_summary_snapshot["topic_weights"],
+                                top_entities=_summary_snapshot["top_entities"],
+                                query_count=_summary_snapshot["query_count"],
+                                avg_confidence=_summary_snapshot["avg_confidence"],
+                                avg_depth=_summary_snapshot["avg_depth"],
+                                started_at=utcnow().isoformat(),
+                                ended_at=utcnow().isoformat(),
+                            )
+                        except Exception:
+                            logger.debug(
+                                "Session summary persist failed (non-critical)",
+                                exc_info=True,
+                            )
+
+                    self._spawn_background(_bg_save_session_summary(), "save_session_summary")
             except Exception:
                 logger.debug("Session recording failed (non-critical)", exc_info=True)
 

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance — Defer Post-Recall Side-Effects (~15-20% recall latency)
+
+Profile of `ReflexPipeline.query()` on a real brain (3,488 neurons) showed ~19ms of the critical path spent on four blocking DB-write blocks that don't contribute to the returned result: reinforcement + `batch_update_last_accessed`, calibration/retriever-outcome/depth-prior writes, deferred write queue flush, reconsolidation loop, and session summary persist.
+
+- **`ReflexPipeline._spawn_background()` + `_background_tasks` set.** Side-effectful writes are scheduled as `asyncio.Task`s; exceptions logged at debug, never raised. The returned `RetrievalResult` reflects everything user-visible (metadata, confidence, context) but no longer waits for the subsequent DB writes.
+- **Storage-side task registry (`storage._pipeline_bg_tasks`).** Each spawned task registers on the storage object so backend `close()` can drain pending writes before releasing the file handle. Critical on Windows where `tempfile.TemporaryDirectory` cleanup races aiosqlite connection teardown.
+- **`SQLiteStorage.close()` + `SQLStorage.close()` drain pending pipeline tasks** via `asyncio.gather(..., return_exceptions=True)` before running their existing connection-teardown logic.
+- **`ReflexPipeline.flush_background_tasks()`** for tests or explicit shutdown paths that need write determinism.
+- **Result (30-query real-brain profile):** TOTAL mean 118.8ms (Apr 12 baseline) → 64-80ms (post-fix). Four deferred blocks now contribute ~0ms to the hot path.
+
+### Tests
+
+- `tests/unit/test_pipeline_background_tasks.py` — 5 cases: tasks are spawned on query, `flush_background_tasks` awaits all, flush on empty pipeline is no-op, `storage.close()` drains tasks, failing coroutines don't bubble.
+
+### Tooling
+
+- `scripts/profile_recall.py` retained (unchanged). Re-run after any retrieval change to confirm post-recall side-effects stay off the hot path.
+
 ### Added — `nmem_causal` temporal query actions
 
 Wires the previously-dead `query_temporal_range()` + `query_temporal_neighborhood()` engine functions in `engine/causal_traversal.py` through to the MCP surface. Two new actions on `nmem_causal`:

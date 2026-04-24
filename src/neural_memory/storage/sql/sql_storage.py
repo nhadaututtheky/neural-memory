@@ -15,6 +15,7 @@ Usage::
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from neural_memory.storage.base import NeuralStorage
@@ -142,7 +143,15 @@ class SQLStorage(
         logger.info("SQLStorage initialized with %s dialect", self._dialect.name)
 
     async def close(self) -> None:
-        """Close the dialect connection(s)."""
+        """Close the dialect connection(s).
+
+        Drains pending pipeline background tasks first so writes don't
+        race the connection teardown (matters on Windows + aiosqlite).
+        """
+        tasks = getattr(self, "_pipeline_bg_tasks", None)
+        if tasks:
+            await asyncio.gather(*list(tasks), return_exceptions=True)
+
         self._close_vector_index()
         await self._dialect.close()
         logger.debug("SQLStorage closed")
