@@ -689,18 +689,36 @@
       </button>
       <h3>Thanh toan QR</h3>
       <p class="subtitle">Chuyen khoan ngan hang — tu dong kich hoat sau 1-5 phut</p>
-      <label for="sepay-email">Email (nhan license key)</label>
-      <input type="email" id="sepay-email" required placeholder="you@example.com" oninput="updateSepayQR()">
-      <label for="sepay-github">GitHub username (optional)</label>
-      <input type="text" id="sepay-github" placeholder="octocat">
-      <div class="qr-container">
-        <img id="sepay-qr" src="" alt="QR thanh toan" width="220" height="220">
+
+      <!-- Step 1: collect email & register order -->
+      <div id="sepay-step-email">
+        <label for="sepay-email">Email (de nhan license key) *</label>
+        <input type="email" id="sepay-email" required placeholder="you@example.com">
+        <label for="sepay-github">GitHub username (optional)</label>
+        <input type="text" id="sepay-github" placeholder="octocat">
+        <p style="color:var(--text-muted);font-size:11px;margin:8px 0 12px;">
+          Email la BAT BUOC truoc khi hien QR — license key se duoc gui ve dia chi nay.
+        </p>
+        <button class="btn-confirm-sepay" id="sepay-register-btn" onclick="registerSepayOrder()">Tao ma & Hien QR</button>
+        <div id="sepay-error" style="color:var(--rose);font-size:12px;margin-top:8px;display:none;"></div>
       </div>
-      <div class="sepay-info">
-        <div class="row"><span>So tien:</span><span class="value" id="sepay-amount">219,000 VND</span></div>
-        <div class="row"><span>Noi dung CK:</span><span class="value" id="sepay-content" style="color:var(--violet);font-size:11px;">NM-PRO-MONTHLY-XXXXXXXX</span></div>
+
+      <!-- Step 2: QR + transfer instructions (hidden until order registered) -->
+      <div id="sepay-step-qr" style="display:none;">
+        <div class="qr-container">
+          <img id="sepay-qr" src="" alt="QR thanh toan" width="220" height="220">
+        </div>
+        <div class="sepay-info">
+          <div class="row"><span>So tien:</span><span class="value" id="sepay-amount">219,000 VND</span></div>
+          <div class="row"><span>Noi dung CK:</span><span class="value" id="sepay-content" style="color:var(--violet);font-size:11px;">NM-PRO-MONTHLY-XXXXXXXX</span></div>
+          <div class="row"><span>Gui den:</span><span class="value" id="sepay-recipient-email" style="font-size:11px;"></span></div>
+        </div>
+        <p style="color:var(--text-muted);font-size:12px;margin-top:12px;">
+          Sau khi chuyen khoan thanh cong, license key se duoc gui ve email trong vong 1-5 phut.<br>
+          QUAN TRONG: noi dung chuyen khoan phai giu nguyen (du ngan hang co the bo dau gach).
+        </p>
       </div>
-      <button class="btn-confirm-sepay" onclick="confirmSepayOrder()">Da chuyen khoan xong</button>
+
       <p style="color:var(--text-muted);font-size:11px;text-align:center;margin-top:8px;">
         Powered by <a href="https://sepay.vn" target="_blank" rel="noopener" style="color:var(--cyan);">Sepay.vn</a>
       </p>
@@ -1473,30 +1491,54 @@
     function showSepayModal(product, amount) {
       currentProduct = product || 'NM-PRO-MONTHLY';
       const info = PRODUCTS[currentProduct];
-      sepayOrderCode = generateOrderCode(currentProduct);
 
       document.getElementById('sepay-amount').textContent =
         new Intl.NumberFormat('vi-VN').format(info.price) + ' VND';
-      document.getElementById('sepay-content').textContent = sepayOrderCode;
+      // Reset modal to step 1 (email entry)
+      document.getElementById('sepay-step-email').style.display = '';
+      document.getElementById('sepay-step-qr').style.display = 'none';
+      document.getElementById('sepay-error').style.display = 'none';
+      document.getElementById('sepay-email').value = '';
+      document.getElementById('sepay-github').value = '';
+      sepayOrderCode = '';
 
-      updateSepayQR();
       document.getElementById('sepay-modal').style.display = 'flex';
     }
 
     function updateSepayQR() {
       const info = PRODUCTS[currentProduct];
-      if (!info) return;
+      if (!info || !sepayOrderCode) return;
       const qrUrl = `https://qr.sepay.vn/img?acc=${SEPAY_ACC}&bank=${SEPAY_BANK}&amount=${info.price}&des=${encodeURIComponent(sepayOrderCode)}&template=compact`;
       document.getElementById('sepay-qr').src = qrUrl;
     }
 
-    async function confirmSepayOrder() {
-      const email = document.getElementById('sepay-email').value;
-      const github = document.getElementById('sepay-github').value;
-      if (!email) { alert('Vui long nhap email'); return; }
+    function showSepayError(msg) {
+      const errEl = document.getElementById('sepay-error');
+      errEl.textContent = msg;
+      errEl.style.display = 'block';
+    }
+
+    async function registerSepayOrder() {
+      const email = document.getElementById('sepay-email').value.trim();
+      const github = document.getElementById('sepay-github').value.trim();
+      const btn = document.getElementById('sepay-register-btn');
+      const errEl = document.getElementById('sepay-error');
+
+      errEl.style.display = 'none';
+
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showSepayError('Vui long nhap email hop le.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Dang tao ma...';
+
+      // Generate order code client-side, then register on the hub
+      sepayOrderCode = generateOrderCode(currentProduct);
 
       try {
-        await fetch(PAY_API + '/order/register', {
+        const res = await fetch(PAY_API + '/order/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1507,10 +1549,24 @@
             source: 'sepay',
           }),
         });
-        alert('Da ghi nhan! License key se gui ve ' + email + ' sau khi xac nhan chuyen khoan (1-5 phut).');
-        closeSepayModal();
-      } catch {
-        alert('Loi ket noi. Vui long thu lai hoac lien he support.');
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Khong dang ky duoc ma. Vui long thu lai.');
+        }
+
+        // Success — switch to QR step
+        document.getElementById('sepay-content').textContent = sepayOrderCode;
+        document.getElementById('sepay-recipient-email').textContent = email;
+        updateSepayQR();
+        document.getElementById('sepay-step-email').style.display = 'none';
+        document.getElementById('sepay-step-qr').style.display = '';
+      } catch (err) {
+        showSepayError(err.message || 'Loi ket noi. Vui long thu lai.');
+        sepayOrderCode = '';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Tao ma & Hien QR';
       }
     }
 
