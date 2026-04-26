@@ -164,8 +164,7 @@ async def _migrate_to_infinitydb(brain_name: str | None) -> None:
         )
     except ImportError as exc:
         typer.secho(
-            f"InfinityDB engine not available: {exc}. "
-            "Run: pip install 'neural-memory[pro]'",
+            f"InfinityDB engine not available: {exc}. Run: pip install 'neural-memory[pro]'",
             fg=typer.colors.RED,
         )
         raise typer.Exit(1) from exc

@@ -403,11 +403,7 @@ class SQLiteToInfinityMigrator:
                     row_dict.get("type", row_dict.get("fiber_type", "cluster")) or "cluster"
                 )
                 description = row_dict.get("description") or row_dict.get("summary") or ""
-                name = (
-                    row_dict.get("name")
-                    or row_dict.get("summary")
-                    or (str(fid) if fid else "")
-                )
+                name = row_dict.get("name") or row_dict.get("summary") or (str(fid) if fid else "")
 
                 if not fid:
                     stats.fibers_skipped += 1
