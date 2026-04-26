@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.53.2] — 2026-04-26
+
+### Fixed — Dashboard Migration Endpoint (#147 follow-up)
+
+A post-ship audit of v4.53.1 caught two more occurrences of the same class of bug the CLI fix had just shipped: the dashboard's `POST /api/storage/migrate` endpoint had the broken `from neural_memory.storage.sqlite import SQLiteStorage` (module is `sqlite_store`) and a missing `SQLiteStorage.list_brains()` call. CLI users were already safe — dashboard users still hit `ImportError` / `AttributeError` until this patch.
+
+- `server/routes/dashboard_api.py:2158` import switched to `sqlite_store` (same drift as `cli/commands/migrate.py:152` had).
+- `SQLiteStorage` now exposes `list_brains()` returning `[{"id": ..., "name": ...}]`, mirroring `InfinityDBStorage` / `SQLStorage` so backend-agnostic callers (`_run_migration_task`) work uniformly across all 3 backends. Convention is still single-brain-per-file but we read the `brains` table rather than assume.
+
+### Improved — Fiber Round-Trip Fidelity
+
+- `pro/infinitydb/migrator.py` fiber loop now also preserves `summary` under `metadata["summary"]`. It was already surfaced as `name` / `description` post-migration, but downstream readers using the `summary` key wouldn't find it. Additive fix — no breaking change.
+
+### Tests
+
+- `TestSQLiteListBrains` (3 cases: single brain, empty DB, multiple brains in created_at order).
+- `test_fiber_summary_preserved_in_metadata` proves the `summary` field round-trips through InfinityDB metadata.
+- 506/506 Pro + storage + migration suite green.
+
+### Side benefit — Hidden mypy bug surfaced
+
+With the `sqlite_store` import path now correct, mypy could finally resolve `SQLiteStorage` and caught a pre-existing `Optional[str]` narrowing issue at `dashboard_api.py:2184`. Fixed under the same patch — not a runtime bug, but mypy was effectively blind to this file before.
+
 ## [4.53.1] — 2026-04-26
 
 ### Fixed — InfinityDB Migration End-to-End (#147)
