@@ -394,14 +394,24 @@ class SQLiteToInfinityMigrator:
                 fid = row_dict.get("id") or row_dict.get("fiber_id")
                 if id_col:
                     last_id = str(row_dict.get(id_col, last_id))
-                name = row_dict.get("name", "")
+                # SQLite fibers schema (sqlite_schema.py) has no `name` column —
+                # the canonical label is `summary` (free-form) and `id` is the
+                # only true identifier. Older brains may still have `name`, so
+                # check both. Pre-fix this loop required BOTH `id` AND `name`,
+                # which silently dropped 100% of modern fibers (issue #147).
                 fiber_type = (
                     row_dict.get("type", row_dict.get("fiber_type", "cluster")) or "cluster"
                 )
-                description = row_dict.get("description", "")
+                description = row_dict.get("description") or row_dict.get("summary") or ""
+                name = (
+                    row_dict.get("name")
+                    or row_dict.get("summary")
+                    or (str(fid) if fid else "")
+                )
 
-                if not fid or not name:
+                if not fid:
                     stats.fibers_skipped += 1
+                    stats.add_error(f"Fiber row missing id: {row_dict}")
                     continue
 
                 try:

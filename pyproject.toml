@@ -63,6 +63,10 @@ pro = [
     "numpy>=1.24.0",
     "hnswlib>=0.8.0",
     "msgpack>=1.0.0",
+    # Required by neural_memory.pro.infinitydb.metadata_store (SortedList).
+    # Missing it produces a runtime ImportError when InfinityDB opens
+    # (issue #147 — install succeeded but execution failed).
+    "sortedcontainers>=2.0",
 ]
 server = [
     "fastapi>=0.100",

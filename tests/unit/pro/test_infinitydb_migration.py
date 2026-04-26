@@ -610,6 +610,84 @@ class TestMigrationIntegration:
 
         await db.close()
 
+    async def test_fibers_modern_schema_no_name_column(self, tmp_path: Path) -> None:
+        """Issue #147: production SQLite fibers schema has no `name` column —
+        the legacy migrator skipped 100% of fibers because it required both
+        `id` AND `name`. Modern fibers carry `summary` instead, and the
+        migrator must fall back gracefully."""
+        db_path = tmp_path / "modern.db"
+        conn = sqlite3.connect(str(db_path))
+        # Mirror sqlite_schema.py:832 — no `name` column
+        conn.execute(
+            """CREATE TABLE fibers (
+                id TEXT PRIMARY KEY,
+                summary TEXT,
+                description TEXT DEFAULT ''
+            )"""
+        )
+        # Fiber 1: summary only — pre-fix this would skip
+        conn.execute("INSERT INTO fibers (id, summary) VALUES ('f1', 'cluster about Python')")
+        # Fiber 2: empty summary — should still migrate, name falls back to id
+        conn.execute("INSERT INTO fibers (id, summary) VALUES ('f2', '')")
+        # Fiber 3: NULL summary — same fallback path
+        conn.execute("INSERT INTO fibers (id) VALUES ('f3')")
+        conn.commit()
+        conn.close()
+
+        db = InfinityDB(tmp_path / "infinity", dimensions=8)
+        await db.open()
+
+        migrator = SQLiteToInfinityMigrator(db_path, db)
+        stats = await migrator.migrate()
+
+        # All three fibers must migrate — none are skipped just because
+        # they lack a legacy `name` column.
+        assert stats.fibers_migrated == 3
+        assert stats.fibers_skipped == 0
+
+        f1 = await db.get_fiber("f1")
+        assert f1 is not None
+        assert f1.get("name") == "cluster about Python"
+
+        await db.close()
+
+    async def test_runtime_path_round_trip(self, tmp_path: Path) -> None:
+        """Issue #147: data migrated to InfinityDB(brains_dir, brain_id=name)
+        MUST be readable by reopening at the SAME (brains_dir, brain_id) —
+        because that is exactly how the runtime opens the backend after
+        `nmem storage switch infinitydb`. Pre-fix the CLI passed
+        `InfinityDBStorage(brain_dir)` which placed data one level too deep
+        and the runtime read 0 memories."""
+        brains_dir = tmp_path / "brains"
+        brains_dir.mkdir()
+        brain_name = "default"
+        sqlite_path = brains_dir / f"{brain_name}.db"
+        _create_sqlite_db(sqlite_path, neurons=7, synapses=4, fibers=2)
+
+        # Write through the same call shape the CLI now uses.
+        writer = InfinityDB(brains_dir, brain_id=brain_name)
+        await writer.open()
+        try:
+            stats = await SQLiteToInfinityMigrator(sqlite_path, writer).migrate()
+            await writer.flush()
+        finally:
+            await writer.close()
+
+        assert stats.neurons_migrated == 7
+
+        # Now reopen with EXACTLY the runtime invocation pattern.
+        reader = InfinityDB(brains_dir, brain_id=brain_name)
+        await reader.open()
+        try:
+            verify = await reader.get_stats()
+        finally:
+            await reader.close()
+
+        # If the path/brain_id pair was wrong on either side, this would be 0.
+        assert verify["neuron_count"] == 7
+        assert verify["synapse_count"] == 4
+        assert verify["fiber_count"] == 2
+
     async def test_invalid_neuron_type_defaults_to_fact(self, tmp_path: Path) -> None:
         """M3: Unknown neuron types should default to 'fact'."""
         db_path = tmp_path / "bad_type.db"

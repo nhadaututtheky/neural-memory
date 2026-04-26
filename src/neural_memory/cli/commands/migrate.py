@@ -114,7 +114,17 @@ async def _migrate_to_postgres(
 
 
 async def _migrate_to_infinitydb(brain_name: str | None) -> None:
-    """Run the SQLite -> InfinityDB migration (Pro feature)."""
+    """Run the SQLite -> InfinityDB migration (Pro feature).
+
+    Critical: the InfinityDB instance is opened with the SAME `(base_dir,
+    brain_id)` pair that the runtime (`unified_config._build_storage`) uses
+    when `storage_backend = "infinitydb"` — i.e. `InfinityDB(brains_dir,
+    brain_id=name)`. This guarantees `nmem health` after `storage switch`
+    reads from exactly the directory we wrote to. A previous version passed
+    `brain_dir` as `base_dir` instead, which placed data at
+    `brains/<name>/default/brain.inf` while the runtime read from
+    `brains/<name>/brain.inf` — silent data loss reported in issue #147.
+    """
     from pathlib import Path
 
     from neural_memory.pro import is_pro_deps_installed
@@ -144,77 +154,86 @@ async def _migrate_to_infinitydb(brain_name: str | None) -> None:
         typer.secho(f"No SQLite data for brain '{name}': {db_path}", fg=typer.colors.RED)
         raise typer.Exit(1)
 
+    # Lazy-import the migrator so users without Pro deps installed get a
+    # clean error instead of an ImportError trace.
+    try:
+        from neural_memory.pro.infinitydb.engine import InfinityDB
+        from neural_memory.pro.infinitydb.migrator import (
+            SQLiteToInfinityMigrator,
+            estimate_migration,
+        )
+    except ImportError as exc:
+        typer.secho(
+            f"InfinityDB engine not available: {exc}. "
+            "Run: pip install 'neural-memory[pro]'",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(1) from exc
+
     typer.secho(f"Migrating brain '{name}' from SQLite -> InfinityDB", bold=True)
     typer.echo(f"  Source: {db_path}")
     typer.echo(f"  Target: {brains_dir / name}/")
 
-    # Open source SQLite
-    from neural_memory.storage.sqlite import SQLiteStorage
-
-    source = SQLiteStorage(str(db_path))
-    await source.initialize()
-
-    # Find brain
-    brain_list = await source.list_brains()
-    brain_id: str | None = None
-    for b in brain_list:
-        if b.get("name") == name:
-            brain_id = b.get("id") or b.get("name")
-            break
-    if not brain_id and brain_list:
-        brain_id = brain_list[0].get("id") or brain_list[0].get("name") or name
-    if not brain_id:
-        typer.secho(f"No brain '{name}' found in SQLite database.", fg=typer.colors.RED)
-        raise typer.Exit(1)
-
-    source.set_brain(brain_id)
-
-    # Count source
-    stats = await source.get_stats(brain_id)
-    n_neurons = stats.get("neuron_count", 0)
-    n_synapses = stats.get("synapse_count", 0)
-    n_fibers = stats.get("fiber_count", 0)
+    # Show source counts via direct SQLite probe (no SQLiteStorage adapter
+    # needed — the migrator opens its own connection, and probing the actual
+    # SQLite file avoids the broken `SQLiteStorage.list_brains()` lookup).
+    estimate = await estimate_migration(db_path)
+    n_neurons = estimate.get("neurons_count", 0)
+    n_synapses = estimate.get("synapses_count", 0)
+    n_fibers = estimate.get("fibers_count", 0)
     typer.echo(f"  Neurons: {n_neurons}, Synapses: {n_synapses}, Fibers: {n_fibers}")
 
-    # Export from source
-    typer.echo("  Exporting from SQLite...")
-    snapshot = await source.export_brain(brain_id)
-
-    # Open target InfinityDB
+    # Open InfinityDB at the runtime path. Mirror exactly how
+    # InfinityDBStorage(base_dir=brains_dir, brain_id=name).open() invokes
+    # the engine — same base_dir, same brain_id — so a subsequent
+    # `nmem storage switch infinitydb` reads from this exact directory.
+    db = InfinityDB(brains_dir, brain_id=name)
+    await db.open()
     try:
-        from neural_memory.pro.storage_adapter import InfinityDBStorage
+        typer.echo("  Migrating data...")
+        migrator = SQLiteToInfinityMigrator(db_path, db)
+        stats = await migrator.migrate()
+        await db.flush()
+    finally:
+        await db.close()
 
-        storage_cls: type = InfinityDBStorage
-    except ImportError:
+    typer.echo(
+        f"  Migrated: {stats.neurons_migrated} neurons, "
+        f"{stats.synapses_migrated} synapses, "
+        f"{stats.fibers_migrated} fibers "
+        f"({stats.elapsed_seconds:.2f}s)"
+    )
+    if stats.neurons_skipped or stats.synapses_skipped or stats.fibers_skipped:
         typer.secho(
-            "InfinityDB not available. Run: pip install neural-memory",
-            fg=typer.colors.RED,
+            f"  Skipped: {stats.neurons_skipped} neurons, "
+            f"{stats.synapses_skipped} synapses, "
+            f"{stats.fibers_skipped} fibers",
+            fg=typer.colors.YELLOW,
         )
-        raise typer.Exit(1) from None
+    if stats.errors:
+        typer.secho("  Errors during migration:", fg=typer.colors.YELLOW)
+        for err in stats.errors[:5]:
+            typer.echo(f"    - {err}")
+        if len(stats.errors) > 5:
+            typer.echo(f"    ... and {len(stats.errors) - 5} more")
 
-    brain_dir = brains_dir / name
-    brain_dir.mkdir(parents=True, exist_ok=True)
-    target = storage_cls(str(brain_dir))
-    await target.initialize()
-
-    # Import into target
-    typer.echo("  Importing into InfinityDB...")
-    await target.import_brain(snapshot)
-
-    # Verify
-    target_brain_list = await target.list_brains()
-    if target_brain_list:
-        target_brain_id = target_brain_list[0].get("id") or target_brain_list[0].get("name")
-        target.set_brain(target_brain_id)
-        target_stats = await target.get_stats(target_brain_id)
-        t_neurons = target_stats.get("neuron_count", 0)
-        typer.echo(f"  Verified: {t_neurons} neurons in InfinityDB")
-
-        if n_neurons > 0 and abs(t_neurons - n_neurons) / n_neurons > 0.005:
+    # Verify by reopening at the runtime path and reading the count back.
+    # This is the exact path `nmem storage switch infinitydb` will use,
+    # so a mismatch here means the user will see 0 memories after switch.
+    db_verify = InfinityDB(brains_dir, brain_id=name)
+    await db_verify.open()
+    try:
+        verify_stats = await db_verify.get_stats()
+        v_neurons = verify_stats.get("neuron_count", 0)
+        typer.echo(f"  Verified: {v_neurons} neurons readable from runtime path")
+        if v_neurons != stats.neurons_migrated:
             typer.secho(
-                f"  WARNING: count mismatch — source {n_neurons}, target {t_neurons}",
+                f"  WARNING: round-trip mismatch — wrote {stats.neurons_migrated}, "
+                f"read back {v_neurons}",
                 fg=typer.colors.YELLOW,
             )
+    finally:
+        await db_verify.close()
 
     typer.secho("Migration complete!", fg=typer.colors.GREEN)
     typer.echo("  Next: nmem storage switch infinitydb")
