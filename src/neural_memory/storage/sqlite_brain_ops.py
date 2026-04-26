@@ -106,6 +106,21 @@ class SQLiteBrainMixin:
                 return None
             return row_to_brain(row)
 
+    async def list_brains(self) -> list[dict[str, str]]:
+        """Return all brains in this database as `[{'id': ..., 'name': ...}]`.
+
+        Mirrors the shape returned by `InfinityDBStorage.list_brains()` and
+        `SQLStorage.list_brains()` so callers can treat any backend
+        uniformly. The convention is single-brain-per-file
+        (`brains_dir/<name>.db`), so this list is usually one entry — but
+        we read the table rather than assume, since legacy/imported files
+        may carry more.
+        """
+        conn = self._ensure_conn()
+        async with conn.execute("SELECT id, name FROM brains ORDER BY created_at") as cursor:
+            rows = await cursor.fetchall()
+        return [{"id": str(r["id"]), "name": str(r["name"])} for r in rows]
+
     async def export_brain(self, brain_id: str) -> BrainSnapshot:
         conn = self._ensure_conn()
 

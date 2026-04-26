@@ -651,6 +651,45 @@ class TestMigrationIntegration:
 
         await db.close()
 
+    async def test_fiber_summary_preserved_in_metadata(self, tmp_path: Path) -> None:
+        """Issue #147 audit Angle 7: `summary` is read out of SQLite to derive
+        the InfinityDB `name` and `description`, which loses the original
+        field-name semantic. The migrator now ALSO preserves it under
+        `metadata["summary"]` so downstream readers using that key still
+        see the value."""
+        db_path = tmp_path / "summary.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            """CREATE TABLE fibers (
+                id TEXT PRIMARY KEY,
+                summary TEXT,
+                essence TEXT,
+                pathway TEXT
+            )"""
+        )
+        conn.execute(
+            "INSERT INTO fibers (id, summary, essence, pathway) "
+            "VALUES ('f1', 'Big-picture summary', 'one-line essence', '[\"n1\",\"n2\"]')"
+        )
+        conn.commit()
+        conn.close()
+
+        db = InfinityDB(tmp_path / "inf", dimensions=8)
+        await db.open()
+        try:
+            stats = await SQLiteToInfinityMigrator(db_path, db).migrate()
+            assert stats.fibers_migrated == 1
+
+            f = await db.get_fiber("f1")
+            assert f is not None
+            meta = f.get("metadata") or {}
+            # The key the original SQLite row used must still be retrievable.
+            assert meta.get("summary") == "Big-picture summary"
+            assert meta.get("essence") == "one-line essence"
+            assert meta.get("pathway") == '["n1","n2"]'
+        finally:
+            await db.close()
+
     async def test_runtime_path_round_trip(self, tmp_path: Path) -> None:
         """Issue #147: data migrated to InfinityDB(brains_dir, brain_id=name)
         MUST be readable by reopening at the SAME (brains_dir, brain_id) —

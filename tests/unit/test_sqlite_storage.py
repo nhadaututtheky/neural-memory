@@ -624,6 +624,56 @@ class TestSQLiteStats:
         assert stats["project_count"] == 1
 
 
+class TestSQLiteListBrains:
+    """Issue #147 follow-up: SQLiteStorage now exposes `list_brains()` so
+    backend-agnostic callers (dashboard `_run_migration_task`, future
+    multi-brain tooling) work uniformly across SQLite / InfinityDB / SQL."""
+
+    @pytest.mark.asyncio
+    async def test_list_brains_single(self, storage: SQLiteStorage) -> None:
+        brains = await storage.list_brains()
+        assert len(brains) == 1
+        assert brains[0]["name"] == "test_brain"
+        assert "id" in brains[0]
+
+    @pytest.mark.asyncio
+    async def test_list_brains_empty(self) -> None:
+        """Fresh DB with no saved brains returns empty list, not crash."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "empty.db"
+            s = SQLiteStorage(db_path)
+            await s.initialize()
+            try:
+                assert await s.list_brains() == []
+            finally:
+                await s.close()
+
+    @pytest.mark.asyncio
+    async def test_list_brains_multiple_ordered_by_creation(self) -> None:
+        """If a DB carries more than one brain (legacy/imported), all are
+        returned in `created_at` order."""
+        import asyncio
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "multi.db"
+            s = SQLiteStorage(db_path)
+            await s.initialize()
+            try:
+                first = Brain.create(name="alpha")
+                await s.save_brain(first)
+                # Small async sleep so created_at differs at the second/ms
+                # boundary regardless of clock resolution.
+                await asyncio.sleep(0.01)
+                second = Brain.create(name="beta")
+                await s.save_brain(second)
+
+                brains = await s.list_brains()
+                names = [b["name"] for b in brains]
+                assert names == ["alpha", "beta"]
+            finally:
+                await s.close()
+
+
 class TestSQLitePersistence:
     """Tests for data persistence across connections."""
 

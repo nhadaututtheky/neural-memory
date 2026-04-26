@@ -2154,8 +2154,14 @@ async def _open_sqlite_storage(
     *,
     fresh: bool = False,
 ) -> Any:
-    """Open a SQLite storage instance for the given brain."""
-    from neural_memory.storage.sqlite import SQLiteStorage
+    """Open a SQLite storage instance for the given brain.
+
+    Note: the import is `sqlite_store`, not `sqlite` — the module was
+    renamed long ago and this endpoint was not updated until the issue
+    #147 follow-up. Both this file and `cli/commands/migrate.py` had the
+    same stale path.
+    """
+    from neural_memory.storage.sqlite_store import SQLiteStorage
 
     brains_dir = Path(cfg.data_dir) / "brains"
     db_path = brains_dir / f"{brain_name}.db"
@@ -2169,11 +2175,14 @@ async def _open_sqlite_storage(
 
     await storage.initialize()
 
-    # Set brain context
+    # Set brain context. SQLiteStorage now exposes `list_brains()`
+    # uniformly with the InfinityDB / SQL adapters (added in v4.53.2 to
+    # close the issue #147 dashboard regression).
     brain_list = await storage.list_brains()
     if brain_list:
         brain_id = brain_list[0].get("id") or brain_list[0].get("name")
-        storage.set_brain(brain_id)
+        if brain_id:
+            storage.set_brain(brain_id)
 
     return storage
 

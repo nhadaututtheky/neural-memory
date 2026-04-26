@@ -444,7 +444,11 @@ class SQLiteToInfinityMigrator:
                             fiber_meta[tag_key] = [
                                 t.strip() for t in str(raw).split(",") if t.strip()
                             ]
-                    for str_key in ("pathway", "anchor_neuron_id", "essence"):
+                    # `summary` is also surfaced as `name` / `description`
+                    # above, but keep it under its original key so downstream
+                    # readers using `fiber["metadata"]["summary"]` still find
+                    # the original value (Angle 7 from #147 audit).
+                    for str_key in ("pathway", "anchor_neuron_id", "essence", "summary"):
                         val = row_dict.get(str_key)
                         if val is not None:
                             fiber_meta[str_key] = val
