@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.53.1] — 2026-04-26
+
+### Fixed — InfinityDB Migration End-to-End (#147)
+
+Issue #147 reported `nmem migrate infinitydb` failing on a fresh v4.53.0 install. Five interlocking bugs caused the command to crash, and even when worked around manually, the migrated InfinityDB read as empty under `nmem health`. All five fixed in a single patch:
+
+- **Wrong import** — `cli/commands/migrate.py:152` imported `neural_memory.storage.sqlite` (module renamed `sqlite_store` long ago). Crashed on first run with `ModuleNotFoundError`. Fix: drop the SQLiteStorage adapter detour entirely; drive `SQLiteToInfinityMigrator` directly the way the user proved works.
+- **Missing API** — `migrate.py:158` called `await source.list_brains()` which does not exist on SQLiteStorage. The migrate command no longer needs it after the rewrite.
+- **Path mismatch (the silent killer)** — `migrate.py:197` opened `InfinityDBStorage(str(brain_dir))`, putting writes at `brains/<name>/default/brain.inf` while runtime reads from `brains/<name>/brain.inf`. Migration now opens `InfinityDB(brains_dir, brain_id=name)` — a literal mirror of `unified_config._build_storage`. Plus a re-verify pass that reopens at the runtime path before declaring success.
+- **Fibers silently skipped** — `pro/infinitydb/migrator.py:403` skipped any fiber missing both `id` AND `name`, but the production fibers schema (`sqlite_schema.py:832`) has NO `name` column — `summary` is the canonical label. **100% of modern fibers were dropped** (e.g. 30/30 in the issue). Now skips only on missing `id`, falls back to `summary` then `id` for the InfinityDB label, records a diagnostic when skipping.
+- **Missing dep** — `pyproject.toml` `pro` extra missing `sortedcontainers` even though `pro/infinitydb/metadata_store.py` imports `SortedList`. Install succeeded, runtime ImportError on first InfinityDB open. Added `sortedcontainers>=2.0` to the Pro extra.
+
+### Tests
+
+- 2 new regression tests: `test_fibers_modern_schema_no_name_column` proves fibers with `summary`-only schema migrate correctly, `test_runtime_path_round_trip` proves data written via the CLI path is readable through the exact `(base_dir, brain_id)` pair the runtime uses.
+- 34/34 migration tests pass, 454/454 Pro + migration suite green.
+
 ## [4.53.0] — 2026-04-24
 
 ### Performance — Defer Post-Recall Side-Effects (~15-20% recall latency)
