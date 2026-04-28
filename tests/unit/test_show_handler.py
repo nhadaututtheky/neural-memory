@@ -84,7 +84,11 @@ class TestShow:
     @pytest.mark.asyncio
     async def test_show_not_found(self) -> None:
         handler, storage = _make_handler()
+        # _show now looks up typed_memory, fiber, and neuron independently so
+        # it can surface untyped fibers (#148). All three must be None for
+        # the "not found" path.
         storage.get_typed_memory = AsyncMock(return_value=None)
+        storage.get_fiber = AsyncMock(return_value=None)
         storage.get_neuron = AsyncMock(return_value=None)
 
         result = await handler._show({"memory_id": "nonexistent"})
@@ -128,7 +132,10 @@ class TestShow:
     async def test_show_neuron_path(self) -> None:
         handler, storage = _make_handler()
 
+        # Bare neuron path: no typed_memory and no fiber for this id; the show
+        # handler falls through to get_neuron.
         storage.get_typed_memory = AsyncMock(return_value=None)
+        storage.get_fiber = AsyncMock(return_value=None)
         neuron = MagicMock()
         neuron.content = "Raw neuron content"
         neuron.type = MagicMock(value="concept")

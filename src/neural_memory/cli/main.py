@@ -92,6 +92,7 @@ app.add_typer(shared_app, name="sync")
 from neural_memory.cli.commands import (
     codebase,
     info,
+    lifecycle,
     listing,
     memory,
     migrate,
@@ -103,6 +104,7 @@ from neural_memory.cli.commands import (
 )
 
 memory.register(app)
+lifecycle.register(app)
 listing.register(app)
 info.register(app)
 tools.register(app)

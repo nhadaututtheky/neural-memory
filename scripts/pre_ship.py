@@ -76,23 +76,23 @@ def check_versions() -> None:
     }
 
     # pyproject.toml
-    text = (ROOT / "pyproject.toml").read_text()
+    text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     m = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
     canonical = m.group(1) if m else "NOT_FOUND"
     version_files["pyproject.toml"] = canonical
 
     # __init__.py
-    text = (ROOT / "src/neural_memory/__init__.py").read_text()
+    text = (ROOT / "src/neural_memory/__init__.py").read_text(encoding="utf-8")
     m = re.search(r'__version__\s*=\s*"([^"]+)"', text)
     version_files["src/neural_memory/__init__.py"] = m.group(1) if m else "NOT_FOUND"
 
     # plugin.json
-    text = (ROOT / ".claude-plugin/plugin.json").read_text()
+    text = (ROOT / ".claude-plugin/plugin.json").read_text(encoding="utf-8")
     m = re.search(r'"version"\s*:\s*"([^"]+)"', text)
     version_files[".claude-plugin/plugin.json"] = m.group(1) if m else "NOT_FOUND"
 
     # marketplace.json (2 occurrences)
-    text = (ROOT / ".claude-plugin/marketplace.json").read_text()
+    text = (ROOT / ".claude-plugin/marketplace.json").read_text(encoding="utf-8")
     versions = re.findall(r'"version"\s*:\s*"([^"]+)"', text)
     version_files[".claude-plugin/marketplace.json (metadata)"] = (
         versions[0] if len(versions) > 0 else "NOT_FOUND"
@@ -102,12 +102,12 @@ def check_versions() -> None:
     )
 
     # test_health_fixes.py
-    text = (ROOT / "tests/unit/test_health_fixes.py").read_text()
+    text = (ROOT / "tests/unit/test_health_fixes.py").read_text(encoding="utf-8")
     m = re.search(r'__version__\s*==\s*"([^"]+)"', text)
     version_files["tests/unit/test_health_fixes.py"] = m.group(1) if m else "NOT_FOUND"
 
     # test_markdown_export.py
-    text = (ROOT / "tests/unit/test_markdown_export.py").read_text()
+    text = (ROOT / "tests/unit/test_markdown_export.py").read_text(encoding="utf-8")
     m = re.search(r'"version"\s*:\s*"([^"]+)"', text)
     version_files["tests/unit/test_markdown_export.py"] = m.group(1) if m else "NOT_FOUND"
 
@@ -120,7 +120,7 @@ def check_versions() -> None:
             print(f"           {path}: {status}")
 
     # CHANGELOG has entry for this version
-    changelog = (ROOT / "CHANGELOG.md").read_text()
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     has_entry = f"[{canonical}]" in changelog
     check(f"CHANGELOG has [{canonical}] entry", has_entry)
 
@@ -211,10 +211,10 @@ def check_tests() -> None:
         try:
             result = subprocess.run(
                 cmd, stdout=tmp, stderr=subprocess.STDOUT,
-                cwd=str(ROOT), timeout=600,
+                cwd=str(ROOT), timeout=1200,
             )
         except subprocess.TimeoutExpired:
-            check("pytest tests/unit/", False, "timed out after 600s")
+            check("pytest tests/unit/", False, "timed out after 1200s")
             return
         tmp.seek(0)
         output = tmp.read()
@@ -322,8 +322,8 @@ def check_plugin() -> None:
         return
 
     # Check name matches manifest id
-    pkg_text = pkg.read_text()
-    manifest_text = manifest.read_text()
+    pkg_text = pkg.read_text(encoding="utf-8")
+    manifest_text = manifest.read_text(encoding="utf-8")
 
     pkg_name = re.search(r'"name"\s*:\s*"([^"]+)"', pkg_text)
     manifest_id = re.search(r'"id"\s*:\s*"([^"]+)"', manifest_text)

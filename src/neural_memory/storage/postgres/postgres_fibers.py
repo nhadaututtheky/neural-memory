@@ -275,13 +275,15 @@ class PostgresFiberMixin(PostgresBaseMixin):
         """Find fibers connected to any of the given neuron IDs.
 
         Uses a window function to enforce per-neuron limit, then deduplicates.
+        LEFT JOINs ``typed_memories`` so soft-deleted fibers (``expires_at`` set
+        and in the past) are excluded from recall — fixes issue #148.
         """
         if not neuron_ids:
             return []
         brain_id = self._get_brain_id()
         total_limit = limit_per_neuron * len(neuron_ids)
 
-        # Build base query with ROW_NUMBER for per-neuron limit
+        # Build base query with ROW_NUMBER for per-neuron limit + expired filter
         query = """
             SELECT DISTINCT ON (f.id) f.*
             FROM (
@@ -292,11 +294,14 @@ class PostgresFiberMixin(PostgresBaseMixin):
                 FROM fibers f2
                 JOIN fiber_neurons fn
                     ON f2.brain_id = fn.brain_id AND f2.id = fn.fiber_id
+                LEFT JOIN typed_memories tm
+                    ON tm.brain_id = f2.brain_id AND tm.fiber_id = f2.id
                 WHERE fn.brain_id = $1 AND fn.neuron_id = ANY($2::text[])
+                  AND (tm.expires_at IS NULL OR tm.expires_at > $3)
             ) f
-            WHERE f._rn <= $3
+            WHERE f._rn <= $4
         """
-        params: list[Any] = [brain_id, neuron_ids, limit_per_neuron]
+        params: list[Any] = [brain_id, neuron_ids, utcnow(), limit_per_neuron]
 
         if created_before is not None:
             params.append(created_before)

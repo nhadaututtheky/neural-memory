@@ -280,12 +280,17 @@ class ProvenanceHandler:
             logger.error("No brain configured for show")
             return {"error": "No brain configured"}
 
-        # Try as fiber_id first (typed memory), then as neuron_id
+        # Try as fiber_id first — fetch typed_memory and fiber INDEPENDENTLY
+        # so an untyped fiber (no typed_memory row) is still surfaced. This
+        # closes the gap from issue #148 where recall returned a fiber id but
+        # show short-circuited on the missing typed_memory.
         typed_mem = await storage.get_typed_memory(memory_id)
-        fiber = await storage.get_fiber(memory_id) if typed_mem else None
+        fiber = await storage.get_fiber(memory_id)
 
-        if typed_mem and fiber:
-            anchor = await storage.get_neuron(fiber.anchor_neuron_id)
+        if fiber:
+            anchor = (
+                await storage.get_neuron(fiber.anchor_neuron_id) if fiber.anchor_neuron_id else None
+            )
             content = anchor.content if anchor else ""
 
             # Decrypt if needed
@@ -306,33 +311,48 @@ class ProvenanceHandler:
                     logger.debug("Decryption failed in show", exc_info=True)
 
             # Get connected synapses
-            synapses_out = await storage.get_synapses(source_id=fiber.anchor_neuron_id)
-            synapses_in = await storage.get_synapses(target_id=fiber.anchor_neuron_id)
-            synapse_list = [
-                {
-                    "type": s.type.value if hasattr(s.type, "value") else str(s.type),
-                    "target_id": s.target_id,
-                    "source_id": s.source_id,
-                    "weight": s.weight,
-                }
-                for s in [*synapses_out, *synapses_in]
-            ]
+            synapse_list: list[dict[str, Any]] = []
+            if fiber.anchor_neuron_id:
+                synapses_out = await storage.get_synapses(source_id=fiber.anchor_neuron_id)
+                synapses_in = await storage.get_synapses(target_id=fiber.anchor_neuron_id)
+                synapse_list = [
+                    {
+                        "type": s.type.value if hasattr(s.type, "value") else str(s.type),
+                        "target_id": s.target_id,
+                        "source_id": s.source_id,
+                        "weight": s.weight,
+                    }
+                    for s in [*synapses_out, *synapses_in]
+                ]
 
-            return {
+            response: dict[str, Any] = {
                 "memory_id": memory_id,
                 "content": content,
-                "memory_type": typed_mem.memory_type.value,
-                "priority": typed_mem.priority.value,
-                "tags": list(typed_mem.tags) if typed_mem.tags else [],
                 "created_at": fiber.created_at.isoformat() if fiber.created_at else None,
                 "anchor_neuron_id": fiber.anchor_neuron_id,
                 "neuron_count": fiber.neuron_count,
                 "summary": fiber.summary,
                 "metadata": fiber.metadata,
                 "synapses": synapse_list,
-                "trust_score": typed_mem.trust_score,
-                "expires_at": typed_mem.expires_at.isoformat() if typed_mem.expires_at else None,
             }
+            if typed_mem is not None:
+                response["memory_type"] = typed_mem.memory_type.value
+                response["priority"] = typed_mem.priority.value
+                response["tags"] = list(typed_mem.tags) if typed_mem.tags else []
+                response["trust_score"] = typed_mem.trust_score
+                response["expires_at"] = (
+                    typed_mem.expires_at.isoformat() if typed_mem.expires_at else None
+                )
+            else:
+                # Untyped fiber: surfaced by recall but never typed (auto-extract,
+                # legacy data, or migration leftover). Tell the caller so they can
+                # diagnose / clean it up via `nmem forget --hard <id>`.
+                response["memory_type"] = None
+                response["warning"] = (
+                    "Fiber has no typed_memory row (untyped). "
+                    "Likely auto-extracted or legacy. Use `nmem forget --hard` to remove."
+                )
+            return response
 
         # Try as direct neuron_id
         neuron = await storage.get_neuron(memory_id)

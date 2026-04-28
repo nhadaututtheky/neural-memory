@@ -46,6 +46,7 @@ _CHECK_TIERS: dict[str, str] = {
     "Knowledge surface": TIER_OPTIONAL,
     "Config freshness": TIER_OPTIONAL,
     "Pro features": TIER_OPTIONAL,
+    "Orphan fibers": TIER_OPTIONAL,
 }
 
 QUICKSTART_URL = "https://nhadaututtheky.github.io/neural-memory/guides/quickstart/"
@@ -74,6 +75,7 @@ def run_doctor(*, json_output: bool = False, fix: bool = False) -> dict[str, Any
     checks.append(_check_config_freshness())
     checks.append(_check_cli_tools())
     checks.append(_check_pro_plugin())
+    checks.append(_check_orphan_fibers())
 
     # Auto-fix pass
     if fix:
@@ -452,6 +454,66 @@ def _check_cli_tools() -> dict[str, Any]:
         "status": WARN,
         "detail": f"missing: {', '.join(missing)} (nmem mcp fallback available)",
     }
+
+
+def _check_orphan_fibers() -> dict[str, Any]:
+    """Detect fibers without typed_memory rows.
+
+    These untyped fibers can surface in recall but have no metadata, so
+    ``nmem_show``/``nmem_forget`` historically failed on them (issue #148).
+    Common causes: legacy data from before typed_memory was introduced, or
+    auto-extracted fibers whose typed_memory creation was skipped/failed.
+    """
+    try:
+        from neural_memory.unified_config import get_neuralmemory_dir
+
+        config_dir = get_neuralmemory_dir()
+        try:
+            from neural_memory.unified_config import get_config
+
+            config = get_config(reload=True)
+            brain_name = config.current_brain
+        except Exception:
+            brain_name = "default"
+
+        db_path = config_dir / "brains" / f"{brain_name}.db"
+        if not db_path.exists():
+            return {
+                "name": "Orphan fibers",
+                "status": SKIP,
+                "detail": "no brain database",
+            }
+
+        import sqlite3
+
+        with sqlite3.connect(str(db_path)) as conn:
+            cur = conn.execute(
+                """SELECT COUNT(*) FROM fibers f
+                   LEFT JOIN typed_memories tm
+                     ON tm.brain_id = f.brain_id AND tm.fiber_id = f.id
+                   WHERE tm.fiber_id IS NULL"""
+            )
+            orphan_count = int(cur.fetchone()[0])
+
+        if orphan_count == 0:
+            return {
+                "name": "Orphan fibers",
+                "status": OK,
+                "detail": "no untyped fibers",
+            }
+
+        return {
+            "name": "Orphan fibers",
+            "status": WARN,
+            "detail": f"{orphan_count} fiber(s) without typed_memory",
+            "fix": "Inspect with `nmem show <id>`; remove via `nmem forget --hard <id>`",
+        }
+    except Exception:
+        return {
+            "name": "Orphan fibers",
+            "status": SKIP,
+            "detail": "could not query brain database",
+        }
 
 
 def _check_pro_plugin() -> dict[str, Any]:
