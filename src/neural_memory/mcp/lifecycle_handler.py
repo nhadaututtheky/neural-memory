@@ -151,7 +151,15 @@ class LifecycleHandler:
         return {"error": "Memory not found"}
 
     async def _forget(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Explicitly delete or close a specific memory."""
+        """Explicitly delete or close a specific memory.
+
+        Resolves the ID across three shapes (fixed in #148):
+          1. Typed fiber — has both ``typed_memory`` row and ``fiber`` row.
+          2. Untyped fiber — fiber row exists but no typed_memory (legacy or
+             auto-extracted). Hard delete works; soft delete is rejected since
+             there is no expires_at to set.
+          3. Bare neuron — no fiber. Hard delete works.
+        """
         memory_id = args.get("memory_id")
         if not memory_id or not isinstance(memory_id, str):
             return {"error": "memory_id is required"}
@@ -166,9 +174,11 @@ class LifecycleHandler:
             logger.error("No brain configured for forget")
             return {"error": "No brain configured"}
 
-        # Look up the memory
+        # Resolve typed_memory and fiber INDEPENDENTLY so untyped fibers are
+        # still discoverable (issue #148: recall surfaces fiber ids that have
+        # no typed_memory row).
         typed_mem = await storage.get_typed_memory(memory_id)
-        fiber = await storage.get_fiber(memory_id) if typed_mem else None
+        fiber = await storage.get_fiber(memory_id)
 
         if not typed_mem and not fiber:
             # Try as neuron_id — find its fiber
@@ -184,18 +194,21 @@ class LifecycleHandler:
                     "message": "Neuron permanently deleted",
                 }
             return {
-                "error": f"No typed memory found for neuron {memory_id}. Use hard=true for neuron deletion."
+                "error": (
+                    f"No typed memory found for neuron {memory_id}. "
+                    "Use hard=true for neuron deletion."
+                )
             }
 
         if hard:
             # Permanent deletion: fiber + typed_memory + neurons
             storage.disable_auto_save()
             try:
-                # Delete typed memory
-                await storage.delete_typed_memory(memory_id)
+                if typed_mem is not None:
+                    await storage.delete_typed_memory(memory_id)
 
                 # Delete fiber (CASCADE handles fiber_neurons junction)
-                if fiber:
+                if fiber is not None:
                     await storage.delete_fiber(memory_id)
 
                 await storage.batch_save()
@@ -207,21 +220,30 @@ class LifecycleHandler:
                 "status": "hard_deleted",
                 "memory_id": memory_id,
                 "message": "Memory permanently deleted with cascade cleanup",
+                "untyped": typed_mem is None,
             }
-        else:
-            # Soft delete: expire immediately
-            from dataclasses import replace as dc_replace
 
-            assert typed_mem is not None  # guaranteed by early return above
-            expired_tm = dc_replace(typed_mem, expires_at=utcnow())
-            await storage.update_typed_memory(expired_tm)
-
-            logger.info("Soft-deleted memory %s (reason: %s)", memory_id, reason or "none")
+        # Soft delete: expire immediately. Requires a typed_memory to mark
+        # expired — there is nothing to soft-delete on an untyped fiber.
+        if typed_mem is None:
             return {
-                "status": "soft_deleted",
-                "memory_id": memory_id,
-                "message": "Memory marked as expired (will be cleaned up on next consolidation)",
+                "error": (
+                    f"Fiber {memory_id} has no typed_memory (untyped). "
+                    "Soft delete cannot expire it; use hard=true to remove."
+                )
             }
+
+        from dataclasses import replace as dc_replace
+
+        expired_tm = dc_replace(typed_mem, expires_at=utcnow())
+        await storage.update_typed_memory(expired_tm)
+
+        logger.info("Soft-deleted memory %s (reason: %s)", memory_id, reason or "none")
+        return {
+            "status": "soft_deleted",
+            "memory_id": memory_id,
+            "message": "Memory marked as expired (will be cleaned up on next consolidation)",
+        }
 
     async def _consolidate(self, args: dict[str, Any]) -> dict[str, Any]:
         """Run memory consolidation on the current brain."""

@@ -217,7 +217,12 @@ class SQLiteFiberMixin:
         tag_mode: str = "and",
         created_before: datetime | None = None,
     ) -> list[Fiber]:
-        """Find fibers containing any of the given neurons in a single SQL query."""
+        """Find fibers containing any of the given neurons in a single SQL query.
+
+        LEFT JOINs ``typed_memories`` so soft-deleted fibers (``expires_at`` set
+        and in the past) are dropped from recall — fixes issue #148 where
+        ``nmem_forget`` left fibers visible to retrieval.
+        """
         if not neuron_ids:
             return []
 
@@ -230,9 +235,12 @@ class SQLiteFiberMixin:
         sql = (
             f"SELECT DISTINCT f.* FROM fibers f"
             f" JOIN fiber_neurons fn ON f.brain_id = fn.brain_id AND f.id = fn.fiber_id"
+            f" LEFT JOIN typed_memories tm"
+            f"   ON tm.brain_id = f.brain_id AND tm.fiber_id = f.id"
             f" WHERE fn.brain_id = ? AND fn.neuron_id IN ({placeholders})"
+            f"   AND (tm.expires_at IS NULL OR tm.expires_at > ?)"
         )
-        params: list[Any] = [brain_id, *neuron_ids]
+        params: list[Any] = [brain_id, *neuron_ids, utcnow().isoformat()]
 
         # Tag filter: f.tags column stores the union of auto_tags + agent_tags
         if tags:

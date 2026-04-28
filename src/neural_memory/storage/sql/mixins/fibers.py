@@ -289,7 +289,11 @@ class FiberMixin:
         tag_mode: str = "and",
         created_before: datetime | None = None,
     ) -> list[Fiber]:
-        """Find fibers containing any of the given neurons in a single SQL query."""
+        """Find fibers containing any of the given neurons in a single SQL query.
+
+        LEFT JOINs ``typed_memories`` so soft-deleted fibers (``expires_at`` set
+        and in the past) are dropped from recall — fixes issue #148.
+        """
         if not neuron_ids:
             return []
 
@@ -304,8 +308,12 @@ class FiberMixin:
         # IN clause for neuron_ids
         in_sql, in_params = d.in_clause(n, neuron_ids)
         params.extend(in_params)
-        # Advance n past the params consumed by in_clause
         n += len(in_params)
+
+        # Expired-memory filter: param[n] = now (used by tm.expires_at > now)
+        params.append(d.serialize_dt(utcnow()))
+        expired_filter = f" AND (tm.expires_at IS NULL OR tm.expires_at > {d.ph(n)})"
+        n += 1
 
         # Tag filter: AND = all tags must match, OR = any tag matches
         tag_parts: list[str] = []
@@ -324,7 +332,10 @@ class FiberMixin:
         sql = (
             f"SELECT DISTINCT f.* FROM fibers f "
             f"JOIN fiber_neurons fn ON f.brain_id = fn.brain_id AND f.id = fn.fiber_id "
+            f"LEFT JOIN typed_memories tm "
+            f"  ON tm.brain_id = f.brain_id AND tm.fiber_id = f.id "
             f"WHERE fn.brain_id = {d.ph(1)} AND fn.neuron_id {in_sql}"
+            f"{expired_filter}"
             f"{tag_sql}"
             f" ORDER BY f.salience DESC LIMIT {d.ph(n)}"
         )

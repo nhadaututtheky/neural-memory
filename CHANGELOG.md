@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.53.3] — 2026-04-28
+
+### Fixed — Lifecycle Integrity & CLI Parity (#148)
+
+Issue #148 reported two confusing failures when soft-deleting a TODO fiber via MCP `nmem_forget`: (1) the CLI had no `forget` command, forcing all delete flows through MCP, and (2) `nmem recall` continued surfacing fiber IDs that `nmem_show`/`nmem_forget` already considered "Memory not found". Root-causing surfaced a single class of bug — recall, show, and forget each used a different definition of "fiber exists" — plus a parity gap between the MCP and CLI surfaces.
+
+#### Recall no longer leaks soft-deleted or untyped fibers
+
+- `storage/sqlite_fibers.py`, `storage/sql/mixins/fibers.py`, `storage/postgres/postgres_fibers.py` — `find_fibers_batch` now LEFT JOINs `typed_memories` and filters `expires_at <= now()`. Fibers soft-deleted via `nmem_forget` (which only sets `expires_at`) are dropped from recall immediately instead of waiting for the next consolidation pass. Untyped fibers (no `typed_memory` row) still surface — the LEFT JOIN treats them as never-expiring.
+
+#### Show / forget now handle untyped fibers
+
+- `mcp/provenance_handler.py:_show` — used to short-circuit on `typed_mem is None` and return "Memory not found" even when the fiber row existed. Now fetches `typed_memory` and `fiber` independently; returns fiber data with `memory_type=null` plus a warning when no typed_memory exists, so users can `nmem forget --hard` the orphan.
+- `mcp/lifecycle_handler.py:_forget` — same independent lookup. Hard delete on an untyped fiber now removes the fiber row (and skips the missing typed_memory). Soft delete on an untyped fiber returns a clear error pointing to `--hard`, since there is no `expires_at` to set.
+
+#### CLI parity for the lifecycle CRUD subset
+
+- `nmem forget <id> [--hard] [--reason "…"]` — soft- or hard-delete via CLI without an MCP server. Useful for cron cleanup, scripted teardowns, and debugging when MCP is unavailable.
+- `nmem show <id> [--json]` — inspect a memory by ID. Works for typed fibers, untyped fibers, and bare neurons.
+- `nmem edit <id> [--type T] [--content X] [--priority N] [--tier T]` — type/content/priority/tier edits.
+- `nmem pin <id>` / `nmem pin list` / `nmem unpin <id>` — pin lifecycle parity.
+
+CLI commands reuse the existing MCP handler bodies via a small `_CliMcpFacade(LifecycleHandler, ProvenanceHandler, TrainHandler)` shim, so behavior stays identical across surfaces.
+
+#### Diagnostics
+
+- `nmem doctor` now surfaces an "Orphan fibers" check that counts fibers with no `typed_memory` row. Suggests `nmem show <id>` + `nmem forget --hard <id>` for cleanup.
+
+### Tests
+
+- `tests/unit/test_issue_148_lifecycle.py` — 6 regression cases: soft-deleted fibers excluded from recall, untyped fibers still surface in recall, future-dated `expires_at` still surfaces, `_show` returns untyped fibers with a warning, `_forget --hard` removes an untyped fiber, `_forget` (soft) on an untyped fiber rejects with `hard=true` hint.
+- 108/108 lifecycle/forget/edit/tag-filter/pinned/related/performance tests green; full mypy clean.
+
+### Strategic note
+
+Audited all 57 MCP tools against the CLI surface. Decided against full 1:1 parity — most agent-only tools (cognitive, narrative, suggest, auto, batch, recap, …) would just bloat the CLI without serving humans. Only the CRUD lifecycle subset (forget/show/edit/pin) was added; ops tools like `conflicts`, `review`, `budget`, `tier` remain MCP-only until a concrete user need lands.
+
 ## [4.53.2] — 2026-04-26
 
 ### Fixed — Dashboard Migration Endpoint (#147 follow-up)
