@@ -22,7 +22,8 @@ class TestDoctor:
     def test_check_dependencies_ok(self) -> None:
         from neural_memory.cli.doctor import _check_dependencies
 
-        result = _check_dependencies()
+        with patch("neural_memory.cli.doctor._check_aiosqlite_connectivity", return_value=None):
+            result = _check_dependencies()
         assert result["status"] == "ok"
 
     def test_check_dependencies_missing(self) -> None:
@@ -32,6 +33,22 @@ class TestDoctor:
             result = _check_dependencies()
             assert result["status"] == "fail"
             assert "Missing" in result["detail"]
+
+    def test_check_dependencies_reports_aiosqlite_failure(self) -> None:
+        from neural_memory.cli.doctor import _check_dependencies
+
+        aiosqlite_failure = {
+            "name": "Dependencies",
+            "status": "fail",
+            "detail": "aiosqlite connect timed out",
+        }
+
+        with patch(
+            "neural_memory.cli.doctor._check_aiosqlite_connectivity",
+            return_value=aiosqlite_failure,
+        ):
+            result = _check_dependencies()
+            assert result == aiosqlite_failure
 
     def test_check_embedding_disabled(self) -> None:
         from neural_memory.cli.doctor import _check_embedding_provider

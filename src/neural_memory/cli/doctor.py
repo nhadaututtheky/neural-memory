@@ -17,8 +17,6 @@ from typing import Any
 
 import typer
 
-from neural_memory.cli._helpers import run_async
-
 # Check result constants
 OK = "ok"
 WARN = "warn"
@@ -205,7 +203,54 @@ def _check_dependencies() -> dict[str, Any]:
             "fix": "Run: pip install neural-memory",
         }
 
+    aiosqlite_check = _check_aiosqlite_connectivity()
+    if aiosqlite_check is not None:
+        return aiosqlite_check
+
     return {"name": "Dependencies", "status": OK, "detail": "all core deps available"}
+
+
+def _check_aiosqlite_connectivity() -> dict[str, Any] | None:
+    """Detect environments where aiosqlite cannot complete a basic connect.
+
+    aiosqlite relies on a worker thread calling loop.call_soon_threadsafe()
+    to resolve futures on the main event loop. Some restricted sandboxes can
+    allow Python threads while preventing that event-loop wakeup, which makes
+    storage-backed CLI commands hang before they can report a useful error.
+    Wrap the probe in asyncio.wait_for() so doctor itself fails fast.
+    """
+
+    async def _probe() -> None:
+        import asyncio
+
+        import aiosqlite
+
+        conn = await asyncio.wait_for(aiosqlite.connect(":memory:"), timeout=2.0)
+        await conn.close()
+
+    import asyncio
+
+    try:
+        asyncio.run(_probe())
+    except TimeoutError:
+        return {
+            "name": "Dependencies",
+            "status": FAIL,
+            "detail": "aiosqlite connect timed out; storage-backed commands may hang",
+            "fix": (
+                "Run outside this sandbox or use an environment that permits "
+                "aiosqlite's worker-thread event-loop wakeups"
+            ),
+        }
+    except Exception as exc:
+        return {
+            "name": "Dependencies",
+            "status": FAIL,
+            "detail": f"aiosqlite connect failed: {type(exc).__name__}: {exc}",
+            "fix": "Check Python threading, asyncio, and sqlite support in this environment",
+        }
+
+    return None
 
 
 def _check_embedding_provider() -> dict[str, Any]:
@@ -287,20 +332,16 @@ def _check_schema_version() -> dict[str, Any]:
                 "detail": "empty database (schema created on first use)",
             }
 
-        async def _get_version() -> int:
-            import aiosqlite
+        import sqlite3
 
-            async with aiosqlite.connect(str(db_path)) as db:
-                # NM stores schema version in schema_version table, not PRAGMA
-                try:
-                    cursor = await db.execute("SELECT version FROM schema_version LIMIT 1")
-                    row = await cursor.fetchone()
-                    return row[0] if row else 0
-                except Exception:
-                    # Table may not exist in very old databases
-                    return 0
-
-        version = run_async(_get_version())
+        with sqlite3.connect(str(db_path)) as db:
+            # NM stores schema version in schema_version table, not PRAGMA.
+            try:
+                row = db.execute("SELECT version FROM schema_version LIMIT 1").fetchone()
+                version = int(row[0]) if row else 0
+            except Exception:
+                # Table may not exist in very old databases.
+                version = 0
 
         from neural_memory.storage.sqlite_schema import SCHEMA_VERSION as CURRENT_VERSION
 
