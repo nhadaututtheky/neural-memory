@@ -300,6 +300,36 @@ async def _find_similar_entity(storage: NeuralStorage, text: str) -> Neuron | No
 # ── Step 3: Extract Concept Neurons ──
 
 
+# Short common words that produce noisy concept neurons.
+# These match len >= 3 but carry no topical signal.
+_NOISE_CONCEPTS: frozenset[str] = frozenset(
+    {
+        # Pronouns / determiners that survive stop-word filtering
+        "not",
+        "but",
+        "all",
+        "any",
+        "can",
+        "get",
+        "got",
+        # Very common verbs
+        "use",
+        "used",
+        "let",
+        "run",
+        "try",
+        "see",
+        "say",
+        # Common adjectives / adverbs
+        "new",
+        "old",
+        "own",
+        "way",
+        "too",
+    }
+)
+
+
 class ExtractConceptNeuronsStep:
     """Extract keyword/concept neurons from content."""
 
@@ -314,10 +344,30 @@ class ExtractConceptNeuronsStep:
         config: BrainConfig,
     ) -> PipelineContext:
         keywords = extract_keywords(ctx.content, language=ctx.language)
-        concept_limit = min(20, max(5, len(ctx.content) // 100))
+        # Scale concept floor to content length: short text (<100 chars)
+        # rarely carries enough signal for 5+ distinct concepts.
+        concept_limit = min(20, max(3, len(ctx.content) // 100))
+
+        # Build a set of entity content already captured so concept extraction
+        # doesn't duplicate what entity neurons already represent.
+        entity_content = {
+            n.content.lower() for n in ctx.entity_neurons + ctx.existing_entity_neurons
+        }
+
+        def _is_valid_concept(kw: str) -> bool:
+            kw_lower = kw.lower()
+            # Minimum 4 chars — 3-char words produce too many noise concepts ("ai", "os")
+            if len(kw_lower) < 4:
+                return False
+            if kw_lower in _NOISE_CONCEPTS:
+                return False
+            # Skip if already captured as an entity neuron
+            if kw_lower in entity_content:
+                return False
+            return True
 
         # Filter valid keywords first
-        valid_keywords = [kw for kw in keywords[:concept_limit] if len(kw) >= 3]
+        valid_keywords = [kw for kw in keywords[:concept_limit] if _is_valid_concept(kw)]
 
         # Batch check existing concepts in one query
         existing_map = await storage.find_neurons_exact_batch(
