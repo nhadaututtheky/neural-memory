@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.53.4] — 2026-04-30
+
+### Fixed — Sandbox Hang at Every Storage Entry Point (#151)
+
+Issue #151 reported that `nmem` CLI commands hang silently inside the Codex
+workspace sandbox. Root-causing surfaced an environmental issue, not a Neural
+Memory bug: `aiosqlite` relies on `loop.call_soon_threadsafe()` to wake the
+main event loop from its worker thread, but the sandbox blocks that wakeup.
+The result is a never-resolving future on `aiosqlite.connect()` — every
+storage-backed command (`nmem context`, `status`, `stats`, `list`, `today`,
+`health`, `doctor`) freezes with no output.
+
+PR #152 (from the issue author) patched only `nmem doctor`; this release
+expands the fix to all four storage entry points.
+
+#### Shared sandbox probe
+
+- `src/neural_memory/utils/sandbox.py` (new) — runs a 2-second
+  `aiosqlite.connect(":memory:")` probe, caches the verdict process-wide,
+  exposes `ensure_aiosqlite_or_exit_cli()` (CLI) and
+  `ensure_aiosqlite_or_raise()` (server). Honours
+  `NMEM_SKIP_AIOSQLITE_PROBE=1` for explicit opt-out.
+
+#### Wired into every entry point that touches storage
+
+- `cli/_helpers.py:run_async` — covers all storage-backed CLI commands.
+  Hangs become a clear `typer.Exit(2)` with hint pointing at issue #151.
+- `mcp/server.py` — both stdio (`run_mcp_server`) and HTTP (`main`)
+  transports probe before any handler runs. Failure writes a structured
+  error to stderr (so MCP clients log the real reason) and `sys.exit(2)`
+  instead of leaving clients connected to a hung server.
+- `server/app.py:lifespan` — FastAPI startup raises
+  `SandboxIncompatibleError` instead of blocking the lifespan event.
+- `cli/doctor.py:_check_dependencies` — reuses the shared probe so
+  `nmem doctor` surfaces the runtime failure beside the importability
+  check.
+
+#### Doctor stays responsive in broken sandboxes
+
+- `cli/doctor.py:_check_schema_version` — switched from `aiosqlite` to
+  sync `sqlite3`. Doctor now completes (and reports the runtime probe
+  failure) even when `aiosqlite` itself is hanging.
+
+### Tests
+
+- `tests/unit/test_sandbox_probe.py` — 23 cases covering probe basics
+  (success, caching, force re-run, reset), bypass env var parsing,
+  failure paths (mocked timeout + real stuck connect), CLI exit
+  contract, server raise contract, doctor integration, and CLI
+  `run_async` integration.
+
 ## [4.53.3] — 2026-04-28
 
 ### Fixed — Lifecycle Integrity & CLI Parity (#148)
