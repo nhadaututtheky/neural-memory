@@ -149,6 +149,34 @@ def compact_response(
     return out
 
 
+def strip_response_hints(result: dict[str, Any], config: ResponseConfig) -> dict[str, Any]:
+    """Strip advisory hint fields without applying full compaction.
+
+    This preserves normal response shape while honoring ``response.strip_hints``
+    for machine clients that do not request compact mode.
+    """
+    if not config.strip_hints or not isinstance(result, dict):
+        return result
+
+    out: dict[str, Any] = {}
+    changed = False
+
+    for key, value in result.items():
+        if key in STRIPPABLE_KEYS:
+            changed = True
+            continue
+
+        if isinstance(value, dict):
+            stripped = strip_response_hints(value, config)
+            out[key] = stripped
+            changed = changed or stripped is not value
+            continue
+
+        out[key] = value
+
+    return out if changed else result
+
+
 def should_compact(
     *,
     tool_args: dict[str, Any],

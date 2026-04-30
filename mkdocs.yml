@@ -98,6 +98,7 @@ nav:
     - Brain Sharing: guides/brain-sharing.md
     - Multi-Brain Setup: guides/multi-brain-setup.md
     - Brain Health Guide: guides/brain-health.md
+    - Agent Memory Governance: guides/agent-memory-governance.md
     - OpenClaw Plugin: guides/openclaw-plugin.md
     - Cognitive Reasoning: guides/cognitive-reasoning.md
     - Schema v21 Migration: guides/schema-v21-migration.md

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Advisory hints stripped from machine output (#155)
+
+CLI update notices are now skipped for machine-oriented commands
+(`context`, `recall`, `stats`, `status`) and any invocation with `--json`.
+MCP `strip_hints` now strips advisory fields even in non-compact mode.
+Adds an Agent Memory Governance guide.
+
 ### Added — Contributor dev diagnostics (#154)
 
 `nmem doctor --dev` now reports source checkout detection, editable install
