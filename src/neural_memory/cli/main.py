@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+from collections.abc import Sequence
 from typing import Annotated
 
 import typer
@@ -11,6 +13,15 @@ app = typer.Typer(
     name="nmem",
     help="Neural Memory - Reflex-based memory for AI agents",
     no_args_is_help=True,
+)
+
+_MACHINE_ORIENTED_UPDATE_CHECK_SKIP_COMMANDS = frozenset(
+    {
+        "context",
+        "recall",
+        "stats",
+        "status",
+    }
 )
 
 
@@ -41,6 +52,20 @@ def _warn_if_not_initialized(ctx: typer.Context) -> None:
         )
 
 
+def _args_request_json(args: Sequence[str]) -> bool:
+    """Return True when the raw CLI invocation requests JSON output."""
+    return any(arg in {"--json", "-j"} or arg.startswith("--json=") for arg in args)
+
+
+def _should_run_update_check(ctx: typer.Context, args: Sequence[str] | None = None) -> bool:
+    """Decide whether this command should emit opportunistic update notices."""
+    if ctx.invoked_subcommand in _MACHINE_ORIENTED_UPDATE_CHECK_SKIP_COMMANDS:
+        return False
+
+    raw_args = sys.argv[1:] if args is None else args
+    return not _args_request_json(raw_args)
+
+
 @app.callback(invoke_without_command=True)
 def _app_callback(
     ctx: typer.Context,
@@ -60,6 +85,9 @@ def _app_callback(
         return
 
     _warn_if_not_initialized(ctx)
+
+    if not _should_run_update_check(ctx):
+        return
 
     from neural_memory.cli.update_check import run_update_check_background
 
