@@ -8,7 +8,9 @@ not hang silently.
 from __future__ import annotations
 
 import asyncio
+import gc
 import os
+import warnings
 from typing import Any
 from unittest.mock import patch
 
@@ -173,6 +175,29 @@ class TestCliRunAsyncIntegration:
 
         with pytest.raises(typer.Exit):
             run_async(_noop())
+
+    def test_run_async_closes_unawaited_coro_when_probe_fails(self) -> None:
+        import typer
+
+        from neural_memory.cli._helpers import run_async
+
+        sandbox._cached_result = sandbox.ProbeResult(
+            ok=False, detail="hung", error_class="TimeoutError"
+        )
+
+        async def _context() -> int:
+            return 1
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", RuntimeWarning)
+            with pytest.raises(typer.Exit):
+                run_async(_context())
+            gc.collect()
+
+        warning_messages = [str(w.message) for w in caught]
+        assert not any(
+            "coroutine" in msg and "was never awaited" in msg for msg in warning_messages
+        )
 
     def test_run_async_executes_when_probe_ok(self) -> None:
         from neural_memory.cli._helpers import run_async
