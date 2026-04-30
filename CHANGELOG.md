@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Conversational stop words for cleaner keyword extraction (#157)
+
+Keyword extraction now filters casual English that produces noisy concept
+neurons: contractions without apostrophes (`dont`, `ive`, `thats`, `im`),
+filler words (`literally`, `basically`, `something`), profanity (`fucking`,
+`shit`), and common non-topical verbs (`think`, `know`, `get`, `look`).
+Stops garbage bigrams like "like dont" and "fucking fall" from entering
+the neuron pool.
+
 ### Fixed — Concept Neuron Noise Filtering (#156)
 
 Short and casual text no longer creates low-signal concept neurons that pollute
