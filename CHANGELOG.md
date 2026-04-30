@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Contributor dev diagnostics (#154)
+
+`nmem doctor --dev` now reports source checkout detection, editable install
+status, dev dependencies, and checkout/package version parity for
+contributors working from a source checkout.
+
 ### Fixed — Coroutine warning on sandbox fail-fast (#153)
 
 CLI commands that fail fast in restricted sandboxes no longer emit

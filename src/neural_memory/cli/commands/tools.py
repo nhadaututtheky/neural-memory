@@ -915,6 +915,10 @@ def flush(
 def doctor(
     json_output: Annotated[bool, typer.Option("--json", "-j", help="Output as JSON")] = False,
     fix: Annotated[bool, typer.Option("--fix", help="Auto-fix available issues")] = False,
+    dev: Annotated[
+        bool,
+        typer.Option("--dev", help="Include source checkout and contributor tooling checks"),
+    ] = False,
 ) -> None:
     """Run system health diagnostics.
 
@@ -922,17 +926,19 @@ def doctor(
     schema version, MCP config, hooks, dedup, surface, and CLI tools.
 
     Use --fix to automatically remediate fixable issues.
+    Use --dev to check contributor setup in a source checkout.
 
     Examples:
         nmem doctor          # Run all checks
         nmem doctor --fix    # Auto-fix what's possible
+        nmem doctor --dev    # Include contributor setup checks
         nmem doctor --json   # Machine-readable output
     """
     import json as json_mod
 
     from neural_memory.cli.doctor import run_doctor
 
-    result = run_doctor(json_output=json_output, fix=fix)
+    result = run_doctor(json_output=json_output, fix=fix, dev=dev)
 
     if json_output:
         typer.echo(json_mod.dumps(result, indent=2, default=str))

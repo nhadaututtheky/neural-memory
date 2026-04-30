@@ -49,6 +49,7 @@ Please be respectful and constructive in all interactions. We're building someth
 5. **Verify setup**
 
    ```bash
+   nmem doctor --dev
    pytest tests/ -v
    mypy src/
    ruff check src/ tests/
