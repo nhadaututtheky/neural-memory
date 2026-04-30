@@ -44,8 +44,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     import logging
 
     from neural_memory.unified_config import get_config, get_shared_storage
+    from neural_memory.utils.sandbox import (
+        SANDBOX_HINT,
+        SandboxIncompatibleError,
+        ensure_aiosqlite_or_raise,
+    )
 
     _logger = logging.getLogger(__name__)
+
+    # Fail fast in restricted sandboxes (issue #151) — blocking on
+    # ``aiosqlite.connect`` here would silently hang FastAPI startup.
+    try:
+        ensure_aiosqlite_or_raise()
+    except SandboxIncompatibleError as exc:
+        _logger.error("Neural Memory cannot start: %s", exc.detail)
+        for line in SANDBOX_HINT.splitlines():
+            _logger.error("  %s", line)
+        raise
 
     storage = await get_shared_storage()
     app.state.storage = storage

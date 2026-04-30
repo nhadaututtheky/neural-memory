@@ -17,8 +17,6 @@ from typing import Any
 
 import typer
 
-from neural_memory.cli._helpers import run_async
-
 # Check result constants
 OK = "ok"
 WARN = "warn"
@@ -205,7 +203,37 @@ def _check_dependencies() -> dict[str, Any]:
             "fix": "Run: pip install neural-memory",
         }
 
+    sandbox_check = _check_aiosqlite_runtime()
+    if sandbox_check is not None:
+        return sandbox_check
+
     return {"name": "Dependencies", "status": OK, "detail": "all core deps available"}
+
+
+def _check_aiosqlite_runtime() -> dict[str, Any] | None:
+    """Probe aiosqlite end-to-end so doctor catches sandbox hangs.
+
+    Importable but unusable is a real failure mode (issue #151): some
+    sandboxes block asyncio cross-thread loop wakeups, so aiosqlite hangs
+    despite being installed correctly. Returning a fail dict here lets the
+    doctor render an actionable message instead of timing out itself.
+    """
+    from neural_memory.utils.sandbox import probe_aiosqlite_compat
+
+    result = probe_aiosqlite_compat()
+    if result.ok:
+        return None
+
+    return {
+        "name": "Dependencies",
+        "status": FAIL,
+        "detail": result.detail,
+        "fix": (
+            "Run outside this sandbox, or grant permission for asyncio "
+            "cross-thread wakeups. See: "
+            "https://github.com/nhadaututtheky/neural-memory/issues/151"
+        ),
+    }
 
 
 def _check_embedding_provider() -> dict[str, Any]:
@@ -287,20 +315,18 @@ def _check_schema_version() -> dict[str, Any]:
                 "detail": "empty database (schema created on first use)",
             }
 
-        async def _get_version() -> int:
-            import aiosqlite
+        # Use sync sqlite3 here so doctor stays responsive in sandboxes
+        # where aiosqlite hangs (issue #151). Doctor must complete even
+        # when the storage runtime probe fails.
+        import sqlite3
 
-            async with aiosqlite.connect(str(db_path)) as db:
-                # NM stores schema version in schema_version table, not PRAGMA
-                try:
-                    cursor = await db.execute("SELECT version FROM schema_version LIMIT 1")
-                    row = await cursor.fetchone()
-                    return row[0] if row else 0
-                except Exception:
-                    # Table may not exist in very old databases
-                    return 0
-
-        version = run_async(_get_version())
+        with sqlite3.connect(str(db_path)) as db:
+            try:
+                row = db.execute("SELECT version FROM schema_version LIMIT 1").fetchone()
+                version = int(row[0]) if row else 0
+            except sqlite3.Error:
+                # Table may not exist in very old databases
+                version = 0
 
         from neural_memory.storage.sqlite_schema import SCHEMA_VERSION as CURRENT_VERSION
 

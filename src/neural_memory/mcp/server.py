@@ -715,8 +715,33 @@ def _lazy_init() -> None:
         logger.debug("NeuralMemory: auto-init failed (non-critical)", exc_info=True)
 
 
+def _check_sandbox_or_exit() -> None:
+    """Probe aiosqlite once; if broken, write a diagnostic and exit (2).
+
+    The MCP server cannot speak the protocol if storage hangs on first
+    use — clients then time out without ever seeing an error. We detect
+    the sandbox case (issue #151) before any handler is registered and
+    surface a single stderr line so MCP clients log the real reason.
+    """
+    from neural_memory.utils.sandbox import SANDBOX_HINT, probe_aiosqlite_compat
+
+    result = probe_aiosqlite_compat()
+    if result.ok:
+        return
+
+    print(
+        f"neural-memory MCP server cannot start: {result.detail}",
+        file=sys.stderr,
+        flush=True,
+    )
+    for line in SANDBOX_HINT.splitlines():
+        print(line, file=sys.stderr, flush=True)
+    sys.exit(2)
+
+
 async def run_mcp_server() -> None:
     """Run the MCP server over stdio."""
+    _check_sandbox_or_exit()
     _lazy_init()
 
     server = create_mcp_server()
@@ -826,6 +851,9 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.http is not None:
+        # Probe before binding the socket so HTTP clients aren't left
+        # connecting to a server that will hang on first storage call.
+        _check_sandbox_or_exit()
         from neural_memory.mcp.http_transport import run_http_server
 
         asyncio.run(run_http_server(port=args.http))

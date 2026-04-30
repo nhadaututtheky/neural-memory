@@ -33,8 +33,13 @@ def run_async(coro: Coroutine[Any, Any, T]) -> T:
     """Run an async CLI command with proper storage cleanup.
 
     Replaces bare ``asyncio.run()`` to ensure aiosqlite connections are
-    closed *before* the event loop is torn down.
+    closed *before* the event loop is torn down. Also probes aiosqlite
+    compatibility once per process so storage-backed commands fail fast
+    in restricted sandboxes (issue #151) instead of hanging silently.
     """
+    from neural_memory.utils.sandbox import ensure_aiosqlite_or_exit_cli
+
+    ensure_aiosqlite_or_exit_cli()
 
     async def _with_cleanup() -> T:
         try:
