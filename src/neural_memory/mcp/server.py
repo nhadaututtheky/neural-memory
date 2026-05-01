@@ -549,6 +549,7 @@ async def handle_message(server: MCPServer, message: dict[str, Any]) -> dict[str
             compact_response,
             needs_auto_compact,
             should_compact,
+            strip_response_hints,
         )
 
         use_compact = should_compact(tool_args=tool_args, config=server.config.response)
@@ -574,6 +575,8 @@ async def handle_message(server: MCPServer, message: dict[str, Any]) -> dict[str
                 elif needs_auto_compact(result, resp_config.auto_compact_threshold):
                     logger.debug("Auto-compact: %s exceeded threshold", tool_name)
                     result = compact_response(result, resp_config)
+                else:
+                    result = strip_response_hints(result, resp_config)
 
                 # Apply token budget if requested
                 if token_budget is not None:

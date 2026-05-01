@@ -10,6 +10,7 @@ from neural_memory.mcp.response_compactor import (
     compact_response,
     needs_auto_compact,
     should_compact,
+    strip_response_hints,
 )
 from neural_memory.unified_config import ResponseConfig
 
@@ -145,6 +146,55 @@ class TestCompactResponseEdgeCases:
         compacted = compact_response(result, _default_config(max_list_items=3))
         assert compacted["items"] == [1, 2, 3]
         assert "_items_truncated" not in compacted
+
+
+# ---------- strip_response_hints ----------
+
+
+class TestStripResponseHints:
+    """Test hint-only stripping without compacting the response."""
+
+    def test_strips_hints_without_truncating_lists(self) -> None:
+        result = {
+            "answer": "keep",
+            "maintenance_hint": "strip",
+            "memories": [{"id": i} for i in range(20)],
+        }
+
+        stripped = strip_response_hints(result, ResponseConfig(strip_hints=True))
+
+        assert stripped["answer"] == "keep"
+        assert "maintenance_hint" not in stripped
+        assert stripped["memories"] == result["memories"]
+        assert "_memories_truncated" not in stripped
+
+    def test_strips_nested_hints(self) -> None:
+        result = {
+            "data": {
+                "answer": "keep",
+                "update_hint": "strip",
+                "onboarding": {"next": "strip"},
+            }
+        }
+
+        stripped = strip_response_hints(result, ResponseConfig(strip_hints=True))
+
+        assert stripped["data"] == {"answer": "keep"}
+
+    def test_preserves_hints_when_disabled(self) -> None:
+        result = {"answer": "keep", "update_hint": "keep"}
+
+        stripped = strip_response_hints(result, ResponseConfig(strip_hints=False))
+
+        assert stripped is result
+        assert stripped["update_hint"] == "keep"
+
+    def test_returns_original_when_no_hints_found(self) -> None:
+        result = {"answer": "keep", "confidence": 0.9}
+
+        stripped = strip_response_hints(result, ResponseConfig(strip_hints=True))
+
+        assert stripped is result
 
 
 # ---------- should_compact ----------
