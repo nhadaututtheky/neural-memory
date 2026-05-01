@@ -140,6 +140,39 @@ class TestDoctor:
             result = _check_cli_tools()
             assert result["status"] == "fail"
 
+    def test_check_dev_dependencies_missing(self) -> None:
+        from neural_memory.cli.doctor import _check_dev_dependencies
+
+        with patch("neural_memory.cli.doctor.importlib.import_module", side_effect=ImportError):
+            result = _check_dev_dependencies()
+            assert result["status"] == "fail"
+            assert 'pip install -e ".[dev]"' in result["fix"]
+
+    def test_check_dev_checkout_version_matches(self, tmp_path: Path) -> None:
+        from neural_memory.cli.doctor import _check_dev_checkout_version
+
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text('[project]\nversion = "1.2.3"\n', encoding="utf-8")
+
+        with patch("neural_memory.cli.doctor.importlib.metadata.version", return_value="1.2.3"):
+            result = _check_dev_checkout_version(tmp_path)
+
+        assert result["status"] == "ok"
+        assert "checkout 1.2.3" in result["detail"]
+
+    def test_check_dev_checkout_version_mismatch(self, tmp_path: Path) -> None:
+        from neural_memory.cli.doctor import _check_dev_checkout_version
+
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text('[project]\nversion = "4.53.4"\n', encoding="utf-8")
+
+        with patch("neural_memory.cli.doctor.importlib.metadata.version", return_value="4.53.2"):
+            result = _check_dev_checkout_version(tmp_path)
+
+        assert result["status"] == "warn"
+        assert "checkout 4.53.4; installed 4.53.2" in result["detail"]
+        assert 'pip install -e ".[dev]"' in result["fix"]
+
     def test_run_doctor_returns_summary(self) -> None:
         from neural_memory.cli.doctor import run_doctor
 
@@ -196,6 +229,40 @@ class TestDoctor:
             result = run_doctor(json_output=True)
             assert result["failed"] == 1
             assert result["passed"] == 14
+
+    def test_run_doctor_dev_adds_dev_checks(self) -> None:
+        from neural_memory.cli.doctor import run_doctor
+
+        with (
+            patch("neural_memory.cli.doctor._check_python_version") as m1,
+            patch("neural_memory.cli.doctor._check_config") as m2,
+            patch("neural_memory.cli.doctor._check_brain") as m3,
+            patch("neural_memory.cli.doctor._check_dependencies") as m4,
+            patch("neural_memory.cli.doctor._check_embedding_provider") as m5,
+            patch("neural_memory.cli.doctor._check_schema_version") as m6,
+            patch("neural_memory.cli.doctor._check_mcp_config") as m7,
+            patch("neural_memory.cli.doctor._check_mcp_connection") as m7b,
+            patch("neural_memory.cli.doctor._check_cli_tools") as m8,
+            patch("neural_memory.cli.doctor._check_hooks") as m9,
+            patch("neural_memory.cli.doctor._check_dedup") as m10,
+            patch("neural_memory.cli.doctor._check_surface") as m11,
+            patch("neural_memory.cli.doctor._check_config_freshness") as m12,
+            patch("neural_memory.cli.doctor._check_pro_plugin") as m13,
+            patch("neural_memory.cli.doctor._check_orphan_fibers") as m14,
+            patch("neural_memory.cli.doctor._check_dev_environment") as m15,
+        ):
+            for m in [m1, m2, m3, m4, m5, m6, m7, m7b, m8, m9, m10, m11, m12, m13, m14]:
+                m.return_value = {"name": "test", "status": "ok", "detail": "ok"}
+            m15.return_value = [
+                {"name": "Source checkout", "status": "ok", "detail": "ok"},
+                {"name": "Dev dependencies", "status": "ok", "detail": "ok"},
+            ]
+
+            result = run_doctor(json_output=True, dev=True)
+
+        assert result["passed"] == 17
+        assert result["total"] == 17
+        assert any(c["tier"] == "dev" for c in result["checks"])
 
 
 # ──────────────────── Embedding Setup ────────────────────
@@ -384,6 +451,14 @@ class TestDoctorCommand:
         from neural_memory.cli.commands.tools import doctor
 
         assert callable(doctor)
+
+    def test_doctor_accepts_dev_option(self) -> None:
+        import inspect
+
+        from neural_memory.cli.commands.tools import doctor
+
+        sig = inspect.signature(doctor)
+        assert "dev" in sig.parameters
 
     def test_setup_function_exists(self) -> None:
         from neural_memory.cli.commands.tools import setup

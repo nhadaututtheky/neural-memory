@@ -9,6 +9,7 @@ with actionable fix suggestions. Supports --fix for auto-remediation.
 from __future__ import annotations
 
 import importlib
+import importlib.metadata
 import json
 import shutil
 import sys
@@ -27,6 +28,7 @@ SKIP = "skip"
 TIER_CORE = "core"  # required for basic operation
 TIER_RECOMMENDED = "recommended"  # recommended for full power (embeddings, MCP, hooks)
 TIER_OPTIONAL = "optional"  # nice-to-have (surface snapshot, pro plugin, etc.)
+TIER_DEV = "dev"  # contributor/source checkout diagnostics
 
 # Check name → tier mapping. Unassigned defaults to RECOMMENDED.
 _CHECK_TIERS: dict[str, str] = {
@@ -45,17 +47,27 @@ _CHECK_TIERS: dict[str, str] = {
     "Config freshness": TIER_OPTIONAL,
     "Pro features": TIER_OPTIONAL,
     "Orphan fibers": TIER_OPTIONAL,
+    "Source checkout": TIER_DEV,
+    "Editable install": TIER_DEV,
+    "Dev dependencies": TIER_DEV,
+    "Checkout version": TIER_DEV,
 }
 
 QUICKSTART_URL = "https://nhadaututtheky.github.io/neural-memory/guides/quickstart/"
 
 
-def run_doctor(*, json_output: bool = False, fix: bool = False) -> dict[str, Any]:
+def run_doctor(
+    *,
+    json_output: bool = False,
+    fix: bool = False,
+    dev: bool = False,
+) -> dict[str, Any]:
     """Run all diagnostic checks and return results.
 
     Args:
         json_output: Return machine-readable output.
         fix: Auto-fix what's possible (enable config flags, install hooks).
+        dev: Include source checkout diagnostics for contributors.
     """
     checks: list[dict[str, Any]] = []
 
@@ -74,6 +86,8 @@ def run_doctor(*, json_output: bool = False, fix: bool = False) -> dict[str, Any
     checks.append(_check_cli_tools())
     checks.append(_check_pro_plugin())
     checks.append(_check_orphan_fibers())
+    if dev:
+        checks.extend(_check_dev_environment())
 
     # Auto-fix pass
     if fix:
@@ -100,6 +114,162 @@ def run_doctor(*, json_output: bool = False, fix: bool = False) -> dict[str, Any
         _render_results(result)
 
     return result
+
+
+def _source_checkout_root() -> Path | None:
+    """Return the repository root when running from a source checkout."""
+    root = Path(__file__).resolve().parents[3]
+    if (root / "pyproject.toml").exists() and (root / "src" / "neural_memory").exists():
+        return root
+    return None
+
+
+def _read_checkout_version(root: Path) -> str | None:
+    """Read ``project.version`` from a source checkout."""
+    try:
+        import tomllib
+
+        data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+        version = data.get("project", {}).get("version")
+        return str(version) if version else None
+    except Exception:
+        return None
+
+
+def _check_dev_environment() -> list[dict[str, Any]]:
+    """Contributor-focused diagnostics for source checkouts."""
+    root = _source_checkout_root()
+    return [
+        _check_dev_source_checkout(root),
+        _check_dev_editable_install(root),
+        _check_dev_dependencies(),
+        _check_dev_checkout_version(root),
+    ]
+
+
+def _check_dev_source_checkout(root: Path | None = None) -> dict[str, Any]:
+    """Check whether doctor is running from a repository checkout."""
+    root = _source_checkout_root() if root is None else root
+    if root is None:
+        return {
+            "name": "Source checkout",
+            "status": SKIP,
+            "detail": "not running from a source checkout",
+        }
+    return {
+        "name": "Source checkout",
+        "status": OK,
+        "detail": str(root),
+    }
+
+
+def _check_dev_editable_install(root: Path | None = None) -> dict[str, Any]:
+    """Check whether imports resolve to the current checkout."""
+    root = _source_checkout_root() if root is None else root
+    if root is None:
+        return {
+            "name": "Editable install",
+            "status": SKIP,
+            "detail": "source checkout not detected",
+        }
+
+    try:
+        import neural_memory
+
+        package_path = Path(neural_memory.__file__).resolve()
+        package_path.relative_to(root / "src")
+        return {
+            "name": "Editable install",
+            "status": OK,
+            "detail": "importing from checkout src/",
+        }
+    except ValueError:
+        return {
+            "name": "Editable install",
+            "status": WARN,
+            "detail": "importing installed package, not checkout src/",
+            "fix": 'Run: pip install -e ".[dev]"',
+        }
+    except Exception:
+        return {
+            "name": "Editable install",
+            "status": WARN,
+            "detail": "could not inspect import path",
+            "fix": 'Run: pip install -e ".[dev]"',
+        }
+
+
+def _check_dev_dependencies() -> dict[str, Any]:
+    """Check contributor tooling dependencies."""
+    required = {
+        "pytest": "pytest",
+        "pytest-asyncio": "pytest_asyncio",
+        "ruff": "ruff",
+        "mypy": "mypy",
+    }
+    missing = []
+    for package_name, module_name in required.items():
+        try:
+            importlib.import_module(module_name)
+        except ImportError:
+            missing.append(package_name)
+
+    if missing:
+        return {
+            "name": "Dev dependencies",
+            "status": FAIL,
+            "detail": f"missing: {', '.join(missing)}",
+            "fix": 'Run: pip install -e ".[dev]"',
+        }
+
+    return {
+        "name": "Dev dependencies",
+        "status": OK,
+        "detail": "pytest, pytest-asyncio, ruff, mypy available",
+    }
+
+
+def _check_dev_checkout_version(root: Path | None = None) -> dict[str, Any]:
+    """Compare checkout version with the installed package metadata."""
+    root = _source_checkout_root() if root is None else root
+    if root is None:
+        return {
+            "name": "Checkout version",
+            "status": SKIP,
+            "detail": "source checkout not detected",
+        }
+
+    checkout_version = _read_checkout_version(root)
+    if checkout_version is None:
+        return {
+            "name": "Checkout version",
+            "status": WARN,
+            "detail": "could not read pyproject.toml version",
+        }
+
+    try:
+        installed_version = importlib.metadata.version("neural-memory")
+    except importlib.metadata.PackageNotFoundError:
+        return {
+            "name": "Checkout version",
+            "status": WARN,
+            "detail": f"checkout {checkout_version}; package not installed",
+            "fix": 'Run: pip install -e ".[dev]"',
+        }
+
+    if installed_version == checkout_version:
+        return {
+            "name": "Checkout version",
+            "status": OK,
+            "detail": f"checkout {checkout_version}; installed {installed_version}",
+        }
+
+    return {
+        "name": "Checkout version",
+        "status": WARN,
+        "detail": f"checkout {checkout_version}; installed {installed_version}",
+        "fix": 'Run: pip install -e ".[dev]"',
+    }
 
 
 def _check_python_version() -> dict[str, Any]:
@@ -899,9 +1069,10 @@ def _render_results(result: dict[str, Any]) -> None:
         TIER_CORE: ("CORE", "required for basic operation"),
         TIER_RECOMMENDED: ("RECOMMENDED", "full-power setup"),
         TIER_OPTIONAL: ("OPTIONAL", "nice-to-have, not needed for basic use"),
+        TIER_DEV: ("DEV", "source checkout and contributor tooling"),
     }
 
-    for tier in (TIER_CORE, TIER_RECOMMENDED, TIER_OPTIONAL):
+    for tier in (TIER_CORE, TIER_RECOMMENDED, TIER_OPTIONAL, TIER_DEV):
         tier_checks = [c for c in result["checks"] if c.get("tier") == tier]
         if not tier_checks:
             continue

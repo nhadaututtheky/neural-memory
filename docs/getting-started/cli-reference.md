@@ -400,6 +400,7 @@ nmem doctor [OPTIONS]
 |--------|------|----------|---------|-------------|
 | `--json / -j` | boolean | No | `False` | Output as JSON |
 | `--fix` | boolean | No | `False` | Auto-fix available issues |
+| `--dev` | boolean | No | `False` | Include source checkout and contributor tooling checks |
 
 ### `nmem dashboard`
 
