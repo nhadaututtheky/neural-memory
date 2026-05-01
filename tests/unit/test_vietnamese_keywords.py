@@ -40,7 +40,9 @@ class TestStopWords:
     """Tests for language-aware stop word selection."""
 
     def test_combined_stop_words(self) -> None:
-        assert STOP_WORDS == STOP_WORDS_EN | STOP_WORDS_VI
+        from neural_memory.extraction.keywords import _STOP_WORDS_CONVERSATIONAL_EN
+
+        assert STOP_WORDS == STOP_WORDS_EN | STOP_WORDS_VI | _STOP_WORDS_CONVERSATIONAL_EN
 
     def test_english_stop_words(self) -> None:
         assert "the" in STOP_WORDS_EN
@@ -51,7 +53,9 @@ class TestStopWords:
         assert "the" not in STOP_WORDS_VI
 
     def test_get_stop_words_en(self) -> None:
-        assert _get_stop_words("en", "") == STOP_WORDS_EN
+        from neural_memory.extraction.keywords import _STOP_WORDS_CONVERSATIONAL_EN
+
+        assert _get_stop_words("en", "") == STOP_WORDS_EN | _STOP_WORDS_CONVERSATIONAL_EN
 
     def test_get_stop_words_vi(self) -> None:
         assert _get_stop_words("vi", "") == STOP_WORDS_VI

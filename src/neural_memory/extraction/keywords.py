@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
-# English stop words
+# English stop words — standard
 STOP_WORDS_EN: frozenset[str] = frozenset(
     {
         "the",
@@ -133,6 +133,112 @@ STOP_WORDS_EN: frozenset[str] = frozenset(
     }
 )
 
+# Conversational English — common contractions without apostrophes,
+# filler words, and profanity that keyword extraction should skip.
+# These produce noisy bigrams ("like dont", "fucking fall") when
+# left in the token stream.
+_STOP_WORDS_CONVERSATIONAL_EN: frozenset[str] = frozenset(
+    {
+        # Contractions without apostrophes (casual typing)
+        "dont",
+        "doesnt",
+        "didnt",
+        "wont",
+        "wouldnt",
+        "couldnt",
+        "shouldnt",
+        "cant",
+        "isnt",
+        "arent",
+        "wasnt",
+        "werent",
+        "hasnt",
+        "havent",
+        "hadnt",
+        "im",
+        "ive",
+        "id",
+        "youre",
+        "youve",
+        "youll",
+        "youd",
+        "hes",
+        "shes",
+        "its",
+        "were",
+        "theyre",
+        "theyve",
+        "theyll",
+        "thats",
+        "theres",
+        "heres",
+        "whats",
+        "lets",
+        # Common filler / hedging
+        "like",
+        "really",
+        "actually",
+        "basically",
+        "literally",
+        "honestly",
+        "seriously",
+        "obviously",
+        "suppose",
+        "guess",
+        "thing",
+        "things",
+        "something",
+        "anything",
+        "everything",
+        "nothing",
+        "kinda",
+        "sorta",
+        "gonna",
+        "gotta",
+        "wanna",
+        "dunno",
+        "yeah",
+        "nah",
+        "yep",
+        "nope",
+        "hey",
+        "oh",
+        "ugh",
+        "lol",
+        "lmao",
+        "idk",
+        "tbh",
+        "imo",
+        "imho",
+        # Profanity (no topical signal)
+        "fucking",
+        "fuck",
+        "shit",
+        "damn",
+        "hell",
+        "crap",
+        # Common verbs that rarely carry topical signal
+        "think",
+        "know",
+        "want",
+        "make",
+        "go",
+        "going",
+        "come",
+        "take",
+        "give",
+        "tell",
+        "say",
+        "said",
+        "get",
+        "got",
+        "went",
+        "put",
+        "look",
+        "looking",
+    }
+)
+
 # Vietnamese stop words
 STOP_WORDS_VI: frozenset[str] = frozenset(
     {
@@ -191,7 +297,7 @@ STOP_WORDS_VI: frozenset[str] = frozenset(
 )
 
 # Combined stop words for backward compatibility
-STOP_WORDS: frozenset[str] = STOP_WORDS_EN | STOP_WORDS_VI
+STOP_WORDS: frozenset[str] = STOP_WORDS_EN | STOP_WORDS_VI | _STOP_WORDS_CONVERSATIONAL_EN
 
 # Vietnamese diacritical character pattern (unique to Vietnamese, not French)
 _VI_DIACRITICS = re.compile(r"[ăâđêôơưắằẳẵặấầẩẫậếềểễệốồổỗộớờởỡợứừửữự]")
@@ -207,8 +313,8 @@ def _get_stop_words(language: str, text: str) -> frozenset[str]:
     if language == "vi":
         return STOP_WORDS_VI
     if language == "en":
-        return STOP_WORDS_EN
-    # "auto" — use both
+        return STOP_WORDS_EN | _STOP_WORDS_CONVERSATIONAL_EN
+    # "auto" — use all
     return STOP_WORDS
 
 
