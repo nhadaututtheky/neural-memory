@@ -39,7 +39,11 @@ def run_async(coro: Coroutine[Any, Any, T]) -> T:
     """
     from neural_memory.utils.sandbox import ensure_aiosqlite_or_exit_cli
 
-    ensure_aiosqlite_or_exit_cli()
+    try:
+        ensure_aiosqlite_or_exit_cli()
+    except BaseException:
+        coro.close()
+        raise
 
     async def _with_cleanup() -> T:
         try:

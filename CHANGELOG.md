@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Coroutine warning on sandbox fail-fast (#153)
+
+CLI commands that fail fast in restricted sandboxes no longer emit
+`RuntimeWarning: coroutine was never awaited`. The unawaited command
+coroutine is now explicitly closed before re-raising the sandbox exit.
+
 ## [4.53.4] — 2026-04-30
 
 ### Fixed — Sandbox Hang at Every Storage Entry Point (#151)
