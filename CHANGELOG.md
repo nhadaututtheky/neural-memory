@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Concept Neuron Noise Filtering (#156)
+
+Short and casual text no longer creates low-signal concept neurons that pollute
+recall context. `ExtractConceptNeuronsStep` now:
+
+- Raises min keyword length from 3 to 4 chars (filters `AI`, `OS`, `It`)
+- Scales concept floor from 5 to 3 for content under 100 chars
+- Skips keywords already captured as entity neurons (avoids duplicates)
+- Filters known noise words (`use`, `run`, `new`, `got`, etc.)
+
+Aligns with the F2 Fiber Precision & Density roadmap item.
+
 ### Fixed — Advisory hints stripped from machine output (#155)
 
 CLI update notices are now skipped for machine-oriented commands
