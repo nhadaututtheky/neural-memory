@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.54.0] — 2026-05-01
+
 ### Fixed — Conversational stop words for cleaner keyword extraction (#157)
 
 Keyword extraction now filters casual English that produces noisy concept
