@@ -9,10 +9,20 @@ This script:
   2. Marks matching neurons as stale (lifecycle_state = 'stale') so the recall
      pipeline naturally skips them.
   3. Reports what was cleaned so we can assess if more filtering is needed.
+
+Usage:
+  python scripts/prune-noisy-concepts.py           # dry-run (default)
+  python scripts/prune-noisy-concepts.py --execute  # apply pruning
+  python scripts/prune-noisy-concepts.py --dump     # save affected to JSON
+  python scripts/prune-noisy-concepts.py --unprune prune-dump.json  # restore
+
+Supports BRAIN_PATH env var to override ~/.neuralmemory base directory.
 """
 
 from __future__ import annotations
 
+import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -146,7 +156,6 @@ CODE_NOISE: set[str] = {
     "write", "Write",
     "load", "Load",
     "save", "Save",
-    "copy", "Copy",
     "move", "Move",
     "find", "Find",
     "sort", "Sort",
@@ -196,10 +205,18 @@ CODE_NOISE: set[str] = {
 # ── Helpers ─────────────────────────────────────────────────
 
 
+def _get_brain_base() -> Path:
+    """Resolve brain storage directory from env var or default."""
+    env_path = os.environ.get("BRAIN_PATH", "")
+    if env_path:
+        return Path(env_path)
+    return Path.home() / ".neuralmemory"
+
+
 def find_brain_dbs() -> list[Path]:
     """Find all brain databases in the neural-memory directory."""
     candidates: list[Path] = []
-    base = Path.home() / ".neuralmemory"
+    base = _get_brain_base()
 
     # Main brain
     main = base / "brain.db"
@@ -210,6 +227,11 @@ def find_brain_dbs() -> list[Path]:
     brains_dir = base / "brains"
     if brains_dir.exists():
         candidates.extend(brains_dir.glob("*.db"))
+
+    # Also check for any .db files directly in the base dir (alternate layouts)
+    for f in base.glob("*.db"):
+        if f not in candidates:
+            candidates.append(f)
 
     return candidates
 
@@ -282,12 +304,120 @@ def report_noise_sample(cur: sqlite3.Cursor, limit: int = 15) -> list[tuple]:
     return cur.fetchall()
 
 
+def dump_affected_neurons(dbs: list[Path]) -> list[dict]:
+    """Dump all affected (brain, neuron_id, content) to a list for rollback."""
+    noise_lower = {w.lower() for w in SHORT_NOISE | CODE_NOISE}
+    placeholders = ",".join("?" for _ in noise_lower)
+    affected: list[dict] = []
+
+    for db_path in dbs:
+        conn = sqlite3.connect(str(db_path))
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='neurons'"
+        )
+        if not cur.fetchone():
+            conn.close()
+            continue
+
+        cur.execute(
+            f"""
+            SELECT rowid, id, type, content, lifecycle_state
+            FROM neurons
+            WHERE type IN ('concept', 'entity')
+            AND LOWER(content) IN ({placeholders})
+            AND (lifecycle_state IS NULL OR lifecycle_state != 'stale')
+            """,
+            list(noise_lower),
+        )
+        for row in cur.fetchall():
+            affected.append({
+                "brain": str(db_path),
+                "rowid": row[0],
+                "neuron_id": row[1],
+                "type": row[2],
+                "content": row[3],
+                "lifecycle_state": row[4],
+            })
+        conn.close()
+
+    return affected
+
+
+def unprune_neurons(dump_path: str) -> int:
+    """Restore neurons from a previously saved dump file."""
+    with open(dump_path) as f:
+        records = json.load(f)
+
+    if not records:
+        print("No records to restore.")
+        return 0
+
+    # Group by brain file
+    brains: dict[str, list[dict]] = {}
+    for r in records:
+        brains.setdefault(r["brain"], []).append(r)
+
+    total_restored = 0
+    for brain_path, brain_records in brains.items():
+        conn = sqlite3.connect(brain_path)
+        cur = conn.cursor()
+        restorable = []
+        for r in brain_records:
+            nid = r["neuron_id"]
+            cur.execute(
+                "SELECT lifecycle_state FROM neurons WHERE id = ?", (nid,)
+            )
+            row = cur.fetchone()
+            if row and row[0] == "stale":
+                restorable.append(nid)
+
+        if restorable:
+            placeholders = ",".join("?" for _ in restorable)
+            cur.execute(
+                f"""
+                UPDATE neurons
+                SET lifecycle_state = NULL,
+                    metadata = json_remove(COALESCE(metadata, '{{}}'), '$.pruned_reason')
+                WHERE id IN ({placeholders})
+                """,
+                restorable,
+            )
+            conn.commit()
+            total_restored += cur.rowcount
+            print(f"  Restored {cur.rowcount} neurons in {Path(brain_path).name}")
+        else:
+            print(f"  No stale neurons to restore in {Path(brain_path).name}")
+        conn.close()
+
+    return total_restored
+
+
 # ── Main ────────────────────────────────────────────────────
 
 
 def main() -> None:
     """Run the prune, showing report with optional --execute to apply."""
-    dry_run = "--execute" not in sys.argv
+    args = set(sys.argv[1:])
+    dry_run = "--execute" not in args
+    do_dump = "--dump" in args
+    do_unprune = "--unprune" in args
+
+    # Extract dump path
+    dump_path = None
+    for i, arg in enumerate(sys.argv):
+        if arg == "--unprune" and i + 1 < len(sys.argv):
+            dump_path = sys.argv[i + 1]
+
+    # Unprune mode
+    if do_unprune and dump_path:
+        print("=" * 60)
+        print("  NeuralMemory -- Unprune Mode")
+        print(f"  Dump file: {dump_path}")
+        print("=" * 60)
+        restored = unprune_neurons(dump_path)
+        print(f"\nRestored {restored} neuron(s) total")
+        return
 
     print("=" * 60)
     print("  NeuralMemory -- Noisy Concept/Entity Prune")
@@ -297,7 +427,20 @@ def main() -> None:
     dbs = find_brain_dbs()
     print(f"\nFound {len(dbs)} brain database(s):")
 
+    # Dump-all mode: save affected neurons to JSON for rollback
+    if do_dump:
+        affected = dump_affected_neurons(dbs)
+        dump_file = Path("prune-dump.json")
+        with open(dump_file, "w") as f:
+            json.dump(affected, f, indent=2)
+        print(f"\nDumped {len(affected)} affected neuron(s) to {dump_file}")
+        print("  Use --unprune prune-dump.json to restore")
+        if not dry_run:
+            print("  Note: --dump + --execute saves the backup BEFORE pruning")
+        return
+
     total_noisy = 0
+    total_affected: list[dict] = []
     total_pruned = 0
 
     for db_path in dbs:
@@ -331,6 +474,9 @@ def main() -> None:
             print(f'      {row[0]:10s} "{row[1]:20s}" x {row[2]}')
 
         if not dry_run:
+            # Save backup before pruning
+            affected = dump_affected_neurons([db_path])
+            total_affected.extend(affected)
             pruned = prune_noisy_neurons(cur, dry_run=False)
             total_pruned += pruned
             conn.commit()
@@ -340,10 +486,18 @@ def main() -> None:
 
         conn.close()
 
+    # Save backup dump if anything was pruned
+    if not dry_run and total_affected:
+        dump_file = Path("prune-dump.json")
+        with open(dump_file, "w") as f:
+            json.dump(total_affected, f, indent=2)
+        print(f"\n  Backup saved to {dump_file} (use --unprune to restore)")
+
     print(f"\n{'=' * 60}")
     if dry_run:
         print(f"  Total: {total_noisy} noisy neurons found across {len(dbs)} DB(s)")
         print("  Run with --execute to apply")
+        print("  Run with --dump to save affected list (for rollback)")
     else:
         print(f"  Pruned: {total_pruned} noisy neurons")
     print(f"{'=' * 60}")
