@@ -172,12 +172,7 @@ CODE_NOISE: set[str] = {
     "todo", "Todo", "TODO",
     "fixme", "Fixme", "FIXME",
     "hack", "Hack",
-    "work", "Work",
-    "task", "Task",
-    "code", "Code",
-    "data", "Data",
-    "info", "Info",
-    "meta", "Meta",
+
     "docs", "Docs",
     "test", "Test",
     "spec", "Spec",

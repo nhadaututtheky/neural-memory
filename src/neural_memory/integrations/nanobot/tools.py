@@ -9,6 +9,7 @@ Four tools conforming to Nanobot's Tool ABC interface:
 
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import Any
 
@@ -123,13 +124,13 @@ class NMRememberTool(BaseNMTool):
         # Priority order:
         # 1. Explicit source_agent parameter (agent passes it deliberately)
         # 2. NMEM_AGENT_ID env var (set by agent's launcher — transparent)
-        # 3. Default to "unknown" so every memory has some attribution
+        # 3. No tag — skip injection to avoid agent:unknown polluting legacy memories
         source_agent = (
             kwargs.get("source_agent", "")
             or os.environ.get("NMEM_AGENT_ID", "")
-            or "unknown"
         )
-        tags.add(f"agent:{source_agent}")
+        if source_agent:
+            tags.add(f"agent:{source_agent}")
 
         storage = self._ctx.storage
         encoder = MemoryEncoder(storage, self._ctx.config)
@@ -272,9 +273,12 @@ class NMRecallTool(BaseNMTool):
 
         # Apply post-query type/tag filters for agent-to-agent precision
         if (type_filter or tag_filters) and result.fibers_matched:
+            # Batch fetch fibers concurrently to avoid N+1
+            fibers = await asyncio.gather(
+                *(self._ctx.storage.get_fiber(fid) for fid in result.fibers_matched)
+            )
             filtered_ids: list[str] = []
-            for fid in result.fibers_matched:
-                fiber = await self._ctx.storage.get_fiber(fid)
+            for fid, fiber in zip(result.fibers_matched, fibers, strict=True):
                 if fiber is None:
                     continue
                 fiber_meta = fiber.metadata or {}
@@ -296,12 +300,15 @@ class NMRecallTool(BaseNMTool):
 
                 filtered_ids.append(fid)
 
+            # Preserve list shape for callers parsing fibers_matched,
+            # but also return count for convenience
             result.fibers_matched = filtered_ids
             if not filtered_ids:
                 return self._json({
                     "answer": None,
                     "message": f"No memories matching type=\"{type_filter}\" tags={tag_filters}",
-                    "fibers_matched": 0,
+                    "fibers_matched": [],
+                    "fibers_matched_count": 0,
                 })
 
         if result.confidence < min_confidence:
@@ -318,7 +325,8 @@ class NMRecallTool(BaseNMTool):
                 "answer": result.context or "No relevant memories found.",
                 "confidence": result.confidence,
                 "neurons_activated": result.neurons_activated,
-                "fibers_matched": len(result.fibers_matched),
+                "fibers_matched": result.fibers_matched,
+                "fibers_matched_count": len(result.fibers_matched),
                 "depth_used": result.depth_used.value if result.depth_used else depth.value,
                 "tokens_used": result.tokens_used,
             }

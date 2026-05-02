@@ -2992,7 +2992,7 @@ class ReflexPipeline:
                                 _session_ctx_topics = {t for t, w in top.items() if w > 0.3}
 
                     # Combine query tokens with session context for richer matching
-                    _ctx_topics = set(query_tokens) | _session_ctx_topics
+                    _ctx_topics = set(query_tokens or ()) | _session_ctx_topics
                     ret_ctx = ContextFingerprint(
                         project_name=_ret_project,
                         dominant_topics=tuple(sorted(_ctx_topics)[:10]),

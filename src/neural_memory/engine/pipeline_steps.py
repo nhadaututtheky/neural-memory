@@ -359,7 +359,7 @@ _CODE_NOISE: frozenset[str] = frozenset(
         # Version control — code-specific terms (skip words that work in general conversation)
         "stash", "rebase",
         # Common standard library imports (Python stdlib noise)
-        "copy", "math", "time", "date",
+        "math", "time", "date",
         "typing", "functools", "itertools", "collections",
         "dataclass",
     }

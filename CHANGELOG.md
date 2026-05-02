@@ -11,24 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Recency boost (T1.6):** Newer memories (minutes old) score higher than
   older ones (days old) via exponential decay with configurable halflife.
+  Opt-in: set `creation_recency_boost > 0.0` (default 0.0, neutral).
 - **High-signal memory boost (T1.7):** Decisions, insights, and preferences
-  get a 1.15x score boost so agent handoffs surface priority memories first.
+  get a configurable score multiplier for agent handoffs.
+  Opt-in: set `high_signal_memory_boost > 1.0` (default 1.0, neutral).
 - **Session context enrichment:** Short or low-signal queries now fall back
   to recent session topics for context matching, preventing empty recall.
+  Enabled by default (`session_context_enrichment: True`).
 - **Expanded noise concept filter:** Curated code-noise set grown from 18
-  to 143 terms (283 total with stop words), blocking "json", "uuid",
+  to ~140 terms (plus spaCy stop words), blocking "json", "uuid",
   "config", "null", import/export keywords, repo boilerplate, and log
   levels during encoding. Config toggle: `concept_noise_filter_enabled`.
-- **Agent identity injection:** `nmem_remember` auto-tags all memories with
-  `agent:<name>` via explicit `source_agent` parameter, `NMEM_AGENT_ID`
-  environment variable, or "unknown" fallback — enabling cross-agent recall.
+- **Agent identity injection:** `nmem_remember` tags memories with
+  `agent:<name>` via explicit `source_agent` parameter or `NMEM_AGENT_ID`
+  env var. Skips injection when no identity is available — no `agent:unknown`
+  pollution on legacy memories.
 - **Type and tag filters on nmem_recall:** Agents can scope recall by memory
   type (`decision`, `insight`, `preference`) and tags (`agent:bindax`,
-  `project:caitos`) for precision agent-to-agent handoffs.
+  `project:caitos`) for precision agent-to-agent handoffs. Batch fiber
+  fetching via `asyncio.gather` to avoid N+1 query pattern.
 - **Config fields:** All new features are configurable via BrainConfig with
-  zero-breaking-change defaults. See `brain.py` for details.
-- **Prune script:** One-time cleanup of 605 stale noisy neurons across
-  brain databases. Run `python scripts/prune-noisy-concepts.py --execute`.
+  neutral defaults (boost=1.0, recency=0.0). Upgrade-safe — no silent
+  ranking changes. See `brain.py` for details.
+- **Prune script:** Maintenance script for cleaning stale noisy neurons.
+  Scans config-resolved brain paths (supports `BRAIN_PATH` env var).
+  Dry-run only by default; use `--execute` to apply. Run
+  `python scripts/prune-noisy-concepts.py` for preview.
 
 ## [4.54.0] — 2026-05-01
 
