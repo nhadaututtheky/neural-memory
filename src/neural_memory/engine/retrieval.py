@@ -2730,9 +2730,11 @@ class ReflexPipeline:
         _topic_affinity_boost = self._config.topic_affinity_boost
         _recent_boost = self._config.recent_access_boost
         _recent_window_hrs = self._config.recent_access_window_days * 24.0
-        _creation_recency_boost = getattr(self._config, 'creation_recency_boost', 0.3)
-        _creation_recency_halflife_hrs = getattr(self._config, 'creation_recency_halflife_hrs', 24.0)
-        _session_context_enrichment = getattr(self._config, 'session_context_enrichment', True)
+        _creation_recency_boost = getattr(self._config, "creation_recency_boost", 0.3)
+        _creation_recency_halflife_hrs = getattr(
+            self._config, "creation_recency_halflife_hrs", 24.0
+        )
+        _session_context_enrichment = getattr(self._config, "session_context_enrichment", True)
         _session_topics = session_topics or set()
         _goal_proximity = goal_proximity or {}
         _goal_proximity_boost = getattr(self._config, "goal_proximity_boost", 0.25)

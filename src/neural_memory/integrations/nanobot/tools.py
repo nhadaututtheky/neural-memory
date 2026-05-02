@@ -125,10 +125,7 @@ class NMRememberTool(BaseNMTool):
         # 1. Explicit source_agent parameter (agent passes it deliberately)
         # 2. NMEM_AGENT_ID env var (set by agent's launcher — transparent)
         # 3. No tag — skip injection to avoid agent:unknown polluting legacy memories
-        source_agent = (
-            kwargs.get("source_agent", "")
-            or os.environ.get("NMEM_AGENT_ID", "")
-        )
+        source_agent = kwargs.get("source_agent", "") or os.environ.get("NMEM_AGENT_ID", "")
         if source_agent:
             tags.add(f"agent:{source_agent}")
 
@@ -304,12 +301,14 @@ class NMRecallTool(BaseNMTool):
             # but also return count for convenience
             result.fibers_matched = filtered_ids
             if not filtered_ids:
-                return self._json({
-                    "answer": None,
-                    "message": f"No memories matching type=\"{type_filter}\" tags={tag_filters}",
-                    "fibers_matched": [],
-                    "fibers_matched_count": 0,
-                })
+                return self._json(
+                    {
+                        "answer": None,
+                        "message": f'No memories matching type="{type_filter}" tags={tag_filters}',
+                        "fibers_matched": [],
+                        "fibers_matched_count": 0,
+                    }
+                )
 
         if result.confidence < min_confidence:
             return self._json(

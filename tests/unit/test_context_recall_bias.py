@@ -146,9 +146,7 @@ class TestNoiseFilter:
             "CaitOS",
             "Brendon",
         ]:
-            assert term.lower() not in _NOISE_CONCEPTS, (
-                f"Domain term '{term}' incorrectly filtered"
-            )
+            assert term.lower() not in _NOISE_CONCEPTS, f"Domain term '{term}' incorrectly filtered"
 
     def test_get_noise_concepts_returns_frozenset(self) -> None:
         """_get_noise_concepts should return a frozenset."""
@@ -196,7 +194,9 @@ class TestAgentIdentityInjection:
     @pytest.mark.asyncio
     async def test_explicit_source_agent(self, storage: SQLiteStorage) -> None:
         """Explicit parameter should flow through the real remember tool."""
-        tool = NMRememberTool(NMContext(storage=storage, brain=Brain.create(name="test_brain"), config=BrainConfig()))
+        tool = NMRememberTool(
+            NMContext(storage=storage, brain=Brain.create(name="test_brain"), config=BrainConfig())
+        )
         result = await tool.execute(content="agent injection test", source_agent="bindax")
         assert '"success": true' in result
 
@@ -205,7 +205,11 @@ class TestAgentIdentityInjection:
         """NMEM_AGENT_ID env var should be used when no explicit param."""
         os.environ["NMEM_AGENT_ID"] = "codex"
         try:
-            tool = NMRememberTool(NMContext(storage=storage, brain=Brain.create(name="test_brain"), config=BrainConfig()))
+            tool = NMRememberTool(
+                NMContext(
+                    storage=storage, brain=Brain.create(name="test_brain"), config=BrainConfig()
+                )
+            )
             result = await tool.execute(content="env fallback test")
             assert '"success": true' in result
         finally:
@@ -215,7 +219,9 @@ class TestAgentIdentityInjection:
     async def test_no_tag_when_no_identity(self, storage: SQLiteStorage) -> None:
         """No agent tag should be injected when no identity is available."""
         os.environ.pop("NMEM_AGENT_ID", None)
-        tool = NMRememberTool(NMContext(storage=storage, brain=Brain.create(name="test_brain"), config=BrainConfig()))
+        tool = NMRememberTool(
+            NMContext(storage=storage, brain=Brain.create(name="test_brain"), config=BrainConfig())
+        )
         result = await tool.execute(content="no identity test")
         assert '"success": true' in result
 
@@ -227,9 +233,7 @@ class TestHighSignalBoost:
     """Verify the T1.7 high-signal memory boost through the real scoring pipeline."""
 
     @pytest.mark.asyncio
-    async def test_decision_ranks_higher_with_boost(
-        self, fiber_storage: SQLiteStorage
-    ) -> None:
+    async def test_decision_ranks_higher_with_boost(self, fiber_storage: SQLiteStorage) -> None:
         """With boost enabled, decision fibers should score higher than concept fibers."""
         from neural_memory.engine.retrieval import ReflexPipeline
 
@@ -260,9 +264,7 @@ class TestHighSignalBoost:
         assert result.context is not None
 
     @pytest.mark.asyncio
-    async def test_preferences_boosted_with_config(
-        self, fiber_storage: SQLiteStorage
-    ) -> None:
+    async def test_preferences_boosted_with_config(self, fiber_storage: SQLiteStorage) -> None:
         """Preferences should also get the high-signal boost when enabled."""
         from neural_memory.engine.retrieval import ReflexPipeline
 
