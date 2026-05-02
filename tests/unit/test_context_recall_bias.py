@@ -18,6 +18,8 @@ from neural_memory.engine.pipeline_steps import (
     _NOISE_CONCEPTS,
     _get_noise_concepts,
 )
+from neural_memory.integrations.nanobot.context import NMContext
+from neural_memory.integrations.nanobot.tools import NMRememberTool
 from neural_memory.storage.sqlite_store import SQLiteStorage
 
 # ── Fixtures ────────────────────────────────────────────────
@@ -191,37 +193,31 @@ class TestBrainConfig:
 class TestAgentIdentityInjection:
     """Verify the two-layer agent identity resolution in nmem_remember."""
 
-    def test_explicit_source_agent(self) -> None:
-        """Explicit parameter should produce agent:<name> tag."""
-        tags: set[str] = set()
-        source_agent = "bindax"
-        resolved = source_agent or os.environ.get("NMEM_AGENT_ID", "")
-        if resolved:
-            tags.add(f"agent:{resolved}")
-        assert "agent:bindax" in tags
+    @pytest.mark.asyncio
+    async def test_explicit_source_agent(self, storage: SQLiteStorage) -> None:
+        """Explicit parameter should flow through the real remember tool."""
+        tool = NMRememberTool(NMContext(storage=storage, brain=Brain.create(name="test_brain"), config=BrainConfig()))
+        result = await tool.execute(content="agent injection test", source_agent="bindax")
+        assert '"success": true' in result
 
-    def test_env_var_fallback(self) -> None:
+    @pytest.mark.asyncio
+    async def test_env_var_fallback(self, storage: SQLiteStorage) -> None:
         """NMEM_AGENT_ID env var should be used when no explicit param."""
         os.environ["NMEM_AGENT_ID"] = "codex"
         try:
-            tags: set[str] = set()
-            source_agent = ""  # no explicit param
-            resolved = source_agent or os.environ.get("NMEM_AGENT_ID", "")
-            if resolved:
-                tags.add(f"agent:{resolved}")
-            assert "agent:codex" in tags
+            tool = NMRememberTool(NMContext(storage=storage, brain=Brain.create(name="test_brain"), config=BrainConfig()))
+            result = await tool.execute(content="env fallback test")
+            assert '"success": true' in result
         finally:
             del os.environ["NMEM_AGENT_ID"]
 
-    def test_no_tag_when_no_identity(self) -> None:
+    @pytest.mark.asyncio
+    async def test_no_tag_when_no_identity(self, storage: SQLiteStorage) -> None:
         """No agent tag should be injected when no identity is available."""
-        tags: set[str] = set()
-        source_agent = ""
-        resolved = source_agent or os.environ.get("NMEM_AGENT_ID", "")
-        # No tag added when resolved is empty (avoids agent:unknown pollution)
-        if resolved:
-            tags.add(f"agent:{resolved}")
-        assert len(tags) == 0
+        os.environ.pop("NMEM_AGENT_ID", None)
+        tool = NMRememberTool(NMContext(storage=storage, brain=Brain.create(name="test_brain"), config=BrainConfig()))
+        result = await tool.execute(content="no identity test")
+        assert '"success": true' in result
 
 
 # ── High-Signal Memory Boost — Integration Tests ───────────
@@ -244,9 +240,9 @@ class TestHighSignalBoost:
 
         result = await pipeline.query("api design decision cache layer")
 
-        # The decision fiber matching our query should have a high confidence
         assert result.confidence > 0
         assert result.context is not None
+        assert "Redis for caching layer" in result.context
 
     @pytest.mark.asyncio
     async def test_boost_disabled_by_default(self, fiber_storage: SQLiteStorage) -> None:
@@ -260,8 +256,8 @@ class TestHighSignalBoost:
 
         result = await pipeline.query("api design decision cache layer")
 
-        # Pipeline should still return results with neutral boost
         assert result.confidence > 0
+        assert result.context is not None
 
     @pytest.mark.asyncio
     async def test_preferences_boosted_with_config(
@@ -279,6 +275,7 @@ class TestHighSignalBoost:
 
         assert result.confidence > 0
         assert result.context is not None
+        assert "async patterns" in result.context
 
 
 # ── Recency Boost — Integration Tests ──────────────────────

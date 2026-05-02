@@ -338,7 +338,7 @@ _CODE_NOISE: frozenset[str] = frozenset(
         "readme", "changelog", "license", "makefile", "gitignore",
         # Generic tech actions — too vague to be topical
         "setup", "install", "configure", "initialize",
-        "migrate", "upgrade", "downgrade", "rollback",
+        "migrate", "upgrade", "downgrade",
         "deploy", "build", "compile", "render", "validate", "verify",
         # Log levels — code noise, not conversation topics
         "fatal", "notice", "warning", "critical", "verbose",

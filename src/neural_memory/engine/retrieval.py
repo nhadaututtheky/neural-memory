@@ -3014,10 +3014,10 @@ class ReflexPipeline:
                     score = max(0.0, score + instruction_boost)
 
                 # Trigger pattern matching boost
-                if query_tokens:
+                if query_tokens is not None:
                     triggers = set(fiber_meta.get("trigger_patterns", []))
                     if triggers:
-                        overlap = len(query_tokens & triggers) / max(len(triggers), 1)
+                        overlap = len(set(query_tokens or ()) & triggers) / max(len(triggers), 1)
                         if overlap > 0.3:
                             score += overlap * 0.2
 
