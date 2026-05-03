@@ -302,17 +302,21 @@ async def _find_similar_entity(storage: NeuralStorage, text: str) -> Neuron | No
 
 # Short common words that produce noisy concept neurons.
 # These match len >= 3 but carry no topical signal.
-_NOISE_CONCEPTS: frozenset[str] = frozenset(
+# ── Noise concept filtering ──────────────────────────────
+# Merges spaCy's standard English stop words (when available) with
+# a curated set of code identifiers that carry no topical signal.
+#
+# spaCy provides ~326 well-vetted English stop words covering pronouns,
+# determiners, common verbs, adjectives, and adverbs.
+# Our curated set extends this with code-noise terms like "json", "uuid",
+# "deque", "tuple" that are valid English words but produce meaningless
+# concept neurons in a conversation-focused memory system.
+
+# Our curated code-noise additions — terms that are valid English words
+# but carry zero topical signal in a code-mixed conversation context.
+_CODE_NOISE: frozenset[str] = frozenset(
     {
-        # Pronouns / determiners that survive stop-word filtering
-        "not",
-        "but",
-        "all",
-        "any",
-        "can",
-        "get",
-        "got",
-        # Very common verbs
+        # Very common verbs that escape spaCy filtering
         "use",
         "used",
         "let",
@@ -320,14 +324,324 @@ _NOISE_CONCEPTS: frozenset[str] = frozenset(
         "try",
         "see",
         "say",
-        # Common adjectives / adverbs
-        "new",
-        "old",
-        "own",
-        "way",
-        "too",
+        "make",
+        "take",
+        "give",
+        "find",
+        "keep",
+        "know",
+        "think",
+        "want",
+        "look",
+        "like",
+        # Code identifiers that look like English words
+        "json",
+        "yaml",
+        "toml",
+        "xml",
+        "uuid",
+        "uuid4",
+        "deque",
+        "tuple",
+        "struct",
+        "enum",
+        "impl",
+        "trait",
+        "async",
+        "await",
+        "callback",
+        "middleware",
+        "syntax",
+        "parser",
+        "compiler",
+        "runtime",
+        "binary",
+        "config",
+        "configs",
+        "schema",
+        "schemas",
+        # Data structures — code noise, not topics
+        "linked",
+        "buffer",
+        "offset",
+        "alias",
+        # Literal values — never conversation topics
+        "null",
+        "none",
+        "true",
+        "false",
+        "void",
+        "nil",
+        "zero",
+        # Python keywords — noise outside of code discussion
+        "import",
+        "export",
+        "return",
+        "raise",
+        "yield",
+        "lambda",
+        "class",
+        "self",
+        "super",
+        "global",
+        "nonlocal",
+        "except",
+        "break",
+        "continue",
+        "finally",
+        "assert",
+        "del",
+        # Repo boilerplate — never signal
+        "readme",
+        "changelog",
+        "license",
+        "makefile",
+        "gitignore",
+        # Generic tech actions — too vague to be topical
+        "setup",
+        "install",
+        "configure",
+        "initialize",
+        "migrate",
+        "upgrade",
+        "downgrade",
+        "deploy",
+        "build",
+        "compile",
+        "render",
+        "validate",
+        "verify",
+        # Log levels — code noise, not conversation topics
+        "fatal",
+        "notice",
+        "warning",
+        "critical",
+        "verbose",
+        # Project management — generic noise
+        "issue",
+        "ticket",
+        "sprint",
+        "backlog",
+        "roadmap",
+        "milestone",
+        # Common abbreviations that survive min_length=4
+        "regex",
+        "utils",
+        "props",
+        "params",
+        "args",
+        "admin",
+        "attr",
+        "prop",
+        # Generic programming terms
+        "override",
+        "overload",
+        "polymorph",
+        "abstract",
+        "inherit",
+        "encapsul",
+        "recursion",
+        "iteration",
+        "singleton",
+        "factory",
+        "decorator",
+        "prototype",
+        # Testing — generic noise
+        "expect",
+        "mock",
+        "stub",
+        "fixture",
+        "coverage",
+        "benchmark",
+        "testcase",
+        "testsuite",
+        # Generic tech modifiers — only filter ones that are ALMOST NEVER topics
+        "legacy",
+        "archive",
+        # Version control — code-specific terms (skip words that work in general conversation)
+        "stash",
+        "rebase",
+        # Common standard library imports (Python stdlib noise)
+        "math",
+        "time",
+        "date",
+        "typing",
+        "functools",
+        "itertools",
+        "collections",
+        "dataclass",
     }
 )
+
+
+def _get_noise_concepts() -> frozenset[str]:
+    """Merge spaCy stop words (if available) with curated code noise."""
+    try:
+        import spacy.lang.en.stop_words as sw
+
+        base: frozenset[str] = sw.STOP_WORDS
+    except (ImportError, AttributeError):
+        # Fallback: minimal standard English stop words
+        base = frozenset(
+            {
+                "a",
+                "an",
+                "the",
+                "and",
+                "or",
+                "but",
+                "if",
+                "because",
+                "as",
+                "until",
+                "while",
+                "of",
+                "at",
+                "by",
+                "for",
+                "with",
+                "about",
+                "against",
+                "between",
+                "into",
+                "through",
+                "during",
+                "before",
+                "after",
+                "above",
+                "below",
+                "to",
+                "from",
+                "up",
+                "down",
+                "in",
+                "out",
+                "on",
+                "off",
+                "over",
+                "under",
+                "again",
+                "further",
+                "then",
+                "once",
+                "here",
+                "there",
+                "when",
+                "where",
+                "why",
+                "how",
+                "all",
+                "any",
+                "both",
+                "each",
+                "few",
+                "more",
+                "most",
+                "other",
+                "some",
+                "such",
+                "no",
+                "nor",
+                "not",
+                "only",
+                "own",
+                "same",
+                "so",
+                "than",
+                "too",
+                "very",
+                "just",
+                "can",
+                "will",
+                "don",
+                "should",
+                "now",
+                "i",
+                "me",
+                "my",
+                "myself",
+                "we",
+                "our",
+                "ours",
+                "ourselves",
+                "you",
+                "your",
+                "yours",
+                "yourself",
+                "yourselves",
+                "he",
+                "him",
+                "his",
+                "himself",
+                "she",
+                "her",
+                "hers",
+                "herself",
+                "it",
+                "its",
+                "itself",
+                "they",
+                "them",
+                "their",
+                "theirs",
+                "themselves",
+                "what",
+                "which",
+                "who",
+                "whom",
+                "this",
+                "that",
+                "these",
+                "those",
+                "am",
+                "is",
+                "are",
+                "was",
+                "were",
+                "be",
+                "been",
+                "being",
+                "have",
+                "has",
+                "had",
+                "having",
+                "do",
+                "does",
+                "did",
+                "doing",
+                "would",
+                "could",
+                "might",
+                "shall",
+                "need",
+                "dare",
+                "ought",
+                "used",
+                "get",
+                "got",
+                "say",
+                "said",
+                "make",
+                "made",
+                "know",
+                "think",
+                "see",
+                "want",
+                "come",
+                "go",
+                "take",
+                "like",
+                "look",
+                "give",
+                "find",
+                "new",
+                "tell",
+            }
+        )
+    return base | _CODE_NOISE
+
+
+_NOISE_CONCEPTS: frozenset[str] = _get_noise_concepts()
 
 
 class ExtractConceptNeuronsStep:
@@ -359,11 +673,14 @@ class ExtractConceptNeuronsStep:
             # Minimum 4 chars — 3-char words produce too many noise concepts ("ai", "os")
             if len(kw_lower) < 4:
                 return False
-            if kw_lower in _NOISE_CONCEPTS:
-                return False
             # Skip if already captured as an entity neuron
             if kw_lower in entity_content:
                 return False
+            # Noise filter: blocks low-signal concept neurons. Disable via config
+            # if you need every keyword captured regardless of topical value.
+            if getattr(config, "concept_noise_filter_enabled", True):
+                if kw_lower in _NOISE_CONCEPTS:
+                    return False
             return True
 
         # Filter valid keywords first

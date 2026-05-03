@@ -168,9 +168,21 @@ class BrainConfig:
     # Interference forgetting (memory competition detection)
     interference_detection_enabled: bool = False
     fan_effect_threshold: int = 15
+    # Concept noise filter: blocks low-signal concept neurons (code identifiers,
+    # generic tech terms) during encoding. Disable if you need every keyword
+    # captured regardless of topical value.
+    concept_noise_filter_enabled: bool = True
+    # High-signal memory boost: decisions, insights, preferences rank higher
+    # during recall, improving agent-to-agent handoff discoverability.
+    high_signal_memory_boost: float = 1.0
     # Precision recall (A8 Phase 1)
     recent_access_boost: float = 0.1
     recent_access_window_days: int = 7
+    # Creation-time recency: newer memories get a score boost (decays exponentially)
+    creation_recency_boost: float = 0.0
+    creation_recency_halflife_hrs: float = 24.0
+    # Session context enrichment: include recent session topics in retrieval context
+    session_context_enrichment: bool = True
     diversity_overlap_threshold: float = 0.6
     diversity_penalty_factor: float = 0.7
     topic_affinity_boost: float = 0.15

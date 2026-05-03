@@ -247,6 +247,7 @@ ignore = [
 "src/neural_memory/engine/db_introspector.py" = ["S608"]  # identifier-validated SQL
 "src/neural_memory/pro/**" = ["TC002"]  # numpy/hnswlib runtime imports used in Pro code
 "src/neural_memory/storage/postgres/**" = ["S608", "TC002"]  # parameterized SQL + asyncpg runtime import
+"scripts/prune-noisy-concepts.py" = ["S608"]  # hardcoded placeholders from curated noise set, not user input
 "src/neural_memory/server/middleware/**" = ["TC002"]  # starlette runtime imports
 "src/neural_memory/mcp/version_check_handler.py" = ["S603", "S607", "S310"]  # subprocess + pip
 "src/neural_memory/engine/doc_extractor.py" = ["F401"]  # availability-check imports

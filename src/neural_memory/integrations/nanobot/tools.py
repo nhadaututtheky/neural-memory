@@ -9,6 +9,8 @@ Four tools conforming to Nanobot's Tool ABC interface:
 
 from __future__ import annotations
 
+import asyncio
+import os
 from typing import Any
 
 from neural_memory.integrations.nanobot.base_tool import BaseNMTool
@@ -26,7 +28,10 @@ class NMRememberTool(BaseNMTool):
         return (
             "Store a memory in NeuralMemory. Use this to remember facts, "
             "decisions, insights, todos, errors, and other information "
-            "that should persist across sessions."
+            "that should persist across sessions. "
+            "IMPORTANT for multi-agent workflows: always set source_agent to your "
+            "identity (e.g., 'bindax', 'codex', 'cait') so other agents can "
+            "find your memories via nmem_recall's tags filter."
         )
 
     @property
@@ -69,6 +74,10 @@ class NMRememberTool(BaseNMTool):
                     "type": "integer",
                     "description": "Days until memory expires",
                 },
+                "source_agent": {
+                    "type": "string",
+                    "description": "Agent identity (e.g., bindax, codex, cait). Auto-tags with agent:<name> for cross-agent recall filtering. Falls back to NMEM_AGENT_ID env var or 'unknown'.",
+                },
             },
             "required": ["content"],
         }
@@ -110,6 +119,15 @@ class NMRememberTool(BaseNMTool):
 
         priority = Priority.from_int(kwargs.get("priority", 5))
         tags = set(kwargs.get("tags", []))
+
+        # ── Agent identity injection ──────────────────────────────────
+        # Priority order:
+        # 1. Explicit source_agent parameter (agent passes it deliberately)
+        # 2. NMEM_AGENT_ID env var (set by agent's launcher — transparent)
+        # 3. No tag — skip injection to avoid agent:unknown polluting legacy memories
+        source_agent = kwargs.get("source_agent", "") or os.environ.get("NMEM_AGENT_ID", "")
+        if source_agent:
+            tags.add(f"agent:{source_agent}")
 
         storage = self._ctx.storage
         encoder = MemoryEncoder(storage, self._ctx.config)
@@ -179,7 +197,9 @@ class NMRecallTool(BaseNMTool):
         return (
             "Query memories from NeuralMemory using spreading activation. "
             "Use this to recall past information, decisions, patterns, or "
-            "context relevant to the current task."
+            "context relevant to the current task. "
+            "For multi-agent workflows, use type='decision'|'insight'|'preference' "
+            "and tags=['agent:<name>'] to scope recall to a specific agent's work."
         )
 
     @property
@@ -209,6 +229,15 @@ class NMRecallTool(BaseNMTool):
                     "maximum": 1,
                     "description": "Minimum confidence threshold",
                 },
+                "type": {
+                    "type": "string",
+                    "description": "Filter by memory type: decision, insight, preference, fact, todo, instruction, error, workflow, reference",
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Filter by tags (e.g. agent:bindax, project:caitos, scope:docs)",
+                },
             },
             "required": ["query"],
         }
@@ -228,6 +257,8 @@ class NMRecallTool(BaseNMTool):
 
         max_tokens = min(kwargs.get("max_tokens", 500), 10_000)
         min_confidence = kwargs.get("min_confidence", 0.0)
+        type_filter = kwargs.get("type", "")
+        tag_filters = kwargs.get("tags", [])
 
         pipeline = ReflexPipeline(self._ctx.storage, self._ctx.config)
         result = await pipeline.query(
@@ -236,6 +267,48 @@ class NMRecallTool(BaseNMTool):
             max_tokens=max_tokens,
             reference_time=utcnow(),
         )
+
+        # Apply post-query type/tag filters for agent-to-agent precision
+        if (type_filter or tag_filters) and result.fibers_matched:
+            # Batch fetch fibers concurrently to avoid N+1
+            fibers = await asyncio.gather(
+                *(self._ctx.storage.get_fiber(fid) for fid in result.fibers_matched)
+            )
+            filtered_ids: list[str] = []
+            for fid, fiber in zip(result.fibers_matched, fibers, strict=True):
+                if fiber is None:
+                    continue
+                fiber_meta = fiber.metadata or {}
+                fiber_tags = set(fiber.metadata.get("tags", [])) if fiber.metadata else set()
+                # Include auto/agent tags for matching
+                fiber_tags |= fiber.auto_tags | fiber.agent_tags
+
+                # Type filter
+                if type_filter:
+                    mem_type = fiber_meta.get("memory_type", "") or fiber_meta.get("type", "")
+                    if mem_type.lower() != type_filter.lower():
+                        continue
+
+                # Tag filter (any match — OR logic within tag filters)
+                if tag_filters:
+                    tag_set = {t.lower() for t in tag_filters}
+                    if not tag_set & fiber_tags:  # no overlap
+                        continue
+
+                filtered_ids.append(fid)
+
+            # Preserve list shape for callers parsing fibers_matched,
+            # but also return count for convenience
+            result.fibers_matched = filtered_ids
+            if not filtered_ids:
+                return self._json(
+                    {
+                        "answer": None,
+                        "message": f'No memories matching type="{type_filter}" tags={tag_filters}',
+                        "fibers_matched": [],
+                        "fibers_matched_count": 0,
+                    }
+                )
 
         if result.confidence < min_confidence:
             return self._json(
@@ -252,6 +325,7 @@ class NMRecallTool(BaseNMTool):
                 "confidence": result.confidence,
                 "neurons_activated": result.neurons_activated,
                 "fibers_matched": result.fibers_matched,
+                "fibers_matched_count": len(result.fibers_matched),
                 "depth_used": result.depth_used.value if result.depth_used else depth.value,
                 "tokens_used": result.tokens_used,
             }

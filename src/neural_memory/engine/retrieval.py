@@ -2730,6 +2730,11 @@ class ReflexPipeline:
         _topic_affinity_boost = self._config.topic_affinity_boost
         _recent_boost = self._config.recent_access_boost
         _recent_window_hrs = self._config.recent_access_window_days * 24.0
+        _creation_recency_boost = getattr(self._config, "creation_recency_boost", 0.3)
+        _creation_recency_halflife_hrs = getattr(
+            self._config, "creation_recency_halflife_hrs", 24.0
+        )
+        _session_context_enrichment = getattr(self._config, "session_context_enrichment", True)
         _session_topics = session_topics or set()
         _goal_proximity = goal_proximity or {}
         _goal_proximity_boost = getattr(self._config, "goal_proximity_boost", 0.25)
@@ -2737,6 +2742,7 @@ class ReflexPipeline:
         _preference_boost = getattr(self._config, "preference_boost", 1.5)
         _preference_domain_boost = getattr(self._config, "preference_domain_boost", 0.2)
         _is_pref_query = is_preference_query
+        _high_signal_boost = getattr(self._config, "high_signal_memory_boost", 1.15)
         _event_anchors = temporal_event_anchors or set()
         _event_anchor_boost = getattr(self._config, "temporal_event_anchor_boost", 0.3)
         _role_target = role_target
@@ -2899,6 +2905,12 @@ class ReflexPipeline:
                 if hours_since <= _recent_window_hrs:
                     score *= 1.0 + _recent_boost
 
+            # --- T1.6: Creation-time recency boost (newer memories rank higher) ---
+            if _creation_recency_boost > 0 and fiber.created_at:
+                _age_hrs = (_now - fiber.created_at).total_seconds() / 3600
+                _decay = math.exp(-_age_hrs / _creation_recency_halflife_hrs)
+                score *= 1.0 + _creation_recency_boost * _decay
+
             # --- Arousal boost: emotionally charged memories are more memorable ---
             fiber_meta = fiber.metadata or {}
             arousal = fiber_meta.get("_arousal", 0.0)
@@ -2921,6 +2933,15 @@ class ReflexPipeline:
                         domain_overlap = len(query_tokens & domain_set)
                         if domain_overlap > 0:
                             score += _preference_domain_boost * min(domain_overlap, 3) / 3
+
+            # --- T1.7: High-signal memory boost (decisions, insights, preferences) ---
+            # Agent-to-agent handoffs rely on these memory types being discoverable.
+            # Give them a small inherent boost so they rank above generic concept/entity
+            # fibers with similar semantic scores.
+            if _high_signal_boost > 1.0:
+                _mem_type = fiber_meta.get("memory_type", "") or fiber_meta.get("type", "")
+                if _mem_type in {"decision", "insight", "preference"}:
+                    score *= _high_signal_boost
 
             # --- Temporal event anchor boost: fibers mentioning query events rank higher ---
             if _event_anchors and _event_anchor_boost > 0:
@@ -2955,7 +2976,7 @@ class ReflexPipeline:
             # --- Context-dependent retrieval: match encoding vs query context ---
             if getattr(self._config, "context_retrieval_enabled", True):
                 stored_fp = fiber_meta.get("_context_fingerprint")
-                if stored_fp and isinstance(stored_fp, dict) and query_tokens:
+                if stored_fp and isinstance(stored_fp, dict):
                     from neural_memory.engine.context_retrieval import (
                         ContextFingerprint,
                         context_match_score,
@@ -2964,13 +2985,19 @@ class ReflexPipeline:
                     enc_ctx = ContextFingerprint.from_dict(stored_fp)
                     # Use session's top topic as project context for matching
                     _ret_project = ""
+                    _session_ctx_topics: set[str] = set()
                     if session_state is not None:
-                        top = session_state.get_topic_weights(limit=1)
+                        top = session_state.get_topic_weights(limit=5)
                         if top:
                             _ret_project = next(iter(top))
+                            if _session_context_enrichment:
+                                _session_ctx_topics = {t for t, w in top.items() if w > 0.3}
+
+                    # Combine query tokens with session context for richer matching
+                    _ctx_topics = set(query_tokens or ()) | _session_ctx_topics
                     ret_ctx = ContextFingerprint(
                         project_name=_ret_project,
-                        dominant_topics=tuple(sorted(query_tokens)[:10]),
+                        dominant_topics=tuple(sorted(_ctx_topics)[:10]),
                     )
                     ctx_mult = context_match_score(enc_ctx, ret_ctx)
                     score *= ctx_mult
@@ -2989,10 +3016,10 @@ class ReflexPipeline:
                     score = max(0.0, score + instruction_boost)
 
                 # Trigger pattern matching boost
-                if query_tokens:
+                if query_tokens is not None:
                     triggers = set(fiber_meta.get("trigger_patterns", []))
                     if triggers:
-                        overlap = len(query_tokens & triggers) / max(len(triggers), 1)
+                        overlap = len(set(query_tokens or ()) & triggers) / max(len(triggers), 1)
                         if overlap > 0.3:
                             score += overlap * 0.2
 
