@@ -13,6 +13,7 @@ from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import Direction, Synapse, SynapseType
 from neural_memory.storage.postgres.postgres_base import PostgresBaseMixin
 from neural_memory.storage.postgres.postgres_row_mappers import row_to_brain
+from neural_memory.utils.tag_normalizer import normalize_tags_lower
 from neural_memory.utils.timeutils import utcnow
 
 _MAX_EXPORT_NEURONS = 50_000
@@ -292,7 +293,7 @@ class PostgresBrainMixin(PostgresBaseMixin):
                     metadata=f_data.get("metadata", {}),
                     created_at=datetime.fromisoformat(f_data["created_at"]),
                 )
-                all_tags = sorted(fiber.auto_tags | fiber.agent_tags)
+                all_tags = sorted(normalize_tags_lower(fiber.auto_tags | fiber.agent_tags))
                 await self._query(
                     """INSERT INTO fibers (id, brain_id, neuron_ids, synapse_ids, anchor_neuron_id,
                        pathway, conductivity, last_conducted, time_start, time_end, coherence,
@@ -325,8 +326,8 @@ class PostgresBrainMixin(PostgresBaseMixin):
                     fiber.frequency,
                     fiber.summary,
                     json.dumps(all_tags),
-                    json.dumps(list(fiber.auto_tags)),
-                    json.dumps(list(fiber.agent_tags)),
+                    json.dumps(sorted(normalize_tags_lower(fiber.auto_tags))),
+                    json.dumps(sorted(normalize_tags_lower(fiber.agent_tags))),
                     json.dumps(fiber.metadata),
                     fiber.compression_tier,
                     1 if fiber.pinned else 0,

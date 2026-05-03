@@ -8,6 +8,7 @@ from typing import Literal
 from neural_memory.core.fiber import Fiber
 from neural_memory.core.memory_types import MemoryType, Priority, TypedMemory
 from neural_memory.core.project import Project
+from neural_memory.utils.tag_normalizer import normalize_tags_lower
 from neural_memory.utils.timeutils import utcnow
 
 
@@ -58,10 +59,12 @@ class InMemoryCollectionsMixin:
                 if not fiber.overlaps_time(start, end):
                     continue
             if tags is not None:
+                _tags = normalize_tags_lower(tags)
+                _ftags = normalize_tags_lower(fiber.tags)
                 if tag_mode == "or":
-                    if not (tags & fiber.tags):
+                    if not (_tags & _ftags):
                         continue
-                elif not tags.issubset(fiber.tags):
+                elif not _tags.issubset(_ftags):
                     continue
             if min_salience is not None and fiber.salience < min_salience:
                 continue
@@ -94,10 +97,12 @@ class InMemoryCollectionsMixin:
                 continue
             # fiber.tags property = auto_tags | agent_tags (union)
             if tags is not None:
+                _tags = normalize_tags_lower(tags)
+                _ftags = normalize_tags_lower(fiber.tags)
                 if tag_mode == "or":
-                    if not (tags & fiber.tags):
+                    if not (_tags & _ftags):
                         continue
-                elif not tags.issubset(fiber.tags):
+                elif not _tags.issubset(_ftags):
                     continue
             seen.add(fiber.id)
             result.append(fiber)

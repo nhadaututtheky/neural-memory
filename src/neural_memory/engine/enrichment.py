@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.engine.clustering import UnionFind
+from neural_memory.utils.tag_normalizer import normalize_tags_lower
 
 if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
@@ -136,14 +137,14 @@ async def find_cross_cluster_links(
     uf = UnionFind(n)
 
     for i in range(n):
-        tags_a = tagged_fibers[i].tags
+        tags_a = normalize_tags_lower(tagged_fibers[i].tags)
         if not tags_a:
             continue
         # Yield to event loop every 20 outer iterations so timeout can fire
         if i % 20 == 0:
             await asyncio.sleep(0)
         for j in range(i + 1, n):
-            tags_b = tagged_fibers[j].tags
+            tags_b = normalize_tags_lower(tagged_fibers[j].tags)
             if not tags_b:
                 continue
             intersection = len(tags_a & tags_b)

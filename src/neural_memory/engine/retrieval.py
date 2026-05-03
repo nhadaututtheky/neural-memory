@@ -2730,7 +2730,7 @@ class ReflexPipeline:
         _topic_affinity_boost = self._config.topic_affinity_boost
         _recent_boost = self._config.recent_access_boost
         _recent_window_hrs = self._config.recent_access_window_days * 24.0
-        _creation_recency_boost = getattr(self._config, "creation_recency_boost", 0.3)
+        _creation_recency_boost = getattr(self._config, "creation_recency_boost", 0.0)
         _creation_recency_halflife_hrs = getattr(
             self._config, "creation_recency_halflife_hrs", 24.0
         )
@@ -2742,7 +2742,7 @@ class ReflexPipeline:
         _preference_boost = getattr(self._config, "preference_boost", 1.5)
         _preference_domain_boost = getattr(self._config, "preference_domain_boost", 0.2)
         _is_pref_query = is_preference_query
-        _high_signal_boost = getattr(self._config, "high_signal_memory_boost", 1.15)
+        _high_signal_boost = getattr(self._config, "high_signal_memory_boost", 1.0)
         _event_anchors = temporal_event_anchors or set()
         _event_anchor_boost = getattr(self._config, "temporal_event_anchor_boost", 0.3)
         _role_target = role_target
@@ -2908,7 +2908,7 @@ class ReflexPipeline:
             # --- T1.6: Creation-time recency boost (newer memories rank higher) ---
             if _creation_recency_boost > 0 and fiber.created_at:
                 _age_hrs = (_now - fiber.created_at).total_seconds() / 3600
-                _decay = math.exp(-_age_hrs / _creation_recency_halflife_hrs)
+                _decay = math.exp(-_age_hrs / max(_creation_recency_halflife_hrs, 1e-6))
                 score *= 1.0 + _creation_recency_boost * _decay
 
             # --- Arousal boost: emotionally charged memories are more memorable ---

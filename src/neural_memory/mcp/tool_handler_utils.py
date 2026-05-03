@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from neural_memory.utils.tag_normalizer import normalize_tags_lower
+
 if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
 
@@ -28,7 +30,7 @@ def _parse_tags(args: dict[str, Any], *, max_items: int = _MAX_RECALL_TAGS) -> s
     if not raw_tags or not isinstance(raw_tags, list):
         return None
     tags = {t for t in raw_tags[:max_items] if isinstance(t, str) and 0 < len(t) <= _MAX_TAG_LENGTH}
-    return tags or None
+    return normalize_tags_lower(tags) or None
 
 
 def _require_brain_id(storage: NeuralStorage) -> str:

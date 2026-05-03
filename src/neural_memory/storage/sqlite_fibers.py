@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from neural_memory.core.fiber import Fiber
 from neural_memory.storage.sqlite_row_mappers import row_to_fiber
+from neural_memory.utils.tag_normalizer import normalize_tags_lower
 from neural_memory.utils.timeutils import utcnow
 
 
@@ -70,9 +71,9 @@ class SQLiteFiberMixin:
                     fiber.summary,
                     fiber.essence,
                     fiber.last_ghost_shown_at.isoformat() if fiber.last_ghost_shown_at else None,
-                    json.dumps(list(fiber.tags)),
-                    json.dumps(list(fiber.auto_tags)),
-                    json.dumps(list(fiber.agent_tags)),
+                    json.dumps(sorted(normalize_tags_lower(fiber.tags))),
+                    json.dumps(sorted(normalize_tags_lower(fiber.auto_tags))),
+                    json.dumps(sorted(normalize_tags_lower(fiber.agent_tags))),
                     json.dumps(fiber.metadata),
                     fiber.compression_tier,
                     1 if fiber.pinned else 0,
@@ -202,10 +203,11 @@ class SQLiteFiberMixin:
 
         # Filter by tags in Python (JSON array doesn't support efficient set operations)
         if tags is not None:
+            tags = normalize_tags_lower(tags)
             if tag_mode == "or":
-                fibers = [f for f in fibers if tags & f.tags]
+                fibers = [f for f in fibers if tags & normalize_tags_lower(f.tags)]
             else:
-                fibers = [f for f in fibers if tags.issubset(f.tags)]
+                fibers = [f for f in fibers if tags.issubset(normalize_tags_lower(f.tags))]
 
         return fibers[:limit]
 
@@ -244,7 +246,8 @@ class SQLiteFiberMixin:
 
         # Tag filter: f.tags column stores the union of auto_tags + agent_tags
         if tags:
-            tag_clauses = ["EXISTS (SELECT 1 FROM json_each(f.tags) WHERE value = ?)" for _ in tags]
+            tags = normalize_tags_lower(tags)
+            tag_clauses = ["EXISTS (SELECT 1 FROM json_each(f.tags) WHERE LOWER(value) = ?)" for _ in tags]
             joiner = " OR " if tag_mode == "or" else " AND "
             sql += f" AND ({joiner.join(tag_clauses)})"
             params.extend(tags)
@@ -288,9 +291,9 @@ class SQLiteFiberMixin:
                 fiber.summary,
                 fiber.essence,
                 fiber.last_ghost_shown_at.isoformat() if fiber.last_ghost_shown_at else None,
-                json.dumps(list(fiber.tags)),
-                json.dumps(list(fiber.auto_tags)),
-                json.dumps(list(fiber.agent_tags)),
+                json.dumps(sorted(normalize_tags_lower(fiber.tags))),
+                json.dumps(sorted(normalize_tags_lower(fiber.auto_tags))),
+                json.dumps(sorted(normalize_tags_lower(fiber.agent_tags))),
                 json.dumps(fiber.metadata),
                 fiber.compression_tier,
                 1 if fiber.pinned else 0,

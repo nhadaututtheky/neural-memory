@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING
 from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.engine.learning_rule import LearningConfig, anti_hebbian_update
+from neural_memory.utils.tag_normalizer import normalize_tags_lower
 from neural_memory.utils.timeutils import utcnow
 
 logger = logging.getLogger(__name__)
@@ -409,8 +410,10 @@ def _tag_overlap(tags_a: set[str], tags_b: set[str]) -> float:
     """Compute Jaccard similarity between two tag sets."""
     if not tags_a or not tags_b:
         return 0.0
-    intersection = len(tags_a & tags_b)
-    union = len(tags_a | tags_b)
+    a = normalize_tags_lower(tags_a)
+    b = normalize_tags_lower(tags_b)
+    intersection = len(a & b)
+    union = len(a | b)
     return intersection / union if union > 0 else 0.0
 
 

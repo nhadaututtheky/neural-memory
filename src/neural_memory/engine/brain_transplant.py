@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from neural_memory.engine.merge import ConflictStrategy, MergeReport, merge_snapshots
+from neural_memory.utils.tag_normalizer import normalize_tags_lower
 
 if TYPE_CHECKING:
     from neural_memory.core.brain import BrainSnapshot
@@ -80,8 +81,8 @@ def _fiber_matches_tags(
     required_tags: frozenset[str],
 ) -> bool:
     """Return True if the fiber carries ANY of the required tags."""
-    fiber_tags = set(fiber.get("tags", []))
-    return bool(fiber_tags & required_tags)
+    fiber_tags = normalize_tags_lower(set(fiber.get("tags", [])))
+    return bool(fiber_tags & normalize_tags_lower(set(required_tags)))
 
 
 def _fiber_matches_salience(

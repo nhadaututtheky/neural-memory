@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
+from neural_memory.utils.tag_normalizer import normalize_tags_lower
 from neural_memory.utils.timeutils import utcnow
 
 
@@ -120,10 +121,10 @@ class Fiber:
 
         # Tag origin resolution: if caller uses legacy 'tags' param,
         # treat them as agent-provided tags for backward compatibility
-        effective_auto = auto_tags or set()
-        effective_agent = agent_tags or set()
+        effective_auto = normalize_tags_lower(auto_tags or set())
+        effective_agent = normalize_tags_lower(agent_tags or set())
         if tags is not None and not auto_tags and not agent_tags:
-            effective_agent = tags
+            effective_agent = normalize_tags_lower(tags)
 
         return cls(
             id=fiber_id or str(uuid4()),

@@ -279,9 +279,8 @@ class NMRecallTool(BaseNMTool):
                 if fiber is None:
                     continue
                 fiber_meta = fiber.metadata or {}
-                fiber_tags = set(fiber.metadata.get("tags", [])) if fiber.metadata else set()
-                # Include auto/agent tags for matching
-                fiber_tags |= fiber.auto_tags | fiber.agent_tags
+                fiber_tags = {t.lower() for t in fiber.metadata.get("tags", [])} if fiber.metadata else set()
+                fiber_tags |= {t.lower() for t in fiber.auto_tags} | {t.lower() for t in fiber.agent_tags}
 
                 # Type filter
                 if type_filter:

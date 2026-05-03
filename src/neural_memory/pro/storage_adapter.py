@@ -28,6 +28,7 @@ from neural_memory.pro.storage_adapter_extras import InfinityDBExtrasMixin
 from neural_memory.pro.storage_adapter_sync import InfinityDBSyncMixin
 from neural_memory.pro.storage_adapter_typed import InfinityDBTypedMixin
 from neural_memory.storage.base import NeuralStorage
+from neural_memory.utils.tag_normalizer import normalize_tags_lower
 from neural_memory.utils.timeutils import utcnow
 
 logger = logging.getLogger(__name__)
@@ -137,10 +138,11 @@ def _apply_fiber_filters(
 
 def _fiber_tags_match(fiber: Fiber, tags: set[str], mode: str) -> bool:
     """Check if fiber's tags match the filter."""
-    fiber_tags = (fiber.auto_tags or set()) | (fiber.agent_tags or set())
+    fiber_tags = normalize_tags_lower((fiber.auto_tags or set()) | (fiber.agent_tags or set()))
+    _tags = normalize_tags_lower(tags)
     if mode == "or":
-        return bool(fiber_tags & tags)
-    return tags <= fiber_tags
+        return bool(fiber_tags & _tags)
+    return _tags <= fiber_tags
 
 
 def _meta_to_fiber(fdict: dict[str, Any]) -> Fiber:
@@ -717,10 +719,11 @@ class InfinityDBStorage(
                 if raw is not None:
                     fiber = _meta_to_fiber(raw)
                     if tags:
-                        fiber_tags = set(fiber.tags) if fiber.tags else set()
-                        if tag_mode == "and" and not tags.issubset(fiber_tags):
+                        fiber_tags = normalize_tags_lower(set(fiber.tags)) if fiber.tags else set()
+                        _tags = normalize_tags_lower(tags)
+                        if tag_mode == "and" and not _tags.issubset(fiber_tags):
                             continue
-                        if tag_mode == "or" and not tags.intersection(fiber_tags):
+                        if tag_mode == "or" and not _tags.intersection(fiber_tags):
                             continue
                     if created_before and fiber.created_at and fiber.created_at > created_before:
                         continue

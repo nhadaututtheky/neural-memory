@@ -162,3 +162,8 @@ class TagNormalizer:
                 )
 
         return reports
+
+
+def normalize_tags_lower(tags: set[str]) -> set[str]:
+    """Case-fold and strip a tag set. No synonym resolution — just lowercase."""
+    return {t_clean for t in tags if (t_clean := t.lower().strip())}

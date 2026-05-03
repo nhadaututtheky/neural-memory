@@ -11,6 +11,7 @@ from typing import Any, Literal
 from neural_memory.core.fiber import Fiber
 from neural_memory.storage.postgres.postgres_base import PostgresBaseMixin
 from neural_memory.storage.postgres.postgres_row_mappers import row_to_fiber
+from neural_memory.utils.tag_normalizer import normalize_tags_lower
 from neural_memory.utils.timeutils import utcnow
 
 logger = logging.getLogger(__name__)
@@ -44,9 +45,9 @@ class PostgresFiberMixin(PostgresBaseMixin):
                 fiber.salience,
                 fiber.frequency,
                 fiber.summary,
-                json.dumps(list(fiber.tags)),
-                json.dumps(list(fiber.auto_tags)),
-                json.dumps(list(fiber.agent_tags)),
+                json.dumps(sorted(normalize_tags_lower(fiber.tags))),
+                json.dumps(sorted(normalize_tags_lower(fiber.auto_tags))),
+                json.dumps(sorted(normalize_tags_lower(fiber.agent_tags))),
                 json.dumps(fiber.metadata),
                 fiber.compression_tier,
                 1 if fiber.pinned else 0,
@@ -114,14 +115,15 @@ class PostgresFiberMixin(PostgresBaseMixin):
             query += f" AND metadata ? ${len(params)}"
 
         if tags is not None and tags:
+            tags = normalize_tags_lower(tags)
             if tag_mode == "or":
                 # ?| checks if ANY key in the array exists in the jsonb
                 # asyncpg auto-coerces Python list to PostgreSQL text[]
-                params.append(list(tags))
+                params.append(sorted(tags))
                 query += f" AND tags ?| ${len(params)}::text[]"
             else:
                 # @> checks containment (all must match)
-                params.append(json.dumps(list(tags)))
+                params.append(json.dumps(sorted(tags)))
                 query += f" AND tags @> ${len(params)}::jsonb"
 
         params.append(limit)
@@ -153,9 +155,9 @@ class PostgresFiberMixin(PostgresBaseMixin):
             fiber.salience,
             fiber.frequency,
             fiber.summary,
-            json.dumps(list(fiber.tags)),
-            json.dumps(list(fiber.auto_tags)),
-            json.dumps(list(fiber.agent_tags)),
+            json.dumps(sorted(normalize_tags_lower(fiber.tags))),
+            json.dumps(sorted(normalize_tags_lower(fiber.auto_tags))),
+            json.dumps(sorted(normalize_tags_lower(fiber.agent_tags))),
             json.dumps(fiber.metadata),
             fiber.compression_tier,
             1 if fiber.pinned else 0,

@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from neural_memory.core.fiber import Fiber
 from neural_memory.storage.sql.row_mappers import row_to_fiber
+from neural_memory.utils.tag_normalizer import normalize_tags_lower
 from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
@@ -90,9 +91,9 @@ class FiberMixin:
             fiber.summary,  # 14
             fiber.essence,  # 15
             d.serialize_dt(fiber.last_ghost_shown_at),  # 16
-            json.dumps(list(fiber.tags)),  # 17
-            json.dumps(list(fiber.auto_tags)),  # 18
-            json.dumps(list(fiber.agent_tags)),  # 19
+            json.dumps(sorted(normalize_tags_lower(fiber.tags))),  # 17
+            json.dumps(sorted(normalize_tags_lower(fiber.auto_tags))),  # 18
+            json.dumps(sorted(normalize_tags_lower(fiber.agent_tags))),  # 19
             json.dumps(fiber.metadata),  # 20
             fiber.compression_tier,  # 21
             1 if fiber.pinned else 0,  # 22
@@ -271,10 +272,11 @@ class FiberMixin:
 
         # Post-filter by tags for safety (JSON array set operations are imprecise)
         if tags is not None:
+            _tags = normalize_tags_lower(tags)
             if tag_mode == "or":
-                fibers = [f for f in fibers if tags & f.tags]
+                fibers = [f for f in fibers if _tags & normalize_tags_lower(f.tags)]
             else:
-                fibers = [f for f in fibers if tags.issubset(f.tags)]
+                fibers = [f for f in fibers if _tags.issubset(normalize_tags_lower(f.tags))]
 
         return fibers[:limit]
 
@@ -318,7 +320,7 @@ class FiberMixin:
         # Tag filter: AND = all tags must match, OR = any tag matches
         tag_parts: list[str] = []
         if tags:
-            for tag in tags:
+            for tag in normalize_tags_lower(tags):
                 params.append(tag)
                 tag_parts.append(d.json_array_contains("f.tags", n))
                 n += 1
@@ -365,9 +367,9 @@ class FiberMixin:
             fiber.summary,  # 12
             fiber.essence,  # 13
             d.serialize_dt(fiber.last_ghost_shown_at),  # 14
-            json.dumps(list(fiber.tags)),  # 15
-            json.dumps(list(fiber.auto_tags)),  # 16
-            json.dumps(list(fiber.agent_tags)),  # 17
+            json.dumps(sorted(normalize_tags_lower(fiber.tags))),  # 15
+            json.dumps(sorted(normalize_tags_lower(fiber.auto_tags))),  # 16
+            json.dumps(sorted(normalize_tags_lower(fiber.agent_tags))),  # 17
             json.dumps(fiber.metadata),  # 18
             fiber.compression_tier,  # 19
             1 if fiber.pinned else 0,  # 20
