@@ -364,12 +364,14 @@ class TestTagFilterEdgeCases:
         assert len(result) == 0
 
     @pytest.mark.asyncio
-    async def test_find_fibers_batch_tag_case_sensitivity(self, storage: SQLiteStorage) -> None:
-        """Tag matching should be case-sensitive."""
+    async def test_find_fibers_batch_tag_case_insensitive(self, storage: SQLiteStorage) -> None:
+        """Tag matching is case-insensitive — tags are normalized to lowercase
+        at both write and read boundaries (commit dddc313)."""
         n1 = Neuron.create(type=NeuronType.CONCEPT, content="Case test")
         await storage.add_neuron(n1)
 
-        # Fiber with lowercase "kb"
+        # Fiber with lowercase "kb" (also normalized at write — would survive
+        # mixed-case input too)
         f1 = Fiber.create(
             neuron_ids={n1.id},
             synapse_ids=set(),
@@ -378,12 +380,16 @@ class TestTagFilterEdgeCases:
         )
         await storage.add_fiber(f1)
 
-        # Find with uppercase "KB" - should not match
+        # Uppercase query normalizes to lowercase — matches
         result = await storage.find_fibers_batch([n1.id], tags={"KB"})
-        assert len(result) == 0
+        assert len(result) == 1
 
-        # Find with correct lowercase - should match
+        # Lowercase query — matches
         result = await storage.find_fibers_batch([n1.id], tags={"kb"})
+        assert len(result) == 1
+
+        # Mixed case query — also matches
+        result = await storage.find_fibers_batch([n1.id], tags={"Kb"})
         assert len(result) == 1
 
     @pytest.mark.asyncio
