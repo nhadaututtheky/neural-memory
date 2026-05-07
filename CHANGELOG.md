@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.55.1] — 2026-05-08
+
+### Fixed — Stale tag case-sensitivity test blocked v4.55.0 PyPI publish
+
+A test asserting old (pre-`dddc313`) case-sensitive tag matching survived
+the tag-normalization commit and surfaced in CI on the v4.55.0 release.
+Renamed `test_find_fibers_batch_tag_case_sensitivity` →
+`test_find_fibers_batch_tag_case_insensitive` and updated assertions to
+match the now-correct case-insensitive behavior (upper, lower, and mixed
+case all match a normalized lowercase tag).
+
+No production code changed between v4.55.0 and v4.55.1 — this patch
+exists solely to unblock the Release workflow's CI gate so v4.55.0
+features ship to PyPI.
+
 ## [4.55.0] — 2026-05-07
 
 ### Added — Agent operator ergonomics (issue #160)
