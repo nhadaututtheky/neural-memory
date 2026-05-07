@@ -82,16 +82,38 @@ MAX_RECALL: dict[str, dict[str, Any]] = {
     },
 }
 
+CHAT_HEAVY: dict[str, dict[str, Any]] = {
+    "brain": {
+        "decay_rate": 0.15,
+        "reinforcement_delta": 0.05,
+        "activation_threshold": 0.25,
+        "max_spread_hops": 3,
+        "max_context_tokens": 800,
+        "freshness_weight": 0.25,
+    },
+    "maintenance": {
+        "auto_consolidate": True,
+        "check_interval": 20,
+        "auto_consolidate_strategies": ["prune", "merge"],
+        "consolidate_cooldown_minutes": 20,
+    },
+    "eternal": {
+        "max_context_tokens": 64_000,
+    },
+}
+
 _PRESETS: dict[str, dict[str, dict[str, Any]]] = {
     "safe-cost": SAFE_COST,
     "balanced": BALANCED,
     "max-recall": MAX_RECALL,
+    "chat-heavy": CHAT_HEAVY,
 }
 
 _DESCRIPTIONS: dict[str, str] = {
     "safe-cost": "Lower token usage, faster decay, aggressive pruning",
     "balanced": "Default settings — good all-around performance",
     "max-recall": "Maximum retention, deeper retrieval, conservative pruning",
+    "chat-heavy": "Conversational agents (Telegram/Discord/Slack) — fast decay, recent-biased, compact",
 }
 
 

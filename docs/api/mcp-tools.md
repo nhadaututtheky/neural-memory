@@ -103,6 +103,7 @@ Store a memory. Auto-detects type, auto-resolves contradicted errors (RESOLVED_B
 | `context` | object | No | — | Structured context dict merged into content server-side using type-specific templates. Keys like 'reason', 'alternati... |
 | `ephemeral` | boolean | No | — | Session-scoped memory: auto-expires after TTL (default 24h), never synced to cloud, excluded from consolidation. Use ... |
 | `compact` | boolean | No | — | Compact response: return only success + fiber_id + memory_type, skip verbose metadata. Saves 200-400 tokens. Default:... |
+| `verbose_extraction` | boolean | No | — | Surface concept-extraction observability stats (dropped_short, dropped_noise, dropped_duplicate_entity). Default: fal... |
 | `token_budget` | integer | No | — | Max tokens for response. Progressively strips content to fit budget. |
 
 ### `nmem_remember_batch`

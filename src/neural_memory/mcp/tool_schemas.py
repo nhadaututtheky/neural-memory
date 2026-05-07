@@ -201,6 +201,10 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "type": "boolean",
                     "description": "Compact response: return only success + fiber_id + memory_type, skip verbose metadata. Saves 200-400 tokens. Default: true. Set false for full response.",
                 },
+                "verbose_extraction": {
+                    "type": "boolean",
+                    "description": "Surface concept-extraction observability stats (dropped_short, dropped_noise, dropped_duplicate_entity). Default: false. Useful for debugging noise filter or measuring memory hygiene.",
+                },
             },
             "required": ["content"],
         },

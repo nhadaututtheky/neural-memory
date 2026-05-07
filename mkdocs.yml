@@ -101,6 +101,7 @@ nav:
     - Agent Memory Governance: guides/agent-memory-governance.md
     - OpenClaw Plugin: guides/openclaw-plugin.md
     - Cognitive Reasoning: guides/cognitive-reasoning.md
+    - Temporal Recall Recipes: guides/temporal-recipes.md
     - Schema v21 Migration: guides/schema-v21-migration.md
     - Learning Habits: guides/learning-habits.md
     - Safety & Security: guides/safety.md

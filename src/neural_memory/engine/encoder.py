@@ -64,6 +64,9 @@ class EncodingResult:
         neurons_created: List of newly created neurons
         neurons_linked: List of existing neuron IDs that were linked
         synapses_created: List of newly created synapses
+        extraction_stats: Optional concept-extraction counters when callers
+            opt in via verbose_extraction. Surface schema:
+            ``{"dropped_short", "dropped_noise", "dropped_duplicate_entity"}``.
     """
 
     fiber: Fiber
@@ -71,6 +74,7 @@ class EncodingResult:
     neurons_linked: list[str]
     synapses_created: list[Synapse]
     conflicts_detected: int = 0
+    extraction_stats: dict[str, int] | None = None
 
 
 def build_default_pipeline(
@@ -443,6 +447,11 @@ class MemoryEncoder:
             neurons_linked=ctx.neurons_linked,
             synapses_created=ctx.synapses_created,
             conflicts_detected=ctx.conflicts_detected,
+            extraction_stats={
+                "dropped_short": ctx.dropped_short,
+                "dropped_noise": ctx.dropped_noise,
+                "dropped_duplicate_entity": ctx.dropped_duplicate_entity,
+            },
         )
 
     async def _post_encode_neuro(self, anchor: Neuron) -> None:

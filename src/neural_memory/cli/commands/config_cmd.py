@@ -13,7 +13,7 @@ config_app = typer.Typer(help="Configuration management")
 def preset_cmd(
     name: Annotated[
         str,
-        typer.Argument(help="Preset name: safe-cost, balanced, max-recall"),
+        typer.Argument(help="Preset name: safe-cost, balanced, max-recall, chat-heavy"),
     ] = "",
     list_available: Annotated[
         bool,
@@ -30,7 +30,7 @@ def preset_cmd(
         nmem config preset --list
         nmem config preset balanced
         nmem config preset max-recall --dry-run
-        nmem config preset safe-cost
+        nmem config preset chat-heavy
     """
     from neural_memory.config_presets import (
         apply_preset,

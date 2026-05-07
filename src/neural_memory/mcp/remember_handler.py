@@ -676,6 +676,10 @@ class RememberHandler:
             context=raw_context if isinstance(raw_context, dict) else None,
         )
 
+        # Opt-in concept-extraction observability — drops counted in pipeline_steps
+        verbose_extraction = bool(args.get("verbose_extraction", False))
+        extraction_stats = result.extraction_stats if verbose_extraction else None
+
         # Compact mode: minimal response for agent efficiency (saves ~200-400 tokens)
         compact = bool(args.get("compact", True))
         if compact:
@@ -706,6 +710,8 @@ class RememberHandler:
             deja_vu = (result.fiber.metadata or {}).get("_deja_vu")
             if deja_vu:
                 compact_response["deja_vu_warnings"] = len(deja_vu)
+            if extraction_stats is not None:
+                compact_response["extraction_stats"] = extraction_stats
             return compact_response
 
         response: dict[str, Any] = {
@@ -719,6 +725,9 @@ class RememberHandler:
             "message": f"Remembered: {content[:50]}{'...' if len(content) > 50 else ''}",
             **quality_result.to_dict(),
         }
+
+        if extraction_stats is not None:
+            response["extraction_stats"] = extraction_stats
 
         if source_id and isinstance(source_id, str):
             response["source_id"] = source_id

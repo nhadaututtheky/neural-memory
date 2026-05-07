@@ -76,6 +76,12 @@ class PipelineContext:
     # Entities stored here are first-mentions — not yet promoted to neurons
     deferred_entity_refs: list[str] = field(default_factory=list)
 
+    # Concept extraction observability — incremented by ExtractConceptNeuronsStep.
+    # Surfaced through EncodingResult.extraction_stats only when callers opt in.
+    dropped_short: int = 0
+    dropped_noise: int = 0
+    dropped_duplicate_entity: int = 0
+
 
 @runtime_checkable
 class PipelineStep(Protocol):

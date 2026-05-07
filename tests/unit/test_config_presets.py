@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from neural_memory.config_presets import (
     BALANCED,
+    CHAT_HEAVY,
     MAX_RECALL,
     SAFE_COST,
     apply_preset,
@@ -19,9 +20,9 @@ from neural_memory.unified_config import (
 
 
 class TestListPresets:
-    def test_returns_three_presets(self) -> None:
+    def test_returns_four_presets(self) -> None:
         presets = list_presets()
-        assert len(presets) == 3
+        assert len(presets) == 4
 
     def test_each_has_name_and_description(self) -> None:
         for p in list_presets():
@@ -34,6 +35,7 @@ class TestListPresets:
         assert "safe-cost" in names
         assert "balanced" in names
         assert "max-recall" in names
+        assert "chat-heavy" in names
 
 
 class TestGetPreset:
@@ -41,6 +43,7 @@ class TestGetPreset:
         assert get_preset("safe-cost") == SAFE_COST
         assert get_preset("balanced") == BALANCED
         assert get_preset("max-recall") == MAX_RECALL
+        assert get_preset("chat-heavy") == CHAT_HEAVY
 
     def test_returns_none_for_unknown(self) -> None:
         assert get_preset("nonexistent") is None
@@ -94,6 +97,16 @@ class TestApplyPreset:
         assert config.brain.max_spread_hops == 6
         assert config.brain.max_context_tokens == 3000
 
+    def test_applies_chat_heavy(self) -> None:
+        config = UnifiedConfig()
+        changes = apply_preset(config, CHAT_HEAVY)
+        assert len(changes) > 0
+        assert config.brain.decay_rate == 0.15
+        assert config.brain.max_spread_hops == 3
+        assert config.brain.max_context_tokens == 800
+        assert config.brain.freshness_weight == 0.25
+        assert config.brain.activation_threshold == 0.25
+
     def test_balanced_is_noop(self) -> None:
         config = UnifiedConfig()
         changes = apply_preset(config, BALANCED)
@@ -126,14 +139,14 @@ class TestPresetStructure:
     """Validate preset dicts have correct structure."""
 
     def test_all_presets_have_brain_section(self) -> None:
-        for name in ("safe-cost", "balanced", "max-recall"):
+        for name in ("safe-cost", "balanced", "max-recall", "chat-heavy"):
             preset = get_preset(name)
             assert preset is not None
             assert "brain" in preset
 
     def test_brain_keys_are_valid(self) -> None:
         valid_keys = set(BrainSettings().to_dict().keys())
-        for name in ("safe-cost", "balanced", "max-recall"):
+        for name in ("safe-cost", "balanced", "max-recall", "chat-heavy"):
             preset = get_preset(name)
             assert preset is not None
             for key in preset.get("brain", {}):
@@ -141,7 +154,7 @@ class TestPresetStructure:
 
     def test_maintenance_keys_are_valid(self) -> None:
         valid_keys = set(MaintenanceConfig().to_dict().keys())
-        for name in ("safe-cost", "balanced", "max-recall"):
+        for name in ("safe-cost", "balanced", "max-recall", "chat-heavy"):
             preset = get_preset(name)
             assert preset is not None
             for key in preset.get("maintenance", {}):

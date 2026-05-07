@@ -131,3 +131,51 @@ class TestConceptNoiseFilter:
         assert found, (
             f"Expected at least one meaningful concept from {meaningful}, got {concept_contents}"
         )
+
+
+class TestExtractionStats:
+    """Concept-extraction observability counters surfaced via EncodingResult."""
+
+    @pytest.mark.asyncio
+    async def test_stats_present_on_every_result(
+        self, encoder: tuple[MemoryEncoder, InMemoryStorage]
+    ) -> None:
+        """extraction_stats dict is always populated with the three counters."""
+        enc, _storage = encoder
+
+        result = await enc.encode(
+            "Fixed a bug",
+            timestamp=datetime(2024, 2, 4, 15, 0),
+        )
+
+        assert result.extraction_stats is not None
+        assert set(result.extraction_stats.keys()) == {
+            "dropped_short",
+            "dropped_noise",
+            "dropped_duplicate_entity",
+        }
+        for value in result.extraction_stats.values():
+            assert isinstance(value, int)
+            assert value >= 0
+
+    @pytest.mark.asyncio
+    async def test_drops_counted_for_filtered_text(
+        self, encoder: tuple[MemoryEncoder, InMemoryStorage]
+    ) -> None:
+        """At least one drop counter increments when content has filterable terms."""
+        enc, _storage = encoder
+
+        result = await enc.encode(
+            "We use the new tool to run the test json yaml readme",
+            timestamp=datetime(2024, 2, 4, 15, 0),
+        )
+
+        assert result.extraction_stats is not None
+        total_drops = (
+            result.extraction_stats["dropped_short"]
+            + result.extraction_stats["dropped_noise"]
+            + result.extraction_stats["dropped_duplicate_entity"]
+        )
+        assert total_drops >= 1, (
+            f"Expected at least one drop from filterable text, got stats: {result.extraction_stats}"
+        )
