@@ -247,7 +247,9 @@ class SQLiteFiberMixin:
         # Tag filter: f.tags column stores the union of auto_tags + agent_tags
         if tags:
             tags = normalize_tags_lower(tags)
-            tag_clauses = ["EXISTS (SELECT 1 FROM json_each(f.tags) WHERE LOWER(value) = ?)" for _ in tags]
+            tag_clauses = [
+                "EXISTS (SELECT 1 FROM json_each(f.tags) WHERE LOWER(value) = ?)" for _ in tags
+            ]
             joiner = " OR " if tag_mode == "or" else " AND "
             sql += f" AND ({joiner.join(tag_clauses)})"
             params.extend(tags)
