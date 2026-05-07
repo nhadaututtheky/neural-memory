@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.55.0] — 2026-05-07
+
+### Added — Agent operator ergonomics (issue #160)
+
+- **`chat-heavy` config preset:** New 4th preset alongside `safe-cost`,
+  `balanced`, `max-recall`. Tuned for conversational agents
+  (Telegram/Discord/Slack) — fast decay (0.15), recent-biased
+  (`freshness_weight=0.25`), shallow spread (3 hops), compact responses
+  (800 tokens). Apply via `nmem config preset chat-heavy`.
+- **Concept-extraction observability stats:** `nmem_remember` now accepts
+  an opt-in `verbose_extraction=true` flag that surfaces three counters
+  in the response: `dropped_short`, `dropped_noise`,
+  `dropped_duplicate_entity`. Default OFF — preserves token-efficient
+  compact mode for normal use. Useful for debugging the noise filter
+  or measuring memory hygiene.
+- **Temporal Recall Recipes guide:** New `docs/guides/temporal-recipes.md`
+  with five worked examples for `nmem_causal action=temporal_range` and
+  `temporal_neighborhood` — weekly review, decision context, parallel
+  events, incident audit trails, and combining temporal + causal traces.
+
 ### Added — Context-recall bias improvements for agent-to-agent memory workflows
 
 - **Recency boost (T1.6):** Newer memories (minutes old) score higher than
