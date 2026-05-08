@@ -93,6 +93,8 @@ Sync uses **Merkle delta** — only diffs travel, not the full brain. Fast, effi
 - **14 memory types** — fact, decision, error, insight, preference, workflow, instruction, and more
 - **Spreading activation** — memories surface by association, not keyword match
 - **Cognitive reasoning** — hypothesize, submit evidence, make predictions, verify with Bayesian confidence
+- **Workload presets** — `nmem config preset {balanced,safe-cost,max-recall,chat-heavy}` tune the brain for SaaS, frugal mode, deep retention, or conversational agents
+- **Temporal recall** — `nmem_causal` exposes `temporal_range` and `temporal_neighborhood` actions; see the [Temporal Recall Recipes guide](https://nhadaututtheky.github.io/neural-memory/guides/temporal-recipes/)
 
 #### Knowledge Ingestion
 - **Train from documents** — PDF, DOCX, PPTX, HTML, JSON, XLSX, CSV ingested into permanent brain knowledge
