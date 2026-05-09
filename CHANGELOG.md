@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.55.2] — 2026-05-09
+
+### Fixed
+
+- **Python 3.14 compatibility** — `pipeline_steps.py:644` called `_get_noise_concepts()` at module level, importing spacy whose pydantic v1 compat layer crashes on 3.14. Since the import chain reaches `neural_memory.__init__`, every `import neural_memory` was dead. Fix: lazy-init via `_ensure_noise_concepts()` + broadened except to catch pydantic v1 `ConfigError`.
+- **Stale test fake** — `test_related_memories.py` `_FakeNeuron` was missing `with_metadata()` added to production `Neuron`, causing 4 test failures.
+- **Test import** — `test_context_recall_bias.py` updated to use `_ensure_noise_concepts()` instead of the now-lazy `_NOISE_CONCEPTS` module variable.
+
+### Tests
+
+- 7262 passed, 0 failed (was 4 failed pre-fix), 2 skipped, 1 xfailed.
+
 ## [4.55.1] — 2026-05-08
 
 ### Fixed — Stale tag case-sensitivity test blocked v4.55.0 PyPI publish
