@@ -23,6 +23,10 @@ class _FakeNeuron:
         if self.type is None:
             self.type = MagicMock(value="concept")
 
+    def with_metadata(self, **kwargs: Any) -> _FakeNeuron:
+        merged = {**self.metadata, **kwargs}
+        return _FakeNeuron(id=self.id, content=self.content, metadata=merged, type=self.type)
+
 
 @dataclass
 class _FakeFiber:

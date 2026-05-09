@@ -480,7 +480,7 @@ def _get_noise_concepts() -> frozenset[str]:
         import spacy.lang.en.stop_words as sw
 
         base: frozenset[str] = frozenset(sw.STOP_WORDS)
-    except (ImportError, AttributeError):
+    except Exception:
         # Fallback: minimal standard English stop words
         base = frozenset(
             {
@@ -641,7 +641,14 @@ def _get_noise_concepts() -> frozenset[str]:
     return base | _CODE_NOISE
 
 
-_NOISE_CONCEPTS: frozenset[str] = _get_noise_concepts()
+_NOISE_CONCEPTS: frozenset[str] | None = None
+
+
+def _ensure_noise_concepts() -> frozenset[str]:
+    global _NOISE_CONCEPTS
+    if _NOISE_CONCEPTS is None:
+        _NOISE_CONCEPTS = _get_noise_concepts()
+    return _NOISE_CONCEPTS
 
 
 class ExtractConceptNeuronsStep:
@@ -681,7 +688,7 @@ class ExtractConceptNeuronsStep:
             # Noise filter: blocks low-signal concept neurons. Disable via config
             # if you need every keyword captured regardless of topical value.
             if getattr(config, "concept_noise_filter_enabled", True):
-                if kw_lower in _NOISE_CONCEPTS:
+                if kw_lower in _ensure_noise_concepts():
                     ctx.dropped_noise += 1
                     return False
             return True

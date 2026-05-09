@@ -15,7 +15,7 @@ from neural_memory.core.fiber import Fiber
 from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.engine.pipeline_steps import (
     _CODE_NOISE,
-    _NOISE_CONCEPTS,
+    _ensure_noise_concepts,
     _get_noise_concepts,
 )
 from neural_memory.integrations.nanobot.context import NMContext
@@ -106,7 +106,9 @@ class TestNoiseFilter:
 
     def test_noise_set_size(self) -> None:
         """Noise set should be substantially larger than the original 18 terms."""
-        assert len(_NOISE_CONCEPTS) >= 100, f"Noise set too small: {len(_NOISE_CONCEPTS)}"
+        assert len(_ensure_noise_concepts()) >= 100, (
+            f"Noise set too small: {len(_ensure_noise_concepts())}"
+        )
         assert len(_CODE_NOISE) >= 50, f"Code-noise set too small: {len(_CODE_NOISE)}"
 
     def test_noise_terms_caught(self) -> None:
@@ -129,7 +131,7 @@ class TestNoiseFilter:
             "setup",
             "install",
         ]:
-            assert term in _NOISE_CONCEPTS, f"Noise term '{term}' not in filter set"
+            assert term in _ensure_noise_concepts(), f"Noise term '{term}' not in filter set"
 
     def test_domain_terms_not_filtered(self) -> None:
         """Domain-relevant terms must NOT be in the noise set."""
@@ -146,7 +148,9 @@ class TestNoiseFilter:
             "CaitOS",
             "Brendon",
         ]:
-            assert term.lower() not in _NOISE_CONCEPTS, f"Domain term '{term}' incorrectly filtered"
+            assert term.lower() not in _ensure_noise_concepts(), (
+                f"Domain term '{term}' incorrectly filtered"
+            )
 
     def test_get_noise_concepts_returns_frozenset(self) -> None:
         """_get_noise_concepts should return a frozenset."""
