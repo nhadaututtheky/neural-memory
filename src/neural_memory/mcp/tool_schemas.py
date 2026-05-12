@@ -168,6 +168,18 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "(e.g. '2026-03-02T08:00:00'). Defaults to current time if not provided. "
                     "Useful for batch-importing past events with correct timestamps.",
                 },
+                "valid_from": {
+                    "type": "string",
+                    "description": "Inclusive lower bound of the memory's validity window "
+                    "(ISO 8601). Recall before this moment heavily penalizes the score. "
+                    "Use for scheduled rules, sprint goals, time-bounded API keys, etc.",
+                },
+                "valid_until": {
+                    "type": "string",
+                    "description": "Inclusive upper bound of the memory's validity window "
+                    "(ISO 8601). After this cliff, recall scores drop 10x and the lifecycle "
+                    "sweep eventually flips status to 'expired'. Complements gradual decay.",
+                },
                 "trust_score": {
                     "type": "number",
                     "minimum": 0.0,
@@ -372,6 +384,20 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 "clean_for_prompt": {
                     "type": "boolean",
                     "description": "Return clean bullet-point text without section headers or neuron-type tags. Default: true.",
+                },
+                "show_provenance": {
+                    "type": "boolean",
+                    "description": "Append a one-line provenance footer "
+                    "(`[src=… · YYYY-MM-DD · conf=…]`) to each related neuron in recall output. "
+                    "Default: true. Set false to save ~5-8% tokens when caller does not need attribution.",
+                },
+                "include_status": {
+                    "type": ["string", "array"],
+                    "items": {"type": "string", "enum": ["active", "superseded", "expired"]},
+                    "description": "Lifecycle status filter. Default surfaces only 'active' "
+                    "neurons. Pass ['active', 'superseded'] to also see auto-superseded "
+                    "memories (Reflex Arc winners), or ['expired'] for past-validity-window "
+                    "history queries.",
                 },
                 "compact": {
                     "type": "boolean",

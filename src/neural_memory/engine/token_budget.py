@@ -69,6 +69,11 @@ class BudgetConfig:
     # Neurons exceeding this are truncated via _truncate_to_sentences then
     # word-clipped. Default 150 tokens (neurons should be atomic facts).
     related_neuron_max_tokens: int = 150
+    # Append a one-line provenance footer (`[src=… · YYYY-MM-DD · conf=…]`)
+    # to each neuron in the "## Related Information" section. Lets agent
+    # callers judge trust without a separate `nmem_provenance` round-trip.
+    # Disable to save ~5-8% recall tokens when caller doesn't need attribution.
+    show_provenance: bool = True
 
 
 def estimate_fiber_tokens(

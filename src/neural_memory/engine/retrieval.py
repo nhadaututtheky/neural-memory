@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from neural_memory.core.fiber import Fiber
-from neural_memory.core.neuron import NeuronType
+from neural_memory.core.neuron import Neuron, NeuronStatus, NeuronType
 from neural_memory.core.synapse import (
     ACTIVE_ROLE_TYPES,
     REINFORCEMENT_TYPES,
@@ -56,6 +56,9 @@ __all__ = ["DepthLevel", "ReflexPipeline", "RetrievalResult"]
 logger = logging.getLogger(__name__)
 
 _UNSET = object()  # Sentinel for lazy-init cache
+
+_VALID_STATUS_VALUES: frozenset[str] = frozenset(s.value for s in NeuronStatus)
+_MAX_INDEX_DOCS: int = 100000  # BM25 lazy-build cap; warn when reached
 
 # Morphological expansion constants for query term expansion.
 _EXPANSION_SUFFIXES: tuple[str, ...] = (
@@ -173,6 +176,13 @@ class ReflexPipeline:
         # Populated via set_warm_activations() at startup.
         self._warm_activations: dict[str, float] | None = None
 
+        # BM25 lexical index — lazy-built on first query when enabled.
+        # Default OFF (config.bm25_enabled=False): zero behavior change.
+        # Lock guards the build path so concurrent first-queries do not
+        # each scan the corpus (Item #1 review H3).
+        self._lexical_index: Any = None  # LexicalIndex | None — lazy import
+        self._lexical_index_lock: asyncio.Lock = asyncio.Lock()
+
         # Adaptive depth selection (Bayesian priors)
         self._adaptive_selector: AdaptiveDepthSelector | None = None
         if config.adaptive_depth_enabled:
@@ -276,6 +286,7 @@ class ReflexPipeline:
         as_of: datetime | None = None,
         simhash_threshold: int | None = None,
         exclude_reflexes: bool = False,
+        include_status: frozenset[str] | None = None,
     ) -> RetrievalResult:
         """
         Execute the retrieval pipeline.
@@ -337,15 +348,28 @@ class ReflexPipeline:
             else:
                 depth = rule_depth
 
+        # Item #2 review H3: fast-paths bypass `_filter_by_status`. Skip the
+        # fast-paths entirely when caller explicitly opts into a non-default
+        # status set so superseded/expired memories surface only via the full
+        # pipeline (which respects `include_status`). For default queries
+        # the bypass methods now filter their own results — see
+        # `_try_fiber_summary_tier` and `_try_temporal_reasoning`.
+        _status_override = include_status is not None and include_status != frozenset({"active"})
+
         # 2.5 Temporal reasoning fast-path (v0.19.0)
-        temporal_result = await self._try_temporal_reasoning(
-            stimulus, depth, reference_time, start_time
-        )
-        if temporal_result is not None:
-            return temporal_result
+        if not _status_override:
+            temporal_result = await self._try_temporal_reasoning(
+                stimulus, depth, reference_time, start_time
+            )
+            if temporal_result is not None:
+                return temporal_result
 
         # 2.8 Fiber summary tier — lightweight first-pass retrieval
-        if self._config.fiber_summary_tier_enabled and depth != DepthLevel.INSTANT:
+        if (
+            not _status_override
+            and self._config.fiber_summary_tier_enabled
+            and depth != DepthLevel.INSTANT
+        ):
             fiber_result = await self._try_fiber_summary_tier(
                 stimulus, depth, max_tokens, start_time
             )
@@ -373,6 +397,16 @@ class ReflexPipeline:
             exclude_ids=exclude_ids,
             created_before=as_of,
         )
+
+        # 3.1 BM25 lexical anchors (item #1) — opt-in via config.bm25_enabled.
+        # Adds a parallel ranked list to the RRF input so exact-keyword
+        # matches (file paths, IDs, quoted phrases) survive even when
+        # semantic similarity misses them.
+        if self._config.bm25_enabled:
+            bm25_anchors = await self._bm25_anchors(query, exclude_ids=exclude_ids)
+            if bm25_anchors:
+                ranked_lists.append(bm25_anchors)
+                anchor_sets.append([a.neuron_id for a in bm25_anchors])
 
         # 3.5 RRF score fusion: compute initial activation levels from multi-retriever ranks
         # Use dynamic per-brain retriever weights when available
@@ -580,8 +614,29 @@ class ReflexPipeline:
             density_scaling=self._config.graph_density_scaling_enabled,
         )
 
+        # 4.65/4.66/4.7 — single batch fetch shared across the three
+        # post-activation gates. Pre-Item-#2 had 1 fetch; naive Item #2 +
+        # #3 wiring made 3 (review H2). Cache once, reuse.
+        _post_neurons: dict[str, Neuron] | None = None
+        if activations:
+            _post_neurons = await self._storage.get_neurons_batch(list(activations.keys()))
+
+        # 4.65 Drop non-active neurons (superseded/expired) unless caller opts in
+        activations, _status_dropped = await self._filter_by_status(
+            activations,
+            include_status=include_status,
+            neuron_cache=_post_neurons,
+        )
+
+        # 4.66 Penalize neurons outside their validity window (item #3 cliff)
+        activations = await self._apply_validity_penalty(
+            activations, as_of=as_of, neuron_cache=_post_neurons
+        )
+
         # 4.7 Deprioritize disputed neurons (conflict resolution)
-        activations, disputed_ids = await self._deprioritize_disputed(activations)
+        activations, disputed_ids = await self._deprioritize_disputed(
+            activations, neuron_cache=_post_neurons
+        )
 
         # 4.75 Apply causal semantics: role-aware post-processing
         activations = await self._apply_causal_semantics(activations)
@@ -810,6 +865,18 @@ class ReflexPipeline:
             ranked_lists=ranked_lists,
             query_intent=stimulus.intent.value,
         )
+
+        # 5.0.1 Item #2 H3 / Item #3 follow-through: drop fibers whose anchor
+        # neuron has a non-allowed status OR whose anchor is outside its
+        # validity window. Subordinate concept/entity neurons of a superseded
+        # or expired content can survive `_filter_by_status` (they have
+        # their own activation), but the fiber tying them back to the
+        # filtered anchor must NOT leak the original content.
+        if fibers_matched:
+            fibers_matched = await self._filter_fibers_by_anchor_status(
+                fibers_matched, include_status=include_status, as_of=as_of
+            )
+
         _phase_timings["fibers"] = (time.perf_counter() - start_time) * 1000
 
         # 5.5 Causal auto-inclusion: trace CAUSED_BY/LEADS_TO from matched fibers
@@ -1943,18 +2010,28 @@ class ReflexPipeline:
     async def _deprioritize_disputed(
         self,
         activations: dict[str, ActivationResult],
+        *,
+        neuron_cache: dict[str, Neuron] | None = None,
     ) -> tuple[dict[str, ActivationResult], list[str]]:
         """Reduce activation of disputed neurons by 50%.
 
-        Neurons marked with _disputed metadata get their activation
-        halved, making them less likely to appear in results. Superseded
-        neurons are suppressed even further (75% reduction).
+        Neurons marked with `_disputed` metadata get their activation
+        halved. The historical 75% reduction for `_superseded`-flagged
+        neurons is now mostly dead code: Item #2's `_filter_by_status`
+        drops superseded neurons entirely before this step runs. The
+        branch remains for the rare case where a caller passes
+        ``include_status={"active", "superseded"}`` and a still-disputed
+        neuron survives the filter.
 
         Args:
-            activations: Current activation results
+            activations: Current activation results.
+            neuron_cache: Pre-fetched ``{neuron_id: Neuron}`` map shared
+                with sibling pipeline steps to avoid duplicate storage
+                round trips.
 
         Returns:
-            Tuple of (new dict with disputed neurons deprioritized, list of disputed neuron IDs)
+            Tuple of (new dict with disputed neurons deprioritized,
+            list of disputed neuron IDs)
         """
         if not activations:
             return activations, []
@@ -1962,9 +2039,11 @@ class ReflexPipeline:
         disputed_factor = 0.5
         superseded_factor = 0.25
 
-        # Batch-fetch neurons to check for disputed metadata
-        neuron_ids = list(activations.keys())
-        neurons = await self._storage.get_neurons_batch(neuron_ids)
+        if neuron_cache is None:
+            neuron_ids = list(activations.keys())
+            neurons = await self._storage.get_neurons_batch(neuron_ids)
+        else:
+            neurons = neuron_cache
 
         disputed_ids: list[str] = []
         result: dict[str, ActivationResult] = {}
@@ -1988,6 +2067,287 @@ class ReflexPipeline:
                 result[neuron_id] = activation
 
         return result, disputed_ids
+
+    async def _bm25_anchors(
+        self,
+        query: str,
+        *,
+        exclude_ids: set[str] | None = None,
+    ) -> list[RankedAnchor]:
+        """Return the top BM25 matches as a ranked list for RRF fusion.
+
+        Lazy-builds the in-memory lexical index on first call. The build
+        scans `storage.list_neurons()` once; subsequent queries reuse
+        the cached index. Writes do not currently invalidate the index
+        (acceptable for the first ship — rebuild manually via
+        `_invalidate_lexical_index()` after bulk imports).
+
+        Args:
+            query: Raw query text (re-tokenized internally).
+            exclude_ids: Neuron IDs to drop from the result list (e.g.
+                SimHash-prefiltered duplicates).
+
+        Returns:
+            Ranked list ready to feed into `rrf_fuse`.
+        """
+        index = await self._get_lexical_index()
+        if index is None or index.size == 0:
+            return []
+
+        # Cap user-provided limit. `LexicalIndex.search` also caps via
+        # MAX_BM25_LIMIT, but enforcing here keeps the call clean for
+        # downstream consumers reading `len(anchors)`.
+        from neural_memory.engine.lexical_index import MAX_BM25_LIMIT
+
+        limit = min(max(1, int(self._config.bm25_limit)), MAX_BM25_LIMIT)
+        hits = index.search(query, limit=limit)
+        if exclude_ids:
+            hits = [h for h in hits if h[0] not in exclude_ids]
+        if not hits:
+            return []
+
+        # Item #1 review C1: index is built lazily and not invalidated on
+        # writes/deletes. Verify each hit still has a backing neuron so a
+        # `nmem_forget`-removed memory cannot ghost-rank #1 in recall.
+        existing = await self._storage.get_neurons_batch([h[0] for h in hits])
+        ranked: list[RankedAnchor] = []
+        for neuron_id, score in hits:
+            if neuron_id not in existing:
+                continue
+            ranked.append(
+                RankedAnchor(
+                    neuron_id=neuron_id,
+                    rank=len(ranked) + 1,
+                    retriever="bm25",
+                    score=score,
+                )
+            )
+        return ranked
+
+    async def _get_lexical_index(self) -> Any:
+        """Build (lazily) and return the BM25 lexical index, or None on failure.
+
+        Concurrent first-queries are serialized through `_lexical_index_lock`
+        so the corpus is scanned at most once. Specific exceptions
+        (ImportError / OSError / MemoryError) are swallowed because BM25 is
+        an optional candidate source and must never block recall;
+        programming errors propagate.
+        """
+        if self._lexical_index is not None:
+            return self._lexical_index
+
+        async with self._lexical_index_lock:
+            # Double-check after acquiring lock — another coroutine may
+            # have built the index while we waited.
+            if self._lexical_index is not None:
+                return self._lexical_index
+            try:
+                from neural_memory.engine.lexical_index import LexicalIndex
+                from neural_memory.engine.tokenizers import get_tokenizer
+
+                tokenizer = get_tokenizer(self._config.bm25_tokenizer)
+                index = LexicalIndex(tokenizer=tokenizer)
+                # 100k cap covers virtually all real brains; warn so a
+                # paged-fetch rewrite can be triggered if exceeded.
+                neurons = await self._storage.find_neurons(limit=_MAX_INDEX_DOCS)
+                if len(neurons) >= _MAX_INDEX_DOCS:
+                    logger.warning(
+                        "BM25 index may be incomplete: hit %d-doc cap. "
+                        "Consider paged-fetch for larger brains.",
+                        _MAX_INDEX_DOCS,
+                    )
+                for neuron in neurons:
+                    if neuron.content:
+                        index.add_document(neuron.id, neuron.content)
+                self._lexical_index = index
+                logger.info("BM25 index built: %d documents", index.size)
+                return index
+            except (ImportError, OSError, MemoryError, RuntimeError):
+                # Storage / dep / OS errors must not block recall. Programming
+                # errors (TypeError, AttributeError, NameError) propagate so
+                # tests catch them.
+                logger.warning("BM25 index build failed", exc_info=True)
+                return None
+
+    def _invalidate_lexical_index(self) -> None:
+        """Drop the cached BM25 index — next query rebuilds from scratch."""
+        self._lexical_index = None
+
+    async def _apply_validity_penalty(
+        self,
+        activations: dict[str, ActivationResult],
+        *,
+        as_of: datetime | None,
+        neuron_cache: dict[str, Neuron] | None = None,
+    ) -> dict[str, ActivationResult]:
+        """Apply a 0.1x multiplier to neurons outside their validity window.
+
+        Neurons with `valid_from`/`valid_until` metadata get heavily
+        deprioritized when the reference moment falls outside the window.
+        We don't drop them — caller may want to see what was true at a
+        prior point. Time-travel queries pass an explicit `as_of`.
+
+        Args:
+            activations: Current activation map.
+            as_of: Reference moment for validity. None means "now".
+            neuron_cache: Pre-fetched ``{neuron_id: Neuron}`` map shared
+                with sibling pipeline steps to avoid duplicate storage
+                round trips.
+
+        Returns:
+            New activation map with out-of-window scores penalized.
+        """
+        if not activations:
+            return activations
+
+        from neural_memory.utils.timeutils import utcnow
+
+        reference = as_of if as_of is not None else utcnow()
+        penalty = 0.1
+
+        if neuron_cache is None:
+            neuron_ids = list(activations.keys())
+            neurons = await self._storage.get_neurons_batch(neuron_ids)
+        else:
+            neurons = neuron_cache
+
+        result: dict[str, ActivationResult] = {}
+        for neuron_id, activation in activations.items():
+            neuron = neurons.get(neuron_id)
+            if neuron is None or neuron.is_currently_valid(reference):
+                result[neuron_id] = activation
+                continue
+            new_level = activation.activation_level * penalty
+            if new_level >= self._config.activation_threshold:
+                result[neuron_id] = ActivationResult(
+                    neuron_id=neuron_id,
+                    activation_level=new_level,
+                    hop_distance=activation.hop_distance,
+                    path=activation.path,
+                    source_anchor=activation.source_anchor,
+                )
+            # Below threshold → effectively pruned, matches existing
+            # `_deprioritize_disputed` behavior for severely demoted nodes.
+        return result
+
+    async def _filter_fibers_by_anchor_status(
+        self,
+        fibers: list[Fiber],
+        include_status: frozenset[str] | None = None,
+        *,
+        as_of: datetime | None = None,
+    ) -> list[Fiber]:
+        """Drop fibers whose anchor neuron has a non-allowed status OR
+        whose anchor falls outside its validity window at ``as_of``.
+
+        Subordinate concept/entity neurons of a superseded / expired
+        content survive `_filter_by_status` because they have their own
+        activation — the fiber that ties them back to the filtered
+        anchor would otherwise leak the original content into recall.
+        """
+        if not fibers:
+            return fibers
+
+        if include_status is not None and include_status:
+            allowed = include_status
+        else:
+            allowed = frozenset({"active"})
+
+        reference = as_of if as_of is not None else utcnow()
+
+        anchor_ids = list({f.anchor_neuron_id for f in fibers if f.anchor_neuron_id})
+        if not anchor_ids:
+            return fibers
+
+        anchors = await self._storage.get_neurons_batch(anchor_ids)
+
+        def _ok(anchor_id: str) -> bool:
+            anchor = anchors.get(anchor_id)
+            if anchor is None:
+                # Missing anchor — keep (matches `_filter_by_status` policy).
+                return True
+            if anchor.status.value not in allowed:
+                return False
+            if not anchor.is_currently_valid(reference):
+                return False
+            return True
+
+        return [f for f in fibers if _ok(f.anchor_neuron_id)]
+
+    async def _filter_by_status(
+        self,
+        activations: dict[str, ActivationResult],
+        include_status: frozenset[str] | None = None,
+        *,
+        neuron_cache: dict[str, Neuron] | None = None,
+    ) -> tuple[dict[str, ActivationResult], list[str]]:
+        """Drop neurons whose lifecycle status is not in the allowed set.
+
+        Default allow-set is ``{"active"}`` so superseded/expired memories
+        stay queryable via an explicit ``include_status`` override without
+        polluting normal recall.
+
+        Args:
+            activations: Current activation map.
+            include_status: Frozen set of NeuronStatus values to keep. None
+                means default-active. ``frozenset()`` (empty) drops every
+                candidate — usually a caller bug; treated as default to
+                avoid surprise recall failures.
+
+        Returns:
+            Tuple of (filtered activations, list of dropped neuron IDs).
+
+        Raises:
+            ValueError: If ``include_status`` contains values that are not
+                valid NeuronStatus members (catches typos like ``"actve"``
+                at the boundary instead of silently dropping everything).
+        """
+        # Validate `include_status` BEFORE the empty short-circuit so a
+        # caller's typo fails loudly even on empty result sets.
+        if include_status is not None and include_status:
+            invalid = include_status - _VALID_STATUS_VALUES
+            if invalid:
+                raise ValueError(
+                    f"Invalid include_status values: {sorted(invalid)}. "
+                    f"Valid: {sorted(_VALID_STATUS_VALUES)}"
+                )
+            allowed = include_status
+        else:
+            # None or empty frozenset → default. Treating empty as default
+            # is intentional: a caller passing `frozenset()` likely meant
+            # "no override", not "drop everything".
+            allowed = frozenset({"active"})
+
+        if not activations:
+            return activations, []
+
+        if neuron_cache is None:
+            neuron_ids = list(activations.keys())
+            neurons = await self._storage.get_neurons_batch(neuron_ids)
+        else:
+            neurons = neuron_cache
+
+        dropped: list[str] = []
+        kept: dict[str, ActivationResult] = {}
+        for neuron_id, activation in activations.items():
+            neuron = neurons.get(neuron_id)
+            if neuron is None:
+                # Missing neurons are kept — letting downstream raise is safer
+                # than silently dropping (caller may have legitimate stub data).
+                kept[neuron_id] = activation
+                continue
+            status_str = neuron.metadata.get("_status")
+            if isinstance(status_str, str) and status_str not in _VALID_STATUS_VALUES:
+                logger.warning(
+                    "Unknown _status value %r for neuron %s — treating as ACTIVE",
+                    status_str,
+                    neuron_id,
+                )
+            if neuron.status.value in allowed:
+                kept[neuron_id] = activation
+            else:
+                dropped.append(neuron_id)
+        return kept, dropped
 
     async def _apply_causal_semantics(
         self,

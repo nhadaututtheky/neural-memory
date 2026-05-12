@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from neural_memory.core.brain import BrainConfig
-from neural_memory.core.neuron import Neuron, NeuronType
+from neural_memory.core.neuron import Neuron, NeuronStatus, NeuronType
 from neural_memory.core.synapse import SynapseType
 from neural_memory.engine.reflex_conflict import (
     REFLEX_CONFLICT_THRESHOLD,
@@ -306,9 +306,46 @@ class TestPinAsReflex:
         first_update = storage.update_neuron.call_args_list[0][0][0]
         assert first_update.id == "n-old"
         assert first_update.reflex is False
+        # Item #2: superseded loser gets status flipped + winner recorded.
+        from neural_memory.core.neuron import NeuronStatus
+
+        assert first_update.status == NeuronStatus.SUPERSEDED
+        assert first_update.metadata.get("_superseded_by") == "n-new"
         second_update = storage.update_neuron.call_args_list[1][0][0]
         assert second_update.id == "n-new"
         assert second_update.reflex is True
+        assert second_update.status == NeuronStatus.ACTIVE
+
+    @pytest.mark.asyncio
+    async def test_pin_revives_formerly_superseded_winner(self) -> None:
+        """Item #2 review C1: a neuron pinned as reflex always becomes ACTIVE.
+
+        Previously, if `neuron` carried a stale `_status="superseded"` from
+        a prior cycle, `pin_as_reflex` would store it with both `_reflex=True`
+        and `_status="superseded"` — the status filter would then hard-drop
+        it from every recall.
+        """
+        content = "always validate user input before processing"
+        formerly_superseded = _make_neuron(content=content, neuron_id="n-revive").with_status(
+            NeuronStatus.SUPERSEDED, superseded_by="old-winner"
+        )
+
+        storage = AsyncMock()
+        storage.get_neuron = AsyncMock(return_value=formerly_superseded)
+        storage.find_reflex_neurons = AsyncMock(return_value=[])
+        storage.update_neuron = AsyncMock()
+        storage.add_synapse = AsyncMock(return_value="syn-x")
+        config = BrainConfig(max_reflexes=10)
+
+        result = await pin_as_reflex("n-revive", storage, config)
+        assert result.pinned is True
+
+        stored = storage.update_neuron.call_args_list[-1][0][0]
+        assert stored.id == "n-revive"
+        assert stored.reflex is True
+        assert stored.status == NeuronStatus.ACTIVE
+        # Revive should also clear the now-stale winner reference (M1).
+        assert "_superseded_by" not in stored.metadata
 
     @pytest.mark.asyncio
     async def test_pin_conflict_frees_slot_for_cap(self) -> None:

@@ -324,6 +324,27 @@ class RecallHandler:
 
         exclude_reflexes = bool(args.get("exclude_reflexes", False))
 
+        # Parse optional lifecycle status include-set (item #2 wired into
+        # retrieval; this exposes the override at the MCP boundary so agent
+        # callers can query superseded/expired memories explicitly).
+        include_status: frozenset[str] | None = None
+        raw_status = args.get("include_status")
+        if raw_status is not None:
+            from neural_memory.core.neuron import NeuronStatus
+
+            if isinstance(raw_status, str):
+                raw_status = [raw_status]
+            try:
+                statuses = [NeuronStatus(s).value for s in raw_status]
+            except (TypeError, ValueError):
+                return {
+                    "error": (
+                        f"Invalid include_status: {raw_status!r}. "
+                        "Use 'active', 'superseded', or 'expired'."
+                    )
+                }
+            include_status = frozenset(statuses)
+
         pipeline = ReflexPipeline(storage, brain.config)
 
         # Warm-start: inject cached activations from prior sessions.
@@ -357,6 +378,7 @@ class RecallHandler:
             as_of=as_of,
             simhash_threshold=simhash_threshold,
             exclude_reflexes=exclude_reflexes,
+            include_status=include_status,
         )
 
         # ── Layered recall: merge global brain results ──
@@ -407,9 +429,15 @@ class RecallHandler:
                 from neural_memory.engine.retrieval_context import format_context_budgeted
                 from neural_memory.engine.token_budget import BudgetConfig
 
+                _show_prov_arg = args.get("show_provenance")
+                if _show_prov_arg is None:
+                    _show_provenance = True
+                else:
+                    _show_provenance = bool(_show_prov_arg)
                 budget_cfg = BudgetConfig(
                     system_overhead_tokens=self.config.budget.system_overhead,
                     per_fiber_overhead=self.config.budget.per_fiber_overhead,
+                    show_provenance=_show_provenance,
                 )
 
                 # Fetch fiber objects for matched fibers

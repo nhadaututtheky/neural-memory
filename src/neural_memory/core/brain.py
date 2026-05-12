@@ -172,6 +172,17 @@ class BrainConfig:
     # generic tech terms) during encoding. Disable if you need every keyword
     # captured regardless of topical value.
     concept_noise_filter_enabled: bool = True
+    # BM25 lexical retrieval — parallel candidate source fused via RRF.
+    # Default OFF: zero behavior change for existing brains. Enable when
+    # exact-keyword recall (file paths, IDs, quoted phrases) misses via
+    # pure semantic similarity.
+    bm25_enabled: bool = False
+    # Tokenizer used by the BM25 index. "whitespace" (default) handles
+    # English/code; "vietnamese" requires the optional `pyvi` extra and
+    # segments compound words like "vượt đèn đỏ" properly.
+    bm25_tokenizer: str = "whitespace"
+    # Max BM25 candidates fused into the anchor pool per query.
+    bm25_limit: int = 30
     # High-signal memory boost: decisions, insights, preferences rank higher
     # during recall, improving agent-to-agent handoff discoverability.
     high_signal_memory_boost: float = 1.0

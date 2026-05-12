@@ -644,11 +644,19 @@ async def format_context(
             max_neurons=20,
         )
 
+        show_provenance = bool(_budget_config is not None and _budget_config.show_provenance)
+        if show_provenance:
+            from neural_memory.engine.format_provenance import (
+                format_provenance_line,
+            )
+
         for neuron, content in compressed_pairs:
             if clean_for_prompt:
                 line = f"- {content}"
             else:
                 line = f"- [{neuron.type.value}] {content}"
+            if show_provenance:
+                line = f"{line}  {format_provenance_line(neuron)}"
             token_estimate += _estimate_tokens(line)
 
             if token_estimate > max_tokens:

@@ -30,6 +30,23 @@ class NeuronType(StrEnum):
     SCHEMA = "schema"  # Mental model snapshots: versioned understanding of a domain
 
 
+class NeuronStatus(StrEnum):
+    """Lifecycle status of a neuron — gates retrieval visibility.
+
+    Default retrieval filters out non-active neurons. Callers can request
+    superseded/expired memories via an explicit `include_status` override.
+
+    STORAGE CONTRACT: these string values are persisted in
+    ``Neuron.metadata["_status"]`` (JSON column). Renaming any value
+    requires a schema migration — old neurons would silently fall back
+    to ACTIVE via the property's ValueError catch.
+    """
+
+    ACTIVE = "active"
+    SUPERSEDED = "superseded"  # Replaced by a newer memory (Reflex Arc supersede)
+    EXPIRED = "expired"  # Past its `_valid_until` cliff (item #3 wires this)
+
+
 @dataclass(frozen=True)
 class Neuron:
     """
@@ -218,6 +235,163 @@ class Neuron:
             ephemeral=self.ephemeral,
         )
 
+    @property
+    def status(self) -> NeuronStatus:
+        """Lifecycle status — default ACTIVE.
+
+        Resolution order:
+          1. Explicit `_status` metadata key (canonical).
+          2. Legacy `_superseded` boolean flag → SUPERSEDED.
+          3. Default ACTIVE.
+        """
+        explicit = self.metadata.get("_status")
+        if isinstance(explicit, str):
+            try:
+                return NeuronStatus(explicit)
+            except ValueError:
+                pass
+        if self.metadata.get("_superseded"):
+            return NeuronStatus.SUPERSEDED
+        return NeuronStatus.ACTIVE
+
+    def with_status(
+        self,
+        status: NeuronStatus | str,
+        *,
+        superseded_by: str | None = None,
+    ) -> Neuron:
+        """Create a new Neuron with the lifecycle status updated.
+
+        Args:
+            status: Target status. String values are validated against
+                NeuronStatus enum; unknown values raise ValueError.
+            superseded_by: Optional ID of the winning neuron (recorded in
+                metadata under `_superseded_by`). Only meaningful when
+                ``status == NeuronStatus.SUPERSEDED``.
+
+        Returns:
+            New Neuron with merged metadata. Reviving a neuron (setting
+            status to ACTIVE) clears any stale `_superseded_by` reference
+            so provenance does not point to a no-longer-relevant winner.
+        """
+        validated = NeuronStatus(status)
+        if validated == NeuronStatus.ACTIVE:
+            # Revive: drop stale winner reference so future reads do not
+            # confuse "active" with "active but historically superseded".
+            new_meta = {k: v for k, v in self.metadata.items() if k != "_superseded_by"}
+            new_meta["_status"] = validated.value
+            return Neuron(
+                id=self.id,
+                type=self.type,
+                content=self.content,
+                metadata=new_meta,
+                content_hash=self.content_hash,
+                created_at=self.created_at,
+                ephemeral=self.ephemeral,
+            )
+        updates: dict[str, Any] = {"_status": validated.value}
+        if superseded_by is not None:
+            updates["_superseded_by"] = superseded_by
+        return self.with_metadata(**updates)
+
+    @property
+    def valid_from(self) -> datetime | None:
+        """Inclusive lower bound of the memory's validity window.
+
+        Stored in metadata under `_valid_from` as ISO 8601. Returns None
+        when missing or unparseable so retrieval logic can skip the window
+        check entirely.
+        """
+        return _parse_iso_datetime(self.metadata.get("_valid_from"))
+
+    @property
+    def valid_until(self) -> datetime | None:
+        """Inclusive upper bound of the memory's validity window.
+
+        Stored in metadata under `_valid_until` as ISO 8601. Past this
+        cliff the memory still exists but recall scores are heavily
+        penalized; lifecycle sweep eventually flips status to EXPIRED.
+        """
+        return _parse_iso_datetime(self.metadata.get("_valid_until"))
+
+    def with_validity(
+        self,
+        *,
+        valid_from: datetime | str | None = None,
+        valid_until: datetime | str | None = None,
+        _clear: bool = False,
+    ) -> Neuron:
+        """Create a new Neuron with the validity window updated.
+
+        Args:
+            valid_from: New lower bound, inclusive. ISO strings are
+                accepted and normalized.
+            valid_until: New upper bound, inclusive.
+            _clear: When True, ``None`` arguments explicitly remove an
+                existing bound (otherwise None is treated as "leave
+                untouched"). Internal flag — most callers should use
+                positional ISO strings or datetimes instead.
+
+        Raises:
+            ValueError: When the resulting range is inverted
+                (``valid_from > valid_until``).
+        """
+        from_dt = _coerce_datetime(valid_from)
+        until_dt = _coerce_datetime(valid_until)
+
+        # Merge with existing metadata bounds so partial updates can not
+        # silently produce an inverted range. e.g.: a neuron already has
+        # `_valid_from=2026-06-01`; a caller sets only `valid_until=2026-01-01`
+        # — without this merge, the guard below would skip and the stored
+        # neuron ends up with from > until.
+        effective_from = from_dt if from_dt is not None else self.valid_from
+        effective_until = until_dt if until_dt is not None else self.valid_until
+
+        if (
+            effective_from is not None
+            and effective_until is not None
+            and effective_from > effective_until
+        ):
+            raise ValueError(
+                f"valid_from ({effective_from.isoformat()}) must be <= "
+                f"valid_until ({effective_until.isoformat()})"
+            )
+
+        new_meta = dict(self.metadata)
+        if from_dt is not None:
+            new_meta["_valid_from"] = from_dt.isoformat()
+        elif _clear:
+            new_meta.pop("_valid_from", None)
+        if until_dt is not None:
+            new_meta["_valid_until"] = until_dt.isoformat()
+        elif _clear:
+            new_meta.pop("_valid_until", None)
+
+        return Neuron(
+            id=self.id,
+            type=self.type,
+            content=self.content,
+            metadata=new_meta,
+            content_hash=self.content_hash,
+            created_at=self.created_at,
+            ephemeral=self.ephemeral,
+        )
+
+    def is_currently_valid(self, now: datetime) -> bool:
+        """Whether the memory's window covers the given moment.
+
+        Both bounds are inclusive: a memory `valid_until=2026-06-01T23:59:59`
+        is still valid at exactly that moment but not one second later.
+        Memories with no bounds are always valid.
+        """
+        from_dt = self.valid_from
+        if from_dt is not None and now < from_dt:
+            return False
+        until_dt = self.valid_until
+        if until_dt is not None and now > until_dt:
+            return False
+        return True
+
     def with_grounded(self, grounded: bool = True, confidence: float = 1.0) -> Neuron:
         """Create a new Neuron with updated grounding status."""
         updates: dict[str, Any] = {"_grounded": grounded, "_confidence": confidence}
@@ -236,6 +410,63 @@ class Neuron:
                 ephemeral=self.ephemeral,
             )
         return self.with_metadata(**updates)
+
+
+def _parse_iso_datetime(value: object) -> datetime | None:
+    """Parse an ISO 8601 timestamp from metadata, returning None on garbage.
+
+    Validity bounds are persisted as strings (JSON metadata). Bad input
+    must not crash recall — better to ignore the field and let the memory
+    be treated as bounds-free.
+
+    Always returns a NAIVE UTC datetime: aware values (e.g. ISO ending in
+    ``+07:00`` or ``Z``) are converted to UTC and stripped, so downstream
+    comparisons against ``utcnow()`` (also naive UTC by project convention)
+    never raise ``TypeError: can't compare naive vs aware``.
+    """
+    from datetime import UTC
+
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        # `fromisoformat` accepts both `T` and space separators on 3.11+.
+        dt = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(UTC).replace(tzinfo=None)
+    return dt
+
+
+def _coerce_datetime(value: datetime | str | None) -> datetime | None:
+    """Normalize a validity bound to a naive UTC datetime.
+
+    Accepts None (no change), datetime, or ISO string. Aware datetimes
+    are converted to UTC and stripped of timezone info per the project's
+    storage convention (CLAUDE.md: "Store naive UTC for SQLite. Never
+    mix naive + aware.").
+
+    Returns None for unsupported types (int, list, dict, ...) so MCP
+    boundary handlers can detect bad input without an AttributeError.
+    """
+    from datetime import UTC
+
+    if value is None:
+        return None
+    if isinstance(value, str):
+        dt = _parse_iso_datetime(value)
+        if dt is None:
+            return None
+        if dt.tzinfo is not None:
+            return dt.astimezone(UTC).replace(tzinfo=None)
+        return dt
+    if not isinstance(value, datetime):
+        # Caller passed an int / list / dict — refuse rather than crash
+        # downstream on `value.tzinfo`.
+        return None
+    if value.tzinfo is not None:
+        return value.astimezone(UTC).replace(tzinfo=None)
+    return value
 
 
 @dataclass(frozen=True)

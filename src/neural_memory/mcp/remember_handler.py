@@ -473,6 +473,29 @@ class RememberHandler:
                         "error": f"Invalid event_at format: {raw_event_at}. Use ISO format (e.g. '2026-03-02T08:00:00')."
                     }
 
+            # Item #3 review H3: validate validity args BEFORE encoding so a
+            # malformed bound never produces a half-stored ghost neuron.
+            valid_from_arg = args.get("valid_from")
+            valid_until_arg = args.get("valid_until")
+            _vf_pre: datetime | None = None
+            _vu_pre: datetime | None = None
+            if valid_from_arg is not None or valid_until_arg is not None:
+                from neural_memory.core.neuron import _coerce_datetime as _cdt
+
+                _vf_pre = _cdt(valid_from_arg)
+                _vu_pre = _cdt(valid_until_arg)
+                if valid_from_arg is not None and _vf_pre is None:
+                    return {"error": f"Invalid valid_from: {valid_from_arg!r}"}
+                if valid_until_arg is not None and _vu_pre is None:
+                    return {"error": f"Invalid valid_until: {valid_until_arg!r}"}
+                if _vf_pre is not None and _vu_pre is not None and _vf_pre > _vu_pre:
+                    return {
+                        "error": (
+                            "valid_from must be <= valid_until "
+                            f"(got {_vf_pre.isoformat()} vs {_vu_pre.isoformat()})"
+                        )
+                    }
+
             encode_content = encrypted_content if encrypted_content is not None else content
             result = await encoder.encode(
                 content=encode_content,
@@ -552,6 +575,23 @@ class RememberHandler:
                         created_at=state.created_at,
                     )
                     await storage.update_neuron_state(updated_state)
+
+            # Mirror MCP origin into neuron metadata as `_source` so the
+            # provenance footer in recall output (engine/format_provenance.py)
+            # has a real signal instead of falling back to "manual" for every
+            # `nmem_remember` neuron. Validity bounds were validated above
+            # (pre-encode); apply them here in the same pass.
+            if mcp_source and result.neurons_created:
+                for neuron in result.neurons_created:
+                    updates: dict[str, Any] = {}
+                    if neuron.metadata.get("_source") != mcp_source:
+                        updates["_source"] = mcp_source
+                    if _vf_pre is not None:
+                        updates["_valid_from"] = _vf_pre.isoformat()
+                    if _vu_pre is not None:
+                        updates["_valid_until"] = _vu_pre.isoformat()
+                    if updates:
+                        await storage.update_neuron(neuron.with_metadata(**updates))
 
             # Link to registered source if source_id provided
             source_id = args.get("source_id")

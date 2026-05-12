@@ -12,6 +12,7 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from neural_memory.core.neuron import NeuronStatus
 from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.utils.simhash import hamming_distance, simhash
 
@@ -137,7 +138,9 @@ async def pin_as_reflex(
     for conflict in conflicts:
         old_neuron = await storage.get_neuron(conflict.existing_id)
         if old_neuron is not None and old_neuron.reflex:
-            unpinned = old_neuron.with_reflex(pinned=False)
+            unpinned = old_neuron.with_reflex(pinned=False).with_status(
+                NeuronStatus.SUPERSEDED, superseded_by=neuron_id
+            )
             await storage.update_neuron(unpinned)
 
             synapse = Synapse.create(
@@ -168,8 +171,9 @@ async def pin_as_reflex(
             error=f"Max reflexes reached ({max_reflexes}). Unpin one first.",
         )
 
-    # Pin the neuron
-    pinned_neuron = neuron.with_reflex(pinned=True)
+    # Pin the neuron — also revive to ACTIVE so a formerly-superseded
+    # neuron does not get hard-dropped by `_filter_by_status` after pin.
+    pinned_neuron = neuron.with_reflex(pinned=True).with_status(NeuronStatus.ACTIVE)
     await storage.update_neuron(pinned_neuron)
     logger.info("Neuron %s pinned as reflex", neuron_id)
 

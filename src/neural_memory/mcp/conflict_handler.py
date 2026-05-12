@@ -200,10 +200,20 @@ class ConflictHandler:
                 )
                 await storage.update_neuron_state(restored)
 
-        updated_existing = existing.with_metadata(_disputed=False, _superseded=False)
+        # Keep existing → revive it via Item #2 status (clears stale flags
+        # AND any prior `_superseded_by` reference).
+        from neural_memory.core.neuron import NeuronStatus
+
+        updated_existing = existing.with_metadata(_disputed=False, _superseded=False).with_status(
+            NeuronStatus.ACTIVE
+        )
         await storage.update_neuron(updated_existing)
 
-        updated_disputing = disputing.with_metadata(_superseded=True)
+        # Loser becomes SUPERSEDED via the canonical Item #2 path so step
+        # 4.65 in retrieval drops it consistently with Reflex Arc supersedes.
+        updated_disputing = disputing.with_metadata(_superseded=True).with_status(
+            NeuronStatus.SUPERSEDED, superseded_by=existing.id
+        )
         await storage.update_neuron(updated_disputing)
 
         resolved_synapse = Synapse(
@@ -230,7 +240,11 @@ class ConflictHandler:
         synapse: Synapse,
     ) -> None:
         """Keep new neuron, mark existing as superseded."""
-        updated_existing = existing.with_metadata(_disputed=False, _superseded=True)
+        from neural_memory.core.neuron import NeuronStatus
+
+        updated_existing = existing.with_metadata(_disputed=False, _superseded=True).with_status(
+            NeuronStatus.SUPERSEDED
+        )
         await storage.update_neuron(updated_existing)
 
         resolved_synapse = Synapse(

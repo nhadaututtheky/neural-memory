@@ -28,6 +28,9 @@ DEFAULT_RETRIEVER_WEIGHTS: dict[str, float] = {
     "graph_expansion": 0.5,
     "fuzzy": 0.4,
     "text_relevance": 0.8,
+    # BM25 lexical retrieval — opt-in parallel candidate source. Weight
+    # close to "keyword" so neither side dominates the fused ranking.
+    "bm25": 0.7,
 }
 
 
