@@ -157,6 +157,7 @@ nul
 data/
 logs/
 .neural_memory/
+.neuralmemory/
 .claude/
 CLAUDE.md
 .rune/

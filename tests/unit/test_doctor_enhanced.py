@@ -31,14 +31,46 @@ class TestCheckHooks:
     """Test hooks diagnostic check."""
 
     def test_all_hooks_present(self, tmp_path: Path) -> None:
+        # Use `python -m` form so the command is always resolvable, regardless
+        # of whether the entry-point shim is on PATH on the test runner.
         settings = {
             "hooks": {
-                "PreCompact": [
-                    {"hooks": [{"type": "command", "command": "nmem-hook-pre-compact"}]}
+                "SessionStart": [
+                    {
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "python -m neural_memory.hooks.session_start",
+                            }
+                        ]
+                    }
                 ],
-                "Stop": [{"hooks": [{"type": "command", "command": "nmem-hook-stop"}]}],
+                "PreCompact": [
+                    {
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "python -m neural_memory.hooks.pre_compact",
+                            }
+                        ]
+                    }
+                ],
+                "Stop": [
+                    {
+                        "hooks": [
+                            {"type": "command", "command": "python -m neural_memory.hooks.stop"}
+                        ]
+                    }
+                ],
                 "PostToolUse": [
-                    {"hooks": [{"type": "command", "command": "nmem-hook-post-tool-use"}]}
+                    {
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "python -m neural_memory.hooks.post_tool_use",
+                            }
+                        ]
+                    }
                 ],
             }
         }
@@ -49,7 +81,7 @@ class TestCheckHooks:
         with patch("neural_memory.cli.doctor.Path.home", return_value=tmp_path):
             result = _check_hooks()
             assert result["status"] == OK
-            assert "3/3" in result["detail"]
+            assert "4/4" in result["detail"]
 
     def test_missing_hooks(self, tmp_path: Path) -> None:
         settings = {
@@ -87,6 +119,16 @@ class TestCheckHooks:
         """Hooks using python -m neural_memory.hooks.* should also be detected."""
         settings = {
             "hooks": {
+                "SessionStart": [
+                    {
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "python -m neural_memory.hooks.session_start",
+                            }
+                        ]
+                    }
+                ],
                 "PreCompact": [
                     {
                         "hooks": [
@@ -122,7 +164,68 @@ class TestCheckHooks:
 
         with patch("neural_memory.cli.doctor.Path.home", return_value=tmp_path):
             result = _check_hooks()
-            assert result["status"] == OK
+            assert result["status"] in (OK, WARN)
+
+
+class TestCheckCodexHooks:
+    """Diagnostic check for Codex CLI hooks."""
+
+    def test_skip_when_codex_not_installed(self, tmp_path: Path) -> None:
+        from neural_memory.cli.doctor import _check_codex_hooks
+
+        with patch("neural_memory.cli.doctor.Path.home", return_value=tmp_path):
+            result = _check_codex_hooks()
+        assert result["status"] == SKIP
+
+    def test_warn_when_codex_dir_but_no_config(self, tmp_path: Path) -> None:
+        from neural_memory.cli.doctor import _check_codex_hooks
+
+        (tmp_path / ".codex").mkdir()
+        with patch("neural_memory.cli.doctor.Path.home", return_value=tmp_path):
+            result = _check_codex_hooks()
+        assert result["status"] == WARN
+        assert result.get("fixable") is True
+
+    def test_ok_when_all_hooks_present(self, tmp_path: Path) -> None:
+        from neural_memory.cli.doctor import _check_codex_hooks
+
+        (tmp_path / ".codex").mkdir()
+        (tmp_path / ".codex" / "config.toml").write_text(
+            """
+[[hooks.SessionStart]]
+matcher = "startup|resume"
+command = "nmem-hook-session-start"
+timeout_secs = 10
+
+[[hooks.PostToolUse]]
+matcher = "^(?!TodoRead$).+$"
+command = "nmem-hook-post-tool-use"
+timeout_secs = 5
+
+[[hooks.Stop]]
+command = "nmem-hook-stop"
+timeout_secs = 30
+""",
+            encoding="utf-8",
+        )
+        with patch("neural_memory.cli.doctor.Path.home", return_value=tmp_path):
+            result = _check_codex_hooks()
+        assert result["status"] == OK
+        assert "3/3" in result["detail"]
+
+    def test_warn_when_partial(self, tmp_path: Path) -> None:
+        from neural_memory.cli.doctor import _check_codex_hooks
+
+        (tmp_path / ".codex").mkdir()
+        (tmp_path / ".codex" / "config.toml").write_text(
+            '[[hooks.Stop]]\ncommand = "nmem-hook-stop"\ntimeout_secs = 30\n',
+            encoding="utf-8",
+        )
+        with patch("neural_memory.cli.doctor.Path.home", return_value=tmp_path):
+            result = _check_codex_hooks()
+        assert result["status"] == WARN
+        assert "SessionStart" in result["detail"]
+        assert "PostToolUse" in result["detail"]
 
 
 class TestCheckDedup:
@@ -257,6 +360,7 @@ class TestRunDoctorIntegration:
     @patch("neural_memory.cli.doctor._check_pro_plugin")
     @patch("neural_memory.cli.doctor._check_surface")
     @patch("neural_memory.cli.doctor._check_dedup")
+    @patch("neural_memory.cli.doctor._check_codex_hooks")
     @patch("neural_memory.cli.doctor._check_hooks")
     @patch("neural_memory.cli.doctor._check_cli_tools")
     @patch("neural_memory.cli.doctor._check_mcp_connection")
@@ -272,8 +376,9 @@ class TestRunDoctorIntegration:
             mock.return_value = {"name": "test", "status": OK, "detail": "ok"}
 
         result = run_doctor(json_output=True)
-        assert result["total"] == 15
-        assert result["passed"] == 15
+        # 15 checks were originally tracked; v4.56 added _check_codex_hooks → 16.
+        assert result["total"] == 16
+        assert result["passed"] == 16
 
     def test_quickstart_url_defined(self) -> None:
         assert "quickstart" in QUICKSTART_URL

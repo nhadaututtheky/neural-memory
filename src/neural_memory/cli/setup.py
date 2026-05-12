@@ -264,6 +264,12 @@ def _find_post_tool_use_command() -> str:
     )
 
 
+def _find_session_start_command() -> str:
+    return _find_hook_command(
+        "nmem-hook-session-start", "session-start-hook", "neural_memory.hooks.session_start"
+    )
+
+
 def _is_nmem_hook_present(entries: list[dict[str, Any]]) -> bool:
     """Return True if any NeuralMemory hook is already registered in the entry list."""
     for entry in entries:
@@ -285,13 +291,20 @@ def _load_settings(settings_path: Path) -> dict[str, Any]:
 
 
 def setup_hooks_claude() -> str:
-    """Auto-configure PreCompact and Stop hooks in Claude Code (~/.claude/settings.json).
+    """Auto-configure NeuralMemory hooks in Claude Code (``~/.claude/settings.json``).
 
-    Injects hook entries so NeuralMemory captures memories both before context
-    compaction (PreCompact) and at normal session end (Stop).
+    Registers four lifecycle handlers so memory capture + context injection
+    happen with zero manual effort:
+
+    * ``SessionStart`` — inject project surface as system message
+    * ``PreCompact`` — flush memory before context loss
+    * ``PostToolUse`` — append tool events for deferred consolidation
+    * ``Stop`` — drain buffer + regenerate surface at session end
+
     Safe to call repeatedly — skips hooks that are already present.
 
-    Returns status string: "added", "exists", "failed", or "not_found".
+    Returns ``"added"`` (new entries written), ``"exists"`` (no-op), ``"failed"``
+    (I/O error), or ``"not_found"`` (no ``~/.claude`` directory).
     """
     claude_dir = Path.home() / ".claude"
     if not claude_dir.exists():
@@ -303,12 +316,14 @@ def setup_hooks_claude() -> str:
 
     added = 0
     hook_specs = [
+        ("SessionStart", _find_session_start_command(), 10),
         ("PreCompact", _find_pre_compact_command(), 30),
         ("Stop", _find_stop_command(), 30),
         ("PostToolUse", _find_post_tool_use_command(), 5),
     ]
 
-    # Matcher for PostToolUse: skip internal/noisy tools
+    # Matcher for PostToolUse: skip internal/noisy tools.
+    # The hook script also filters these defensively (see _NOISE_TOOLS).
     post_tool_matcher = 'tool != "TodoRead" && tool != "TodoWrite" && tool != "TaskList"'
 
     for event, cmd_str, timeout in hook_specs:
@@ -328,6 +343,142 @@ def setup_hooks_claude() -> str:
 
     try:
         settings_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
+        return "added"
+    except OSError:
+        return "failed"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Codex CLI hook installer
+#
+# Codex uses TOML config at ``~/.codex/config.toml`` with array-of-tables under
+# ``[[hooks.<Event>]]``. Matcher field is a **regex** (Codex), not the boolean
+# expression used by Claude. Events supported: SessionStart, PreToolUse,
+# PermissionRequest, PostToolUse, UserPromptSubmit, Stop — Codex has no
+# PreCompact event.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# Regex form of the Claude expression ``tool != X && tool != Y && tool != Z``.
+# Codex matchers use Python-style regex against ``tool_name``.
+_CODEX_POSTTOOL_REGEX = r"^(?!TodoRead$|TodoWrite$|TaskList$).+$"
+
+
+def _codex_hook_specs() -> list[tuple[str, str | None, str, int]]:
+    """Return ``(event, matcher, command, timeout_secs)`` for Codex events.
+
+    Matcher is ``None`` for events where Codex ignores the field
+    (UserPromptSubmit, Stop) or where we want to match every fire.
+    """
+    return [
+        ("SessionStart", "startup|resume", _find_session_start_command(), 10),
+        ("PostToolUse", _CODEX_POSTTOOL_REGEX, _find_post_tool_use_command(), 5),
+        ("Stop", None, _find_stop_command(), 30),
+    ]
+
+
+def _codex_command_is_nmem(cmd: str) -> bool:
+    return "neural_memory" in cmd or "nmem-hook-" in cmd or "nmem " in cmd or cmd.startswith("nmem")
+
+
+def _codex_event_has_nmem_hook(
+    config: dict[str, Any], event: str
+) -> bool:
+    """Check if the Codex ``[[hooks.<event>]]`` array already has a NM entry."""
+    hooks_root = config.get("hooks", {})
+    if not isinstance(hooks_root, dict):
+        return False
+    entries = hooks_root.get(event, [])
+    if not isinstance(entries, list):
+        return False
+    for entry in entries:
+        if isinstance(entry, dict):
+            cmd = str(entry.get("command", ""))
+            if _codex_command_is_nmem(cmd):
+                return True
+    return False
+
+
+def _codex_load_toml(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        import tomllib
+
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _toml_escape(value: str) -> str:
+    """Escape a string for use inside a TOML basic string."""
+    return (
+        value.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+    )
+
+
+def _render_codex_hook_entry(
+    event: str, matcher: str | None, command: str, timeout_secs: int
+) -> str:
+    """Render one ``[[hooks.<event>]]`` block as TOML text."""
+    lines = [f"[[hooks.{event}]]"]
+    if matcher is not None:
+        lines.append(f'matcher = "{_toml_escape(matcher)}"')
+    lines.append(f'command = "{_toml_escape(command)}"')
+    lines.append(f"timeout_secs = {timeout_secs}")
+    return "\n".join(lines) + "\n"
+
+
+def setup_hooks_codex() -> str:
+    """Auto-configure NeuralMemory hooks in Codex CLI (``~/.codex/config.toml``).
+
+    Appends NM ``[[hooks.<Event>]]`` array-of-tables for SessionStart,
+    PostToolUse, and Stop. Skips events that already have an NM entry so
+    re-runs are idempotent.
+
+    Returns ``"added"`` (new entries appended), ``"exists"`` (no-op),
+    ``"failed"`` (I/O error), or ``"not_found"`` (no ``~/.codex`` directory
+    — caller should suggest the user install Codex CLI first).
+    """
+    codex_dir = Path.home() / ".codex"
+    if not codex_dir.exists():
+        return "not_found"
+
+    config_path = codex_dir / "config.toml"
+    existing = _codex_load_toml(config_path)
+
+    blocks_to_append: list[str] = []
+    for event, matcher, command, timeout in _codex_hook_specs():
+        if _codex_event_has_nmem_hook(existing, event):
+            continue
+        blocks_to_append.append(
+            _render_codex_hook_entry(event, matcher, command, timeout)
+        )
+
+    if not blocks_to_append:
+        return "exists"
+
+    try:
+        existing_text = (
+            config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+        )
+        if existing_text and not existing_text.endswith("\n"):
+            existing_text += "\n"
+        if existing_text and not existing_text.endswith("\n\n"):
+            existing_text += "\n"
+        header = (
+            "# ── NeuralMemory hooks (auto-added) ──\n"
+            "# Lifecycle handlers — safe to re-run `nmem hooks install`.\n"
+        )
+        config_path.write_text(
+            existing_text + header + "\n".join(blocks_to_append), encoding="utf-8"
+        )
         return "added"
     except OSError:
         return "failed"

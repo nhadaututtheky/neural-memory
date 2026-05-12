@@ -187,18 +187,19 @@ class TestDoctor:
             patch("neural_memory.cli.doctor._check_mcp_connection") as m7b,
             patch("neural_memory.cli.doctor._check_cli_tools") as m8,
             patch("neural_memory.cli.doctor._check_hooks") as m9,
+            patch("neural_memory.cli.doctor._check_codex_hooks") as m9b,
             patch("neural_memory.cli.doctor._check_dedup") as m10,
             patch("neural_memory.cli.doctor._check_surface") as m11,
             patch("neural_memory.cli.doctor._check_config_freshness") as m12,
             patch("neural_memory.cli.doctor._check_pro_plugin") as m13,
             patch("neural_memory.cli.doctor._check_orphan_fibers") as m14,
         ):
-            for m in [m1, m2, m3, m4, m5, m6, m7, m7b, m8, m9, m10, m11, m12, m13, m14]:
+            for m in [m1, m2, m3, m4, m5, m6, m7, m7b, m8, m9, m9b, m10, m11, m12, m13, m14]:
                 m.return_value = {"name": "test", "status": "ok", "detail": "ok"}
 
             result = run_doctor(json_output=True)
-            assert result["passed"] == 15
-            assert result["total"] == 15
+            assert result["passed"] == 16
+            assert result["total"] == 16
             assert result["failed"] == 0
 
     def test_run_doctor_with_failures(self) -> None:
@@ -215,6 +216,7 @@ class TestDoctor:
             patch("neural_memory.cli.doctor._check_mcp_connection") as m7b,
             patch("neural_memory.cli.doctor._check_cli_tools") as m8,
             patch("neural_memory.cli.doctor._check_hooks") as m9,
+            patch("neural_memory.cli.doctor._check_codex_hooks") as m9b,
             patch("neural_memory.cli.doctor._check_dedup") as m10,
             patch("neural_memory.cli.doctor._check_surface") as m11,
             patch("neural_memory.cli.doctor._check_config_freshness") as m12,
@@ -223,12 +225,12 @@ class TestDoctor:
         ):
             m1.return_value = {"name": "Python", "status": "ok", "detail": "ok"}
             m2.return_value = {"name": "Config", "status": "fail", "detail": "missing"}
-            for m in [m3, m4, m5, m6, m7, m7b, m8, m9, m10, m11, m12, m13, m14]:
+            for m in [m3, m4, m5, m6, m7, m7b, m8, m9, m9b, m10, m11, m12, m13, m14]:
                 m.return_value = {"name": "test", "status": "ok", "detail": "ok"}
 
             result = run_doctor(json_output=True)
             assert result["failed"] == 1
-            assert result["passed"] == 14
+            assert result["passed"] == 15
 
     def test_run_doctor_dev_adds_dev_checks(self) -> None:
         from neural_memory.cli.doctor import run_doctor
@@ -244,6 +246,7 @@ class TestDoctor:
             patch("neural_memory.cli.doctor._check_mcp_connection") as m7b,
             patch("neural_memory.cli.doctor._check_cli_tools") as m8,
             patch("neural_memory.cli.doctor._check_hooks") as m9,
+            patch("neural_memory.cli.doctor._check_codex_hooks") as m9b,
             patch("neural_memory.cli.doctor._check_dedup") as m10,
             patch("neural_memory.cli.doctor._check_surface") as m11,
             patch("neural_memory.cli.doctor._check_config_freshness") as m12,
@@ -251,7 +254,7 @@ class TestDoctor:
             patch("neural_memory.cli.doctor._check_orphan_fibers") as m14,
             patch("neural_memory.cli.doctor._check_dev_environment") as m15,
         ):
-            for m in [m1, m2, m3, m4, m5, m6, m7, m7b, m8, m9, m10, m11, m12, m13, m14]:
+            for m in [m1, m2, m3, m4, m5, m6, m7, m7b, m8, m9, m9b, m10, m11, m12, m13, m14]:
                 m.return_value = {"name": "test", "status": "ok", "detail": "ok"}
             m15.return_value = [
                 {"name": "Source checkout", "status": "ok", "detail": "ok"},
@@ -260,8 +263,8 @@ class TestDoctor:
 
             result = run_doctor(json_output=True, dev=True)
 
-        assert result["passed"] == 17
-        assert result["total"] == 17
+        assert result["passed"] == 18
+        assert result["total"] == 18
         assert any(c["tier"] == "dev" for c in result["checks"])
 
 

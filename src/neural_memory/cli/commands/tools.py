@@ -240,6 +240,7 @@ def init(
         setup_brain,
         setup_config,
         setup_hooks_claude,
+        setup_hooks_codex,
         setup_mcp_claude,
         setup_mcp_cursor,
         setup_skills,
@@ -280,16 +281,25 @@ def init(
         }
         results["Cursor"] = cursor_labels.get(cursor_status, cursor_status)
 
-    # 4. Hooks (Claude Code only)
+    # 4. Hooks (Claude Code + Codex CLI lifecycle hooks)
     if not skip_mcp:
         hook_status = setup_hooks_claude()
         hook_labels = {
-            "added": "3 hooks installed (PreCompact, Stop, PostToolUse)",
+            "added": "4 hooks installed (SessionStart, PreCompact, Stop, PostToolUse)",
             "exists": "already configured",
             "not_found": "not detected (~/.claude/ not found)",
             "failed": "failed to write settings.json",
         }
-        results["Hooks"] = hook_labels.get(hook_status, hook_status)
+        results["Claude hooks"] = hook_labels.get(hook_status, hook_status)
+
+        codex_status = setup_hooks_codex()
+        codex_labels = {
+            "added": "3 hooks installed (SessionStart, PostToolUse, Stop)",
+            "exists": "already configured",
+            "not_found": "Codex CLI not detected (~/.codex/ not found)",
+            "failed": "failed to write config.toml",
+        }
+        results["Codex hooks"] = codex_labels.get(codex_status, codex_status)
 
     # 5. Skills
     if skip_skills:

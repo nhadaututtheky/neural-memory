@@ -42,6 +42,7 @@ _CHECK_TIERS: dict[str, str] = {
     "MCP configuration": TIER_RECOMMENDED,
     "MCP server": TIER_RECOMMENDED,
     "Hooks": TIER_RECOMMENDED,
+    "Codex hooks": TIER_OPTIONAL,
     "Dedup": TIER_OPTIONAL,
     "Knowledge surface": TIER_OPTIONAL,
     "Config freshness": TIER_OPTIONAL,
@@ -80,6 +81,7 @@ def run_doctor(
     checks.append(_check_mcp_config())
     checks.append(_check_mcp_connection())
     checks.append(_check_hooks())
+    checks.append(_check_codex_hooks())
     checks.append(_check_dedup())
     checks.append(_check_surface())
     checks.append(_check_config_freshness())
@@ -785,8 +787,11 @@ def _check_hooks() -> dict[str, Any]:
         }
 
     hooks_section = data.get("hooks", {})
-    expected = ["PreCompact", "Stop", "PostToolUse"]
+    expected = ["SessionStart", "PreCompact", "Stop", "PostToolUse"]
     found: list[str] = []
+    stale_cmds: list[tuple[str, str]] = []
+
+    import shutil
 
     for event in expected:
         entries = hooks_section.get(event, [])
@@ -795,7 +800,27 @@ def _check_hooks() -> dict[str, Any]:
                 cmd = hook.get("command", "")
                 if "neural_memory" in cmd or "nmem" in cmd:
                     found.append(event)
+                    # Detect path drift: if first token looks like an absolute
+                    # path or known entry point, verify it still resolves.
+                    first_token = cmd.split()[0].strip('"') if cmd else ""
+                    if first_token and ("/" in first_token or "\\" in first_token):
+                        if not Path(first_token).exists():
+                            stale_cmds.append((event, first_token))
+                    elif first_token.startswith("nmem-hook-") and not shutil.which(
+                        first_token
+                    ):
+                        stale_cmds.append((event, first_token))
                     break
+
+    if stale_cmds:
+        details = "; ".join(f"{e}: {p}" for e, p in stale_cmds)
+        return {
+            "name": "Hooks",
+            "status": WARN,
+            "detail": f"installed but command(s) missing → {details}",
+            "fix": "Run: nmem init  (re-resolves hook paths)",
+            "fixable": True,
+        }
 
     if len(found) == len(expected):
         return {
@@ -807,6 +832,67 @@ def _check_hooks() -> dict[str, Any]:
     missing = [e for e in expected if e not in found]
     return {
         "name": "Hooks",
+        "status": WARN,
+        "detail": f"{len(found)}/{len(expected)} — missing: {', '.join(missing)}",
+        "fix": "Run: nmem init",
+        "fixable": True,
+    }
+
+
+def _check_codex_hooks() -> dict[str, Any]:
+    """Check Codex CLI hooks are installed (~/.codex/config.toml).
+
+    Returns SKIP status when Codex CLI is not installed (no ~/.codex/),
+    so absence isn't flagged as a problem for Claude-only users.
+    """
+    codex_dir = Path.home() / ".codex"
+    config_path = codex_dir / "config.toml"
+
+    if not codex_dir.exists():
+        return {"name": "Codex hooks", "status": SKIP, "detail": "Codex CLI not detected"}
+
+    if not config_path.exists():
+        return {
+            "name": "Codex hooks",
+            "status": WARN,
+            "detail": "~/.codex/config.toml not found",
+            "fix": "Run: nmem init  (writes Codex hook config)",
+            "fixable": True,
+        }
+
+    try:
+        import tomllib
+
+        with open(config_path, "rb") as f:
+            data = tomllib.load(f)
+    except (OSError, ValueError):
+        return {"name": "Codex hooks", "status": WARN, "detail": "could not parse config.toml"}
+
+    hooks_root = data.get("hooks", {}) if isinstance(data, dict) else {}
+    expected = ["SessionStart", "PostToolUse", "Stop"]
+    found: list[str] = []
+    for event in expected:
+        entries = hooks_root.get(event, []) if isinstance(hooks_root, dict) else []
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            cmd = str(entry.get("command", ""))
+            if "nmem" in cmd or "neural_memory" in cmd:
+                found.append(event)
+                break
+
+    if len(found) == len(expected):
+        return {
+            "name": "Codex hooks",
+            "status": OK,
+            "detail": f"{len(found)}/{len(expected)} installed ({', '.join(found)})",
+        }
+
+    missing = [e for e in expected if e not in found]
+    return {
+        "name": "Codex hooks",
         "status": WARN,
         "detail": f"{len(found)}/{len(expected)} — missing: {', '.join(missing)}",
         "fix": "Run: nmem init",
