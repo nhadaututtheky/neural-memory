@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.56.0] — 2026-05-13
+
+### Added — TLLR plan items #1-5
+
+- **NeuronStatus lifecycle** (`active` / `superseded` / `expired`) — gates retrieval visibility. Default queries surface only `active`; callers pass `include_status` (string or array) to also see superseded or expired memories.
+- **Validity bounds** — `valid_from` / `valid_until` on neurons (ISO 8601) penalize out-of-window recall scores and feed the lifecycle sweep that eventually flips status to `expired`. MCP-level validation prevents half-stored ghost neurons on inverted ranges.
+- **BM25 lexical hybrid** — pure-Python Okapi BM25 index parallel to semantic retrieval, fused via RRF (weight 0.7). Opt-in via `BrainConfig.bm25_enabled=True`. Pluggable tokenizer: `whitespace` (English/code) or `vietnamese` (compound-word segmentation via optional `pyvi` extra). Lazy-built under asyncio lock so concurrent first-queries do not each scan the corpus. `MAX_BM25_LIMIT=200` bounds worst-case CPU per query.
+- **Provenance footer** in recall output — one-line `[src=… · YYYY-MM-DD · conf=…]` per neuron, ≤60 chars. Source resolution: `_source` → `import_source` → `source`. Toggle via `show_provenance` (default `true`, ~5-8% token savings when off).
+- **MCP source attribution** — `nmem_remember` now mirrors `mcp_source` into the neuron's `_source` metadata so the provenance footer carries real attribution instead of falling back to "manual".
+
+### Added — Hooks rewrite
+
+- **Light PostToolUse hook** — stdlib-only hot path, ~45ms p50 / ~48ms p95 (was 268ms / 304ms — **6× faster**). Now within 3ms of the Python interpreter floor. Inline noise filter for `Read` / `Glob` / `Grep` / `TodoRead` / `TodoWrite` / `TaskList` / `NotebookRead` layered on top of `config.toml` blacklist.
+- **SessionStart hook** — loads project-scoped `.neuralmemory/surface.nm` (or global fallback) and emits as `systemMessage` so the agent boots with full context. Walks up the directory tree but stops at home to prevent cross-project bleed.
+- **Codex CLI parity** — `setup_hooks_codex()` writes `~/.codex/config.toml` with `[[hooks.SessionStart/PostToolUse/Stop]]` array-of-tables. Idempotent and preserves user's existing hooks. Codex matchers use Python regex; Claude continues using the boolean DSL.
+- **Doctor diagnostics** — `_check_hooks` now expects 4 events (added SessionStart) and detects path drift (warns when a registered command points at a binary that no longer resolves). New `_check_codex_hooks` SKIPs gracefully when `~/.codex/` is absent.
+- **PEP 562 lazy `__init__`** — defers `Brain` / `Neuron` / engine imports so cold-start callers (hooks, CLI startup) do not pay the ~200ms cost of loading the full engine + storage stack. Backward-compat: `from neural_memory import Brain` still works.
+
+### Improved
+
+- **Concurrent hook safety** — `_append_to_buffer` uses `O_APPEND` + raw `os.write` on POSIX and `msvcrt` byte-0 lock on Windows (where `O_APPEND` is not atomic). Verified with 30-parallel-subprocess test, 0 lost lines.
+- **Reflex Arc supersede** — flips loser to `SUPERSEDED` with `_superseded_by` winner ref. `pin_as_reflex` revives the new neuron to `ACTIVE` so a previously-superseded memory does not get hard-dropped after pin.
+- **Retrieval batch fetch** — single `get_neurons_batch` call reused across the three post-activation gates (status / validity / disputed). Pre-Item-#2 had 1 fetch; naive Item #2 + #3 wiring made 3. Cached, reused.
+- **Fiber filter integration** — fibers tying back to a superseded or out-of-window anchor are dropped post-activation, so subordinate concepts cannot leak filtered content through fiber edges.
+
+### Fixed
+
+- **`.gitignore`** — added `.neuralmemory/` so auto-regenerated `surface.nm` files no longer show in `git diff` every session.
+
+### Tests
+
+- 11 new unit tests covering NeuronStatus, validity bounds, BM25 index, status filter, validity penalty, provenance footer, recall provenance output, tokenizers (~1500 LOC).
+- 1 new e2e integration test (`test_tllr_features_e2e.py`).
+- 3 new hook test files: 46 PostToolUse tests (incl. 30-subprocess concurrent fire), 23 SessionStart tests, 24 Codex installer tests.
+- Reproducible bench harness (`scripts/benchmark/hook_light_spike.py`, `hook_spawn_latency.py`).
+- All 5362 tests pass (1 unrelated flaky sandbox probe under suite pressure, passes in isolation).
+
 ## [4.55.2] — 2026-05-09
 
 ### Fixed
