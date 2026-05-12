@@ -102,20 +102,74 @@ class BenchmarkReport:
 # ---------------------------------------------------------------------------
 
 TOPICS = [
-    "Python", "JavaScript", "Rust", "Go", "TypeScript", "C++", "Java",
-    "Kotlin", "Swift", "Ruby", "Elixir", "Scala", "Haskell", "Clojure",
-    "PostgreSQL", "Redis", "MongoDB", "SQLite", "MySQL", "Cassandra",
-    "Docker", "Kubernetes", "Terraform", "Ansible", "Prometheus",
-    "React", "Vue", "Angular", "Svelte", "Next.js", "Nuxt", "Remix",
-    "FastAPI", "Django", "Flask", "Express", "Spring Boot", "Actix",
-    "GraphQL", "gRPC", "REST", "WebSocket", "MQTT", "AMQP",
-    "JWT", "OAuth2", "SAML", "CORS", "HTTPS", "mTLS",
+    "Python",
+    "JavaScript",
+    "Rust",
+    "Go",
+    "TypeScript",
+    "C++",
+    "Java",
+    "Kotlin",
+    "Swift",
+    "Ruby",
+    "Elixir",
+    "Scala",
+    "Haskell",
+    "Clojure",
+    "PostgreSQL",
+    "Redis",
+    "MongoDB",
+    "SQLite",
+    "MySQL",
+    "Cassandra",
+    "Docker",
+    "Kubernetes",
+    "Terraform",
+    "Ansible",
+    "Prometheus",
+    "React",
+    "Vue",
+    "Angular",
+    "Svelte",
+    "Next.js",
+    "Nuxt",
+    "Remix",
+    "FastAPI",
+    "Django",
+    "Flask",
+    "Express",
+    "Spring Boot",
+    "Actix",
+    "GraphQL",
+    "gRPC",
+    "REST",
+    "WebSocket",
+    "MQTT",
+    "AMQP",
+    "JWT",
+    "OAuth2",
+    "SAML",
+    "CORS",
+    "HTTPS",
+    "mTLS",
 ]
 
 ACTIONS = [
-    "supports", "implements", "requires", "provides", "enables",
-    "handles", "manages", "processes", "validates", "optimizes",
-    "caches", "streams", "serializes", "encrypts", "compresses",
+    "supports",
+    "implements",
+    "requires",
+    "provides",
+    "enables",
+    "handles",
+    "manages",
+    "processes",
+    "validates",
+    "optimizes",
+    "caches",
+    "streams",
+    "serializes",
+    "encrypts",
+    "compresses",
 ]
 
 FEATURES = [
@@ -223,14 +277,27 @@ def generate_memories(n: int) -> list[str]:
 
 BENCHMARK_QUERIES = [
     # Exact keyword (10)
-    "Python", "Redis", "Docker", "GraphQL", "JWT",
-    "Kubernetes", "PostgreSQL", "React", "FastAPI", "WebSocket",
+    "Python",
+    "Redis",
+    "Docker",
+    "GraphQL",
+    "JWT",
+    "Kubernetes",
+    "PostgreSQL",
+    "React",
+    "FastAPI",
+    "WebSocket",
     # Multi-word (10)
-    "Python concurrency async", "Redis caching TTL eviction",
-    "Docker container orchestration", "GraphQL schema generation",
-    "JWT token authentication security", "Kubernetes pod scaling",
-    "PostgreSQL query optimization", "React component rendering",
-    "FastAPI middleware validation", "WebSocket real-time streaming",
+    "Python concurrency async",
+    "Redis caching TTL eviction",
+    "Docker container orchestration",
+    "GraphQL schema generation",
+    "JWT token authentication security",
+    "Kubernetes pod scaling",
+    "PostgreSQL query optimization",
+    "React component rendering",
+    "FastAPI middleware validation",
+    "WebSocket real-time streaming",
     # Question-style (10)
     "What framework handles concurrent requests?",
     "Which database supports JSON storage?",
@@ -254,11 +321,16 @@ BENCHMARK_QUERIES = [
     "OAuth2 and CORS security configuration",
     "gRPC vs REST API performance comparison",
     # Broad/vague (10)
-    "performance optimization", "error handling patterns",
-    "security best practices", "deployment strategy",
-    "data validation", "monitoring and observability",
-    "testing automation", "memory management",
-    "connection handling", "configuration management",
+    "performance optimization",
+    "error handling patterns",
+    "security best practices",
+    "deployment strategy",
+    "data validation",
+    "monitoring and observability",
+    "testing automation",
+    "memory management",
+    "connection handling",
+    "configuration management",
 ]
 
 
@@ -407,13 +479,15 @@ def format_markdown(report: BenchmarkReport) -> str:
             f"| {s.rss_delta_mb:,.1f}MB |"
         )
 
-    lines.extend([
-        "",
-        "## Recall Latency Detail",
-        "",
-        "| Scale | Samples | Mean | Min | Max | p50 | p95 | p99 |",
-        "|------:|--------:|-----:|----:|----:|----:|----:|----:|",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Recall Latency Detail",
+            "",
+            "| Scale | Samples | Mean | Min | Max | p50 | p95 | p99 |",
+            "|------:|--------:|-----:|----:|----:|----:|----:|----:|",
+        ]
+    )
 
     for s in report.scales:
         lat = s.recall_latency
@@ -454,9 +528,9 @@ async def run_scale(
     """Run benchmark at a single scale."""
     n_memories = estimate_memories_for_neurons(target_neurons)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Scale: {target_neurons:,} neurons (est. {n_memories:,} memories)")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     result = ScaleResult(target_neurons=target_neurons)
 
@@ -483,18 +557,21 @@ async def run_scale(
     result.rss_after_mb = rss_after_seed
     result.rss_delta_mb = rss_after_seed - rss_before
 
-    print(f"  Actual: {result.actual_neurons:,} neurons, "
-          f"{result.actual_fibers:,} fibers, "
-          f"{result.actual_synapses:,} synapses")
-    print(f"  RSS: {rss_before:.0f}MB -> {rss_after_seed:.0f}MB "
-          f"(+{result.rss_delta_mb:.1f}MB)")
+    print(
+        f"  Actual: {result.actual_neurons:,} neurons, "
+        f"{result.actual_fibers:,} fibers, "
+        f"{result.actual_synapses:,} synapses"
+    )
+    print(f"  RSS: {rss_before:.0f}MB -> {rss_after_seed:.0f}MB (+{result.rss_delta_mb:.1f}MB)")
 
     # 2. Recall benchmark
     print(f"  Running recall benchmark ({len(queries)} queries x {runs} runs)...")
     result.recall_latency = await bench_recall(storage, queries, runs)
-    print(f"  Recall: p50={result.recall_latency.p50:.1f}ms "
-          f"p95={result.recall_latency.p95:.1f}ms "
-          f"p99={result.recall_latency.p99:.1f}ms")
+    print(
+        f"  Recall: p50={result.recall_latency.p50:.1f}ms "
+        f"p95={result.recall_latency.p95:.1f}ms "
+        f"p99={result.recall_latency.p99:.1f}ms"
+    )
 
     # 3. Consolidation benchmark
     print(f"  Running consolidation benchmark...")
@@ -556,7 +633,7 @@ async def main() -> None:
 
     # Output
     md = format_markdown(report)
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(md)
 
     # Save JSON

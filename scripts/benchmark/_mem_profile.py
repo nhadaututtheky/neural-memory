@@ -23,7 +23,12 @@ sys.path.insert(0, str(_repo / "src"))
 sys.path.insert(0, str(_repo))
 
 warnings.simplefilter("ignore")
-for n in ["neural_memory.engine", "neural_memory.storage", "neural_memory.safety", "neural_memory.extraction"]:
+for n in [
+    "neural_memory.engine",
+    "neural_memory.storage",
+    "neural_memory.safety",
+    "neural_memory.extraction",
+]:
     logging.getLogger(n).setLevel(logging.ERROR)
 logging.basicConfig(level=logging.WARNING)
 
@@ -64,6 +69,7 @@ def snapshot_diff(old, new, limit: int = 15) -> None:
 
 async def main() -> None:
     import psutil
+
     proc = psutil.Process()
 
     from scripts.benchmark.data_loader import load_dataset
@@ -71,6 +77,7 @@ async def main() -> None:
     N = 3  # Small for speed — leak should be obvious after 2-3 iterations
     instances = load_dataset("s", Path(__file__).resolve().parent / "data")
     import json as _json
+
     with (Path(__file__).resolve().parent / "mini_bench_ids.json").open(encoding="utf-8") as f:
         allowed = set(_json.load(f)["instance_ids"])
     instances = [i for i in instances if i.question_id in allowed][:N]
@@ -93,8 +100,10 @@ async def main() -> None:
         rss = proc.memory_info().rss / 1024 / 1024
         snap = tracemalloc.take_snapshot()
         delta_mb = rss - prev_rss
-        print(f"\n=== Instance {i+1}/{N} ({inst.question_id}) ===")
-        print(f"RSS now: {rss:.0f} MB (delta {delta_mb:+.0f} MB from prev, {rss - rss_init:+.0f} MB total)")
+        print(f"\n=== Instance {i + 1}/{N} ({inst.question_id}) ===")
+        print(
+            f"RSS now: {rss:.0f} MB (delta {delta_mb:+.0f} MB from prev, {rss - rss_init:+.0f} MB total)"
+        )
         print(f"\nTop file growers (vs prev instance):")
         snapshot_diff(prev_snap, snap)
         prev_snap = snap

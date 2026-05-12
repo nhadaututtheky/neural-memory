@@ -111,9 +111,7 @@ def _format_event(hook_input: dict[str, Any]) -> dict[str, Any]:
     duration_ms = hook_input.get("duration_ms", 0)
     if not isinstance(duration_ms, (int, float)):
         duration_ms = 0
-    session_id = os.environ.get(
-        "CLAUDE_SESSION_ID", os.environ.get("CODEX_SESSION_ID", "")
-    )
+    session_id = os.environ.get("CLAUDE_SESSION_ID", os.environ.get("CODEX_SESSION_ID", ""))
     return {
         "tool_name": tool_name,
         "server_name": str(hook_input.get("server_name", "")),
@@ -143,9 +141,7 @@ def _append_to_buffer(event: dict[str, Any], buffer_path: Any) -> bool:
         parent = os.path.dirname(path_str)
         if parent:
             os.makedirs(parent, exist_ok=True)
-        line = (json.dumps(event, ensure_ascii=False, default=str) + "\n").encode(
-            "utf-8"
-        )
+        line = (json.dumps(event, ensure_ascii=False, default=str) + "\n").encode("utf-8")
 
         fd = os.open(path_str, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
         try:
@@ -183,7 +179,7 @@ def _check_buffer_rotation(buffer_path: Any, max_lines: int = 10000) -> None:
             lines = f.readlines()
         if len(lines) <= max_lines:
             return
-        keep = lines[len(lines) // 2:]
+        keep = lines[len(lines) // 2 :]
         with open(path_str, "w", encoding="utf-8") as f:
             f.writelines(keep)
     except OSError:

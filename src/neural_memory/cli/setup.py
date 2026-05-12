@@ -381,9 +381,7 @@ def _codex_command_is_nmem(cmd: str) -> bool:
     return "neural_memory" in cmd or "nmem-hook-" in cmd or "nmem " in cmd or cmd.startswith("nmem")
 
 
-def _codex_event_has_nmem_hook(
-    config: dict[str, Any], event: str
-) -> bool:
+def _codex_event_has_nmem_hook(config: dict[str, Any], event: str) -> bool:
     """Check if the Codex ``[[hooks.<event>]]`` array already has a NM entry."""
     hooks_root = config.get("hooks", {})
     if not isinstance(hooks_root, dict):
@@ -457,17 +455,13 @@ def setup_hooks_codex() -> str:
     for event, matcher, command, timeout in _codex_hook_specs():
         if _codex_event_has_nmem_hook(existing, event):
             continue
-        blocks_to_append.append(
-            _render_codex_hook_entry(event, matcher, command, timeout)
-        )
+        blocks_to_append.append(_render_codex_hook_entry(event, matcher, command, timeout))
 
     if not blocks_to_append:
         return "exists"
 
     try:
-        existing_text = (
-            config_path.read_text(encoding="utf-8") if config_path.exists() else ""
-        )
+        existing_text = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
         if existing_text and not existing_text.endswith("\n"):
             existing_text += "\n"
         if existing_text and not existing_text.endswith("\n\n"):

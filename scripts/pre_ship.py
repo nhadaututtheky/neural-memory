@@ -210,8 +210,11 @@ def check_tests() -> None:
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as tmp:
         try:
             result = subprocess.run(
-                cmd, stdout=tmp, stderr=subprocess.STDOUT,
-                cwd=str(ROOT), timeout=1200,
+                cmd,
+                stdout=tmp,
+                stderr=subprocess.STDOUT,
+                cwd=str(ROOT),
+                timeout=1200,
             )
         except subprocess.TimeoutExpired:
             check("pytest tests/unit/", False, "timed out after 1200s")

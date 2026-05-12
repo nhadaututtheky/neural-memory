@@ -230,9 +230,7 @@ class TestMain:
     def test_injects_surface(self, tmp_path: Path) -> None:
         proj = tmp_path / "p"
         (proj / ".neuralmemory").mkdir(parents=True)
-        (proj / ".neuralmemory" / "surface.nm").write_text(
-            "# GRAPH\n[e1] my-concept (entity)\n"
-        )
+        (proj / ".neuralmemory" / "surface.nm").write_text("# GRAPH\n[e1] my-concept (entity)\n")
 
         stdout = StringIO()
         with (

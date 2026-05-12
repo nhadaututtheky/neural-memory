@@ -181,17 +181,32 @@ MULTIHOP_QUERIES: list[tuple[str, list[str]]] = [
 
 CONVERSATION_TURNS: list[tuple[str, str]] = [
     ("user", "I'm building a payment service. Which database should I use?"),
-    ("assistant", "Based on the project requirements, PostgreSQL is the recommended choice due to ACID compliance."),
+    (
+        "assistant",
+        "Based on the project requirements, PostgreSQL is the recommended choice due to ACID compliance.",
+    ),
     ("user", "What about caching? We need fast session lookups."),
-    ("assistant", "Redis is ideal for session storage — sub-millisecond latency and TTL support built in."),
+    (
+        "assistant",
+        "Redis is ideal for session storage — sub-millisecond latency and TTL support built in.",
+    ),
     ("user", "Our auth system keeps breaking after upgrades. Any known issues?"),
-    ("assistant", "Watch out for cookie SameSite policy changes between runtime versions — that was the root cause in v3."),
+    (
+        "assistant",
+        "Watch out for cookie SameSite policy changes between runtime versions — that was the root cause in v3.",
+    ),
     ("user", "How do I deploy once the code is ready?"),
     ("assistant", "Follow: build → run tests → push Docker image → tag release → notify Slack."),
     ("user", "What about security — are there any common mistakes?"),
-    ("assistant", "Never store JWTs in localStorage; use HttpOnly cookies. Also always use parameterised SQL queries."),
+    (
+        "assistant",
+        "Never store JWTs in localStorage; use HttpOnly cookies. Also always use parameterised SQL queries.",
+    ),
     ("user", "Anything else about the team I should know?"),
-    ("assistant", "Alex is tech lead, Maria is PM, Chen is senior backend. Alex requires PRs to have a test plan before review."),
+    (
+        "assistant",
+        "Alex is tech lead, Maria is PM, Chen is senior backend. Alex requires PRs to have a test plan before review.",
+    ),
 ]
 
 CONVERSATION_RECALL_QUERIES: list[str] = [
@@ -248,6 +263,7 @@ def _reset_counts() -> None:
 
 def _token_set(text: str) -> set[str]:
     import re
+
     return set(re.findall(r"[a-z0-9]+", text.lower()))
 
 
@@ -317,19 +333,24 @@ async def cognee_setup() -> bool:
         # Verify config was picked up from env vars
         cfg = get_llm_config()
         print(f"  Cognee LLM: provider={cfg.llm_provider}, model={cfg.llm_model}")
-        print(f"  Cognee LLM: endpoint={cfg.llm_endpoint}, key={'***' + cfg.llm_api_key[-6:] if cfg.llm_api_key else 'NONE'}")
+        print(
+            f"  Cognee LLM: endpoint={cfg.llm_endpoint}, key={'***' + cfg.llm_api_key[-6:] if cfg.llm_api_key else 'NONE'}"
+        )
 
         # Also force via config API as backup
-        cognee.config.set_llm_config({
-            "llm_api_key": DASHSCOPE_API_KEY,
-            "llm_endpoint": DASHSCOPE_BASE_URL,
-            "llm_model": "openai/qwen3-coder-plus",
-            "llm_provider": "custom",
-        })
+        cognee.config.set_llm_config(
+            {
+                "llm_api_key": DASHSCOPE_API_KEY,
+                "llm_endpoint": DASHSCOPE_BASE_URL,
+                "llm_model": "openai/qwen3-coder-plus",
+                "llm_provider": "custom",
+            }
+        )
 
         # WORKAROUND: Cognee bug — CUSTOM provider drops llm_endpoint from GenericAPIAdapter.
         # Monkey-patch litellm to use DashScope as default api_base.
         import litellm
+
         litellm.api_base = DASHSCOPE_BASE_URL
         litellm.api_key = DASHSCOPE_API_KEY
 
@@ -738,16 +759,32 @@ def print_report(suite: BenchmarkSuite) -> None:
         1
         for r in suite.results
         if (
-            (r.nm_time_s is not None and r.cognee_time_s is not None and r.nm_time_s < r.cognee_time_s)
-            or (r.nm_accuracy is not None and r.cognee_accuracy is not None and r.nm_accuracy > r.cognee_accuracy)
+            (
+                r.nm_time_s is not None
+                and r.cognee_time_s is not None
+                and r.nm_time_s < r.cognee_time_s
+            )
+            or (
+                r.nm_accuracy is not None
+                and r.cognee_accuracy is not None
+                and r.nm_accuracy > r.cognee_accuracy
+            )
         )
     )
     cognee_wins = sum(
         1
         for r in suite.results
         if (
-            (r.nm_time_s is not None and r.cognee_time_s is not None and r.cognee_time_s < r.nm_time_s)
-            or (r.nm_accuracy is not None and r.cognee_accuracy is not None and r.cognee_accuracy > r.nm_accuracy)
+            (
+                r.nm_time_s is not None
+                and r.cognee_time_s is not None
+                and r.cognee_time_s < r.nm_time_s
+            )
+            or (
+                r.nm_accuracy is not None
+                and r.cognee_accuracy is not None
+                and r.cognee_accuracy > r.nm_accuracy
+            )
         )
     )
 
@@ -767,8 +804,12 @@ def print_report(suite: BenchmarkSuite) -> None:
 
     print(f"\n  Key insight: NM uses {suite.nm_total_api_calls} external API calls.")
     if suite.cognee_available:
-        print(f"               Cognee uses {suite.cognee_total_api_calls} (LLM calls for cognify + search).")
-    print(f"  NM = zero-LLM retrieval → predictable cost. Cognee = knowledge graph → richer semantics but LLM-dependent.")
+        print(
+            f"               Cognee uses {suite.cognee_total_api_calls} (LLM calls for cognify + search)."
+        )
+    print(
+        f"  NM = zero-LLM retrieval → predictable cost. Cognee = knowledge graph → richer semantics but LLM-dependent."
+    )
     print(sep)
 
 
@@ -809,7 +850,9 @@ async def main() -> None:
     print("=" * 84)
     print("  NeuralMemory vs Cognee — Real-World Memory Benchmark")
     print("=" * 84)
-    print(f"  DashScope key : {'*' * 20}{DASHSCOPE_API_KEY[-6:] if DASHSCOPE_API_KEY else 'NOT SET'}")
+    print(
+        f"  DashScope key : {'*' * 20}{DASHSCOPE_API_KEY[-6:] if DASHSCOPE_API_KEY else 'NOT SET'}"
+    )
     print(f"  Test memories : {len(MEMORIES_50)}")
     print(f"  Recall queries: {len(QUERIES_20)}")
 

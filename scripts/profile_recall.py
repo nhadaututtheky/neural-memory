@@ -120,7 +120,9 @@ async def main(num_queries: int) -> None:
     p50_total = sorted(total_latencies)[len(total_latencies) // 2]
     p95_total = sorted(total_latencies)[int(len(total_latencies) * 0.95)]
     max_total = max(total_latencies)
-    print(f"  {'TOTAL (wall clock)':<23} {mean_total:>7.1f} {p50_total:>7.1f} {p95_total:>7.1f} {max_total:>7.1f}")
+    print(
+        f"  {'TOTAL (wall clock)':<23} {mean_total:>7.1f} {p50_total:>7.1f} {p95_total:>7.1f} {max_total:>7.1f}"
+    )
 
     # Per-phase DELTA breakdown
     print()

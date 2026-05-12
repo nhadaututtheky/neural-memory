@@ -106,9 +106,7 @@ class ClaudeJudge(BaseJudge):
             verdict = getattr(content_block, "text", str(content_block)).strip().lower()
             return verdict.startswith("correct")
         except Exception:
-            logger.exception(
-                "ClaudeJudge failed for question: %s", question[:80]
-            )
+            logger.exception("ClaudeJudge failed for question: %s", question[:80])
             return False
 
 
@@ -132,8 +130,7 @@ class GPT4oJudge(BaseJudge):
                 self._client = openai.AsyncOpenAI()
             except ImportError as exc:
                 raise ImportError(
-                    "openai package is required for GPT4oJudge. "
-                    "Install it with: pip install openai"
+                    "openai package is required for GPT4oJudge. Install it with: pip install openai"
                 ) from exc
         return self._client
 
@@ -163,9 +160,7 @@ class GPT4oJudge(BaseJudge):
             verdict = (response.choices[0].message.content or "").strip().lower()
             return verdict.startswith("correct")
         except Exception:
-            logger.exception(
-                "GPT4oJudge failed for question: %s", question[:80]
-            )
+            logger.exception("GPT4oJudge failed for question: %s", question[:80])
             return False
 
 

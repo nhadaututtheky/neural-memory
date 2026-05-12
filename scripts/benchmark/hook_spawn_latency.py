@@ -46,9 +46,7 @@ def time_spawn(args: list[str], stdin: bytes | None = None) -> float:
     )
     elapsed = (time.perf_counter() - start) * 1000.0
     if proc.returncode != 0:
-        sys.stderr.write(
-            f"[warn] {args[0]} exit={proc.returncode} stderr={proc.stderr[:200]!r}\n"
-        )
+        sys.stderr.write(f"[warn] {args[0]} exit={proc.returncode} stderr={proc.stderr[:200]!r}\n")
     return elapsed
 
 
@@ -60,7 +58,7 @@ def measure(label: str, args: list[str], stdin: bytes | None, runs: int) -> dict
         ms = time_spawn(args, stdin)
         samples.append(ms)
         if i < 3 or i == runs - 1:
-            print(f"  run {i+1:>2}: {ms:7.1f} ms")
+            print(f"  run {i + 1:>2}: {ms:7.1f} ms")
     cold = samples[0]
     warm = samples[1:]
     return {

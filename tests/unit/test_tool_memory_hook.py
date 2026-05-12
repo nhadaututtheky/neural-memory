@@ -375,9 +375,7 @@ class TestMain:
         assert not (tmp_path / "tool_events.jsonl").exists()
 
     def test_config_blacklist_overlays_noise(self, tmp_path: Path) -> None:
-        (tmp_path / "config.toml").write_text(
-            '[tool_memory]\nblacklist = ["CustomNoise"]\n'
-        )
+        (tmp_path / "config.toml").write_text('[tool_memory]\nblacklist = ["CustomNoise"]\n')
         stdout = self._stdout()
         with (
             patch.dict(os.environ, {"NEURALMEMORY_DIR": str(tmp_path)}, clear=False),
@@ -393,9 +391,7 @@ class TestMain:
         stdout = self._stdout()
         with (
             patch.dict(os.environ, {"NEURALMEMORY_DIR": str(tmp_path)}, clear=False),
-            patch.object(
-                sys, "stdin", StringIO('{"tool_name": "Edit", "duration_ms": 25}')
-            ),
+            patch.object(sys, "stdin", StringIO('{"tool_name": "Edit", "duration_ms": 25}')),
             patch.object(sys, "stdout", stdout),
         ):
             os.environ.pop("NEURALMEMORY_DISABLE_HOOKS", None)

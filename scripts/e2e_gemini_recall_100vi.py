@@ -165,8 +165,12 @@ async def main() -> None:
 
     brain_config = loaded_brain.config
     storage.set_brain(loaded_brain.id)
-    logger.info("  Brain: %s, embedding_enabled=%s, provider=%s",
-                loaded_brain.name, brain_config.embedding_enabled, brain_config.embedding_provider)
+    logger.info(
+        "  Brain: %s, embedding_enabled=%s, provider=%s",
+        loaded_brain.name,
+        brain_config.embedding_enabled,
+        brain_config.embedding_provider,
+    )
 
     all_neurons = await storage.find_neurons(limit=1000)
     emb_count = sum(1 for n in all_neurons if n.metadata.get("_embedding"))
@@ -195,15 +199,17 @@ async def main() -> None:
             answer_preview = f"ERROR: {e}"
             status = "ERROR"
 
-        results_data.append({
-            "index": i + 1,
-            "category": category,
-            "query": query,
-            "status": status,
-            "fibers": n_fibers,
-            "confidence": round(conf, 2),
-            "answer_preview": answer_preview,
-        })
+        results_data.append(
+            {
+                "index": i + 1,
+                "category": category,
+                "query": query,
+                "status": status,
+                "fibers": n_fibers,
+                "confidence": round(conf, 2),
+                "answer_preview": answer_preview,
+            }
+        )
 
         # Progress every 10 queries
         if (i + 1) % 10 == 0:
@@ -226,7 +232,9 @@ async def main() -> None:
         cat_results = [r for r in results_data if r["category"] == cat]
         cat_ok = sum(1 for r in cat_results if r["status"] == "OK")
         cat_total = len(cat_results)
-        cat_avg_conf = sum(r["confidence"] for r in cat_results if r["status"] == "OK") / max(cat_ok, 1)
+        cat_avg_conf = sum(r["confidence"] for r in cat_results if r["status"] == "OK") / max(
+            cat_ok, 1
+        )
         cat_stats[cat] = {"ok": cat_ok, "total": cat_total, "avg_conf": round(cat_avg_conf, 2)}
 
     # --- Print results ---
@@ -237,7 +245,7 @@ async def main() -> None:
     print(f"Neurons: {len(all_neurons)} total, {emb_count} with embeddings")
     print(f"Provider: {brain_config.embedding_provider} / {brain_config.embedding_model}")
     print(f"Threshold: {brain_config.embedding_similarity_threshold}")
-    print(f"Recall time: {recall_elapsed:.1f}s ({recall_elapsed/total:.2f}s/query)")
+    print(f"Recall time: {recall_elapsed:.1f}s ({recall_elapsed / total:.2f}s/query)")
     print("-" * 90)
     print(f"RESULTS: {ok_count}/{total} OK | {fail_count} FAIL | {error_count} ERROR")
     print(f"Avg confidence (OK): {avg_conf:.2f}")
@@ -254,7 +262,9 @@ async def main() -> None:
     print("-" * 90)
     for r in results_data:
         marker = "✅" if r["status"] == "OK" else "❌"
-        print(f"  {r['index']:3d}. {marker} [{r['category']:6s}] fibers={r['fibers']:2d} conf={r['confidence']:.2f} | {r['query']}")
+        print(
+            f"  {r['index']:3d}. {marker} [{r['category']:6s}] fibers={r['fibers']:2d} conf={r['confidence']:.2f} | {r['query']}"
+        )
         if r["status"] == "OK" and r["fibers"] > 0:
             print(f"       → {r['answer_preview'][:100]}")
 
@@ -270,24 +280,31 @@ async def main() -> None:
 
     # Save JSON results next to test file
     json_path = Path(__file__).resolve().parent / "results_100vi.json"
-    json_path.write_text(json.dumps({
-        "summary": {
-            "total": total,
-            "ok": ok_count,
-            "fail": fail_count,
-            "error": error_count,
-            "success_rate": round(ok_count / total * 100, 1),
-            "avg_confidence": round(avg_conf, 2),
-            "avg_fibers": round(avg_fibers, 1),
-            "existing_brain": BRAIN_ID,
-            "recall_time_s": round(recall_elapsed, 1),
-            "recall_per_query_s": round(recall_elapsed / total, 2),
-            "neurons_total": len(all_neurons),
-            "neurons_with_embeddings": emb_count,
-        },
-        "category_stats": cat_stats,
-        "results": results_data,
-    }, indent=2, ensure_ascii=False), encoding="utf-8")
+    json_path.write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "total": total,
+                    "ok": ok_count,
+                    "fail": fail_count,
+                    "error": error_count,
+                    "success_rate": round(ok_count / total * 100, 1),
+                    "avg_confidence": round(avg_conf, 2),
+                    "avg_fibers": round(avg_fibers, 1),
+                    "existing_brain": BRAIN_ID,
+                    "recall_time_s": round(recall_elapsed, 1),
+                    "recall_per_query_s": round(recall_elapsed / total, 2),
+                    "neurons_total": len(all_neurons),
+                    "neurons_with_embeddings": emb_count,
+                },
+                "category_stats": cat_stats,
+                "results": results_data,
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
     print(f"\nJSON results saved: {json_path}")
 
     await storage.close()

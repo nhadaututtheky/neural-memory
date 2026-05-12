@@ -26,6 +26,7 @@ async def main() -> None:
     inst = next(i for i in instances if i.question_id == "4d6b87c8")
 
     import time as _t
+
     db = Path(__file__).resolve().parent / f"results/brains/_debug_{int(_t.time())}.db"
     db.parent.mkdir(parents=True, exist_ok=True)
 
@@ -68,7 +69,9 @@ async def main() -> None:
             summary = (fiber.summary or "")[:100].replace("\n", " ")
             anchor = await storage.get_neuron(fiber.anchor_neuron_id)
             anchor_content = (anchor.content[:100].replace("\n", " ")) if anchor else "<missing>"
-            print(f"  fiber {fid[:8]}... in_ingest={in_ingest} sid={sid} neurons={len(fiber.neuron_ids)}")
+            print(
+                f"  fiber {fid[:8]}... in_ingest={in_ingest} sid={sid} neurons={len(fiber.neuron_ids)}"
+            )
             print(f"    summary: {summary!r}")
             print(f"    anchor:  {anchor_content!r}")
 

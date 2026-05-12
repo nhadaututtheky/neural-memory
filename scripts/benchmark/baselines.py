@@ -68,9 +68,7 @@ def retrieve_fts5(instance: LMEInstance, top_k: int = 10) -> RetrievalOutput:
         )
 
         rows = [(s.session_id, _session_text(s)) for s in instance.sessions]
-        conn.executemany(
-            "INSERT INTO sessions (session_id, text) VALUES (?, ?)", rows
-        )
+        conn.executemany("INSERT INTO sessions (session_id, text) VALUES (?, ?)", rows)
 
         query = _fts5_escape(instance.question)
         cursor = conn.execute(
@@ -103,10 +101,46 @@ def _fts5_escape(query: str) -> str:
     tokens = re.findall(r"[A-Za-z0-9]+", query)
     # Drop stop-ish tokens to improve BM25 signal
     stop = {
-        "the", "a", "an", "is", "are", "was", "were", "be", "been", "do", "does",
-        "did", "what", "when", "where", "who", "whom", "why", "how", "which",
-        "i", "you", "me", "my", "your", "it", "of", "in", "on", "at", "for",
-        "to", "with", "from", "this", "that", "and", "or", "but", "not",
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "do",
+        "does",
+        "did",
+        "what",
+        "when",
+        "where",
+        "who",
+        "whom",
+        "why",
+        "how",
+        "which",
+        "i",
+        "you",
+        "me",
+        "my",
+        "your",
+        "it",
+        "of",
+        "in",
+        "on",
+        "at",
+        "for",
+        "to",
+        "with",
+        "from",
+        "this",
+        "that",
+        "and",
+        "or",
+        "but",
+        "not",
     }
     filtered = [f'"{t}"' for t in tokens if t.lower() not in stop and len(t) > 1]
     if not filtered:
@@ -187,9 +221,7 @@ def retrieve_recency(instance: LMEInstance, top_k: int = 10) -> RetrievalOutput:
     """
     t0 = time.perf_counter()
 
-    sorted_sessions = sorted(
-        instance.sessions, key=lambda s: s.timestamp, reverse=True
-    )
+    sorted_sessions = sorted(instance.sessions, key=lambda s: s.timestamp, reverse=True)
     ranked = [s.session_id for s in sorted_sessions[:top_k]]
 
     elapsed = time.perf_counter() - t0
@@ -213,9 +245,7 @@ BASELINES = {
 }
 
 
-async def retrieve(
-    instance: LMEInstance, method: str, top_k: int = 10
-) -> RetrievalOutput:
+async def retrieve(instance: LMEInstance, method: str, top_k: int = 10) -> RetrievalOutput:
     """Async wrapper so orchestrator can `await` all baselines uniformly."""
     if method not in BASELINES:
         raise ValueError(f"Unknown baseline {method!r}. Available: {list(BASELINES)}")

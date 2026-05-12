@@ -54,7 +54,9 @@ def split_sections(context: str) -> dict[str, str]:
     """Split context into Fibers / Related / Other sections."""
     if not context:
         return {"fibers": "", "related": "", "other": ""}
-    parts = re.split(r"^##\s+(Relevant Memories|Related Information)\s*$", context, flags=re.MULTILINE)
+    parts = re.split(
+        r"^##\s+(Relevant Memories|Related Information)\s*$", context, flags=re.MULTILINE
+    )
     result = {"fibers": "", "related": "", "other": parts[0] if parts else ""}
     i = 1
     while i < len(parts) - 1:
@@ -211,11 +213,15 @@ async def main() -> None:
     tag_all = sum(r["tag_toks"] for r in rows)
     related_all = sum(r["related_toks"] for r in rows)
     log(f"\nTotal tokens across {len(rows)} queries: {total_all:,}")
-    log(f"Total 'related' section tokens: {related_all:,} ({related_all / max(total_all, 1) * 100:.1f}%)")
+    log(
+        f"Total 'related' section tokens: {related_all:,} ({related_all / max(total_all, 1) * 100:.1f}%)"
+    )
     log(f"Total '[type]' tag overhead: {tag_all:,} ({tag_all / max(total_all, 1) * 100:.1f}%)")
     log("")
     log("Optimization opportunities:")
-    log(f"  - Drop [type] tags: save ~{tag_all / len(rows):.0f} tok/query ({tag_all / max(total_all, 1) * 100:.1f}% of context)")
+    log(
+        f"  - Drop [type] tags: save ~{tag_all / len(rows):.0f} tok/query ({tag_all / max(total_all, 1) * 100:.1f}% of context)"
+    )
     log(f"  - Dedup Related vs Fibers: unknown (need overlap check)")
 
     out.close()

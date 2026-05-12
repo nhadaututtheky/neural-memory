@@ -296,7 +296,9 @@ def _build_context(
         if session is None:
             continue
 
-        lines.append(f"--- Session {session_id} ({session.timestamp.strftime('%Y-%m-%d %H:%M')}) ---")
+        lines.append(
+            f"--- Session {session_id} ({session.timestamp.strftime('%Y-%m-%d %H:%M')}) ---"
+        )
 
         for turn in session.turns:
             if turn_count >= max_turns:
@@ -346,7 +348,9 @@ async def main() -> None:
     if config.resume:
         completed = load_checkpoint(config.output_dir)
         skip_count = sum(1 for inst in instances if inst.question_id in completed)
-        print(f"Resuming: {skip_count} instances already done, {len(instances) - skip_count} remaining")
+        print(
+            f"Resuming: {skip_count} instances already done, {len(instances) - skip_count} remaining"
+        )
     else:
         # Fresh run — clear old checkpoint
         cp = _checkpoint_path(config.output_dir)
@@ -392,7 +396,7 @@ async def main() -> None:
             import subprocess
 
             _MEM_LIMIT_MB = 10_000  # Kill subprocess if RSS > 10GB
-            _TIMEOUT_SEC = 600     # 10 min hard timeout (embedding adds overhead)
+            _TIMEOUT_SEC = 600  # 10 min hard timeout (embedding adds overhead)
 
             proc = subprocess.Popen(
                 [
@@ -423,7 +427,9 @@ async def main() -> None:
                         if mem_mb > _MEM_LIMIT_MB:
                             logger.warning(
                                 "Killing subprocess for %s — RSS %.0fMB > %dMB limit",
-                                inst.question_id, mem_mb, _MEM_LIMIT_MB,
+                                inst.question_id,
+                                mem_mb,
+                                _MEM_LIMIT_MB,
                             )
                             proc.kill()
                             proc.wait(timeout=10)

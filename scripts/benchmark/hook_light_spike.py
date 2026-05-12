@@ -34,9 +34,7 @@ SAMPLE_INPUT = json.dumps(
 
 def time_spawn(args: list[str], stdin: bytes, env: dict[str, str] | None = None) -> float:
     start = time.perf_counter()
-    proc = subprocess.run(
-        args, input=stdin, capture_output=True, timeout=10, shell=False, env=env
-    )
+    proc = subprocess.run(args, input=stdin, capture_output=True, timeout=10, shell=False, env=env)
     elapsed = (time.perf_counter() - start) * 1000.0
     if proc.returncode != 0:
         sys.stderr.write(f"[warn] exit={proc.returncode} stderr={proc.stderr[:200]!r}\n")
@@ -77,7 +75,10 @@ def main() -> int:
         ("v1: minimal stdlib", [sys.executable, str(bench_dir / "_light_hook_v1_minimal.py")]),
         ("v2: + file lock", [sys.executable, str(bench_dir / "_light_hook_v2_locked.py")]),
         ("v3: stdlib + pathlib", [sys.executable, str(bench_dir / "_light_hook_v3_pathlib.py")]),
-        ("v4: empty fast-path (floor)", [sys.executable, str(bench_dir / "_light_hook_v4_disabled.py")]),
+        (
+            "v4: empty fast-path (floor)",
+            [sys.executable, str(bench_dir / "_light_hook_v4_disabled.py")],
+        ),
     ]
 
     # Sandbox bench writes to a scratch dir so they don't pollute the project root.
@@ -93,7 +94,9 @@ def main() -> int:
     print(f"{'Variant':<40} {'cold':>7} {'p50':>7} {'p95':>7} {'p99':>7}")
     print("-" * 70)
     for r in results:
-        print(f"{r['label']:<40} {r['cold']:>7.1f} {r['p50']:>7.1f} {r['p95']:>7.1f} {r['p99']:>7.1f}")
+        print(
+            f"{r['label']:<40} {r['cold']:>7.1f} {r['p50']:>7.1f} {r['p95']:>7.1f} {r['p99']:>7.1f}"
+        )
     print("=" * 70)
 
     # Delta vs v0 (current heavy)
@@ -108,7 +111,13 @@ def main() -> int:
     print("\n>>> python -X importtime analysis on heavy hook (top 10 slowest)")
     try:
         proc = subprocess.run(
-            [sys.executable, "-X", "importtime", "-c", "from neural_memory.hooks import post_tool_use"],
+            [
+                sys.executable,
+                "-X",
+                "importtime",
+                "-c",
+                "from neural_memory.hooks import post_tool_use",
+            ],
             capture_output=True,
             timeout=30,
         )
@@ -129,7 +138,7 @@ def main() -> int:
         parsed.sort(key=lambda x: x[0], reverse=True)
         print(f"  {'cum_ms':>8}  {'self_ms':>8}  module")
         for cum, self_us, name in parsed[:15]:
-            print(f"  {cum/1000:>8.1f}  {self_us/1000:>8.1f}  {name}")
+            print(f"  {cum / 1000:>8.1f}  {self_us / 1000:>8.1f}  {name}")
     except Exception as e:
         print(f"  [skip importtime: {e}]")
 

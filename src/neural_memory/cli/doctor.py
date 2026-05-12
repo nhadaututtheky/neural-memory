@@ -806,9 +806,7 @@ def _check_hooks() -> dict[str, Any]:
                     if first_token and ("/" in first_token or "\\" in first_token):
                         if not Path(first_token).exists():
                             stale_cmds.append((event, first_token))
-                    elif first_token.startswith("nmem-hook-") and not shutil.which(
-                        first_token
-                    ):
+                    elif first_token.startswith("nmem-hook-") and not shutil.which(first_token):
                         stale_cmds.append((event, first_token))
                     break
 

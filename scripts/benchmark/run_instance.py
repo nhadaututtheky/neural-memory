@@ -76,13 +76,9 @@ async def run(
     ingest_result = await ingest_instance(instance, db_path, backend)
 
     # Retrieve
-    retrieved_session_ids = await _retrieve(
-        instance, ingest_result, db_path, backend, top_k=10
-    )
+    retrieved_session_ids = await _retrieve(instance, ingest_result, db_path, backend, top_k=10)
 
-    retrieval_hit = any(
-        sid in retrieved_session_ids for sid in instance.answer_session_ids
-    )
+    retrieval_hit = any(sid in retrieved_session_ids for sid in instance.answer_session_ids)
 
     elapsed = time.perf_counter() - t0
 

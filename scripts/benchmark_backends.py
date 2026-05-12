@@ -118,20 +118,74 @@ class BenchmarkReport:
 # ---------------------------------------------------------------------------
 
 TOPICS = [
-    "Python", "JavaScript", "Rust", "Go", "TypeScript", "C++", "Java",
-    "Kotlin", "Swift", "Ruby", "Elixir", "Scala", "Haskell", "Clojure",
-    "PostgreSQL", "Redis", "MongoDB", "SQLite", "MySQL", "Cassandra",
-    "Docker", "Kubernetes", "Terraform", "Ansible", "Prometheus",
-    "React", "Vue", "Angular", "Svelte", "Next.js", "Nuxt", "Remix",
-    "FastAPI", "Django", "Flask", "Express", "Spring Boot", "Actix",
-    "GraphQL", "gRPC", "REST", "WebSocket", "MQTT", "AMQP",
-    "JWT", "OAuth2", "SAML", "CORS", "HTTPS", "mTLS",
+    "Python",
+    "JavaScript",
+    "Rust",
+    "Go",
+    "TypeScript",
+    "C++",
+    "Java",
+    "Kotlin",
+    "Swift",
+    "Ruby",
+    "Elixir",
+    "Scala",
+    "Haskell",
+    "Clojure",
+    "PostgreSQL",
+    "Redis",
+    "MongoDB",
+    "SQLite",
+    "MySQL",
+    "Cassandra",
+    "Docker",
+    "Kubernetes",
+    "Terraform",
+    "Ansible",
+    "Prometheus",
+    "React",
+    "Vue",
+    "Angular",
+    "Svelte",
+    "Next.js",
+    "Nuxt",
+    "Remix",
+    "FastAPI",
+    "Django",
+    "Flask",
+    "Express",
+    "Spring Boot",
+    "Actix",
+    "GraphQL",
+    "gRPC",
+    "REST",
+    "WebSocket",
+    "MQTT",
+    "AMQP",
+    "JWT",
+    "OAuth2",
+    "SAML",
+    "CORS",
+    "HTTPS",
+    "mTLS",
 ]
 
 ACTIONS = [
-    "supports", "implements", "requires", "provides", "enables",
-    "handles", "manages", "processes", "validates", "optimizes",
-    "caches", "streams", "serializes", "encrypts", "compresses",
+    "supports",
+    "implements",
+    "requires",
+    "provides",
+    "enables",
+    "handles",
+    "manages",
+    "processes",
+    "validates",
+    "optimizes",
+    "caches",
+    "streams",
+    "serializes",
+    "encrypts",
+    "compresses",
 ]
 
 FEATURES = [
@@ -230,13 +284,26 @@ def generate_memories(n: int) -> list[str]:
 # ---------------------------------------------------------------------------
 
 BENCHMARK_QUERIES = [
-    "Python", "Redis", "Docker", "GraphQL", "JWT",
-    "Kubernetes", "PostgreSQL", "React", "FastAPI", "WebSocket",
-    "Python concurrency async", "Redis caching TTL eviction",
-    "Docker container orchestration", "GraphQL schema generation",
-    "JWT token authentication security", "Kubernetes pod scaling",
-    "PostgreSQL query optimization", "React component rendering",
-    "FastAPI middleware validation", "WebSocket real-time streaming",
+    "Python",
+    "Redis",
+    "Docker",
+    "GraphQL",
+    "JWT",
+    "Kubernetes",
+    "PostgreSQL",
+    "React",
+    "FastAPI",
+    "WebSocket",
+    "Python concurrency async",
+    "Redis caching TTL eviction",
+    "Docker container orchestration",
+    "GraphQL schema generation",
+    "JWT token authentication security",
+    "Kubernetes pod scaling",
+    "PostgreSQL query optimization",
+    "React component rendering",
+    "FastAPI middleware validation",
+    "WebSocket real-time streaming",
     "What framework handles concurrent requests?",
     "Which database supports JSON storage?",
     "How does authentication work?",
@@ -257,11 +324,16 @@ BENCHMARK_QUERIES = [
     "Terraform infrastructure as code patterns",
     "OAuth2 and CORS security configuration",
     "gRPC vs REST API performance comparison",
-    "performance optimization", "error handling patterns",
-    "security best practices", "deployment strategy",
-    "data validation", "monitoring and observability",
-    "testing automation", "memory management",
-    "connection handling", "configuration management",
+    "performance optimization",
+    "error handling patterns",
+    "security best practices",
+    "deployment strategy",
+    "data validation",
+    "monitoring and observability",
+    "testing automation",
+    "memory management",
+    "connection handling",
+    "configuration management",
 ]
 
 
@@ -291,13 +363,17 @@ async def make_infinitydb(base_dir: str, brain_id: str) -> Any:
 async def make_postgres(brain_id: str) -> Any:
     """Create and initialize a PostgreSQL storage backend (using legacy PostgreSQLStorage)."""
     import warnings
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         from neural_memory.storage.postgres.postgres_store import PostgreSQLStorage
 
     storage = PostgreSQLStorage(
-        host="localhost", port=5433, database="neuralmemory_bench",
-        user="postgres", password="postgres",
+        host="localhost",
+        port=5433,
+        database="neuralmemory_bench",
+        user="postgres",
+        password="postgres",
         embedding_dim=384,
     )
     await storage.initialize()
@@ -309,8 +385,11 @@ async def _clean_postgres() -> None:
     import asyncpg
 
     conn = await asyncpg.connect(
-        host="localhost", port=5433, database="neuralmemory_bench",
-        user="postgres", password="postgres",
+        host="localhost",
+        port=5433,
+        database="neuralmemory_bench",
+        user="postgres",
+        password="postgres",
     )
     try:
         await conn.execute("DROP SCHEMA public CASCADE")
@@ -324,6 +403,7 @@ def check_infdb_available() -> bool:
     """Check if InfinityDB dependencies are installed."""
     try:
         from neural_memory.pro import is_pro_deps_installed
+
         return is_pro_deps_installed()
     except ImportError:
         return False
@@ -333,6 +413,7 @@ def check_postgres_available() -> bool:
     """Check if asyncpg is installed."""
     try:
         import asyncpg  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -407,6 +488,7 @@ async def bench_recall(
     if brain is None:
         # InfinityDB may not find brain by arbitrary ID — use default config
         from neural_memory.core.brain import BrainConfig
+
         config = BrainConfig(
             decay_rate=0.1,
             reinforcement_delta=0.05,
@@ -453,8 +535,15 @@ async def bench_recall(
     )
 
     # Average phase timings (convert cumulative → delta)
-    phase_keys = ["parse", "simhash_prefilter", "anchors_rrf", "activation",
-                  "post_activation", "fibers", "reconstruction"]
+    phase_keys = [
+        "parse",
+        "simhash_prefilter",
+        "anchors_rrf",
+        "activation",
+        "post_activation",
+        "fibers",
+        "reconstruction",
+    ]
     avg_phases = PhaseTimings()
     if all_phases:
         for key in phase_keys:
@@ -516,13 +605,15 @@ def format_markdown(report: BenchmarkReport) -> str:
         )
 
     # Phase timing breakdown
-    lines.extend([
-        "",
-        "## Phase Timing Breakdown (avg cumulative ms from query start)",
-        "",
-        "| Backend | Scale | Parse | SimHash | Anchors+RRF | Activation | Post-Act | Fibers | Reconstruction |",
-        "|---------|------:|------:|--------:|------------:|-----------:|---------:|-------:|---------------:|",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Phase Timing Breakdown (avg cumulative ms from query start)",
+            "",
+            "| Backend | Scale | Parse | SimHash | Anchors+RRF | Activation | Post-Act | Fibers | Reconstruction |",
+            "|---------|------:|------:|--------:|------------:|-----------:|---------:|-------:|---------------:|",
+        ]
+    )
 
     for s in report.scales:
         pt = s.phase_timings_avg
@@ -539,13 +630,15 @@ def format_markdown(report: BenchmarkReport) -> str:
         )
 
     # Delta breakdown (phase N - phase N-1 = actual time spent in each phase)
-    lines.extend([
-        "",
-        "## Phase Delta Breakdown (avg ms spent IN each phase)",
-        "",
-        "| Backend | Scale | Parse | SimHash | Anchors+RRF | Activation | Post-Act | Fibers | Recon |",
-        "|---------|------:|------:|--------:|------------:|-----------:|---------:|-------:|------:|",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Phase Delta Breakdown (avg ms spent IN each phase)",
+            "",
+            "| Backend | Scale | Parse | SimHash | Anchors+RRF | Activation | Post-Act | Fibers | Recon |",
+            "|---------|------:|------:|--------:|------------:|-----------:|---------:|-------:|------:|",
+        ]
+    )
 
     for s in report.scales:
         pt = s.phase_timings_avg
@@ -586,9 +679,11 @@ async def run_scale(
     """Run benchmark at a single (backend, scale) pair."""
     n_memories = estimate_memories_for_neurons(target_neurons)
 
-    print(f"\n{'='*60}")
-    print(f"Backend: {backend.upper()} | Scale: {target_neurons:,} neurons (est. {n_memories:,} memories)")
-    print(f"{'='*60}")
+    print(f"\n{'=' * 60}")
+    print(
+        f"Backend: {backend.upper()} | Scale: {target_neurons:,} neurons (est. {n_memories:,} memories)"
+    )
+    print(f"{'=' * 60}")
 
     result = ScaleResult(backend=backend, target_neurons=target_neurons)
 
@@ -633,30 +728,35 @@ async def run_scale(
     result.rss_after_mb = rss_after_seed
     result.rss_delta_mb = rss_after_seed - rss_before
 
-    print(f"  Actual: {result.actual_neurons:,} neurons, "
-          f"{result.actual_fibers:,} fibers, "
-          f"{result.actual_synapses:,} synapses")
-    print(f"  RSS: {rss_before:.0f}MB -> {rss_after_seed:.0f}MB "
-          f"(+{result.rss_delta_mb:.1f}MB)")
+    print(
+        f"  Actual: {result.actual_neurons:,} neurons, "
+        f"{result.actual_fibers:,} fibers, "
+        f"{result.actual_synapses:,} synapses"
+    )
+    print(f"  RSS: {rss_before:.0f}MB -> {rss_after_seed:.0f}MB (+{result.rss_delta_mb:.1f}MB)")
 
     # 2. Recall benchmark
     print(f"  Running recall benchmark ({len(queries)} queries x {runs} runs)...")
     recall_stats, avg_phases, _all_phases = await bench_recall(storage, queries, runs)
     result.recall_latency = recall_stats
     result.phase_timings_avg = avg_phases
-    print(f"  Recall: p50={recall_stats.p50:.1f}ms "
-          f"p95={recall_stats.p95:.1f}ms "
-          f"p99={recall_stats.p99:.1f}ms")
+    print(
+        f"  Recall: p50={recall_stats.p50:.1f}ms "
+        f"p95={recall_stats.p95:.1f}ms "
+        f"p99={recall_stats.p99:.1f}ms"
+    )
 
     # Print phase delta breakdown
     pt = avg_phases
-    print(f"  Phases (delta): parse={pt.parse:.1f}ms "
-          f"simhash={pt.simhash_prefilter - pt.parse:.1f}ms "
-          f"anchors={pt.anchors_rrf - pt.simhash_prefilter:.1f}ms "
-          f"activation={pt.activation - pt.anchors_rrf:.1f}ms "
-          f"post={pt.post_activation - pt.activation:.1f}ms "
-          f"fibers={pt.fibers - pt.post_activation:.1f}ms "
-          f"recon={pt.reconstruction - pt.fibers:.1f}ms")
+    print(
+        f"  Phases (delta): parse={pt.parse:.1f}ms "
+        f"simhash={pt.simhash_prefilter - pt.parse:.1f}ms "
+        f"anchors={pt.anchors_rrf - pt.simhash_prefilter:.1f}ms "
+        f"activation={pt.activation - pt.anchors_rrf:.1f}ms "
+        f"post={pt.post_activation - pt.activation:.1f}ms "
+        f"fibers={pt.fibers - pt.post_activation:.1f}ms "
+        f"recon={pt.reconstruction - pt.fibers:.1f}ms"
+    )
 
     # 3. Consolidation benchmark
     print(f"  Running consolidation benchmark...")
@@ -709,7 +809,9 @@ async def main() -> None:
 
     # Validate backends
     if "infdb" in backends and not check_infdb_available():
-        print("ERROR: InfinityDB dependencies not installed. Install with: pip install neural-memory[pro]")
+        print(
+            "ERROR: InfinityDB dependencies not installed. Install with: pip install neural-memory[pro]"
+        )
         sys.exit(1)
     if "postgres" in backends and not check_postgres_available():
         print("ERROR: asyncpg not installed. Install with: pip install asyncpg pgvector")
@@ -735,7 +837,7 @@ async def main() -> None:
 
     # Output
     md = format_markdown(report)
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(md)
 
     # Save JSON

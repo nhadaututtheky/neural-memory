@@ -186,17 +186,32 @@ MULTIHOP_QUERIES: list[tuple[str, list[str]]] = [
 
 CONVERSATION_TURNS: list[tuple[str, str]] = [
     ("user", "I'm building a payment service. Which database should I use?"),
-    ("assistant", "Based on the project requirements, PostgreSQL is the recommended choice due to ACID compliance."),
+    (
+        "assistant",
+        "Based on the project requirements, PostgreSQL is the recommended choice due to ACID compliance.",
+    ),
     ("user", "What about caching? We need fast session lookups."),
-    ("assistant", "Redis is ideal for session storage — sub-millisecond latency and TTL support built in."),
+    (
+        "assistant",
+        "Redis is ideal for session storage — sub-millisecond latency and TTL support built in.",
+    ),
     ("user", "Our auth system keeps breaking after upgrades. Any known issues?"),
-    ("assistant", "Watch out for cookie SameSite policy changes between runtime versions — that was the root cause in v3."),
+    (
+        "assistant",
+        "Watch out for cookie SameSite policy changes between runtime versions — that was the root cause in v3.",
+    ),
     ("user", "How do I deploy once the code is ready?"),
     ("assistant", "Follow: build → run tests → push Docker image → tag release → notify Slack."),
     ("user", "What about security — are there any common mistakes?"),
-    ("assistant", "Never store JWTs in localStorage; use HttpOnly cookies. Also always use parameterised SQL queries."),
+    (
+        "assistant",
+        "Never store JWTs in localStorage; use HttpOnly cookies. Also always use parameterised SQL queries.",
+    ),
     ("user", "Anything else about the team I should know?"),
-    ("assistant", "Alex is tech lead, Maria is PM, Chen is senior backend. Alex requires PRs to have a test plan before review."),
+    (
+        "assistant",
+        "Alex is tech lead, Maria is PM, Chen is senior backend. Alex requires PRs to have a test plan before review.",
+    ),
 ]
 
 CONVERSATION_RECALL_QUERIES: list[str] = [
@@ -369,7 +384,9 @@ def mem0_recall(client: Any, query: str, user_id: str = "benchmark_user") -> str
 # ---------------------------------------------------------------------------
 
 
-async def bench_write_speed(suite: BenchmarkSuite, mem0_client: Any | None, nm_encoder: Any) -> None:
+async def bench_write_speed(
+    suite: BenchmarkSuite, mem0_client: Any | None, nm_encoder: Any
+) -> None:
     """Test 1: Store 50 memories — measure total wall-clock time."""
     print("\n[1/6] Write Speed — storing 50 memories")
 
@@ -414,7 +431,9 @@ async def bench_write_speed(suite: BenchmarkSuite, mem0_client: Any | None, nm_e
     suite.results.append(result)
 
 
-async def bench_read_speed(suite: BenchmarkSuite, mem0_client: Any | None, nm_pipeline: Any) -> None:
+async def bench_read_speed(
+    suite: BenchmarkSuite, mem0_client: Any | None, nm_pipeline: Any
+) -> None:
     """Test 2: Recall 20 queries — measure total wall-clock time."""
     print("\n[2/6] Read Speed — recalling 20 queries")
 
@@ -553,7 +572,9 @@ async def bench_conversation(
     result.nm_error = nm_err
 
     nm_conv_scores = [
-        best_similarity(CONVERSATION_RECALL_QUERIES[i], [nm_responses[i]] + [t for _, t in CONVERSATION_TURNS])
+        best_similarity(
+            CONVERSATION_RECALL_QUERIES[i], [nm_responses[i]] + [t for _, t in CONVERSATION_TURNS]
+        )
         for i in range(len(CONVERSATION_RECALL_QUERIES))
     ]
     result.nm_accuracy = sum(nm_conv_scores) / len(nm_conv_scores)
@@ -678,7 +699,9 @@ def print_report(suite: BenchmarkSuite) -> None:
     print(thin)
 
     # Errors
-    errors = [(r.operation, r.nm_error, r.mem0_error) for r in suite.results if r.nm_error or r.mem0_error]
+    errors = [
+        (r.operation, r.nm_error, r.mem0_error) for r in suite.results if r.nm_error or r.mem0_error
+    ]
     if errors:
         print("\n  ERRORS / WARNINGS")
         print(thin)
@@ -695,7 +718,11 @@ def print_report(suite: BenchmarkSuite) -> None:
         for r in suite.results
         if (
             (r.nm_time_s is not None and r.mem0_time_s is not None and r.nm_time_s < r.mem0_time_s)
-            or (r.nm_accuracy is not None and r.mem0_accuracy is not None and r.nm_accuracy > r.mem0_accuracy)
+            or (
+                r.nm_accuracy is not None
+                and r.mem0_accuracy is not None
+                and r.nm_accuracy > r.mem0_accuracy
+            )
         )
     )
     mem0_wins = sum(
@@ -703,7 +730,11 @@ def print_report(suite: BenchmarkSuite) -> None:
         for r in suite.results
         if (
             (r.nm_time_s is not None and r.mem0_time_s is not None and r.mem0_time_s < r.nm_time_s)
-            or (r.nm_accuracy is not None and r.mem0_accuracy is not None and r.mem0_accuracy > r.nm_accuracy)
+            or (
+                r.nm_accuracy is not None
+                and r.mem0_accuracy is not None
+                and r.mem0_accuracy > r.nm_accuracy
+            )
         )
     )
 

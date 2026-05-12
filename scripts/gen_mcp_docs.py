@@ -6,6 +6,7 @@ Usage:
     python scripts/gen_mcp_docs.py --check      # check if docs are up-to-date (exit 1 if stale)
     python scripts/gen_mcp_docs.py --stdout      # print to stdout instead of file
 """
+
 from __future__ import annotations
 
 import argparse
@@ -101,7 +102,7 @@ def _format_type(prop: dict[str, Any]) -> str:
         item_type = items.get("type", "any") if isinstance(items, dict) else "any"
         return f"array[{item_type}]"
     if "enum" in prop:
-        values = ", ".join(f'`{v}`' for v in prop["enum"])
+        values = ", ".join(f"`{v}`" for v in prop["enum"])
         return f"{t} ({values})"
     return str(t)
 
@@ -169,7 +170,7 @@ def generate() -> str:
         f"**{len(schemas)} tools** available via MCP stdio transport.",
         "",
         "!!! tip",
-        '    Tools are called as MCP tool calls, not CLI commands. In Claude Code, call `nmem_recall` directly — do not run `nmem recall` in terminal.',
+        "    Tools are called as MCP tool calls, not CLI commands. In Claude Code, call `nmem_recall` directly — do not run `nmem recall` in terminal.",
         "",
         "## Table of Contents",
         "",
@@ -197,7 +198,7 @@ def generate() -> str:
 
     # Per-category sections
     for cat_key, (cat_label, tool_names) in TOOL_CATEGORIES.items():
-        lines.append(f'## {cat_label} {{#{cat_key}}}')
+        lines.append(f"## {cat_label} {{#{cat_key}}}")
         lines.append("")
 
         for tn in tool_names:
@@ -245,10 +246,14 @@ def main() -> None:
                 print(f"  docs/api/mcp-tools.md is up-to-date ({len(content)} chars)")
                 return
             else:
-                print(f"  docs/api/mcp-tools.md is STALE — regenerate with: python scripts/gen_mcp_docs.py")
+                print(
+                    f"  docs/api/mcp-tools.md is STALE — regenerate with: python scripts/gen_mcp_docs.py"
+                )
                 sys.exit(1)
         else:
-            print(f"  docs/api/mcp-tools.md does not exist — generate with: python scripts/gen_mcp_docs.py")
+            print(
+                f"  docs/api/mcp-tools.md does not exist — generate with: python scripts/gen_mcp_docs.py"
+            )
             sys.exit(1)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

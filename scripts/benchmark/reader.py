@@ -14,15 +14,11 @@ logger = logging.getLogger(__name__)
 _SYSTEM_PROMPT = (
     "You are answering questions about a user's past conversations with an AI assistant.\n"
     "Use ONLY the provided conversation history to answer. "
-    "If the information is not in the history, say \"I don't have that information.\"\n"
+    'If the information is not in the history, say "I don\'t have that information."\n'
     "Be concise and direct. The current date is {question_date}."
 )
 
-_USER_TEMPLATE = (
-    "Conversation history:\n{context}\n\n"
-    "Question: {question}\n\n"
-    "Answer:"
-)
+_USER_TEMPLATE = "Conversation history:\n{context}\n\nQuestion: {question}\n\nAnswer:"
 
 
 # ---------------------------------------------------------------------------
@@ -118,8 +114,7 @@ class OllamaReader(BaseReader):
             import httpx
         except ImportError as exc:
             raise ImportError(
-                "httpx is required for OllamaReader. "
-                "Install it with: pip install httpx"
+                "httpx is required for OllamaReader. Install it with: pip install httpx"
             ) from exc
 
         system = _SYSTEM_PROMPT.format(question_date=question_date)

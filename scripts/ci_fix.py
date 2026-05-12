@@ -76,11 +76,19 @@ def main() -> int:
 
     # Step 5: Security scan (same as CI)
     print("Security scan...", end=" ", flush=True)
-    result = run([
-        "python", "-m", "ruff", "check", "src/",
-        "--select", "S",
-        "--ignore", "S101,S110,S112,S311,S324",
-    ])
+    result = run(
+        [
+            "python",
+            "-m",
+            "ruff",
+            "check",
+            "src/",
+            "--select",
+            "S",
+            "--ignore",
+            "S101,S110,S112,S311,S324",
+        ]
+    )
     if result.returncode == 0:
         print(f"{PASS} security rules")
     else:

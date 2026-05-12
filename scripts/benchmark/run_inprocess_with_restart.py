@@ -35,7 +35,9 @@ def main() -> int:
         type=Path,
         default=Path(__file__).resolve().parent / "mini_bench_ids.json",
     )
-    parser.add_argument("--output-dir", type=Path, default=Path(__file__).resolve().parent / "results")
+    parser.add_argument(
+        "--output-dir", type=Path, default=Path(__file__).resolve().parent / "results"
+    )
     parser.add_argument("--rss-limit-mb", type=int, default=14000)
     parser.add_argument("--max-relaunches", type=int, default=6)
     args = parser.parse_args()
@@ -58,10 +60,14 @@ def main() -> int:
         cmd = [
             sys.executable,
             str(Path(__file__).resolve().parent / "compare_inprocess.py"),
-            "--variant", args.variant,
-            "--instance-ids", str(args.instance_ids),
-            "--output-dir", str(args.output_dir),
-            "--rss-limit-mb", str(args.rss_limit_mb),
+            "--variant",
+            args.variant,
+            "--instance-ids",
+            str(args.instance_ids),
+            "--output-dir",
+            str(args.output_dir),
+            "--rss-limit-mb",
+            str(args.rss_limit_mb),
         ]
         rc = subprocess.call(cmd)
         elapsed = time.perf_counter() - t0

@@ -28,7 +28,12 @@ sys.path.insert(0, str(_repo / "src"))
 sys.path.insert(0, str(_repo))
 
 warnings.simplefilter("ignore")
-for n in ["neural_memory.engine", "neural_memory.storage", "neural_memory.safety", "neural_memory.extraction"]:
+for n in [
+    "neural_memory.engine",
+    "neural_memory.storage",
+    "neural_memory.safety",
+    "neural_memory.extraction",
+]:
     logging.getLogger(n).setLevel(logging.ERROR)
 
 logging.basicConfig(level=logging.WARNING)
@@ -136,7 +141,9 @@ async def main() -> None:
         default=Path(__file__).resolve().parent / "mini_bench_ids.json",
     )
     parser.add_argument("--limit", type=int, default=None)
-    parser.add_argument("--output-dir", type=Path, default=Path(__file__).resolve().parent / "results")
+    parser.add_argument(
+        "--output-dir", type=Path, default=Path(__file__).resolve().parent / "results"
+    )
     parser.add_argument(
         "--rss-limit-mb",
         type=int,
@@ -231,8 +238,10 @@ async def main() -> None:
     print(f"\n[OK] Saved: {out}")
 
     print("\n=== Summary ===")
-    print(f"Total elapsed: {total_elapsed:.0f}s ({total_elapsed/len(results):.1f}s/inst)")
-    print(f"R@1={m.recall_at_1:.3f} R@3={m.recall_at_3:.3f} R@5={m.recall_at_5:.3f} R@10={m.recall_at_10:.3f}")
+    print(f"Total elapsed: {total_elapsed:.0f}s ({total_elapsed / len(results):.1f}s/inst)")
+    print(
+        f"R@1={m.recall_at_1:.3f} R@3={m.recall_at_3:.3f} R@5={m.recall_at_5:.3f} R@10={m.recall_at_10:.3f}"
+    )
     print(f"NDCG@5={m.ndcg_at_5:.3f} NDCG@10={m.ndcg_at_10:.3f}")
     print(f"Failures: {summary['failures']}")
 
