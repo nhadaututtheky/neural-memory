@@ -151,13 +151,13 @@ def _append_to_buffer(event: dict[str, Any], buffer_path: Any) -> bool:
                 # Position pointer at byte 0 so all writers contend on the
                 # same lock region. O_APPEND still forces writes to EOF.
                 os.lseek(fd, 0, 0)
-                msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+                msvcrt.locking(fd, msvcrt.LK_LOCK, 1)  # type: ignore[attr-defined,unused-ignore]
                 try:
                     os.write(fd, line)
                 finally:
                     os.lseek(fd, 0, 0)
                     try:
-                        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined,unused-ignore]
                     except OSError:
                         pass
             else:

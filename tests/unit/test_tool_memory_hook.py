@@ -279,7 +279,7 @@ class TestAppendToBuffer:
             # One subprocess per writer; reads its single stdin payload.
             # Command is fully-controlled (no user input) — ruff S603 false positive.
             for line in payloads.splitlines():
-                p = subprocess.Popen(  # noqa: S603
+                p = subprocess.Popen(
                     [sys.executable, "-m", "neural_memory.hooks.post_tool_use"],
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,

@@ -262,6 +262,7 @@ ignore = [
 "tests/unit/test_performance_fixes.py" = ["F401"]  # availability-check import
 "tests/unit/test_postgres_migration.py" = ["S106"]  # test fixture passwords
 "tests/unit/test_tool_tiers.py" = ["F821"]  # forward reference to MCPServer
+"tests/unit/test_tool_memory_hook.py" = ["S603"]  # fully-controlled sys.executable subprocess for concurrent-write fuzz
 "tests/unit/test_version_check_handler.py" = ["PT019"]  # mock param fixture pattern
 "src/neural_memory/integration/telegram.py" = ["S310", "SIM115"]  # URL open + file handling
 "src/neural_memory/mcp/auto_capture.py" = ["F401"]  # availability-check import

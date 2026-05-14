@@ -98,6 +98,8 @@ Store a memory. Auto-detects type, auto-resolves contradicted errors (RESOLVED_B
 | `expires_days` | integer | No | — | Days until memory expires |
 | `encrypted` | boolean | No | default: false | Force encrypt this memory's neuron content (default: false). When true, content is encrypted with the brain's Fernet ... |
 | `event_at` | string | No | — | ISO datetime of when the event originally occurred (e.g. '2026-03-02T08:00:00'). Defaults to current time if not prov... |
+| `valid_from` | string | No | — | Inclusive lower bound of the memory's validity window (ISO 8601). Recall before this moment heavily penalizes the sco... |
+| `valid_until` | string | No | — | Inclusive upper bound of the memory's validity window (ISO 8601). After this cliff, recall scores drop 10x and the li... |
 | `trust_score` | number | No | — | Trust level 0.0-1.0. Capped by source ceiling (user_input max 0.9, ai_inference max 0.7). NULL = unscored. |
 | `source_id` | string | No | — | Link this memory to a registered source. Creates a SOURCE_OF synapse for provenance tracking. |
 | `context` | object | No | — | Structured context dict merged into content server-side using type-specific templates. Keys like 'reason', 'alternati... |
@@ -138,6 +140,8 @@ Query memories via spreading activation. Use when you need past context, decisio
 | `recall_token_budget` | integer | No | — | When set, activates budget-aware fiber selection: ranks fibers by value-per-token and selects the most efficient ones... |
 | `permanent_only` | boolean | No | — | Exclude ephemeral (session-scoped) memories from results. Default: false (include all). |
 | `clean_for_prompt` | boolean | No | — | Return clean bullet-point text without section headers or neuron-type tags. Default: true. |
+| `show_provenance` | boolean | No | — | Append a one-line provenance footer (`[src=… · YYYY-MM-DD · conf=…]`) to each related neuron in recall output. Defaul... |
+| `include_status` | ['string', 'array'] | No | — | Lifecycle status filter. Default surfaces only 'active' neurons. Pass ['active', 'superseded'] to also see auto-super... |
 | `compact` | boolean | No | — | Compact mode: return only core answer + confidence, skip all optional metadata (thought_chains, sources, cognitive_ch... |
 | `tier` | string (`hot`, `warm`, `cold`) | No | — | Filter results by memory tier. Only return memories matching this tier. |
 | `domain` | string | No | — | Domain scope filter. When set, HOT context injection only includes boundaries tagged with this domain (plus unscoped ... |
