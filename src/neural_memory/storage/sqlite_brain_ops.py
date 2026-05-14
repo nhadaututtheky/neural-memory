@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from dataclasses import asdict
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -52,6 +53,12 @@ class SQLiteBrainMixin:
     async def save_brain(self, brain: Brain) -> None:
         conn = self._ensure_conn()
 
+        # Dump every BrainConfig field so newer knobs (bm25_enabled,
+        # high_signal_memory_boost, creation_recency_boost, …) survive a
+        # save/load round-trip. The previous hard-coded subset silently
+        # dropped any field added after the helper was written (issue #168).
+        config_dict = {k: v for k, v in asdict(brain.config).items() if v is not None}
+
         await conn.execute(
             """INSERT OR REPLACE INTO brains
                (id, name, config, owner_id, is_public, shared_with, created_at, updated_at)
@@ -59,26 +66,7 @@ class SQLiteBrainMixin:
             (
                 brain.id,
                 brain.name,
-                json.dumps(
-                    {
-                        "decay_rate": brain.config.decay_rate,
-                        "reinforcement_delta": brain.config.reinforcement_delta,
-                        "activation_threshold": brain.config.activation_threshold,
-                        "max_spread_hops": brain.config.max_spread_hops,
-                        "max_context_tokens": brain.config.max_context_tokens,
-                        "default_synapse_weight": brain.config.default_synapse_weight,
-                        "hebbian_delta": brain.config.hebbian_delta,
-                        "hebbian_threshold": brain.config.hebbian_threshold,
-                        "hebbian_initial_weight": brain.config.hebbian_initial_weight,
-                        "consolidation_prune_threshold": brain.config.consolidation_prune_threshold,
-                        "prune_min_inactive_days": brain.config.prune_min_inactive_days,
-                        "merge_overlap_threshold": brain.config.merge_overlap_threshold,
-                        "embedding_enabled": brain.config.embedding_enabled,
-                        "embedding_provider": brain.config.embedding_provider,
-                        "embedding_model": brain.config.embedding_model,
-                        "embedding_similarity_threshold": brain.config.embedding_similarity_threshold,
-                    }
-                ),
+                json.dumps(config_dict),
                 brain.owner_id,
                 1 if brain.is_public else 0,
                 json.dumps(brain.shared_with),
@@ -144,20 +132,7 @@ class SQLiteBrainMixin:
             neurons=neurons,
             synapses=synapses,
             fibers=fibers,
-            config={
-                "decay_rate": brain.config.decay_rate,
-                "reinforcement_delta": brain.config.reinforcement_delta,
-                "activation_threshold": brain.config.activation_threshold,
-                "max_spread_hops": brain.config.max_spread_hops,
-                "max_context_tokens": brain.config.max_context_tokens,
-                "default_synapse_weight": brain.config.default_synapse_weight,
-                "hebbian_delta": brain.config.hebbian_delta,
-                "hebbian_threshold": brain.config.hebbian_threshold,
-                "hebbian_initial_weight": brain.config.hebbian_initial_weight,
-                "consolidation_prune_threshold": brain.config.consolidation_prune_threshold,
-                "prune_min_inactive_days": brain.config.prune_min_inactive_days,
-                "merge_overlap_threshold": brain.config.merge_overlap_threshold,
-            },
+            config={k: v for k, v in asdict(brain.config).items() if v is not None},
             metadata={
                 "typed_memories": typed_memories,
                 "projects": projects,
@@ -190,6 +165,9 @@ class SQLiteBrainMixin:
             await conn.execute("BEGIN IMMEDIATE")
             try:
                 # Save brain record inside the transaction to prevent orphans
+                _import_config_dict = {
+                    k: v for k, v in asdict(brain.config).items() if v is not None
+                }
                 await conn.execute(
                     """INSERT OR REPLACE INTO brains
                        (id, name, config, owner_id, is_public, shared_with, created_at, updated_at)
@@ -197,22 +175,7 @@ class SQLiteBrainMixin:
                     (
                         brain.id,
                         brain.name,
-                        json.dumps(
-                            {
-                                "decay_rate": brain.config.decay_rate,
-                                "reinforcement_delta": brain.config.reinforcement_delta,
-                                "activation_threshold": brain.config.activation_threshold,
-                                "max_spread_hops": brain.config.max_spread_hops,
-                                "max_context_tokens": brain.config.max_context_tokens,
-                                "default_synapse_weight": brain.config.default_synapse_weight,
-                                "hebbian_delta": brain.config.hebbian_delta,
-                                "hebbian_threshold": brain.config.hebbian_threshold,
-                                "hebbian_initial_weight": brain.config.hebbian_initial_weight,
-                                "consolidation_prune_threshold": brain.config.consolidation_prune_threshold,
-                                "prune_min_inactive_days": brain.config.prune_min_inactive_days,
-                                "merge_overlap_threshold": brain.config.merge_overlap_threshold,
-                            }
-                        ),
+                        json.dumps(_import_config_dict),
                         brain.owner_id,
                         1 if brain.is_public else 0,
                         json.dumps(brain.shared_with),

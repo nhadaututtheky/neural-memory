@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.57.0] — 2026-05-15
+
+### Fixed — Plugin install + brain config
+
+- **Plugin skills path resolution** (issue #166) — `.claude-plugin/plugin.json` declared `"skills": "./skills"`, but Claude Code's loader resolves that string relative to the plugin's *root* (the version dir), not relative to `plugin.json`. Result: `0 skills loaded` and a "Path not found" error in `/doctor`. Corrected to `"./.claude-plugin/skills"` so the loader finds `memory-audit`, `memory-evolution`, and `memory-intake`.
+- **SessionStart hook missing from plugin manifest** (issue #167) — the `nmem-hook-session-start` binary shipped fine, but `.claude-plugin/hooks/hooks.json` only registered three of the four lifecycle hooks. Added the missing SessionStart entry so plugin-installed users get the same "brain surface at session start" behaviour as pip-installed users.
+- **`BrainSettings.from_dict` ignored newer `BrainConfig` fields** (issue #168) — config-toml keys like `bm25_enabled`, `bm25_tokenizer`, `high_signal_memory_boost`, `creation_recency_boost`, `goal_proximity_boost`, etc. were silently dropped because `BrainSettings` only mapped seven historical fields. Added an `extras` pass-through dict so any `[brain]` key matching a real `BrainConfig` field reaches the constructed brain. Unknown keys are filtered against `BrainConfig`'s field set so typos do not crash brain creation.
+- **Storage save/load round-trip dropped newer `BrainConfig` fields** (issue #168, root cause) — both `sqlite_brain_ops.save_brain` and `sqlite_row_mappers.row_to_brain` hard-coded ~25 field names, so any field added to `BrainConfig` later silently reverted to defaults on the next load. Switched both to `asdict()` + dataclass-field filtering so the storage layer faithfully round-trips every current field. Mirror fix applied to the new `sql/row_mappers.py`.
+- **Existing brains get config.toml extras on upgrade** (issue #168) — new `_migrate_brain_runtime_config()` layers `config.toml [brain]` extras over a previously-stored brain on first storage open and persists the patched config back. Only the new `extras` keys are touched; the seven historical fields (which may carry per-brain customisations on legacy brains) are left alone.
+- **Plugin install no longer duplicates lifecycle hooks** (issue #169) — `_lazy_init()` in `mcp/server.py` was unconditionally writing PreCompact/Stop/PostToolUse into `~/.claude/settings.json` on first MCP start. When the plugin was also installed, those same hooks were already registered via `.claude-plugin/hooks/hooks.json`, causing every event to fire twice. Added `_running_under_plugin()` heuristic that skips hook injection when `~/.claude/plugins/cache/.../neural-memory/` exists; pip-only users still get hook auto-setup.
+
+### Tests
+
+- 24 new unit tests across `test_brain_settings_passthrough.py`, `test_brain_runtime_config_migration.py`, `test_plugin_manifest_paths.py`, and `test_lazy_init_plugin_skip.py` pinning each of the four bug fixes.
+
 ## [4.56.0] — 2026-05-13
 
 ### Added — TLLR plan items #1-5

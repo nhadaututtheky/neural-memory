@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -225,41 +226,19 @@ def row_to_project(row: aiosqlite.Row) -> Project:
 
 
 def row_to_brain(row: aiosqlite.Row) -> Brain:
-    """Convert database row to Brain."""
+    """Convert database row to Brain.
+
+    Loads every BrainConfig field present in the stored JSON, filtered against
+    the current ``BrainConfig`` dataclass schema. Fields the dataclass no longer
+    knows about are dropped silently (forward-compat downgrade), and fields the
+    dataclass added since the brain was saved get their dataclass defaults
+    (backward-compat upgrade). Listing fields explicitly here used to silently
+    drop new BrainConfig knobs like ``bm25_enabled`` on every load — issue #168.
+    """
     config_data = json.loads(row["config"])
-    config = BrainConfig(
-        decay_rate=config_data.get("decay_rate", 0.1),
-        reinforcement_delta=config_data.get("reinforcement_delta", 0.05),
-        activation_threshold=config_data.get("activation_threshold", 0.3),
-        max_spread_hops=config_data.get("max_spread_hops", 4),
-        max_context_tokens=config_data.get("max_context_tokens", 1500),
-        default_synapse_weight=config_data.get("default_synapse_weight", 0.5),
-        hebbian_delta=config_data.get("hebbian_delta", 0.03),
-        hebbian_threshold=config_data.get("hebbian_threshold", 0.5),
-        hebbian_initial_weight=config_data.get("hebbian_initial_weight", 0.2),
-        consolidation_prune_threshold=config_data.get("consolidation_prune_threshold", 0.05),
-        prune_min_inactive_days=config_data.get("prune_min_inactive_days", 7.0),
-        merge_overlap_threshold=config_data.get("merge_overlap_threshold", 0.5),
-        sigmoid_steepness=config_data.get("sigmoid_steepness", 6.0),
-        default_firing_threshold=config_data.get("default_firing_threshold", 0.3),
-        default_refractory_ms=config_data.get("default_refractory_ms", 500.0),
-        lateral_inhibition_k=config_data.get("lateral_inhibition_k", 10),
-        lateral_inhibition_factor=config_data.get("lateral_inhibition_factor", 0.3),
-        learning_rate=config_data.get("learning_rate", 0.05),
-        weight_normalization_budget=config_data.get("weight_normalization_budget", 5.0),
-        novelty_boost_max=config_data.get("novelty_boost_max", 3.0),
-        novelty_decay_rate=config_data.get("novelty_decay_rate", 0.06),
-        embedding_enabled=config_data.get("embedding_enabled", False),
-        embedding_provider=config_data.get("embedding_provider", "sentence_transformer"),
-        embedding_model=config_data.get("embedding_model", "all-MiniLM-L6-v2"),
-        embedding_similarity_threshold=config_data.get("embedding_similarity_threshold", 0.7),
-        decay_floor=config_data.get("decay_floor", 0.05),
-        fidelity_enabled=config_data.get("fidelity_enabled", True),
-        fidelity_full_threshold=config_data.get("fidelity_full_threshold", 0.6),
-        fidelity_summary_threshold=config_data.get("fidelity_summary_threshold", 0.3),
-        fidelity_essence_threshold=config_data.get("fidelity_essence_threshold", 0.1),
-        essence_generator=config_data.get("essence_generator", "extractive"),
-    )
+    valid_fields = {f.name for f in dataclasses.fields(BrainConfig)}
+    filtered_config = {k: v for k, v in config_data.items() if k in valid_fields}
+    config = BrainConfig(**filtered_config)
 
     return Brain(
         id=row["id"],

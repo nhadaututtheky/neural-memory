@@ -1,6 +1,12 @@
 {
   "hooks": [
     {
+      "event": "SessionStart",
+      "command": "nmem-hook-session-start",
+      "description": "Inject brain surface context at session start",
+      "timeout": 30
+    },
+    {
       "event": "PreCompact",
       "command": "nmem-hook-pre-compact",
       "description": "Flush conversation memories before context compaction",

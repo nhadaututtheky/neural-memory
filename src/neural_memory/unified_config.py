@@ -13,6 +13,7 @@ Brain data is stored in ~/.neuralmemory/brains/<name>.db (SQLite)
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import logging
 import os
@@ -208,7 +209,19 @@ class EmbeddingSettings:
 
 @dataclass
 class BrainSettings:
-    """Settings for brain behavior."""
+    """Settings for brain behavior.
+
+    Explicit fields are the historical 7 keys that have always been exposed via
+    ``[brain]`` in ``config.toml``. ``extras`` captures any additional ``[brain]``
+    keys (e.g. ``bm25_enabled``, ``high_signal_memory_boost``, ``creation_recency_boost``,
+    ``goal_proximity_boost``, …) that map onto ``core.brain.BrainConfig`` fields added
+    after this class was first defined.
+
+    This pass-through lets new BrainConfig knobs become config-toml-controllable
+    without growing a parallel field for each one (issue #168). Unknown keys are
+    filtered against BrainConfig's field set at construction time, so typos in
+    ``config.toml`` do not crash brain creation.
+    """
 
     decay_rate: float = 0.1
     reinforcement_delta: float = 0.05
@@ -217,6 +230,19 @@ class BrainSettings:
     max_context_tokens: int = 1500
     freshness_weight: float = 0.15
     simhash_prefilter_threshold: int = 0  # 0=disabled, 1-64=Hamming distance cutoff
+    extras: dict[str, Any] = field(default_factory=dict)
+
+    _EXPLICIT_KEYS: ClassVar[frozenset[str]] = frozenset(
+        {
+            "decay_rate",
+            "reinforcement_delta",
+            "activation_threshold",
+            "max_spread_hops",
+            "max_context_tokens",
+            "freshness_weight",
+            "simhash_prefilter_threshold",
+        }
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -227,10 +253,12 @@ class BrainSettings:
             "max_context_tokens": self.max_context_tokens,
             "freshness_weight": self.freshness_weight,
             "simhash_prefilter_threshold": self.simhash_prefilter_threshold,
+            **self.extras,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> BrainSettings:
+        extras = {k: v for k, v in data.items() if k not in cls._EXPLICIT_KEYS}
         return cls(
             decay_rate=data.get("decay_rate", 0.1),
             reinforcement_delta=data.get("reinforcement_delta", 0.05),
@@ -239,7 +267,54 @@ class BrainSettings:
             max_context_tokens=data.get("max_context_tokens", 1500),
             freshness_weight=data.get("freshness_weight", 0.15),
             simhash_prefilter_threshold=int(data.get("simhash_prefilter_threshold", 0)),
+            extras=extras,
         )
+
+    def to_brain_config_kwargs(self, embedding: EmbeddingSettings | None = None) -> dict[str, Any]:
+        """Build kwargs for ``core.brain.BrainConfig`` from this settings instance.
+
+        Combines (1) the 7 explicit BrainSettings fields, (2) embedding-derived
+        fields, and (3) any ``extras`` keys that match a real BrainConfig field
+        name. Unknown extras are dropped so ``BrainConfig(**kwargs)`` is safe.
+        """
+        from neural_memory.core.brain import BrainConfig
+
+        valid_fields = {f.name for f in dataclasses.fields(BrainConfig)}
+        kwargs: dict[str, Any] = {
+            "decay_rate": self.decay_rate,
+            "reinforcement_delta": self.reinforcement_delta,
+            "activation_threshold": self.activation_threshold,
+            "max_spread_hops": self.max_spread_hops,
+            "max_context_tokens": self.max_context_tokens,
+            "freshness_weight": self.freshness_weight,
+            "simhash_prefilter_threshold": self.simhash_prefilter_threshold,
+        }
+        if embedding is not None:
+            kwargs.update(
+                {
+                    "embedding_enabled": embedding.enabled,
+                    "embedding_provider": embedding.provider,
+                    "embedding_model": embedding.model,
+                    "embedding_similarity_threshold": embedding.similarity_threshold,
+                }
+            )
+        for k, v in self.extras.items():
+            if k in valid_fields and k not in kwargs:
+                kwargs[k] = v
+        return kwargs
+
+    def runtime_overrides(self) -> dict[str, Any]:
+        """Return only the ``extras`` keys that match real BrainConfig fields.
+
+        Used by storage init to layer ``config.toml [brain]`` over previously-stored
+        brain config on upgrade (issue #168). Explicit 7 fields are excluded because
+        legacy brains may have had them customized; only the newer ``extras`` keys
+        treat ``config.toml`` as the source of truth.
+        """
+        from neural_memory.core.brain import BrainConfig
+
+        valid_fields = {f.name for f in dataclasses.fields(BrainConfig)}
+        return {k: v for k, v in self.extras.items() if k in valid_fields}
 
 
 @dataclass
@@ -1960,6 +2035,57 @@ async def get_shared_storage(brain_name: str | None = None) -> NeuralStorage:
     return await _get_sqlite_storage(config, name, brain_name)
 
 
+async def _migrate_brain_runtime_config(
+    storage: NeuralStorage,
+    brain: Any,
+    config: UnifiedConfig,
+) -> None:
+    """Layer ``config.toml [brain]`` extras over an already-stored brain.config.
+
+    Brains created on older versions store BrainConfig fields that existed at
+    creation time. Newer fields default to ``BrainConfig`` defaults on load, so
+    ``[brain] bm25_enabled = true`` in ``config.toml`` is silently ignored
+    (issue #168). This helper applies any ``extras`` keys from ``BrainSettings``
+    to the stored brain config and persists the patched brain back to storage.
+
+    Only ``extras`` keys are applied. The 7 explicit BrainSettings fields are
+    left untouched because legacy brains may carry per-brain customizations
+    there and there is no good way to distinguish "never set" from "explicitly
+    set to default". This narrow behaviour avoids surprising config rewrites.
+
+    Failures are logged and swallowed — a brain config migration is never
+    allowed to break recall.
+    """
+    overrides = config.brain.runtime_overrides()
+    if not overrides:
+        return
+
+    try:
+        from neural_memory.utils.timeutils import utcnow
+
+        current_kwargs = {
+            f.name: getattr(brain.config, f.name) for f in dataclasses.fields(brain.config)
+        }
+        diff = {k: v for k, v in overrides.items() if current_kwargs.get(k) != v}
+        if not diff:
+            return
+
+        patched_config = dataclasses.replace(brain.config, **diff)
+        patched_brain = dataclasses.replace(brain, config=patched_config, updated_at=utcnow())
+        await storage.save_brain(patched_brain)
+        logger.info(
+            "Brain %r config migrated from config.toml [brain] extras: %s",
+            brain.name,
+            sorted(diff.keys()),
+        )
+    except Exception:
+        logger.debug(
+            "Brain runtime config migration failed for %r (non-fatal)",
+            getattr(brain, "name", "?"),
+            exc_info=True,
+        )
+
+
 async def _get_sqlite_storage(
     config: UnifiedConfig,
     name: str,
@@ -2005,21 +2131,11 @@ async def _get_sqlite_storage(
         if brain is None:
             from neural_memory.core.brain import BrainConfig
 
-            brain_config = BrainConfig(
-                decay_rate=config.brain.decay_rate,
-                reinforcement_delta=config.brain.reinforcement_delta,
-                activation_threshold=config.brain.activation_threshold,
-                max_spread_hops=config.brain.max_spread_hops,
-                max_context_tokens=config.brain.max_context_tokens,
-                freshness_weight=config.brain.freshness_weight,
-                simhash_prefilter_threshold=config.brain.simhash_prefilter_threshold,
-                embedding_enabled=config.embedding.enabled,
-                embedding_provider=config.embedding.provider,
-                embedding_model=config.embedding.model,
-                embedding_similarity_threshold=config.embedding.similarity_threshold,
-            )
+            brain_config = BrainConfig(**config.brain.to_brain_config_kwargs(config.embedding))
             brain = Brain.create(name=name, config=brain_config, brain_id=name)
             await storage.save_brain(brain)
+        else:
+            await _migrate_brain_runtime_config(storage, brain, config)
 
         storage.set_brain(brain.id)
         _storage_cache[cache_key] = storage
@@ -2122,21 +2238,11 @@ async def _get_postgres_storage(config: UnifiedConfig, name: str) -> NeuralStora
         if brain is None:
             from neural_memory.core.brain import BrainConfig
 
-            brain_config = BrainConfig(
-                decay_rate=config.brain.decay_rate,
-                reinforcement_delta=config.brain.reinforcement_delta,
-                activation_threshold=config.brain.activation_threshold,
-                max_spread_hops=config.brain.max_spread_hops,
-                max_context_tokens=config.brain.max_context_tokens,
-                freshness_weight=config.brain.freshness_weight,
-                simhash_prefilter_threshold=config.brain.simhash_prefilter_threshold,
-                embedding_enabled=config.embedding.enabled,
-                embedding_provider=config.embedding.provider,
-                embedding_model=config.embedding.model,
-                embedding_similarity_threshold=config.embedding.similarity_threshold,
-            )
+            brain_config = BrainConfig(**config.brain.to_brain_config_kwargs(config.embedding))
             brain = Brain.create(name=name, config=brain_config, brain_id=name)
             await _postgres_storage.save_brain(brain)
+        else:
+            await _migrate_brain_runtime_config(_postgres_storage, brain, config)
         _postgres_storage.set_brain(brain.id)
         return _postgres_storage
 
@@ -2159,21 +2265,11 @@ async def _get_postgres_storage(config: UnifiedConfig, name: str) -> NeuralStora
     if brain is None:
         from neural_memory.core.brain import BrainConfig
 
-        brain_config = BrainConfig(
-            decay_rate=config.brain.decay_rate,
-            reinforcement_delta=config.brain.reinforcement_delta,
-            activation_threshold=config.brain.activation_threshold,
-            max_spread_hops=config.brain.max_spread_hops,
-            max_context_tokens=config.brain.max_context_tokens,
-            freshness_weight=config.brain.freshness_weight,
-            simhash_prefilter_threshold=config.brain.simhash_prefilter_threshold,
-            embedding_enabled=config.embedding.enabled,
-            embedding_provider=config.embedding.provider,
-            embedding_model=config.embedding.model,
-            embedding_similarity_threshold=config.embedding.similarity_threshold,
-        )
+        brain_config = BrainConfig(**config.brain.to_brain_config_kwargs(config.embedding))
         brain = Brain.create(name=name, config=brain_config, brain_id=name)
         await storage.save_brain(brain)
+    else:
+        await _migrate_brain_runtime_config(storage, brain, config)
 
     storage.set_brain(brain.id)
     _postgres_storage = storage

@@ -24,6 +24,7 @@ import asyncio
 import json
 import logging
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from neural_memory import __version__
@@ -693,11 +694,42 @@ async def _call_tool_with_retry(
     raise last_exc
 
 
+def _running_under_plugin() -> bool:
+    """Detect whether this MCP server was launched from a Claude Code plugin.
+
+    Plugins ship their own ``.claude-plugin/hooks/hooks.json`` that Claude Code
+    loads directly — so the MCP server must NOT also write hooks into
+    ``~/.claude/settings.json``, or every hook fires twice (issue #169).
+
+    Heuristic: the Claude Code plugin cache lives at
+    ``~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/``. If a
+    ``neural-memory`` plugin directory exists there, the plugin is installed
+    and owns hook registration.
+    """
+    cache_root = Path.home() / ".claude" / "plugins" / "cache"
+    if not cache_root.is_dir():
+        return False
+    try:
+        for marketplace_dir in cache_root.iterdir():
+            plugin_dir = marketplace_dir / "neural-memory"
+            if plugin_dir.is_dir():
+                return True
+    except OSError:
+        return False
+    return False
+
+
 def _lazy_init() -> None:
     """Run first-time setup if NeuralMemory has never been initialized.
 
     Safe to call on every MCP start — no-ops if config already exists.
-    Only touches config/brain/hooks; never writes to stdout (reserved for JSON-RPC).
+    Only touches config/brain; never writes to stdout (reserved for JSON-RPC).
+
+    Hook registration is intentionally skipped here. When installed via the
+    Claude Code plugin, ``.claude-plugin/hooks/hooks.json`` is the canonical
+    source; injecting into ``~/.claude/settings.json`` would duplicate every
+    hook fire (issue #169). pip-only users should run ``nmem init`` which
+    calls ``setup_hooks_claude()`` explicitly.
     """
     from neural_memory.unified_config import get_neuralmemory_dir
 
@@ -712,8 +744,14 @@ def _lazy_init() -> None:
     try:
         setup_config(data_dir)
         setup_brain(data_dir)
-        hook_status = setup_hooks_claude()
-        logger.info("NeuralMemory: first-time auto-init complete (hook: %s)", hook_status)
+        if _running_under_plugin():
+            logger.info(
+                "NeuralMemory: first-time auto-init complete (plugin detected, "
+                "skipping hook injection — plugin hooks.json owns registration)"
+            )
+        else:
+            hook_status = setup_hooks_claude()
+            logger.info("NeuralMemory: first-time auto-init complete (hook: %s)", hook_status)
     except Exception:
         logger.debug("NeuralMemory: auto-init failed (non-critical)", exc_info=True)
 
