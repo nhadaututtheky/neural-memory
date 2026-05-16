@@ -28,6 +28,7 @@ from neural_memory.mcp.budget_handler import BudgetHandler
 from neural_memory.mcp.evolution_handler import EvolutionHandler
 from neural_memory.mcp.instruction_handler import InstructionHandler
 from neural_memory.mcp.lifecycle_handler import LifecycleHandler
+from neural_memory.mcp.offload_handler import OffloadHandler
 from neural_memory.mcp.provenance_handler import ProvenanceHandler
 from neural_memory.mcp.recall_handler import RecallHandler
 from neural_memory.mcp.remember_handler import RememberHandler
@@ -48,6 +49,7 @@ class ToolHandler(
     BudgetHandler,
     TierHandler,
     StoreHandler,
+    OffloadHandler,
     RememberHandler,
     RecallHandler,
 ):

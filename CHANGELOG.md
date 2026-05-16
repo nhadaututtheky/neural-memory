@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.58.0] — 2026-05-17
+
+### Added — Agent ergonomics (plan-agent-ergonomics phases 1-3)
+
+Three small, focused MCP capabilities that target context-quality pain points without adding new engine code. All wire into existing infrastructure (ephemeral neurons, session state, freshness scoring).
+
+- **`nmem_offload` / `nmem_inflate`** — store large tool output (>2KB) as an ephemeral neuron (24h TTL) and return a compact summary + `ref_id`. Inflate the original raw content on demand. Content is run through the same sanitize + auto-redact pipeline as `nmem_remember` so secrets in tool output (API keys in `curl` logs, tokens in `grep` results) are scrubbed before storage. Caller-supplied `tool_name` truncated to 100 chars; auto-summary hard-capped at 300 chars. `redacted` flag in response surfaces when scrubbing happened.
+- **`nmem_situation`** — one-shot session snapshot: active task/feature, top 3 recent decisions, open blockers (TODO with `blocker` tag, no `resolved` tag), `files_in_session` placeholder, and gap detection. Replaces the `nmem_recap` + multiple `nmem_recall` pattern when resuming a session. Pure read, never mutates state. Promoted to `standard` tool tier alongside `nmem_session`.
+- **`prefer_recent` flag on `nmem_recall`** — re-rank matched fibers newest-first (by `time_end`, fallback `created_at`) AND rebuild `result.context` so the answer text reflects the new order, not just metadata. Useful for queries about current state ("what's the current version", "today's status"). Default `False`. Skips when `recall_token_budget` is set (budget path owns ordering) or in `exact` mode (no context to rebuild).
+
+### Fixed
+
+- **`_check_session_gap` was dead code** — the timestamp-comparison branch unconditionally returned `False`, so gap detection only fired on the rare "old code path" case (fingerprint missing entirely). Now compares summary `created_at` vs. fingerprint `saved_at` with 60s slack; a summary created well after the fingerprint correctly flags a gap.
+
+### Tests
+
+- 22 new unit tests across `test_offload_handler.py` (12), `test_situation_handler.py` (6), `test_recall_prefer_recent.py` (4). Includes regression coverage for: `_inflate` cross-neuron leakage guard, long-tool-name summary bound, auto-redaction round-trip, gap-detection timestamp path, `files_in_session` contract key.
+
 ## [4.57.0] — 2026-05-15
 
 ### Fixed — Plugin install + brain config

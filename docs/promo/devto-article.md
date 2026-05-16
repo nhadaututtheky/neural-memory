@@ -66,7 +66,7 @@ Memories have a lifecycle:
 
 ## 50 MCP Tools
 
-Neural Memory exposes 60 tools via the [Model Context Protocol](https://modelcontextprotocol.io/):
+Neural Memory exposes 63 tools via the [Model Context Protocol](https://modelcontextprotocol.io/):
 
 | Tool | What it does |
 |------|-------------|

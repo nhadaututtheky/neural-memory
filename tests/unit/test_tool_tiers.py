@@ -65,7 +65,7 @@ class TestToolTiers:
 
     def test_full_tier_returns_all(self) -> None:
         tools = get_tool_schemas_for_tier("full")
-        assert len(tools) == 60
+        assert len(tools) == 63
 
     def test_full_tier_matches_get_tool_schemas(self) -> None:
         full = get_tool_schemas_for_tier("full")
@@ -75,7 +75,7 @@ class TestToolTiers:
 
     def test_standard_tier_count(self) -> None:
         tools = get_tool_schemas_for_tier("standard")
-        assert len(tools) == 9
+        assert len(tools) == 10
 
     def test_standard_tier_correct_names(self) -> None:
         tools = get_tool_schemas_for_tier("standard")
@@ -88,6 +88,7 @@ class TestToolTiers:
             "nmem_recap",
             "nmem_todo",
             "nmem_session",
+            "nmem_situation",
             "nmem_auto",
             "nmem_eternal",
         }
@@ -108,7 +109,7 @@ class TestToolTiers:
 
     def test_invalid_tier_defaults_to_full(self) -> None:
         tools = get_tool_schemas_for_tier("bogus")
-        assert len(tools) == 60
+        assert len(tools) == 63
 
     def test_tier_hierarchy_minimal_subset_of_standard(self) -> None:
         assert TOOL_TIERS["minimal"] < TOOL_TIERS["standard"]
@@ -133,13 +134,13 @@ class TestToolTiers:
         a = get_tool_schemas()
         b = get_tool_schemas()
         a.pop()
-        assert len(b) == 60
+        assert len(b) == 63
 
     def test_get_tool_schemas_for_tier_returns_copy(self) -> None:
         a = get_tool_schemas_for_tier("standard")
         b = get_tool_schemas_for_tier("standard")
         a.pop()
-        assert len(b) == 9
+        assert len(b) == 10
 
 
 class TestServerTierIntegration:
@@ -159,12 +160,12 @@ class TestServerTierIntegration:
     def test_server_full_tier(self) -> None:
         server = self._make_server("full")
         with patch("neural_memory.plugins.get_plugin_tools", return_value=[]):
-            assert len(server.get_tools()) == 60
+            assert len(server.get_tools()) == 63
 
     def test_server_standard_tier(self) -> None:
         server = self._make_server("standard")
         with patch("neural_memory.plugins.get_plugin_tools", return_value=[]):
-            assert len(server.get_tools()) == 9
+            assert len(server.get_tools()) == 10
 
     def test_server_minimal_tier(self) -> None:
         server = self._make_server("minimal")

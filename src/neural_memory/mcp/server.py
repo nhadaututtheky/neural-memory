@@ -311,6 +311,7 @@ class MCPServer(
             "nmem_verify",
             "nmem_schema",
             "nmem_provenance",
+            "nmem_offload",
         }
     )
 
@@ -377,6 +378,9 @@ class MCPServer(
             "nmem_causal": self._causal,
             "nmem_reflex": self._reflex,
             "nmem_cache": self._cache,
+            "nmem_offload": self._offload,
+            "nmem_inflate": self._inflate,
+            "nmem_situation": self._situation,
         }
         handler = dispatch.get(name)
         if handler:

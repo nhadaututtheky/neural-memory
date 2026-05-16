@@ -12,7 +12,7 @@
 
 **$0** forever
 
-- 60 MCP tools
+- 63 MCP tools
 - SQLite storage engine
 - Spreading activation retrieval
 - FTS5 keyword search

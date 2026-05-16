@@ -65,7 +65,7 @@ The difference isn't speed. It's **recall quality**. Your agent remembers by mea
 | **Consolidation** | O(N²) brute-force | O(N×k) HNSW neighbor clustering |
 | **Graph traversal** | SQL JOINs per hop | Native adjacency BFS, <1ms |
 | **Crash recovery** | SQLite WAL | Custom WAL + idempotent replay |
-| **MCP tools** | 60 tools | 52 + 3 Pro-exclusive |
+| **MCP tools** | 63 tools | 52 + 3 Pro-exclusive |
 | **Storage per 1M neurons** | ~5 GB | **~1 GB** (with tier compression) |
 
 ---
@@ -270,7 +270,7 @@ pip install neural-memory
 nmem pro activate YOUR_LICENSE_KEY
 ```
 
-Pro features are bundled in the main package — all dependencies included. Just activate your license key. Your existing 60 MCP tools keep working unchanged. Three new tools appear automatically.
+Pro features are bundled in the main package — all dependencies included. Just activate your license key. Your existing 63 MCP tools keep working unchanged. Three new tools appear automatically.
 
 To enable InfinityDB (semantic search engine), set `storage_backend = "infinitydb"` in your `config.toml`. On next startup, existing memories are auto-migrated from SQLite. Both databases coexist — downgrade is safe.
 
@@ -297,7 +297,7 @@ To enable InfinityDB (semantic search engine), set `storage_backend = "infinityd
 
 ### Free — $0 forever
 
-Everything you have today. 60 MCP tools, SQLite storage, spreading activation, 14 consolidation strategies, FTS5 search, cloud sync (100 neurons). **No features removed, ever.**
+Everything you have today. 63 MCP tools, SQLite storage, spreading activation, 14 consolidation strategies, FTS5 search, cloud sync (100 neurons). **No features removed, ever.**
 
 ### Pro — $9/month (219,000 VND)
 

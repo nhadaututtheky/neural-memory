@@ -245,6 +245,126 @@ class SessionHandler:
 
         return {"active": False, "summary": summary, "message": "Session ended and summary saved"}
 
+    # ── SITUATION (Phase 2 agent-ergonomics) ──
+
+    async def _resolve_content(self, tm: TypedMemory, storage: NeuralStorage) -> str:
+        """Resolve display content for a TypedMemory.
+
+        Tries metadata['content'] first (cheap), then fiber summary, then
+        the anchor neuron's content. Returns empty string on any failure.
+        """
+        cached = tm.metadata.get("content") if tm.metadata else None
+        if isinstance(cached, str) and cached:
+            return cached
+        try:
+            fiber = await storage.get_fiber(tm.fiber_id)
+            if fiber is None:
+                return ""
+            summary = getattr(fiber, "summary", None)
+            if isinstance(summary, str) and summary:
+                return summary
+            anchor_id = getattr(fiber, "anchor_neuron_id", None)
+            if anchor_id:
+                neuron = await storage.get_neuron(anchor_id)
+                if neuron and neuron.content:
+                    return neuron.content
+        except Exception:
+            logger.debug("Situation: fiber fetch failed for %s", tm.fiber_id, exc_info=True)
+        return ""
+
+    async def _situation(self, _args: dict[str, Any]) -> dict[str, Any]:
+        """Return a one-shot snapshot of the current working situation.
+
+        Aggregates active session state, top recent decisions, and open
+        blockers in a single response so agents can resume context without
+        chaining ``nmem_recap`` + multiple ``nmem_recall`` calls.
+
+        Pure read — never mutates session state.
+        """
+        storage = await self.get_storage()
+
+        # 1) Active session metadata (if any) — reuses gap detection
+        active_meta: dict[str, Any] | None = None
+        gap_detected = False
+        try:
+            session = await self._find_current_session(storage)
+            if session and session.metadata.get("active", True):
+                active_meta = session.metadata
+            else:
+                gap_detected = await self._check_session_gap(storage)
+        except Exception:
+            logger.debug("Situation: session lookup failed", exc_info=True)
+
+        # 2) Recent decisions — top 3 sorted by created_at desc
+        recent_decisions: list[dict[str, Any]] = []
+        try:
+            decisions = await storage.find_typed_memories(
+                memory_type=MemoryType.DECISION,
+                limit=20,
+            )
+            decisions_sorted = sorted(decisions, key=lambda m: m.created_at, reverse=True)
+            for d in decisions_sorted[:3]:
+                recent_decisions.append(
+                    {
+                        "content": await self._resolve_content(d, storage),
+                        "created_at": d.created_at.isoformat(),
+                    }
+                )
+        except Exception:
+            logger.debug("Situation: decision lookup failed", exc_info=True)
+
+        # 3) Open blockers — TODO with "blocker" tag, no "resolved" tag
+        open_blockers: list[dict[str, Any]] = []
+        try:
+            blockers = await storage.find_typed_memories(
+                memory_type=MemoryType.TODO,
+                tags={"blocker"},
+                limit=20,
+            )
+            for b in blockers:
+                if "resolved" in b.tags:
+                    continue
+                open_blockers.append(
+                    {
+                        "content": await self._resolve_content(b, storage),
+                        "tag": "blocker",
+                    }
+                )
+        except Exception:
+            logger.debug("Situation: blocker lookup failed", exc_info=True)
+
+        # files_in_session is contract-stable empty until session metadata
+        # tracks edited files (out of scope here). Keep the key so consumers
+        # can rely on the shape.
+        result: dict[str, Any] = {
+            "active_task": (active_meta or {}).get("task") or None,
+            "active_feature": (active_meta or {}).get("feature") or None,
+            "session_started_at": (active_meta or {}).get("started_at") or None,
+            "recent_decisions": recent_decisions,
+            "open_blockers": open_blockers,
+            "files_in_session": [],
+            "gap_detected": gap_detected,
+        }
+
+        # Compose a short suggestion based on what was found
+        if gap_detected:
+            result["suggestion"] = (
+                "Gap detected — run nmem_auto(action='flush') with recent conversation."
+            )
+        elif active_meta is None and not recent_decisions:
+            result["suggestion"] = (
+                "Fresh brain — call nmem_session(action='set', feature='...', task='...') "
+                "to anchor your work."
+            )
+        elif open_blockers:
+            result["suggestion"] = (
+                f"{len(open_blockers)} open blocker(s) — review before starting new work."
+            )
+        else:
+            result["suggestion"] = "Situation looks clean — continue working."
+
+        return result
+
     # ── Fingerprint helpers ──
 
     @staticmethod
@@ -321,15 +441,25 @@ class SessionHandler:
 
             # Compare timestamps: if summary is newer than fingerprint, gap detected
             fp_saved = fingerprints[0].metadata.get("saved_at", "")
-            summary_created = summaries[0].created_at if hasattr(summaries[0], "created_at") else ""
+            summary_created = (
+                summaries[0].created_at if hasattr(summaries[0], "created_at") else None
+            )
 
-            if not fp_saved or not summary_created:
+            if not fp_saved or summary_created is None:
                 return False
 
-            # If the fingerprint and summary are from the same session_end call,
-            # they'll have very close timestamps — no gap.
-            # A gap means work happened AFTER the last fingerprint was saved.
-            return False
+            try:
+                fp_dt = datetime.fromisoformat(fp_saved) if isinstance(fp_saved, str) else fp_saved
+            except (TypeError, ValueError):
+                return False
+            if not isinstance(fp_dt, datetime) or not isinstance(summary_created, datetime):
+                return False
+
+            # Same session_end pair → near-identical timestamps. A gap is a
+            # summary created well after the fingerprint (≥60s slack to absorb
+            # write skew within the same session_end transaction).
+            delta = (summary_created - fp_dt).total_seconds()
+            return delta >= 60
 
         except Exception:
             logger.debug("Session gap check failed", exc_info=True)

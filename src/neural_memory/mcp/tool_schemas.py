@@ -24,6 +24,7 @@ TOOL_TIERS: dict[str, frozenset[str]] = {
             "nmem_recap",
             "nmem_todo",
             "nmem_session",
+            "nmem_situation",
             "nmem_auto",
             "nmem_eternal",
         }
@@ -376,6 +377,13 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "description": "When set, activates budget-aware fiber selection: ranks fibers by value-per-token "
                     "and selects the most efficient ones to fit within this budget. "
                     "Adds budget_stats to the response. Default: not set (uses standard sequential truncation).",
+                },
+                "prefer_recent": {
+                    "type": "boolean",
+                    "description": "Re-rank matched fibers newest-first (by time_end, fallback created_at). "
+                    "Use for queries about current state ('what's the current version', 'today's status'). "
+                    "Do NOT use for historical questions ('how did we design X') — recency bias will mislead. "
+                    "Default: false.",
                 },
                 "permanent_only": {
                     "type": "boolean",
@@ -2301,6 +2309,63 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
                 },
             },
             "required": ["action"],
+        },
+    },
+    {
+        "name": "nmem_offload",
+        "description": "Store a large tool result as an ephemeral neuron (24h TTL) "
+        "and return a compact summary + ref_id. Use when tool output is large "
+        "(>2KB) and you may need to inspect it again later without keeping it "
+        "in context. Drill back into full content via nmem_inflate(ref_id).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "maxLength": 100000,
+                    "description": "Raw tool output to offload (≤100k chars)",
+                },
+                "tool_name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "description": "Name of the tool that produced this output (e.g. 'ls', 'grep')",
+                },
+                "summary": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "description": "Caller-provided summary. If omitted, an auto-summary "
+                    "(first 200 chars + size hint) is generated.",
+                },
+            },
+            "required": ["content", "tool_name"],
+        },
+    },
+    {
+        "name": "nmem_inflate",
+        "description": "Retrieve full content of a previously offloaded tool result "
+        "by its ref_id (returned from nmem_offload). Returns the original raw content. "
+        "Returns an error if the ref has expired or never existed.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "ref_id": {
+                    "type": "string",
+                    "description": "ref_id returned by nmem_offload",
+                },
+            },
+            "required": ["ref_id"],
+        },
+    },
+    {
+        "name": "nmem_situation",
+        "description": "One-shot snapshot of the current working situation: "
+        "active session task, top 3 recent decisions, open blockers, gap detection. "
+        "Replaces nmem_recap + multiple nmem_recall calls when resuming a session. "
+        "Pure read — never mutates state.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
         },
     },
 ]

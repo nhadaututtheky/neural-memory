@@ -21,6 +21,39 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+async def _rerank_by_recency(fiber_ids: list[str], storage: Any) -> list[str]:
+    """Re-order fiber IDs by recency (newest first).
+
+    Sort key per fiber: ``time_end`` if set, else ``created_at``. Fibers that
+    can't be fetched fall to the end with a naive-UTC epoch sentinel (project
+    uses naive UTC throughout — see CLAUDE.md datetime contract).
+
+    Pure helper — no side effects, safe to call multiple times.
+    """
+    from datetime import datetime as _dt
+
+    epoch = _dt.min  # noqa: DTZ901 — naive UTC sentinel matches project datetime contract
+
+    async def _ts(fid: str) -> _dt:
+        try:
+            fiber = await storage.get_fiber(fid)
+        except Exception:
+            return epoch
+        if fiber is None:
+            return epoch
+        end = getattr(fiber, "time_end", None)
+        if isinstance(end, _dt):
+            return end
+        created = getattr(fiber, "created_at", None)
+        if isinstance(created, _dt):
+            return created
+        return epoch
+
+    pairs = [(fid, await _ts(fid)) for fid in fiber_ids]
+    pairs.sort(key=lambda p: p[1], reverse=True)
+    return [p[0] for p in pairs]
+
+
 class RecallHandler:
     """Mixin providing recall and context MCP tool handlers."""
 
@@ -601,6 +634,60 @@ class RecallHandler:
                     "Post-filter (arousal/valence) failed, returning unfiltered results",
                     exc_info=True,
                 )
+
+        # Optional prefer_recent re-rank (Phase 3 agent-ergonomics).
+        # Reorders the surviving fibers newest-first AND rebuilds result.context
+        # so that the answer text reflects the new order (not just metadata).
+        # Useful for queries about current state ("what's the current version")
+        # where freshness matters more than activation strength.
+        prefer_recent_active = bool(args.get("prefer_recent", False)) and bool(
+            result.fibers_matched
+        )
+        if prefer_recent_active:
+            try:
+                reranked = await _rerank_by_recency(list(result.fibers_matched), storage)
+                if hasattr(result, "_replace"):
+                    result = result._replace(fibers_matched=reranked)
+
+                # Rebuild context only when there's no budget pass coming (the
+                # budget path below handles its own ordering). Skips exact mode
+                # since that path doesn't use result.context.
+                budget_will_rebuild = args.get("recall_token_budget") is not None
+                if not budget_will_rebuild and recall_mode != "exact":
+                    fibers_ordered: list[Any] = []
+                    for fid in reranked:
+                        f = await storage.get_fiber(fid)
+                        if f:
+                            fibers_ordered.append(f)
+                    if fibers_ordered:
+                        from neural_memory.engine.activation import ActivationResult
+                        from neural_memory.engine.retrieval_context import format_context
+
+                        acts: dict[str, ActivationResult] = {}
+                        for co in result.co_activations:
+                            for nid in co.neuron_ids:
+                                acts.setdefault(
+                                    nid,
+                                    ActivationResult(
+                                        neuron_id=nid,
+                                        activation_level=co.binding_strength,
+                                        hop_distance=0,
+                                        path=[nid],
+                                        source_anchor=nid,
+                                    ),
+                                )
+                        new_ctx, _ = await format_context(
+                            storage=storage,
+                            activations=acts,
+                            fibers=fibers_ordered,
+                            max_tokens=max_tokens,
+                            brain_id=brain_id,
+                            clean_for_prompt=clean_for_prompt,
+                        )
+                        if new_ctx and hasattr(result, "_replace"):
+                            result = result._replace(context=new_ctx)
+            except Exception:
+                logger.debug("prefer_recent rerank failed, keeping default order", exc_info=True)
 
         # Exact mode: return raw neuron contents without truncation
         if recall_mode == "exact" and result.fibers_matched:
