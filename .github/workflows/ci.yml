@@ -90,7 +90,10 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        # gen_cli_docs.py introspects typer internals that broke in typer 0.26+
+        # (yields 0 commands → false "STALE"). Pin to a known-good line until the
+        # generator is ported to the new typer API. CLI runtime is unaffected.
+        run: pip install -e ".[dev]" "typer<0.25"
 
       - name: Check MCP docs are up-to-date
         run: python scripts/gen_mcp_docs.py --check
