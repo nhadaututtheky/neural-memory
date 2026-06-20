@@ -148,6 +148,10 @@ dev = [
     "pre-commit>=3.0",
     "pytest-timeout>=2.2",
     "httpx>=0.24",
+    # scripts/gen_cli_docs.py imports click directly (via typer introspection);
+    # declare it explicitly so the Docs Freshness CI job can import it instead
+    # of relying on typer's transitive dep, which the runner didn't resolve.
+    "click>=8.0",
 ]
 docs = [
     "mkdocs>=1.5",

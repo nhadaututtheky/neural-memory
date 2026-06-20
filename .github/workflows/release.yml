@@ -233,6 +233,9 @@ jobs:
         run: npm install -g clawhub 2>/dev/null || true
 
       - name: Publish skill to ClawHub
+        # Non-fatal: a revoked/expired CLAWHUB_TOKEN (or login failure) must not
+        # red the whole Release run — PyPI publish is the critical path.
+        continue-on-error: true
         env:
           CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
         run: |
