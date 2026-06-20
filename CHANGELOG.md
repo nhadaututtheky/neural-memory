@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.58.1] — 2026-06-20
+
+### Fixed — Dashboard Storage tab + migration backend (#182)
+
+- **Storage tab now recognizes PostgreSQL.** Previously a `postgres` backend
+  misrendered as **SQLite** and the Migration card showed an enabled
+  "Rollback to SQLite" button that would migrate live PostgreSQL data into
+  SQLite (a real footgun). The badge now shows **PostgreSQL** with the
+  connection line, and migration actions are hidden with a server-managed note.
+- **`start_migration`** no longer raises `UnboundLocalError` (HTTP 500) on a
+  non-SQLite → InfinityDB migration — the disk-space estimate is now guarded on
+  a SQLite source.
+- **`set_backend` → postgres** now requires the brain data to exist (mirroring
+  the sqlite/infinitydb branches) instead of accepting any reachable, empty
+  PostgreSQL.
+- **Migration verification** now flags an empty source with a non-empty target
+  instead of silently passing via short-circuit.
+- **`get_storage_status`** hides a `done` job once its target equals the active
+  backend, so the dashboard stops re-offering the switch prompt after a switch.
+
 ## [4.58.0] — 2026-05-17
 
 ### Added — Agent ergonomics (plan-agent-ergonomics phases 1-3)

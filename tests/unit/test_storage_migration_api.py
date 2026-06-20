@@ -273,9 +273,7 @@ class TestStartMigration:
         must be guarded so a non-sqlite source no longer 500s.
         """
         cfg = _mock_config(storage_backend="postgres", is_pro=True)
-        cfg.postgres = MagicMock(
-            host="localhost", database="nm", port=5432, user="u", password=""
-        )
+        cfg.postgres = MagicMock(host="localhost", database="nm", port=5432, user="u", password="")
         with (
             patch(_PATCH_GET_CONFIG, return_value=cfg),
             patch(_PATCH_HAS_PRO, return_value=True),
@@ -401,9 +399,7 @@ class TestSetBackend:
     def test_rejects_postgres_without_data(self, client: TestClient) -> None:
         """Switching to an empty PostgreSQL must be blocked, not silently accepted."""
         cfg = _mock_config(storage_backend="sqlite")
-        cfg.postgres = MagicMock(
-            host="localhost", database="nm", port=5432, user="u", password=""
-        )
+        cfg.postgres = MagicMock(host="localhost", database="nm", port=5432, user="u", password="")
         fake_storage = MagicMock()
         fake_storage.get_brain = AsyncMock(return_value=None)
         fake_storage.close = AsyncMock()
