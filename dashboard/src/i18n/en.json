@@ -376,6 +376,8 @@
     "brain": "Brain",
     "sqliteFile": "SQLite database file",
     "infinitydbDir": "InfinityDB directory",
+    "postgresBackend": "PostgreSQL database",
+    "postgresManaged": "PostgreSQL is configured in config.toml and managed server-side — migration is not available from the dashboard.",
     "migration": "Migration",
     "whyUpgrade": "Why InfinityDB?",
     "whyBullet1": "Semantic cone queries — recall by meaning, not just keywords",

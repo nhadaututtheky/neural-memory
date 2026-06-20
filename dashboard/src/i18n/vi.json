@@ -376,6 +376,8 @@
     "brain": "Bộ não",
     "sqliteFile": "Tệp cơ sở dữ liệu SQLite",
     "infinitydbDir": "Thư mục InfinityDB",
+    "postgresBackend": "Cơ sở dữ liệu PostgreSQL",
+    "postgresManaged": "PostgreSQL được cấu hình trong config.toml và quản lý phía máy chủ — không di chuyển dữ liệu từ dashboard.",
     "migration": "Di chuyển dữ liệu",
     "whyUpgrade": "Tại sao InfinityDB?",
     "whyBullet1": "Truy vấn cone ngữ nghĩa — nhớ lại theo ý nghĩa, không chỉ từ khóa",

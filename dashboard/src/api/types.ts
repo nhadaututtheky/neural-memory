@@ -254,12 +254,15 @@ export interface SyncConfigUpdateResponse {
 
 // GET /api/dashboard/storage/status
 export interface StorageStatusResponse {
-  current_backend: "sqlite" | "infinitydb"
+  current_backend: "sqlite" | "infinitydb" | "postgres"
   pro_installed: boolean
   is_pro_license: boolean
   sqlite_exists: boolean
   sqlite_size_bytes: number
   infinitydb_exists: boolean
+  postgres_configured?: boolean
+  postgres_host?: string | null
+  postgres_database?: string | null
   migration_job: MigrationJobStatus | null
 }
 

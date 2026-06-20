@@ -46,6 +46,7 @@ export function MigrationCard({ status }: MigrationCardProps) {
   const isDone = job?.state === "done"
   const isError = job?.state === "error"
   const isSqlite = status.current_backend === "sqlite"
+  const isPostgres = status.current_backend === "postgres"
 
   const handleMigrate = (direction: "to_infinitydb" | "to_sqlite") => {
     startMigration.mutate(direction, {
@@ -156,6 +157,13 @@ export function MigrationCard({ status }: MigrationCardProps) {
           </div>
         )}
 
+        {/* PostgreSQL — configured server-side, not managed via this dashboard */}
+        {isPostgres && !activeJobId && (
+          <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+            {t("storage.postgresManaged")}
+          </div>
+        )}
+
         {/* Action buttons */}
         {!activeJobId && (
           <div className="flex flex-wrap gap-2">
@@ -178,7 +186,7 @@ export function MigrationCard({ status }: MigrationCardProps) {
                 {t("storage.enableInfinitydb")}
               </Button>
             )}
-            {!isSqlite && (
+            {!isSqlite && !isPostgres && (
               <Button
                 variant="outline"
                 onClick={() => handleMigrate("to_sqlite")}

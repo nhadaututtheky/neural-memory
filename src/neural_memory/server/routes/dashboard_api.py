@@ -1753,6 +1753,15 @@ def _utcnow_iso() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _job_target_backend(direction: str) -> str:
+    """Map a migration direction to the backend it produces."""
+    return {
+        "to_infinitydb": "infinitydb",
+        "to_sqlite": "sqlite",
+        "to_postgres": "postgres",
+    }.get(direction, "")
+
+
 def _evict_old_jobs(brain_name: str) -> None:
     """Keep at most _MAX_JOBS_PER_BRAIN completed jobs per brain."""
     brain_jobs = [
@@ -1790,12 +1799,19 @@ async def get_storage_status() -> StorageStatusResponse:
     infinity_marker = brains_dir / brain_name / "brain.inf"
     infinitydb_exists = infinity_marker.exists()
 
-    # Find most recent migration job for this brain
+    # Find most recent relevant migration job for this brain.
+    # Skip a finished migration that has already been applied — i.e. the active
+    # backend now equals the job's target. Otherwise a stale "done" job sticks in
+    # the status forever and the dashboard keeps re-offering the switch prompt
+    # even after the user has switched.
     active_job: MigrationJobStatus | None = None
     for job in reversed(list(_migration_jobs.values())):
-        if job.brain == brain_name:
-            active_job = job
-            break
+        if job.brain != brain_name:
+            continue
+        if job.state == "done" and cfg.storage_backend == _job_target_backend(job.direction):
+            continue
+        active_job = job
+        break
 
     # Postgres config check
     pg = cfg.postgres
@@ -1875,9 +1891,12 @@ async def start_migration(body: StartMigrationRequest) -> dict[str, str]:
                 status_code=409, detail=f"Migration already running for brain '{brain_name}'"
             )
 
-    # Pre-flight: disk space estimate (non-blocking warning in response)
+    # Pre-flight: disk space estimate (non-blocking warning in response).
+    # The estimate is a SQLite-source heuristic and `sqlite_path` only exists on
+    # the sqlite branch above, so guard on the source backend — otherwise a
+    # postgres/infinitydb -> infinitydb migration raised UnboundLocalError (500).
     disk_warning: str | None = None
-    if direction == "to_infinitydb":
+    if direction == "to_infinitydb" and current_backend == "sqlite":
         import shutil
 
         source_size = sqlite_path.stat().st_size
@@ -1972,19 +1991,11 @@ async def set_storage_backend(body: SetBackendRequest) -> dict[str, str]:
                 status_code=400,
                 detail="PostgreSQL not configured. Set [postgres] section in config.toml.",
             )
-        # Test connection
+        # Connect and verify brain data exists. Mirrors the sqlite/infinitydb
+        # branches which require a prior migration — switching to an empty
+        # PostgreSQL would silently point the app at a brain with no memories.
         try:
-            import asyncpg
-
-            conn = await asyncpg.connect(
-                host=pg.host,
-                port=pg.port,
-                database=pg.database,
-                user=pg.user,
-                password=pg.password,
-                timeout=10,
-            )
-            await conn.close()
+            pg_storage = await _open_postgres_storage(cfg, brain_name)
         except ImportError:
             raise HTTPException(
                 status_code=400,
@@ -1996,6 +2007,15 @@ async def set_storage_backend(body: SetBackendRequest) -> dict[str, str]:
                 status_code=400,
                 detail="PostgreSQL connection failed. Check host, port, credentials, and that the server is running.",
             )
+        try:
+            pg_brain = await pg_storage.get_brain(brain_name)
+            if pg_brain is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="PostgreSQL has no data for this brain. Run migration first.",
+                )
+        finally:
+            await pg_storage.close()
 
     # Update config and clear storage cache
     new_cfg = dc_replace(cfg, storage_backend=backend)
@@ -2120,7 +2140,15 @@ async def _run_migration_task(
         target_neurons = target_stats.get("neuron_count", 0)
         source_neurons = job.neurons_total
 
-        if source_neurons > 0 and abs(target_neurons - source_neurons) / source_neurons > 0.005:
+        # Verify counts. For a non-empty source, allow a 0.5% drift. For an empty
+        # source the target must also be empty — never silently pass a migration
+        # that produced unexpected rows (or a 0-count read masking a failed export).
+        if source_neurons > 0:
+            verify_failed = abs(target_neurons - source_neurons) / source_neurons > 0.005
+        else:
+            verify_failed = target_neurons > 0
+
+        if verify_failed:
             job.state = "error"
             job.error = (
                 f"Verification failed: source has {source_neurons} neurons, "

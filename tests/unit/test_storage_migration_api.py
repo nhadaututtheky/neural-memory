@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -111,6 +112,46 @@ class TestStorageStatus:
             assert job is not None
             assert job["job_id"] == "active"
             assert job["state"] == "running"
+
+    def test_hides_consumed_done_job(self, client: TestClient) -> None:
+        """A done job whose target is already the active backend is consumed."""
+        _migration_jobs["done1"] = MigrationJobStatus(
+            job_id="done1",
+            state="done",
+            direction="to_infinitydb",
+            brain="default",
+            started_at="2026-03-26T00:00:00Z",
+            finished_at="2026-03-26T00:01:00Z",
+        )
+        with (
+            patch(_PATCH_GET_CONFIG, return_value=_mock_config(storage_backend="infinitydb")),
+            patch(_PATCH_HAS_PRO, return_value=True),
+            patch("pathlib.Path.exists", return_value=False),
+        ):
+            resp = client.get("/api/dashboard/storage/status")
+            assert resp.status_code == 200
+            assert resp.json()["migration_job"] is None
+
+    def test_shows_done_job_before_switch(self, client: TestClient) -> None:
+        """A done job still surfaces while the active backend is the source."""
+        _migration_jobs["done1"] = MigrationJobStatus(
+            job_id="done1",
+            state="done",
+            direction="to_infinitydb",
+            brain="default",
+            started_at="2026-03-26T00:00:00Z",
+            finished_at="2026-03-26T00:01:00Z",
+        )
+        with (
+            patch(_PATCH_GET_CONFIG, return_value=_mock_config(storage_backend="sqlite")),
+            patch(_PATCH_HAS_PRO, return_value=True),
+            patch("pathlib.Path.exists", return_value=False),
+        ):
+            resp = client.get("/api/dashboard/storage/status")
+            assert resp.status_code == 200
+            job = resp.json()["migration_job"]
+            assert job is not None
+            assert job["job_id"] == "done1"
 
 
 class TestStartMigration:
@@ -225,6 +266,33 @@ class TestStartMigration:
             assert resp.status_code == 200
             assert "disk_warning" in resp.json()
 
+    def test_to_infinitydb_from_postgres_does_not_crash(self, client: TestClient) -> None:
+        """Regression: postgres->infinitydb hit UnboundLocalError on the disk check.
+
+        `sqlite_path` only exists on the sqlite source branch; the disk estimate
+        must be guarded so a non-sqlite source no longer 500s.
+        """
+        cfg = _mock_config(storage_backend="postgres", is_pro=True)
+        cfg.postgres = MagicMock(
+            host="localhost", database="nm", port=5432, user="u", password=""
+        )
+        with (
+            patch(_PATCH_GET_CONFIG, return_value=cfg),
+            patch(_PATCH_HAS_PRO, return_value=True),
+            patch(
+                "neural_memory.server.routes.dashboard_api.asyncio.create_task",
+                return_value=MagicMock(),
+            ),
+        ):
+            resp = client.post(
+                "/api/dashboard/storage/migrate",
+                json={"direction": "to_infinitydb"},
+            )
+            assert resp.status_code == 200
+            assert "job_id" in resp.json()
+            # Disk warning is a sqlite-source heuristic — must be skipped here.
+            assert "disk_warning" not in resp.json()
+
 
 class TestMigrationProgress:
     """Tests for GET /api/dashboard/storage/migrate/{job_id}."""
@@ -329,6 +397,72 @@ class TestSetBackend:
             assert resp.status_code == 200
             assert resp.json()["status"] == "switched"
             assert resp.json()["backend"] == "infinitydb"
+
+    def test_rejects_postgres_without_data(self, client: TestClient) -> None:
+        """Switching to an empty PostgreSQL must be blocked, not silently accepted."""
+        cfg = _mock_config(storage_backend="sqlite")
+        cfg.postgres = MagicMock(
+            host="localhost", database="nm", port=5432, user="u", password=""
+        )
+        fake_storage = MagicMock()
+        fake_storage.get_brain = AsyncMock(return_value=None)
+        fake_storage.close = AsyncMock()
+        with (
+            patch(_PATCH_GET_CONFIG, return_value=cfg),
+            patch(_PATCH_SET_CONFIG),
+            patch(
+                "neural_memory.server.routes.dashboard_api._open_postgres_storage",
+                AsyncMock(return_value=fake_storage),
+            ),
+        ):
+            resp = client.post(
+                "/api/dashboard/storage/backend",
+                json={"backend": "postgres"},
+            )
+            assert resp.status_code == 400
+            assert "no data" in resp.json()["detail"].lower()
+            fake_storage.close.assert_awaited()
+
+    def test_switch_to_postgres_with_data_succeeds(self, client: TestClient) -> None:
+        from dataclasses import dataclass, field
+
+        @dataclass
+        class FakeConfig:
+            storage_backend: str = "sqlite"
+            current_brain: str = "default"
+            data_dir: str = "/tmp/neuralmemory"
+            postgres: Any = field(
+                default_factory=lambda: MagicMock(
+                    host="localhost", database="nm", port=5432, user="u", password=""
+                )
+            )
+
+            def is_pro(self) -> bool:
+                return True
+
+            def save(self) -> None:
+                pass
+
+        fake_storage = MagicMock()
+        fake_storage.get_brain = AsyncMock(return_value=MagicMock())
+        fake_storage.close = AsyncMock()
+        with (
+            patch(_PATCH_GET_CONFIG, return_value=FakeConfig()),
+            patch(_PATCH_SET_CONFIG),
+            patch("neural_memory.unified_config._storage_cache", {}),
+            patch(
+                "neural_memory.server.routes.dashboard_api._open_postgres_storage",
+                AsyncMock(return_value=fake_storage),
+            ),
+        ):
+            resp = client.post(
+                "/api/dashboard/storage/backend",
+                json={"backend": "postgres"},
+            )
+            assert resp.status_code == 200
+            assert resp.json()["status"] == "switched"
+            assert resp.json()["backend"] == "postgres"
+            fake_storage.close.assert_awaited()
 
 
 class TestMigrationJobStatus:
