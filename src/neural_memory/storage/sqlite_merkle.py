@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from neural_memory.sync.merkle import MerkleTreeBuilder
+from neural_memory.sync.merkle import MerkleTreeBuilder, fiber_content_fingerprint
 from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
@@ -285,11 +285,45 @@ async def _fetch_entities(
     table = table_map[entity_type]
 
     if entity_type == "fiber":
-        # Fibers don't have a SimHash column; use summary as a proxy
+        # Fibers have no SimHash/content_hash column. Hashing over `summary`
+        # alone (finding #43) means any non-summary edit — salience, tags,
+        # conductivity, frequency, member sets — leaves the leaf hash
+        # unchanged and the Merkle diff skips the fiber. Build a content
+        # fingerprint over the mutable fields so reinforcement/tag changes
+        # are detected. `updated_at` stays in the leaf (still default '' for
+        # legacy rows) but is no longer the sole mutable signal.
         cursor = await conn.execute(
-            "SELECT id, updated_at, COALESCE(summary, '') FROM fibers WHERE brain_id = ?",
+            """SELECT id, updated_at,
+                      COALESCE(summary, '') AS summary,
+                      COALESCE(salience, 0) AS salience,
+                      COALESCE(conductivity, 0) AS conductivity,
+                      COALESCE(frequency, 0) AS frequency,
+                      COALESCE(auto_tags, '') AS auto_tags,
+                      COALESCE(agent_tags, '') AS agent_tags,
+                      COALESCE(neuron_ids, '') AS neuron_ids,
+                      COALESCE(synapse_ids, '') AS synapse_ids
+               FROM fibers WHERE brain_id = ?""",
             (brain_id,),
         )
+        rows = await cursor.fetchall()
+        result: list[tuple[str, str, str]] = []
+        for r in rows:
+            fid = str(r[0])
+            updated_at = str(r[1] or "")
+            # Deterministic fingerprint of mutable fields. Tags/member sets are
+            # stored as JSON; normalize so element order cannot flip the hash.
+            fingerprint = fiber_content_fingerprint(
+                summary=str(r[2] or ""),
+                salience=r[3],
+                conductivity=r[4],
+                frequency=r[5],
+                auto_tags=str(r[6] or ""),
+                agent_tags=str(r[7] or ""),
+                neuron_ids=str(r[8] or ""),
+                synapse_ids=str(r[9] or ""),
+            )
+            result.append((fid, updated_at, fingerprint))
+        return result
     else:
         # neurons and synapses have content_hash (SimHash integer)
         cursor = await conn.execute(

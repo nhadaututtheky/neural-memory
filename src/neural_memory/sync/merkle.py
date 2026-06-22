@@ -11,10 +11,71 @@ Root hash  = SHA256(neurons_root || synapses_root || fibers_root)
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass, field
+from typing import Any
 
 # Sentinel hash for an empty collection (SHA256 of empty string)
 _EMPTY_HASH: str = hashlib.sha256(b"").hexdigest()
+
+
+def _normalize_json_set(raw: str) -> str:
+    """Normalize a JSON array/string into a sorted canonical string.
+
+    Ensures element ordering (which the DB does not guarantee) cannot change a
+    fiber's content fingerprint. Falls back to the raw string if not JSON.
+    """
+    if not raw:
+        return ""
+    try:
+        parsed: Any = json.loads(raw)
+    except (ValueError, TypeError):
+        return raw
+    if isinstance(parsed, list):
+        return ",".join(sorted(str(x) for x in parsed))
+    return str(parsed)
+
+
+def _normalize_number(value: Any) -> str:
+    """Normalize a numeric DB value to a stable string representation."""
+    try:
+        return repr(round(float(value), 6))
+    except (ValueError, TypeError):
+        return str(value)
+
+
+def fiber_content_fingerprint(
+    *,
+    summary: str,
+    salience: Any,
+    conductivity: Any,
+    frequency: Any,
+    auto_tags: str,
+    agent_tags: str,
+    neuron_ids: str,
+    synapse_ids: str,
+) -> str:
+    """Hash the mutable fields of a fiber into a content fingerprint.
+
+    Fibers have no SimHash/content_hash column. Hashing the Merkle leaf over
+    ``summary`` alone (finding #43) means non-summary edits — salience,
+    conductivity, frequency, tags, member sets — leave the leaf hash unchanged
+    so the Merkle diff skips the fiber and the change never syncs. This
+    fingerprint folds all mutable fields so any of them changing alters the leaf.
+    """
+    parts = [
+        summary,
+        _normalize_number(salience),
+        _normalize_number(conductivity),
+        _normalize_number(frequency),
+        _normalize_json_set(auto_tags),
+        _normalize_json_set(agent_tags),
+        _normalize_json_set(neuron_ids),
+        _normalize_json_set(synapse_ids),
+    ]
+    raw = "\x1f".join(parts).encode()
+    return hashlib.sha256(raw).hexdigest()
+
 
 # Entity types covered by the tree
 ENTITY_TYPES: tuple[str, ...] = ("neuron", "synapse", "fiber")

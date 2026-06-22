@@ -80,8 +80,19 @@ class SyncEngine:
             strategy=self._strategy,
         )
 
-    async def process_sync_response(self, response: SyncResponse) -> dict[str, Any]:
-        """Process a sync response from the hub — apply remote changes locally."""
+    async def process_sync_response(
+        self,
+        response: SyncResponse,
+        request: SyncRequest | None = None,
+    ) -> dict[str, Any]:
+        """Process a sync response from the hub — apply remote changes locally.
+
+        Args:
+            response: The hub's response (remote changes + hub watermark).
+            request: The request we sent. Its changes determine which LOCAL
+                change-log rows are now durably on the hub and may be marked
+                synced. Required to mark local changes synced correctly.
+        """
         applied = 0
         skipped = 0
 
@@ -104,9 +115,20 @@ class SyncEngine:
                 )
                 skipped += 1
 
-        # Mark local changes as synced
+        # Mark LOCAL changes synced using the LOCAL change-log id space, NOT the
+        # hub's sequence (finding #12). `mark_synced` runs against local
+        # change_log.id; the hub_sequence aggregates many devices and is far
+        # larger than any local id, so passing it marks ALL pending local
+        # changes synced — including ones created after the snapshot and never
+        # sent — silently losing them. Only mark up to the max local change id
+        # that was actually included in this request.
+        if request is not None and request.changes:
+            max_local_synced = max(c.sequence for c in request.changes)
+            if max_local_synced > 0:
+                await self._storage.mark_synced(max_local_synced)
+
+        # Track the hub watermark separately (remote "pulled up to").
         if response.hub_sequence > 0:
-            await self._storage.mark_synced(response.hub_sequence)
             await self._storage.update_device_sync(self._device_id, response.hub_sequence)
 
         return {
@@ -142,14 +164,18 @@ class SyncEngine:
         ]
 
         # Resolve conflicts between incoming device changes and hub's existing remote changes
-        # using the device's preferred strategy
-        _, conflicts_list = merge_change_lists(
+        # using the device's preferred strategy. `merged` holds the neural-aware
+        # winner per entity (weight=max, frequency=sum, tags=union, delete-wins);
+        # finding #13: previously discarded, applying raw request.changes instead,
+        # which clobbered cross-device edits with last-applied-wins.
+        merged_changes, conflicts_list = merge_change_lists(
             list(request.changes), remote_changes, request.strategy
         )
 
-        # Record and apply incoming changes from the device
+        # Record every incoming device change in the hub's change log (so other
+        # devices pull them). Recording is over the raw incoming stream — the log
+        # is the authoritative per-device event history.
         for change in request.changes:
-            # Always record in hub's change log first
             await self._storage.record_change(
                 entity_type=change.entity_type,
                 entity_id=change.entity_id,
@@ -157,11 +183,20 @@ class SyncEngine:
                 device_id=change.device_id,
                 payload=change.payload,
             )
+
+        # Apply the MERGED winners to hub storage so the neural-aware resolution
+        # (not raw last-applied-wins) is what actually persists. Only apply the
+        # winners that involve an incoming device change for this entity; remote-
+        # only entities are already present in hub storage.
+        incoming_keys = {(c.entity_type, c.entity_id) for c in request.changes}
+        for change in merged_changes:
+            if (change.entity_type, change.entity_id) not in incoming_keys:
+                continue
             try:
                 await self._apply_remote_change(change)
             except Exception:
                 logger.warning(
-                    "Hub failed to apply change: %s %s",
+                    "Hub failed to apply merged change: %s %s",
                     change.operation,
                     change.entity_id,
                     exc_info=True,
@@ -273,9 +308,9 @@ class SyncEngine:
                 if local_hash != remote_hash:
                     changed_prefixes.append(prefix)
 
-                    # Fetch entities for this bucket
-                    bucket_key = prefix.split("/")[-1] if "/" in prefix else ""
-                    entities = await self._fetch_bucket_entities(entity_type, bucket_key)
+                    # Fetch entities for this bucket via a direct prefix query
+                    # (finding #44) — not a 10000-row slab filtered in Python.
+                    entities = await self._fetch_bucket_entities(entity_type, prefix)
                     entity_ids = [e["id"] for e in entities]
 
                     diffs.append(
@@ -312,13 +347,20 @@ class SyncEngine:
         applied = 0
         deleted = 0
 
+        # Finding #1 (CRITICAL): the client must NOT delete a local entity just
+        # because the hub doesn't have it. Any entity created locally since the
+        # last sync (still pending-push in the change_log with synced=0) is
+        # absent from the hub but must be preserved and pushed, not destroyed.
+        # Gather the set of unsynced (pending-push) local entity IDs so the
+        # delete pass can skip them.
+        pending_push_ids = await self._get_unsynced_entity_ids()
+
         for diff in response.diffs:
             remote_ids = set(diff.entity_ids)
             remote_entities = {e["id"]: e for e in diff.entities}
 
-            # Get local IDs for this bucket
-            bucket_key = diff.prefix.split("/")[-1] if "/" in diff.prefix else ""
-            local_entities = await self._fetch_bucket_entities(diff.entity_type, bucket_key)
+            # Get local IDs for this bucket via a direct prefix query (#44).
+            local_entities = await self._fetch_bucket_entities(diff.entity_type, diff.prefix)
             local_ids = {e["id"] for e in local_entities}
 
             # Inserts: remote has, local doesn't
@@ -359,8 +401,20 @@ class SyncEngine:
                     except Exception:
                         logger.warning("Merkle update failed: %s %s", diff.entity_type, eid)
 
-            # Deletes: local has, remote doesn't
+            # Deletes: local has, remote doesn't — BUT only delete entities the
+            # hub has actually seen. A local-only id that is still pending-push
+            # (synced=0 in the change_log) is a NEW local entity, not a remote
+            # deletion; deleting it would silently destroy un-pushed data
+            # (finding #1). Skip those — they are pushed on the next change-log
+            # sync round instead.
             for eid in local_ids - remote_ids:
+                if eid in pending_push_ids:
+                    logger.debug(
+                        "Merkle: preserving un-pushed local %s %s (pending push)",
+                        diff.entity_type,
+                        eid,
+                    )
+                    continue
                 change = SyncChange(
                     sequence=0,
                     entity_type=diff.entity_type,
@@ -375,9 +429,13 @@ class SyncEngine:
                 except Exception:
                     logger.warning("Merkle delete failed: %s %s", diff.entity_type, eid)
 
-        # Update sync watermark
+        # Update only the hub watermark (remote "pulled up to"). Do NOT call
+        # mark_synced(hub_sequence) here: the Merkle path is a pull/reconcile,
+        # it does not push local change-log rows, and hub_sequence is in the
+        # hub's id space — marking local changes synced against it would lose
+        # un-pushed local data (findings #1 and #12). Local changes are flushed
+        # by the change-log push path, which marks them synced correctly.
         if response.hub_sequence > 0:
-            await self._storage.mark_synced(response.hub_sequence)
             await self._storage.update_device_sync(self._device_id, response.hub_sequence)
 
         return {
@@ -391,79 +449,161 @@ class SyncEngine:
     async def _fetch_bucket_entities(
         self,
         entity_type: str,
-        bucket_key: str,
+        prefix: str,
     ) -> list[dict[str, Any]]:
-        """Fetch all entities whose ID starts with ``bucket_key`` prefix.
+        """Fetch all entities in a Merkle bucket as sync-payload dicts.
 
-        Returns dicts suitable for sync payloads.
+        Finding #44: the old implementation pulled up to 10000 rows
+        (``find_neurons(limit=10000)``) then filtered by ``id[:2]`` in Python,
+        so on a brain with more than 10000 entities everything past the slab
+        was invisible — entities looked "missing" and skewed insert/delete
+        detection. Instead, resolve the exact IDs in this bucket via a SQL
+        prefix query (``get_bucket_entity_ids``) and fetch each entity by ID,
+        which is bounded by the bucket size, not the whole brain.
+
+        ``prefix`` is the full bucket prefix, e.g. ``"neurons/0a"``.
         """
+        # Resolve the exact set of IDs in this bucket via a direct prefix query.
+        bucket_key = prefix.split("/")[-1] if "/" in prefix else ""
+        try:
+            ids = await self._storage.get_bucket_entity_ids(entity_type, prefix, is_pro=True)
+        except (NotImplementedError, AttributeError):
+            ids = []
+
+        if not ids:
+            # Fallback for backends/mocks without get_bucket_entity_ids: derive
+            # IDs from the (bounded) collection. We still avoid re-fetching full
+            # objects below by reusing the ones we already loaded here.
+            return await self._fetch_bucket_entities_fallback(entity_type, bucket_key)
+
         entities: list[dict[str, Any]] = []
 
         if entity_type == "neuron":
-            neurons = await self._storage.find_neurons(limit=10000)
-            for n in neurons:
-                nid = n.id[:2].lower() if len(n.id) >= 2 else n.id.lower().ljust(2, "0")
-                if nid == bucket_key:
-                    entities.append(
-                        {
-                            "id": n.id,
-                            "type": n.type.value if hasattr(n.type, "value") else str(n.type),
-                            "content": n.content,
-                            "content_hash": n.content_hash,
-                            "created_at": n.created_at.isoformat() if n.created_at else "",
-                            "updated_at": getattr(n, "updated_at", n.created_at),
-                            "metadata": n.metadata or {},
-                        }
-                    )
-                    if hasattr(entities[-1]["updated_at"], "isoformat"):
-                        entities[-1]["updated_at"] = entities[-1]["updated_at"].isoformat()
+            for nid in ids:
+                n = await self._storage.get_neuron(nid)
+                if n is not None:
+                    entities.append(self._neuron_to_payload(n))
+
+        elif entity_type == "synapse":
+            for sid in ids:
+                s = await self._storage.get_synapse(sid)
+                if s is not None:
+                    entities.append(self._synapse_to_payload(s))
+
+        elif entity_type == "fiber":
+            for fid in ids:
+                f = await self._storage.get_fiber(fid)
+                if f is not None:
+                    entities.append(self._fiber_to_payload(f))
+
+        return entities
+
+    async def _fetch_bucket_entities_fallback(
+        self,
+        entity_type: str,
+        bucket_key: str,
+    ) -> list[dict[str, Any]]:
+        """Collection-scan fallback when get_bucket_entity_ids is unavailable.
+
+        Paginates through the collection in pages rather than a single 10000-row
+        slab so large brains are still covered (finding #44). Used only by
+        backends/test doubles that do not implement get_bucket_entity_ids.
+        """
+        entities: list[dict[str, Any]] = []
+        page = 5000
+
+        def _bucket_of(eid: str) -> str:
+            return eid[:2].lower() if len(eid) >= 2 else eid.lower().ljust(2, "0")
+
+        if entity_type == "neuron":
+            offset = 0
+            while True:
+                neurons = await self._storage.find_neurons(limit=page, offset=offset)
+                if not neurons:
+                    break
+                for n in neurons:
+                    if _bucket_of(n.id) == bucket_key:
+                        entities.append(self._neuron_to_payload(n))
+                if len(neurons) < page:
+                    break
+                offset += page
 
         elif entity_type == "synapse":
             synapses = await self._storage.get_synapses()
             for s in synapses:
-                sid = s.id[:2].lower() if len(s.id) >= 2 else s.id.lower().ljust(2, "0")
-                if sid == bucket_key:
-                    entities.append(
-                        {
-                            "id": s.id,
-                            "source_id": s.source_id,
-                            "target_id": s.target_id,
-                            "type": s.type.value if hasattr(s.type, "value") else str(s.type),
-                            "weight": s.weight,
-                            "direction": s.direction.value
-                            if hasattr(s.direction, "value")
-                            else str(s.direction),
-                            "content_hash": getattr(s, "content_hash", 0),
-                            "reinforced_count": s.reinforced_count,
-                            "created_at": s.created_at.isoformat() if s.created_at else "",
-                            "metadata": s.metadata or {},
-                        }
-                    )
+                if _bucket_of(s.id) == bucket_key:
+                    entities.append(self._synapse_to_payload(s))
 
         elif entity_type == "fiber":
-            fibers = await self._storage.find_fibers(limit=10000)
+            fibers = await self._storage.find_fibers(limit=page)
             for f in fibers:
-                fid = f.id[:2].lower() if len(f.id) >= 2 else f.id.lower().ljust(2, "0")
-                if fid == bucket_key:
-                    entities.append(
-                        {
-                            "id": f.id,
-                            "anchor_neuron_id": f.anchor_neuron_id,
-                            "summary": f.summary or "",
-                            "conductivity": f.conductivity,
-                            "salience": f.salience,
-                            "frequency": f.frequency,
-                            "neuron_ids": list(f.neuron_ids),
-                            "synapse_ids": list(f.synapse_ids),
-                            "pathway": list(f.pathway),
-                            "auto_tags": list(f.auto_tags),
-                            "agent_tags": list(f.agent_tags),
-                            "created_at": f.created_at.isoformat() if f.created_at else "",
-                            "metadata": f.metadata or {},
-                        }
-                    )
+                if _bucket_of(f.id) == bucket_key:
+                    entities.append(self._fiber_to_payload(f))
 
         return entities
+
+    @staticmethod
+    def _neuron_to_payload(n: Neuron) -> dict[str, Any]:
+        """Serialize a Neuron into a sync-payload dict."""
+        updated_at = getattr(n, "updated_at", None) or n.created_at
+        return {
+            "id": n.id,
+            "type": n.type.value if hasattr(n.type, "value") else str(n.type),
+            "content": n.content,
+            "content_hash": n.content_hash,
+            "created_at": n.created_at.isoformat() if n.created_at else "",
+            "updated_at": updated_at.isoformat() if hasattr(updated_at, "isoformat") else "",
+            "metadata": n.metadata or {},
+        }
+
+    @staticmethod
+    def _synapse_to_payload(s: Synapse) -> dict[str, Any]:
+        """Serialize a Synapse into a sync-payload dict."""
+        return {
+            "id": s.id,
+            "source_id": s.source_id,
+            "target_id": s.target_id,
+            "type": s.type.value if hasattr(s.type, "value") else str(s.type),
+            "weight": s.weight,
+            "direction": s.direction.value if hasattr(s.direction, "value") else str(s.direction),
+            "content_hash": getattr(s, "content_hash", 0),
+            "reinforced_count": s.reinforced_count,
+            "created_at": s.created_at.isoformat() if s.created_at else "",
+            "metadata": s.metadata or {},
+        }
+
+    @staticmethod
+    def _fiber_to_payload(f: Fiber) -> dict[str, Any]:
+        """Serialize a Fiber into a sync-payload dict."""
+        return {
+            "id": f.id,
+            "anchor_neuron_id": f.anchor_neuron_id,
+            "summary": f.summary or "",
+            "conductivity": f.conductivity,
+            "salience": f.salience,
+            "frequency": f.frequency,
+            "neuron_ids": list(f.neuron_ids),
+            "synapse_ids": list(f.synapse_ids),
+            "pathway": list(f.pathway),
+            "auto_tags": list(f.auto_tags),
+            "agent_tags": list(f.agent_tags),
+            "created_at": f.created_at.isoformat() if f.created_at else "",
+            "metadata": f.metadata or {},
+        }
+
+    async def _get_unsynced_entity_ids(self) -> set[str]:
+        """Return the set of local entity IDs with un-pushed change-log rows.
+
+        These are entities created/modified locally since the last successful
+        push (``synced=0`` in the change_log). They are absent from the hub not
+        because the hub deleted them, but because they were never sent — so the
+        Merkle delete pass must preserve them (finding #1).
+        """
+        try:
+            unsynced = await self._storage.get_unsynced_changes(limit=10000)
+        except (NotImplementedError, AttributeError):
+            return set()
+        return {c.entity_id for c in unsynced}
 
     async def _apply_remote_change(self, change: SyncChange) -> None:
         """Apply a single remote change to local storage.

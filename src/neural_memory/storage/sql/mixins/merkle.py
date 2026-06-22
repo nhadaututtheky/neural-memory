@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from neural_memory.storage.sql.dialect import Dialect
-from neural_memory.sync.merkle import MerkleTreeBuilder
+from neural_memory.sync.merkle import MerkleTreeBuilder, fiber_content_fingerprint
 from neural_memory.utils.timeutils import utcnow
 
 logger = logging.getLogger(__name__)
@@ -264,16 +264,44 @@ async def _fetch_entities(
     table = table_map[entity_type]
 
     if entity_type == "fiber":
-        # Fibers don't have a SimHash column; use summary as a proxy
+        # Fibers have no SimHash/content_hash column. Hashing over `summary`
+        # alone (finding #43) skips any non-summary edit (salience, tags,
+        # conductivity, frequency, member sets) in the Merkle diff. Build a
+        # content fingerprint over the mutable fields instead.
         rows = await d.fetch_all(
-            f"SELECT id, updated_at, COALESCE(summary, '') AS hash_value FROM fibers WHERE brain_id = {d.ph(1)}",
+            "SELECT id, updated_at, "
+            "COALESCE(summary, '') AS summary, "
+            "COALESCE(salience, 0) AS salience, "
+            "COALESCE(conductivity, 0) AS conductivity, "
+            "COALESCE(frequency, 0) AS frequency, "
+            "COALESCE(auto_tags, '') AS auto_tags, "
+            "COALESCE(agent_tags, '') AS agent_tags, "
+            "COALESCE(neuron_ids, '') AS neuron_ids, "
+            "COALESCE(synapse_ids, '') AS synapse_ids "
+            f"FROM fibers WHERE brain_id = {d.ph(1)}",
             [brain_id],
         )
-    else:
-        # neurons and synapses have content_hash (SimHash integer)
-        rows = await d.fetch_all(
-            f"SELECT id, updated_at, CAST(content_hash AS TEXT) AS hash_value FROM {table} WHERE brain_id = {d.ph(1)}",
-            [brain_id],
-        )
+        return [
+            (
+                str(r["id"]),
+                str(r["updated_at"] or ""),
+                fiber_content_fingerprint(
+                    summary=str(r["summary"] or ""),
+                    salience=r["salience"],
+                    conductivity=r["conductivity"],
+                    frequency=r["frequency"],
+                    auto_tags=str(r["auto_tags"] or ""),
+                    agent_tags=str(r["agent_tags"] or ""),
+                    neuron_ids=str(r["neuron_ids"] or ""),
+                    synapse_ids=str(r["synapse_ids"] or ""),
+                ),
+            )
+            for r in rows
+        ]
 
+    # neurons and synapses have content_hash (SimHash integer)
+    rows = await d.fetch_all(
+        f"SELECT id, updated_at, CAST(content_hash AS TEXT) AS hash_value FROM {table} WHERE brain_id = {d.ph(1)}",
+        [brain_id],
+    )
     return [(str(r["id"]), str(r["updated_at"] or ""), str(r["hash_value"] or "")) for r in rows]
