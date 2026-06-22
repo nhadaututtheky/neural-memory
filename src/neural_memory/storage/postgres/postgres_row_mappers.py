@@ -57,6 +57,7 @@ def row_to_neuron(record: Any) -> Neuron:
             if hasattr(record["created_at"], "isoformat")
             else datetime.fromisoformat(str(record["created_at"]))
         ),
+        ephemeral=bool(_get(record, "ephemeral", False)),
     )
 
 
@@ -130,6 +131,11 @@ def row_to_fiber(record: Any) -> Fiber:
     time_start = _to_naive_utc(time_start)
     time_end = _to_naive_utc(time_end)
 
+    last_ghost_shown_at = _get(record, "last_ghost_shown_at")
+    if last_ghost_shown_at is not None and not hasattr(last_ghost_shown_at, "isoformat"):
+        last_ghost_shown_at = datetime.fromisoformat(str(last_ghost_shown_at))
+    last_ghost_shown_at = _to_naive_utc(last_ghost_shown_at)
+
     return Fiber(
         id=str(record["id"]),
         neuron_ids=set(neuron_ids),
@@ -144,6 +150,8 @@ def row_to_fiber(record: Any) -> Fiber:
         salience=float(_get(record, "salience", 0.0)),
         frequency=int(_get(record, "frequency", 0)),
         summary=record["summary"],
+        essence=_get(record, "essence"),
+        last_ghost_shown_at=last_ghost_shown_at,
         auto_tags=auto_tags,
         agent_tags=agent_tags,
         metadata=metadata,

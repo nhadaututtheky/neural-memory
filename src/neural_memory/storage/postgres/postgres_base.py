@@ -4,12 +4,31 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+
+def _as_aware_utc(value: Any) -> Any:
+    """Pin a naive datetime to UTC before it is bound to a TIMESTAMPTZ column.
+
+    The project stores all instants as *naive* UTC (see ``utils/timeutils``).
+    asyncpg encodes a naive ``datetime`` into ``TIMESTAMPTZ`` using the
+    **Python process** local timezone, not the session ``TimeZone`` — so a
+    naive UTC value silently shifts by the host's UTC offset (#15). Binding a
+    tz-aware UTC datetime makes the encoded instant correct regardless of the
+    process or server timezone. Non-datetime values pass through untouched.
+    """
+    if isinstance(value, datetime) and value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value
+
+
+def _utc_args(args: tuple[Any, ...]) -> tuple[Any, ...]:
+    return tuple(_as_aware_utc(a) for a in args)
 
 
 class PostgresBaseMixin:
@@ -32,7 +51,7 @@ class PostgresBaseMixin:
 
         conn: asyncpg.Connection = await self._pool.acquire()
         try:
-            return await conn.execute(sql, *args, timeout=timeout)
+            return await conn.execute(sql, *_utc_args(args), timeout=timeout)
         finally:
             await self._pool.release(conn)
 
@@ -42,7 +61,7 @@ class PostgresBaseMixin:
 
         conn: asyncpg.Connection = await self._pool.acquire()
         try:
-            return list(await conn.fetch(sql, *args, timeout=timeout))
+            return list(await conn.fetch(sql, *_utc_args(args), timeout=timeout))
         finally:
             await self._pool.release(conn)
 
@@ -52,7 +71,7 @@ class PostgresBaseMixin:
 
         conn: asyncpg.Connection = await self._pool.acquire()
         try:
-            return await conn.fetchrow(sql, *args, timeout=timeout)
+            return await conn.fetchrow(sql, *_utc_args(args), timeout=timeout)
         finally:
             await self._pool.release(conn)
 
@@ -64,7 +83,9 @@ class PostgresBaseMixin:
 
         conn: asyncpg.Connection = await self._pool.acquire()
         try:
-            await conn.executemany(sql, args_list, timeout=timeout)
+            await conn.executemany(
+                sql, [_utc_args(tuple(a)) for a in args_list], timeout=timeout
+            )
         finally:
             await self._pool.release(conn)
 

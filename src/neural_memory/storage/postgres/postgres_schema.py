@@ -48,6 +48,10 @@ _INIT_SQL_TEMPLATE = [
         device_origin TEXT DEFAULT '',
         updated_at TEXT DEFAULT '',
         created_at TIMESTAMPTZ NOT NULL,
+        last_accessed_at TIMESTAMPTZ,
+        lifecycle_state TEXT DEFAULT 'active',
+        frozen INTEGER DEFAULT 0,
+        ephemeral INTEGER DEFAULT 0,
         PRIMARY KEY (brain_id, id),
         FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
     )
@@ -56,6 +60,9 @@ _INIT_SQL_TEMPLATE = [
     "CREATE INDEX IF NOT EXISTS idx_neurons_created ON neurons(brain_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_neurons_hash ON neurons(brain_id, content_hash)",
     "CREATE INDEX IF NOT EXISTS idx_neurons_fts ON neurons USING GIN(content_tsv)",
+    "CREATE INDEX IF NOT EXISTS idx_neurons_lifecycle ON neurons(brain_id, lifecycle_state)",
+    "CREATE INDEX IF NOT EXISTS idx_neurons_last_accessed ON neurons(brain_id, last_accessed_at)",
+    "CREATE INDEX IF NOT EXISTS idx_neurons_ephemeral ON neurons(brain_id, ephemeral)",
     # ivfflat index optional - create manually after loading data: CREATE INDEX idx_neurons_embedding ON neurons USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
     # Neuron states
     """
@@ -119,6 +126,8 @@ _INIT_SQL_TEMPLATE = [
         salience DOUBLE PRECISION DEFAULT 0.0,
         frequency INTEGER DEFAULT 0,
         summary TEXT,
+        essence TEXT,
+        last_ghost_shown_at TIMESTAMPTZ,
         tags JSONB DEFAULT '[]',
         auto_tags JSONB DEFAULT '[]',
         agent_tags JSONB DEFAULT '[]',
@@ -286,6 +295,37 @@ _MIGRATIONS = [
         PRIMARY KEY (brain_id, keyword),
         FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
     )
+    """,
+    # SQLite parity: fiber distillation + neuron lifecycle/ephemeral columns.
+    # essence (#14) — single-sentence distillation for fidelity-layer recall.
+    "ALTER TABLE fibers ADD COLUMN IF NOT EXISTS essence TEXT",
+    # neurons.ephemeral (#25) — auto-expiring session-scoped memories.
+    # INTEGER (0/1) flag to match the SQLite column and the unified dialect
+    # backend, which both bind int flags (avoids a bool/int impedance split
+    # when the two backends share a database, e.g. in tests).
+    "ALTER TABLE neurons ADD COLUMN IF NOT EXISTS ephemeral INTEGER DEFAULT 0",
+    "CREATE INDEX IF NOT EXISTS idx_neurons_ephemeral ON neurons(brain_id, ephemeral)",
+    # neurons lifecycle columns (#49) — Memory Lifecycle Engine.
+    "ALTER TABLE neurons ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ",
+    "ALTER TABLE neurons ADD COLUMN IF NOT EXISTS lifecycle_state TEXT DEFAULT 'active'",
+    "ALTER TABLE neurons ADD COLUMN IF NOT EXISTS frozen INTEGER DEFAULT 0",
+    "CREATE INDEX IF NOT EXISTS idx_neurons_lifecycle ON neurons(brain_id, lifecycle_state)",
+    "CREATE INDEX IF NOT EXISTS idx_neurons_last_accessed ON neurons(brain_id, last_accessed_at)",
+    # typed_memories.project_id FK (#73) — deleting a project nulls the link,
+    # matching SQLite's ON DELETE SET NULL. Added here (not in the CREATE TABLE)
+    # because typed_memories is created before projects. Guarded so re-running
+    # is a no-op even though ADD CONSTRAINT is not natively idempotent.
+    """
+    DO $nm_tm_proj_fk$ BEGIN
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'typed_memories_project_fk'
+        ) THEN
+            ALTER TABLE typed_memories
+                ADD CONSTRAINT typed_memories_project_fk
+                FOREIGN KEY (brain_id, project_id)
+                REFERENCES projects(brain_id, id) ON DELETE SET NULL;
+        END IF;
+    END $nm_tm_proj_fk$
     """,
 ]
 

@@ -27,10 +27,11 @@ class PostgresFiberMixin(PostgresBaseMixin):
                 """INSERT INTO fibers
                    (id, brain_id, neuron_ids, synapse_ids, anchor_neuron_id,
                     pathway, conductivity, last_conducted, time_start, time_end,
-                    coherence, salience, frequency, summary, tags, auto_tags,
+                    coherence, salience, frequency, summary, essence,
+                    last_ghost_shown_at, tags, auto_tags,
                     agent_tags, metadata, compression_tier, pinned, created_at)
                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-                           $15, $16, $17, $18, $19, $20, $21)""",
+                           $15, $16, $17, $18, $19, $20, $21, $22, $23)""",
                 fiber.id,
                 brain_id,
                 json.dumps(list(fiber.neuron_ids)),
@@ -45,6 +46,8 @@ class PostgresFiberMixin(PostgresBaseMixin):
                 fiber.salience,
                 fiber.frequency,
                 fiber.summary,
+                fiber.essence,
+                fiber.last_ghost_shown_at,
                 json.dumps(sorted(normalize_tags_lower(fiber.tags))),
                 json.dumps(sorted(normalize_tags_lower(fiber.auto_tags))),
                 json.dumps(sorted(normalize_tags_lower(fiber.agent_tags))),
@@ -147,8 +150,8 @@ class PostgresFiberMixin(PostgresBaseMixin):
                time_start = $7, time_end = $8, coherence = $9, salience = $10,
                frequency = $11, summary = $12, tags = $13, auto_tags = $14,
                agent_tags = $15, metadata = $16, compression_tier = $17,
-               pinned = $18
-               WHERE brain_id = $19 AND id = $20""",
+               pinned = $18, essence = $19, last_ghost_shown_at = $20
+               WHERE brain_id = $21 AND id = $22""",
             json.dumps(list(fiber.neuron_ids)),
             json.dumps(list(fiber.synapse_ids)),
             fiber.anchor_neuron_id,
@@ -167,6 +170,8 @@ class PostgresFiberMixin(PostgresBaseMixin):
             json.dumps(fiber.metadata),
             fiber.compression_tier,
             1 if fiber.pinned else 0,
+            fiber.essence,
+            fiber.last_ghost_shown_at,
             brain_id,
             fiber.id,
         )

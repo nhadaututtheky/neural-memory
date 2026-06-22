@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from neural_memory.core.memory_types import MemoryType, Priority, TypedMemory
@@ -330,12 +330,18 @@ class PostgresTypedMemoryMixin(PostgresBaseMixin):
         current_meta["promoted_from"] = old_type
         current_meta["promoted_at"] = utcnow().isoformat()
 
+        # expires_at is TIMESTAMPTZ — asyncpg requires a datetime/None, not a
+        # str. Parse the ISO string before binding (#61).
+        parsed_expires = (
+            datetime.fromisoformat(new_expires_at) if new_expires_at is not None else None
+        )
+
         result = await self._query(
             """UPDATE typed_memories
                SET memory_type = $1, expires_at = $2, metadata = $3
                WHERE fiber_id = $4 AND brain_id = $5""",
             new_type.value,
-            new_expires_at,
+            parsed_expires,
             json.dumps(current_meta),
             fiber_id,
             brain_id,
