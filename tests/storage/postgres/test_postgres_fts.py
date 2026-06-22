@@ -61,9 +61,7 @@ def _unified_pg_available() -> bool:
 
 
 _UNIFIED_PG_AVAILABLE = _unified_pg_available()
-_SKIP_REASON = (
-    f"PostgreSQL not available at {POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
-)
+_SKIP_REASON = f"PostgreSQL not available at {POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
 
 
 pytestmark = pytest.mark.skipif(not _UNIFIED_PG_AVAILABLE, reason=_SKIP_REASON)
@@ -259,9 +257,7 @@ async def test_find_neurons_content_contains_does_not_crash(
     matches = await store.find_neurons(content_contains="python", limit=10)
 
     contents = {n.content for n in matches}
-    assert "Python programming language" in contents, (
-        f"FTS match missing — got {contents!r}"
-    )
+    assert "Python programming language" in contents, f"FTS match missing — got {contents!r}"
     assert "Rust systems language" not in contents
 
 
@@ -319,9 +315,7 @@ async def test_suggest_neurons_does_not_crash(unified_pg_storage: Any) -> None:
     suggestions = await store.suggest_neurons("hello", limit=5)
     assert isinstance(suggestions, list)
     suggested = {s["content"] for s in suggestions}
-    assert "hello world" in suggested, (
-        f"expected exact-word match for 'hello', got {suggested!r}"
-    )
+    assert "hello world" in suggested, f"expected exact-word match for 'hello', got {suggested!r}"
 
 
 @pytest.mark.asyncio

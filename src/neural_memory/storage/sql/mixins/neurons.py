@@ -289,9 +289,7 @@ class NeuronMixin:
             # dialect-aware rank expression (SQLite: fts.rank;
             # Postgres: ts_rank(content_tsv, plainto_tsquery(..., $1)) DESC).
             rank_order = d.fts_neuron_rank_order(1)
-            query += (
-                f" ORDER BY {rank_order} LIMIT {d.ph(idx)} OFFSET {d.ph(idx + 1)}"
-            )
+            query += f" ORDER BY {rank_order} LIMIT {d.ph(idx)} OFFSET {d.ph(idx + 1)}"
             params.extend([limit, offset])
         else:
             # ------ LIKE / ILIKE fallback ------

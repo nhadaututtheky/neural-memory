@@ -319,9 +319,7 @@ class PostgresDialect(Dialect):
 
     def fts_neuron_rank_order(self, term_param: int) -> str:
         # ts_rank returns float where higher = more relevant; use DESC.
-        return (
-            f"ts_rank(n.content_tsv, plainto_tsquery('english', ${term_param})) DESC"
-        )
+        return f"ts_rank(n.content_tsv, plainto_tsquery('english', ${term_param})) DESC"
 
     def fts_neuron_score_expr(self, term_param: int) -> str:
         # Higher = better — directly usable in composite scoring.
