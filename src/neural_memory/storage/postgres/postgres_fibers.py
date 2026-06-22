@@ -63,10 +63,16 @@ class PostgresFiberMixin(PostgresBaseMixin):
                 )
             return fiber.id
         except Exception as e:
-            from asyncpg.exceptions import UniqueViolationError
+            from asyncpg.exceptions import ForeignKeyViolationError, UniqueViolationError
 
             if isinstance(e, UniqueViolationError):
                 raise ValueError(f"Fiber {fiber.id} already exists") from e
+            # FK violation = referenced neuron(s) pruned/merged away. Normalize to
+            # ValueError so ConsolidationEngine._merge's guard skips the merge
+            # instead of crashing the whole run (issue #183). Matches the
+            # sqlite_fibers contract, which already maps FK -> ValueError.
+            if isinstance(e, ForeignKeyViolationError):
+                raise ValueError(f"Fiber {fiber.id} references missing neuron(s)") from e
             raise
 
     async def get_fiber(self, fiber_id: str) -> Fiber | None:

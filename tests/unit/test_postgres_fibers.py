@@ -342,3 +342,48 @@ class TestPgSchemaMigration:
         assert "summary_tsv" in migration_text
         assert "keyword_document_frequency" in migration_text
         assert "fibers_summary_tsv_trigger" in migration_text
+
+
+# ---------------------------------------------------------------------------
+# add_fiber error translation (issue #183)
+# ---------------------------------------------------------------------------
+
+
+class TestAddFiberErrorTranslation:
+    """add_fiber must normalize asyncpg integrity errors to ValueError so
+    ConsolidationEngine._merge's ``except ValueError`` guard skips bad merges
+    instead of crashing the whole run (issue #183)."""
+
+    def _fiber(self) -> Any:
+        from neural_memory.core.fiber import Fiber
+
+        return Fiber.create(
+            neuron_ids={"n1", "n2"},
+            synapse_ids=set(),
+            anchor_neuron_id="n1",
+        )
+
+    async def test_fk_violation_becomes_valueerror(self) -> None:
+        from asyncpg.exceptions import ForeignKeyViolationError
+
+        mixin = _make_mixin()
+        mixin._query = AsyncMock()  # fibers insert succeeds
+        mixin._executemany = AsyncMock(side_effect=ForeignKeyViolationError("fiber_neurons FK"))
+        with pytest.raises(ValueError, match="missing neuron"):
+            await mixin.add_fiber(self._fiber())
+
+    async def test_unique_violation_becomes_valueerror(self) -> None:
+        from asyncpg.exceptions import UniqueViolationError
+
+        mixin = _make_mixin()
+        mixin._query = AsyncMock(side_effect=UniqueViolationError("dup"))
+        mixin._executemany = AsyncMock()
+        with pytest.raises(ValueError, match="already exists"):
+            await mixin.add_fiber(self._fiber())
+
+    async def test_unrelated_errors_propagate_raw(self) -> None:
+        mixin = _make_mixin()
+        mixin._query = AsyncMock(side_effect=RuntimeError("boom"))
+        mixin._executemany = AsyncMock()
+        with pytest.raises(RuntimeError, match="boom"):
+            await mixin.add_fiber(self._fiber())

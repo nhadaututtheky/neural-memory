@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.58.2] — 2026-06-22
+
+### Fixed — Consolidation crash on Postgres FK violation (#183)
+
+- `PostgresFiberMixin.add_fiber` now normalizes `ForeignKeyViolationError` to
+  `ValueError`, matching the contract `ConsolidationEngine._merge` already
+  relies on (and the SQLite backend already honors). Previously a merge that
+  produced a fiber referencing a neuron pruned/merged away in the same pass
+  raised the raw asyncpg error, bypassing `_merge`'s `except ValueError` guard
+  and aborting the whole consolidation run — which surfaced as a failed
+  `remember`. The merge is best-effort, so the dangling-reference case is now
+  skipped with a warning instead of crashing. No data was ever corrupted (the
+  FK constraint prevented orphan rows).
+
 ## [4.58.1] — 2026-06-20
 
 ### Fixed — Dashboard Storage tab + migration backend (#182)

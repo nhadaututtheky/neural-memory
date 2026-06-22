@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-__version__ = "4.58.1"
+__version__ = "4.58.2"
 
 # Map public name -> (module, attribute) for lazy resolution.
 _LAZY: dict[str, tuple[str, str]] = {
