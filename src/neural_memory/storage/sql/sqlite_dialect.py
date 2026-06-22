@@ -194,6 +194,18 @@ class SQLiteDialect(Dialect):
         where_clause = "fts.fibers_fts MATCH ? AND fts.brain_id = ?"
         return from_clause, where_clause
 
+    def fts_neuron_rank_order(self, term_param: int) -> str:
+        if not self._has_fts:
+            raise NotImplementedError("FTS5 not available on this SQLite database")
+        # FTS5 'rank' column: lower = better, so plain ASC.
+        return "fts.rank"
+
+    def fts_neuron_score_expr(self, term_param: int) -> str:
+        if not self._has_fts:
+            raise NotImplementedError("FTS5 not available on this SQLite database")
+        # Negate so higher = better when combined with other positive signals.
+        return "(-fts.rank)"
+
     # ------------------------------------------------------------------
     # Schema helpers (override defaults for SQLite)
     # ------------------------------------------------------------------

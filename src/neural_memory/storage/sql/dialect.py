@@ -198,6 +198,25 @@ class Dialect(ABC):
         """Return (FROM clause, WHERE clause) for fiber FTS."""
         raise NotImplementedError(f"{self.name} dialect does not support FTS")
 
+    def fts_neuron_rank_order(self, term_param: int) -> str:
+        """SQL fragment for the ORDER BY expression that ranks neuron FTS hits.
+
+        SQLite (FTS5):     ``fts.rank``           (ASC: lower = better)
+        PostgreSQL (tsv):  ``ts_rank(...) DESC``  (DESC: higher = better)
+
+        ``term_param`` is the 1-based parameter index that holds the FTS
+        search term in the surrounding query.
+        """
+        raise NotImplementedError(f"{self.name} dialect does not support FTS")
+
+    def fts_neuron_score_expr(self, term_param: int) -> str:
+        """Single SQL expression where HIGHER = more relevant (for composite scoring).
+
+        Used to combine FTS relevance with other signals (access frequency,
+        activation level, etc.).
+        """
+        raise NotImplementedError(f"{self.name} dialect does not support FTS")
+
     # ------------------------------------------------------------------
     # JSON operators
     # ------------------------------------------------------------------
