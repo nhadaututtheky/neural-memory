@@ -6,6 +6,7 @@ without requiring a real PostgreSQL instance.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from datetime import timedelta
 from typing import Any
@@ -349,6 +350,10 @@ class TestPgSchemaMigration:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(
+    importlib.util.find_spec("asyncpg") is None,
+    reason="asyncpg not installed (postgres extra); add_fiber's FK translation needs it",
+)
 class TestAddFiberErrorTranslation:
     """add_fiber must normalize asyncpg integrity errors to ValueError so
     ConsolidationEngine._merge's ``except ValueError`` guard skips bad merges
