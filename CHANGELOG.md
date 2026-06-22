@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.58.3] — 2026-06-22
+
+### Fixed — Postgres FTS crash (`missing FROM-clause entry for table "fts"`)
+
+- `SQLStorage(PostgresDialect)`'s `find_neurons(content_contains=...)` previously
+  crashed with `asyncpg.exceptions.UndefinedTableError: missing FROM-clause
+  entry for table "fts"`. Root cause: the unified neuron mixin hardcoded the
+  SQLite FTS5 expression `ORDER BY fts.rank` (and a matching `(-fts.rank ...)`
+  score expression inside `suggest_neurons`), but the Postgres dialect's
+  `fts_neuron_query` returns a `FROM neurons n` clause with no `fts` relation,
+  and its `content_tsv` / `summary_tsv` tsvector columns were never created
+  by `PostgresDialect.get_schema_ddl()` either.
+- `PostgresDialect.get_schema_ddl()` now appends idempotent DDL that creates
+  `neurons.content_tsv` and `fibers.summary_tsv` as `GENERATED ALWAYS AS
+  to_tsvector('english', coalesce(content/summary, '')) STORED` columns with
+  GIN indexes. A `DO` block also upgrades any pre-existing non-generated
+  `*_tsv` columns from older deployments so FTS lookups actually return
+  matches instead of silently producing zero rows.
+- Two new `Dialect` hooks — `fts_neuron_rank_order(term_param)` and
+  `fts_neuron_score_expr(term_param)` — replace the hardcoded `fts.rank`
+  references. SQLite returns `fts.rank` / `(-fts.rank)` (output unchanged);
+  Postgres returns `ts_rank(n.content_tsv, plainto_tsquery('english', $N))`
+  with `DESC` ordering.
+- Bonus fix to `get_schema_ddl()` on a fresh PG database: `projects` (and its
+  prerequisite `brains`) are now hoisted ahead of `typed_memories` so the
+  forward FK reference doesn't error out at table-creation time.
+- Regression test: `tests/storage/postgres/test_postgres_fts.py` exercises the
+  unified `SQLStorage(PostgresDialect)` path end-to-end with FTS asserts that
+  this crash stays fixed.
+
 ## [4.58.2] — 2026-06-22
 
 ### Fixed — Consolidation crash on Postgres FK violation (#183)

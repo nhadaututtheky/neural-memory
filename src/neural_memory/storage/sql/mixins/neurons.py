@@ -285,7 +285,13 @@ class NeuronMixin:
                 params.append(1 if ephemeral else 0)
 
             idx = len(params) + 1
-            query += f" ORDER BY fts.rank LIMIT {d.ph(idx)} OFFSET {d.ph(idx + 1)}"
+            # The FTS term is bound at param index 1 — reuse it for the
+            # dialect-aware rank expression (SQLite: fts.rank;
+            # Postgres: ts_rank(content_tsv, plainto_tsquery(..., $1)) DESC).
+            rank_order = d.fts_neuron_rank_order(1)
+            query += (
+                f" ORDER BY {rank_order} LIMIT {d.ph(idx)} OFFSET {d.ph(idx + 1)}"
+            )
             params.extend([limit, offset])
         else:
             # ------ LIKE / ILIKE fallback ------
@@ -571,11 +577,14 @@ class NeuronMixin:
             # FTS path — ranked by BM25 score + activation heuristics
             fts_expr = _build_fts_prefix_query(prefix)
             from_clause, where_clause = d.fts_neuron_query(1, 2)
+            # Dialect-aware FTS score (higher = better) so this expression
+            # composes cleanly with access_frequency / activation_level.
+            score_expr = d.fts_neuron_score_expr(1)
             query = (
                 f"SELECT n.id AS neuron_id, n.content, n.type,"
                 f" COALESCE(ns.access_frequency, 0) AS access_frequency,"
                 f" COALESCE(ns.activation_level, 0.0) AS activation_level,"
-                f" (-fts.rank"
+                f" ({score_expr}"
                 f"   + COALESCE(ns.access_frequency, 0) * 0.1"
                 f"   + COALESCE(ns.activation_level, 0.0) * 0.5) AS score"
                 f" FROM {from_clause}"

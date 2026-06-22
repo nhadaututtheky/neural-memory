@@ -13,6 +13,72 @@ from neural_memory.storage.sql.dialect import Dialect
 logger = logging.getLogger(__name__)
 
 
+# Idempotent DDL that creates the tsvector columns + GIN indexes used by
+# ``fts_neuron_query`` / ``fts_fiber_query``. Appended to the schema DDL
+# returned by :meth:`PostgresDialect.get_schema_ddl`. Generated columns
+# (PG 12+) keep the tsvector in sync with ``content`` / ``summary``
+# automatically, so no insert-path changes are needed.
+#
+# The DO blocks below also upgrade pre-existing *non-generated* tsvector
+# columns left over from older code paths: if the column exists but is
+# plain (``attgenerated = ''``), we drop and re-add it as a STORED
+# generated column so FTS lookups actually return matches.
+_PG_FTS_DDL = """
+-- Full-text search support (idempotent; safe to re-run).
+DO $nm_fts_neurons$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_attribute a
+        JOIN pg_class c ON a.attrelid = c.oid
+        WHERE c.relname = 'neurons'
+          AND a.attname = 'content_tsv'
+          AND a.attgenerated = ''
+    ) THEN
+        EXECUTE 'ALTER TABLE neurons DROP COLUMN content_tsv';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_attribute a
+        JOIN pg_class c ON a.attrelid = c.oid
+        WHERE c.relname = 'neurons' AND a.attname = 'content_tsv'
+    ) THEN
+        EXECUTE 'ALTER TABLE neurons ADD COLUMN content_tsv tsvector '
+             || 'GENERATED ALWAYS AS '
+             || '(to_tsvector(''english'', coalesce(content, ''''))) STORED';
+    END IF;
+END
+$nm_fts_neurons$;
+CREATE INDEX IF NOT EXISTS idx_neurons_content_tsv
+    ON neurons USING GIN (content_tsv);
+
+DO $nm_fts_fibers$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_attribute a
+        JOIN pg_class c ON a.attrelid = c.oid
+        WHERE c.relname = 'fibers'
+          AND a.attname = 'summary_tsv'
+          AND a.attgenerated = ''
+    ) THEN
+        EXECUTE 'ALTER TABLE fibers DROP COLUMN summary_tsv';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_attribute a
+        JOIN pg_class c ON a.attrelid = c.oid
+        WHERE c.relname = 'fibers' AND a.attname = 'summary_tsv'
+    ) THEN
+        EXECUTE 'ALTER TABLE fibers ADD COLUMN summary_tsv tsvector '
+             || 'GENERATED ALWAYS AS '
+             || '(to_tsvector(''english'', coalesce(summary, ''''))) STORED';
+    END IF;
+END
+$nm_fts_fibers$;
+CREATE INDEX IF NOT EXISTS idx_fibers_summary_tsv
+    ON fibers USING GIN (summary_tsv);
+"""
+
+
 class PostgresDialect(Dialect):
     """PostgreSQL dialect using asyncpg.
 
@@ -251,6 +317,16 @@ class PostgresDialect(Dialect):
         )
         return from_clause, where_clause
 
+    def fts_neuron_rank_order(self, term_param: int) -> str:
+        # ts_rank returns float where higher = more relevant; use DESC.
+        return (
+            f"ts_rank(n.content_tsv, plainto_tsquery('english', ${term_param})) DESC"
+        )
+
+    def fts_neuron_score_expr(self, term_param: int) -> str:
+        # Higher = better — directly usable in composite scoring.
+        return f"ts_rank(n.content_tsv, plainto_tsquery('english', ${term_param}))"
+
     # ------------------------------------------------------------------
     # JSON operators (override for JSONB)
     # ------------------------------------------------------------------
@@ -319,7 +395,12 @@ class PostgresDialect(Dialect):
         """Return PostgreSQL-compatible DDL for all schema tables.
 
         Converts the SQLite SCHEMA by replacing SQLite-specific syntax
-        with PostgreSQL equivalents.
+        with PostgreSQL equivalents, hoists the ``projects`` table ahead
+        of any table that forward-references it (PostgreSQL enforces
+        FKs at CREATE TABLE time, unlike SQLite), then appends
+        idempotent ALTER statements that add the ``content_tsv`` /
+        ``summary_tsv`` generated columns + GIN indexes required by FTS
+        (see ``fts_neuron_query`` / ``fts_fiber_query``).
         """
         from neural_memory.storage.sqlite_schema import SCHEMA
 
@@ -333,6 +414,27 @@ class PostgresDialect(Dialect):
         import re
 
         ddl = re.sub(r"PRAGMA\s+[^;]+;", "", ddl)
+        # `typed_memories` declares a FOREIGN KEY to `projects`, but the
+        # SCHEMA defines `projects` AFTER `typed_memories`. SQLite is
+        # forgiving here (FKs are only checked on DML); PostgreSQL
+        # rejects the forward reference with `relation "projects" does
+        # not exist`.  Hoist copies of the `brains` and `projects`
+        # CREATE TABLE blocks to the top in dependency order — the
+        # originals later in the script become no-ops thanks to
+        # IF NOT EXISTS.
+        prelude = ""
+        for tbl in ("brains", "projects"):
+            m = re.search(
+                rf"CREATE TABLE IF NOT EXISTS {tbl}\s*\([^;]*?\);",
+                ddl,
+                re.DOTALL,
+            )
+            if m:
+                prelude += m.group(0) + "\n"
+        ddl = prelude + ddl
+        # Append tsvector generated columns + GIN indexes for FTS.
+        # All idempotent — re-running this DDL on an existing DB is a no-op.
+        ddl += _PG_FTS_DDL
         return ddl
 
     # ------------------------------------------------------------------
