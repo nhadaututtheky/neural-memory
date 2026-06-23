@@ -251,7 +251,7 @@ class FiberMixin:
         if tags is not None and tags:
             tag_conditions = []
             for tag in tags:
-                params.append(tag)
+                params.append(d.json_array_contains_param(tag))
                 tag_conditions.append(d.json_array_contains("tags", n))
                 n += 1
             joiner = " AND " if tag_mode != "or" else " OR "
@@ -321,7 +321,7 @@ class FiberMixin:
         tag_parts: list[str] = []
         if tags:
             for tag in normalize_tags_lower(tags):
-                params.append(tag)
+                params.append(d.json_array_contains_param(tag))
                 tag_parts.append(d.json_array_contains("f.tags", n))
                 n += 1
 

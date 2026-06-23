@@ -602,7 +602,11 @@ class NeuronMixin:
             params.append(limit)
 
         elif d.supports_ilike:
-            # PostgreSQL non-FTS path — ILIKE prefix match
+            # PostgreSQL non-FTS path — ILIKE prefix match.
+            # Escape LIKE metacharacters (\, %, _) so a user prefix containing
+            # them matches literally instead of acting as a wildcard, mirroring
+            # the SQLite fallback below (closes #20).
+            escaped = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             query = (
                 "SELECT n.id AS neuron_id, n.content, n.type,"
                 " COALESCE(ns.access_frequency, 0) AS access_frequency,"
@@ -612,9 +616,9 @@ class NeuronMixin:
                 " FROM neurons n"
                 " LEFT JOIN neuron_states ns"
                 "   ON n.brain_id = ns.brain_id AND n.id = ns.neuron_id"
-                f" WHERE n.brain_id = {d.ph(1)} AND n.content ILIKE {d.ph(2)}"
+                f" WHERE n.brain_id = {d.ph(1)} AND n.content ILIKE {d.ph(2)} ESCAPE '\\'"
             )
-            params = [brain_id, f"{prefix}%"]
+            params = [brain_id, f"{escaped}%"]
 
             if type_filter is not None:
                 idx = len(params) + 1

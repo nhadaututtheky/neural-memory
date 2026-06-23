@@ -245,6 +245,18 @@ class Dialect(ABC):
         """
         return f"EXISTS (SELECT 1 FROM json_each({column}) WHERE value = {self.ph(value_param)})"
 
+    def json_array_contains_param(self, value: Any) -> Any:
+        """Bind value for the placeholder produced by :meth:`json_array_contains`.
+
+        Callers pass the *logical* element to test for membership; each
+        dialect wraps it into the shape its own ``json_array_contains`` SQL
+        expects. SQLite compares a scalar against ``json_each(...).value``, so
+        the bare value is returned. PostgreSQL uses ``tags @> $N::jsonb``,
+        which requires a JSON *document* — a one-element JSON array
+        (``'["work"]'``) — not the bare string ``work`` (which is invalid JSON).
+        """
+        return value
+
     # ------------------------------------------------------------------
     # Date/time handling
     # ------------------------------------------------------------------
@@ -274,6 +286,16 @@ class Dialect(ABC):
     # ------------------------------------------------------------------
     # Schema helpers
     # ------------------------------------------------------------------
+
+    def date_trunc_day(self, column: str) -> str:
+        """SQL expression truncating an ISO-text timestamp column to its day.
+
+        SQLite stores timestamps as ISO TEXT and has no DATE type:
+        ``CAST(col AS DATE)`` applies NUMERIC affinity and collapses to the
+        year integer, so use the leading 10 chars (``YYYY-MM-DD``) instead.
+        PostgreSQL overrides this with ``col::date`` on its TIMESTAMPTZ column.
+        """
+        return f"SUBSTR({column}, 1, 10)"
 
     def auto_increment_pk(self) -> str:
         """SQL type for an auto-incrementing integer primary key.

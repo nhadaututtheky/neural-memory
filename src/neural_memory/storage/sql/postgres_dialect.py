@@ -417,7 +417,17 @@ class PostgresDialect(Dialect):
         return f"{column} ? ${key_param}"
 
     def json_array_contains(self, column: str, value_param: int) -> str:
-        return f"{column} @> ${value_param}::jsonb"
+        # JSON tag columns (tags/auto_tags/agent_tags) are stored as TEXT on the
+        # unified schema (SQLite-derived), so the column must be cast to jsonb
+        # before the containment operator — ``text @> jsonb`` has no operator.
+        return f"{column}::jsonb @> ${value_param}::jsonb"
+
+    def json_array_contains_param(self, value: Any) -> Any:
+        # ``tags @> $N::jsonb`` needs a JSON document. A bare tag like ``work``
+        # is not valid JSON, so wrap it as a one-element JSON array.
+        import json
+
+        return json.dumps([value])
 
     # ------------------------------------------------------------------
     # Date/time (native TIMESTAMPTZ)
@@ -538,6 +548,10 @@ class PostgresDialect(Dialect):
     # ------------------------------------------------------------------
     # Schema helpers (override for PostgreSQL types)
     # ------------------------------------------------------------------
+
+    def date_trunc_day(self, column: str) -> str:
+        # TIMESTAMPTZ → DATE truncation is native and correct on Postgres.
+        return f"{column}::date"
 
     def auto_increment_pk(self) -> str:
         return "SERIAL PRIMARY KEY"

@@ -226,8 +226,9 @@ class ToolEventsMixin:
 
         cutoff = d.serialize_dt(utcnow() - timedelta(days=safe_days))
 
+        day_expr = d.date_trunc_day("created_at")
         rows = await d.fetch_all(
-            f"""SELECT CAST(created_at AS DATE) as day, tool_name,
+            f"""SELECT {day_expr} as day, tool_name,
                       COUNT(*) as cnt,
                       SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as ok,
                       AVG(duration_ms) as avg_ms

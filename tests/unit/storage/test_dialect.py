@@ -59,6 +59,17 @@ class TestSQLiteDialectSQL:
         d = SQLiteDialect(db_path="/tmp/test.db")
         assert d.json_extract("metadata", "type") == "json_extract(metadata, '$.type')"
 
+    def test_json_array_contains_param_passthrough(self):
+        # #6: SQLite compares a scalar against json_each(...).value.
+        d = SQLiteDialect(db_path="/tmp/test.db")
+        assert d.json_array_contains_param("work") == "work"
+
+    def test_date_trunc_day_uses_substr(self):
+        # #23: CAST(... AS DATE) collapses to the year integer on SQLite,
+        # so use the YYYY-MM-DD prefix instead.
+        d = SQLiteDialect(db_path="/tmp/test.db")
+        assert d.date_trunc_day("created_at") == "SUBSTR(created_at, 1, 10)"
+
     def test_auto_increment_pk(self):
         d = SQLiteDialect(db_path="/tmp/test.db")
         assert d.auto_increment_pk() == "INTEGER PRIMARY KEY AUTOINCREMENT"
@@ -167,7 +178,18 @@ class TestPostgresDialectSQL:
 
     def test_json_array_contains(self):
         d = PostgresDialect()
-        assert d.json_array_contains("tags", 2) == "tags @> $2::jsonb"
+        # TEXT tag columns must be cast to jsonb before ``@>`` (#6).
+        assert d.json_array_contains("tags", 2) == "tags::jsonb @> $2::jsonb"
+
+    def test_json_array_contains_param_wraps_as_json_array(self):
+        # #6: ``tags @> $N::jsonb`` needs a JSON document, not a bare tag.
+        d = PostgresDialect()
+        assert d.json_array_contains_param("work") == '["work"]'
+
+    def test_date_trunc_day_uses_native_cast(self):
+        # #23: Postgres has a real DATE type, so cast natively.
+        d = PostgresDialect()
+        assert d.date_trunc_day("created_at") == "created_at::date"
 
     def test_auto_increment_pk(self):
         d = PostgresDialect()
