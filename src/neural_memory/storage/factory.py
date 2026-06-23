@@ -458,10 +458,30 @@ class HybridStorage(NeuralStorage):
             strategy=conflict_strategy,
         )
 
-        # Clear local and reimport merged
+        # Stage the merged snapshot into a temporary brain id FIRST, so that a
+        # crash/error between clear() and import_brain() can never destroy the
+        # only copy of the data (#31). The staging brain is a durable on-disk
+        # recovery copy: only after it is fully imported do we clear+reimport
+        # the real brain, and only after THAT succeeds do we drop the staging
+        # copy. A failure mid-swap leaves the staging brain intact for recovery.
+        import uuid
+
+        staging_brain_id = f"__sync_staging_{self._brain_id}_{uuid.uuid4().hex[:8]}"
+        await self._local.import_brain(merged_snapshot, staging_brain_id)
+        # Swap: clear+reimport the real brain. If anything here fails, the
+        # staging brain is deliberately left intact (NOT cleaned up) so the data
+        # is recoverable — re-running sync re-imports from the merged snapshot.
         await self._local.clear(self._brain_id)
         await self._local.import_brain(merged_snapshot, self._brain_id)
         self._local.set_brain(self._brain_id)
+        # Swap succeeded — drop the now-redundant staging copy (best-effort).
+        try:
+            await self._local.clear(staging_brain_id)
+        except Exception:  # pragma: no cover - best-effort cleanup
+            logger.warning(
+                "Failed to drop sync staging brain %s; left for recovery",
+                staging_brain_id,
+            )
 
         # Push merged to remote
         await self._remote.import_brain(merged_snapshot, self._brain_id)

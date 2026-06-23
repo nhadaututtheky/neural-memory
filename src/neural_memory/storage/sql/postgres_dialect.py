@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import logging
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
@@ -11,6 +12,16 @@ from typing import Any
 from neural_memory.storage.sql.dialect import Dialect
 
 logger = logging.getLogger(__name__)
+
+# Per-task transaction connection. A ContextVar (not an instance attribute)
+# so concurrent asyncio tasks each see their OWN active transaction
+# connection — two coroutines entering transaction() at once no longer clobber
+# a shared attribute and leak queries across connections (fix for #17).
+# Module-level so it is shared by the dialect's execute()/fetch_*() helpers;
+# ContextVar isolation is per-task, not per-instance.
+_txn_conn_var: contextvars.ContextVar[Any | None] = contextvars.ContextVar(
+    "postgres_dialect_txn_conn", default=None
+)
 
 
 # Idempotent DDL that creates the tsvector columns + GIN indexes used by
@@ -250,13 +261,18 @@ class PostgresDialect(Dialect):
         return self._pool
 
     # ------------------------------------------------------------------
-    # Query execution (transaction-aware: uses _txn_conn when inside
-    # a transaction() block, otherwise acquires from pool per call)
+    # Query execution (transaction-aware: uses the per-task transaction
+    # connection ContextVar when inside a transaction() block, otherwise
+    # acquires from pool per call)
     # ------------------------------------------------------------------
 
     def _get_conn_or_none(self) -> Any:
-        """Return the transaction connection if inside a transaction, else None."""
-        return getattr(self, "_txn_conn", None)
+        """Return the transaction connection if inside a transaction, else None.
+
+        Reads from a ContextVar so concurrent tasks don't see each other's
+        transaction connection (#17).
+        """
+        return _txn_conn_var.get()
 
     async def execute(self, sql: str, params: Sequence[Any] = ()) -> str:
         conn = self._get_conn_or_none()
@@ -461,11 +477,12 @@ class PostgresDialect(Dialect):
         conn = await pool.acquire()
         txn = conn.transaction()
         await txn.start()
-        # Temporarily stash the transaction connection so that execute
-        # methods called inside the block can use it.  Since neural-memory
-        # is single-writer async, this is safe.
-        prev_txn_conn = getattr(self, "_txn_conn", None)
-        self._txn_conn = conn
+        # Bind the transaction connection to the CURRENT task via a
+        # ContextVar so execute()/fetch_*() called inside this block route to
+        # it — while a concurrent task running its own transaction() sees its
+        # own connection (not this one). Nested transaction() blocks in the
+        # same task naturally stack via the returned reset token (#17).
+        token = _txn_conn_var.set(conn)
         try:
             yield
             await txn.commit()
@@ -473,7 +490,7 @@ class PostgresDialect(Dialect):
             await txn.rollback()
             raise
         finally:
-            self._txn_conn = prev_txn_conn
+            _txn_conn_var.reset(token)
             await pool.release(conn)
 
     # ------------------------------------------------------------------

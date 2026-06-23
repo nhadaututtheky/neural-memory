@@ -196,153 +196,158 @@ class PostgresBrainMixin(PostgresBaseMixin):
         old_brain_id = self._current_brain_id
         try:
             self.set_brain(brain_id)  # type: ignore[attr-defined]
-            await self.save_brain(brain)
+            # All-or-nothing import: brains row + neurons + states + synapses +
+            # fibers + junction rows commit together. A failure midway (bad
+            # enum, encode error) rolls the whole import back instead of
+            # leaving a partially-imported brain (#60).
+            async with self._transaction():
+                await self.save_brain(brain)
 
-            for n_data in snapshot.neurons:
-                neuron = Neuron(
-                    id=n_data["id"],
-                    type=NeuronType(n_data["type"]),
-                    content=n_data["content"],
-                    metadata=n_data.get("metadata", {}),
-                    created_at=datetime.fromisoformat(n_data["created_at"]),
-                )
-                meta_json = json.dumps(neuron.metadata)
-                await self._query(
-                    """INSERT INTO neurons (id, brain_id, type, content, metadata, content_hash, created_at)
-                       VALUES ($1, $2, $3, $4, $5, $6, $7)
-                       ON CONFLICT (brain_id, id) DO UPDATE SET
-                         type = EXCLUDED.type, content = EXCLUDED.content,
-                         metadata = EXCLUDED.metadata, content_hash = EXCLUDED.content_hash""",
-                    neuron.id,
-                    brain_id,
-                    neuron.type.value,
-                    neuron.content,
-                    meta_json,
-                    neuron.content_hash,
-                    neuron.created_at,
-                )
-                await self._query(
-                    """INSERT INTO neuron_states (neuron_id, brain_id, firing_threshold,
-                       refractory_period_ms, homeostatic_target, created_at)
-                       VALUES ($1, $2, 0.3, 500.0, 0.5, $3)
-                       ON CONFLICT (brain_id, neuron_id) DO NOTHING""",
-                    neuron.id,
-                    brain_id,
-                    utcnow(),
-                )
+                for n_data in snapshot.neurons:
+                    neuron = Neuron(
+                        id=n_data["id"],
+                        type=NeuronType(n_data["type"]),
+                        content=n_data["content"],
+                        metadata=n_data.get("metadata", {}),
+                        created_at=datetime.fromisoformat(n_data["created_at"]),
+                    )
+                    meta_json = json.dumps(neuron.metadata)
+                    await self._query(
+                        """INSERT INTO neurons (id, brain_id, type, content, metadata, content_hash, created_at)
+                           VALUES ($1, $2, $3, $4, $5, $6, $7)
+                           ON CONFLICT (brain_id, id) DO UPDATE SET
+                             type = EXCLUDED.type, content = EXCLUDED.content,
+                             metadata = EXCLUDED.metadata, content_hash = EXCLUDED.content_hash""",
+                        neuron.id,
+                        brain_id,
+                        neuron.type.value,
+                        neuron.content,
+                        meta_json,
+                        neuron.content_hash,
+                        neuron.created_at,
+                    )
+                    await self._query(
+                        """INSERT INTO neuron_states (neuron_id, brain_id, firing_threshold,
+                           refractory_period_ms, homeostatic_target, created_at)
+                           VALUES ($1, $2, 0.3, 500.0, 0.5, $3)
+                           ON CONFLICT (brain_id, neuron_id) DO NOTHING""",
+                        neuron.id,
+                        brain_id,
+                        utcnow(),
+                    )
 
-            for s_data in snapshot.synapses:
-                syn = Synapse(
-                    id=s_data["id"],
-                    source_id=s_data["source_id"],
-                    target_id=s_data["target_id"],
-                    type=SynapseType(s_data["type"]),
-                    weight=s_data["weight"],
-                    direction=Direction(s_data.get("direction", "uni")),
-                    metadata=s_data.get("metadata", {}),
-                    reinforced_count=s_data.get("reinforced_count", 0),
-                    created_at=datetime.fromisoformat(s_data["created_at"]),
-                )
-                await self._query(
-                    """INSERT INTO synapses (id, brain_id, source_id, target_id, type, weight,
-                       direction, metadata, reinforced_count, last_activated, created_at)
-                       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-                       ON CONFLICT (brain_id, id) DO UPDATE SET
-                         type = EXCLUDED.type, weight = EXCLUDED.weight,
-                         direction = EXCLUDED.direction, metadata = EXCLUDED.metadata,
-                         reinforced_count = EXCLUDED.reinforced_count""",
-                    syn.id,
-                    brain_id,
-                    syn.source_id,
-                    syn.target_id,
-                    syn.type.value,
-                    syn.weight,
-                    syn.direction.value,
-                    json.dumps(syn.metadata),
-                    syn.reinforced_count,
-                    syn.last_activated,
-                    syn.created_at,
-                )
+                for s_data in snapshot.synapses:
+                    syn = Synapse(
+                        id=s_data["id"],
+                        source_id=s_data["source_id"],
+                        target_id=s_data["target_id"],
+                        type=SynapseType(s_data["type"]),
+                        weight=s_data["weight"],
+                        direction=Direction(s_data.get("direction", "uni")),
+                        metadata=s_data.get("metadata", {}),
+                        reinforced_count=s_data.get("reinforced_count", 0),
+                        created_at=datetime.fromisoformat(s_data["created_at"]),
+                    )
+                    await self._query(
+                        """INSERT INTO synapses (id, brain_id, source_id, target_id, type, weight,
+                           direction, metadata, reinforced_count, last_activated, created_at)
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                           ON CONFLICT (brain_id, id) DO UPDATE SET
+                             type = EXCLUDED.type, weight = EXCLUDED.weight,
+                             direction = EXCLUDED.direction, metadata = EXCLUDED.metadata,
+                             reinforced_count = EXCLUDED.reinforced_count""",
+                        syn.id,
+                        brain_id,
+                        syn.source_id,
+                        syn.target_id,
+                        syn.type.value,
+                        syn.weight,
+                        syn.direction.value,
+                        json.dumps(syn.metadata),
+                        syn.reinforced_count,
+                        syn.last_activated,
+                        syn.created_at,
+                    )
 
-            for f_data in snapshot.fibers:
-                auto_tags = set(f_data.get("auto_tags", []))
-                agent_tags = set(f_data.get("agent_tags", []))
-                if not auto_tags and not agent_tags:
-                    agent_tags = set(f_data.get("tags", []))
-                fiber = Fiber(
-                    id=f_data["id"],
-                    neuron_ids=set(f_data["neuron_ids"]),
-                    synapse_ids=set(f_data["synapse_ids"]),
-                    anchor_neuron_id=f_data["anchor_neuron_id"],
-                    time_start=(
-                        datetime.fromisoformat(f_data["time_start"])
-                        if f_data.get("time_start")
-                        else None
-                    ),
-                    time_end=(
-                        datetime.fromisoformat(f_data["time_end"])
-                        if f_data.get("time_end")
-                        else None
-                    ),
-                    coherence=f_data.get("coherence", 0.0),
-                    salience=f_data.get("salience", 0.0),
-                    frequency=f_data.get("frequency", 0),
-                    summary=f_data.get("summary"),
-                    auto_tags=auto_tags,
-                    agent_tags=agent_tags,
-                    metadata=f_data.get("metadata", {}),
-                    created_at=datetime.fromisoformat(f_data["created_at"]),
-                )
-                all_tags = sorted(normalize_tags_lower(fiber.auto_tags | fiber.agent_tags))
-                await self._query(
-                    """INSERT INTO fibers (id, brain_id, neuron_ids, synapse_ids, anchor_neuron_id,
-                       pathway, conductivity, last_conducted, time_start, time_end, coherence,
-                       salience, frequency, summary, tags, auto_tags, agent_tags, metadata,
-                       compression_tier, pinned, created_at)
-                       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-                               $16, $17, $18, $19, $20, $21)
-                       ON CONFLICT (brain_id, id) DO UPDATE SET
-                         neuron_ids = EXCLUDED.neuron_ids, synapse_ids = EXCLUDED.synapse_ids,
-                         anchor_neuron_id = EXCLUDED.anchor_neuron_id, pathway = EXCLUDED.pathway,
-                         conductivity = EXCLUDED.conductivity, last_conducted = EXCLUDED.last_conducted,
-                         time_start = EXCLUDED.time_start, time_end = EXCLUDED.time_end,
-                         coherence = EXCLUDED.coherence, salience = EXCLUDED.salience,
-                         frequency = EXCLUDED.frequency, summary = EXCLUDED.summary,
-                         tags = EXCLUDED.tags, auto_tags = EXCLUDED.auto_tags,
-                         agent_tags = EXCLUDED.agent_tags, metadata = EXCLUDED.metadata,
-                         compression_tier = EXCLUDED.compression_tier""",
-                    fiber.id,
-                    brain_id,
-                    json.dumps(list(fiber.neuron_ids)),
-                    json.dumps(list(fiber.synapse_ids)),
-                    fiber.anchor_neuron_id,
-                    json.dumps(list(fiber.pathway)),
-                    fiber.conductivity,
-                    fiber.last_conducted,
-                    fiber.time_start,
-                    fiber.time_end,
-                    fiber.coherence,
-                    fiber.salience,
-                    fiber.frequency,
-                    fiber.summary,
-                    json.dumps(all_tags),
-                    json.dumps(sorted(normalize_tags_lower(fiber.auto_tags))),
-                    json.dumps(sorted(normalize_tags_lower(fiber.agent_tags))),
-                    json.dumps(fiber.metadata),
-                    fiber.compression_tier,
-                    1 if fiber.pinned else 0,
-                    fiber.created_at,
-                )
-                if fiber.neuron_ids:
-                    for nid in fiber.neuron_ids:
-                        await self._query(
-                            """INSERT INTO fiber_neurons (brain_id, fiber_id, neuron_id)
-                               VALUES ($1, $2, $3)
-                               ON CONFLICT (brain_id, fiber_id, neuron_id) DO NOTHING""",
-                            brain_id,
-                            fiber.id,
-                            nid,
-                        )
+                for f_data in snapshot.fibers:
+                    auto_tags = set(f_data.get("auto_tags", []))
+                    agent_tags = set(f_data.get("agent_tags", []))
+                    if not auto_tags and not agent_tags:
+                        agent_tags = set(f_data.get("tags", []))
+                    fiber = Fiber(
+                        id=f_data["id"],
+                        neuron_ids=set(f_data["neuron_ids"]),
+                        synapse_ids=set(f_data["synapse_ids"]),
+                        anchor_neuron_id=f_data["anchor_neuron_id"],
+                        time_start=(
+                            datetime.fromisoformat(f_data["time_start"])
+                            if f_data.get("time_start")
+                            else None
+                        ),
+                        time_end=(
+                            datetime.fromisoformat(f_data["time_end"])
+                            if f_data.get("time_end")
+                            else None
+                        ),
+                        coherence=f_data.get("coherence", 0.0),
+                        salience=f_data.get("salience", 0.0),
+                        frequency=f_data.get("frequency", 0),
+                        summary=f_data.get("summary"),
+                        auto_tags=auto_tags,
+                        agent_tags=agent_tags,
+                        metadata=f_data.get("metadata", {}),
+                        created_at=datetime.fromisoformat(f_data["created_at"]),
+                    )
+                    all_tags = sorted(normalize_tags_lower(fiber.auto_tags | fiber.agent_tags))
+                    await self._query(
+                        """INSERT INTO fibers (id, brain_id, neuron_ids, synapse_ids, anchor_neuron_id,
+                           pathway, conductivity, last_conducted, time_start, time_end, coherence,
+                           salience, frequency, summary, tags, auto_tags, agent_tags, metadata,
+                           compression_tier, pinned, created_at)
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+                                   $16, $17, $18, $19, $20, $21)
+                           ON CONFLICT (brain_id, id) DO UPDATE SET
+                             neuron_ids = EXCLUDED.neuron_ids, synapse_ids = EXCLUDED.synapse_ids,
+                             anchor_neuron_id = EXCLUDED.anchor_neuron_id, pathway = EXCLUDED.pathway,
+                             conductivity = EXCLUDED.conductivity, last_conducted = EXCLUDED.last_conducted,
+                             time_start = EXCLUDED.time_start, time_end = EXCLUDED.time_end,
+                             coherence = EXCLUDED.coherence, salience = EXCLUDED.salience,
+                             frequency = EXCLUDED.frequency, summary = EXCLUDED.summary,
+                             tags = EXCLUDED.tags, auto_tags = EXCLUDED.auto_tags,
+                             agent_tags = EXCLUDED.agent_tags, metadata = EXCLUDED.metadata,
+                             compression_tier = EXCLUDED.compression_tier""",
+                        fiber.id,
+                        brain_id,
+                        json.dumps(list(fiber.neuron_ids)),
+                        json.dumps(list(fiber.synapse_ids)),
+                        fiber.anchor_neuron_id,
+                        json.dumps(list(fiber.pathway)),
+                        fiber.conductivity,
+                        fiber.last_conducted,
+                        fiber.time_start,
+                        fiber.time_end,
+                        fiber.coherence,
+                        fiber.salience,
+                        fiber.frequency,
+                        fiber.summary,
+                        json.dumps(all_tags),
+                        json.dumps(sorted(normalize_tags_lower(fiber.auto_tags))),
+                        json.dumps(sorted(normalize_tags_lower(fiber.agent_tags))),
+                        json.dumps(fiber.metadata),
+                        fiber.compression_tier,
+                        1 if fiber.pinned else 0,
+                        fiber.created_at,
+                    )
+                    if fiber.neuron_ids:
+                        for nid in fiber.neuron_ids:
+                            await self._query(
+                                """INSERT INTO fiber_neurons (brain_id, fiber_id, neuron_id)
+                                   VALUES ($1, $2, $3)
+                                   ON CONFLICT (brain_id, fiber_id, neuron_id) DO NOTHING""",
+                                brain_id,
+                                fiber.id,
+                                nid,
+                            )
         finally:
             if old_brain_id is not None:
                 self.set_brain(old_brain_id)  # type: ignore[attr-defined]

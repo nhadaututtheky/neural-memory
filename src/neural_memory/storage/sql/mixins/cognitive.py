@@ -258,30 +258,33 @@ class CognitiveMixin:
         brain_id = self._get_brain_id()
         now = d.serialize_dt(utcnow())
 
-        # Clear existing index for this brain
-        await d.execute(
-            f"DELETE FROM hot_index WHERE brain_id = {d.ph(1)}",
-            (brain_id,),
-        )
-
+        # Atomic replace: DELETE + re-INSERT in one transaction so a bad item
+        # (missing key / constraint violation) rolls back the whole refresh
+        # rather than leaving the hot index wiped or partially populated (#54).
         count = 0
-        for item in items[:_MAX_HOT_SLOTS]:
+        async with d.transaction():
             await d.execute(
-                f"""INSERT INTO hot_index
-                   (brain_id, slot, category, neuron_id, summary, confidence, score, updated_at)
-                   VALUES ({d.phs(8)})""",
-                (
-                    brain_id,
-                    item["slot"],
-                    item["category"],
-                    item["neuron_id"],
-                    item["summary"][:500],
-                    item.get("confidence"),
-                    item["score"],
-                    now,
-                ),
+                f"DELETE FROM hot_index WHERE brain_id = {d.ph(1)}",
+                (brain_id,),
             )
-            count += 1
+
+            for item in items[:_MAX_HOT_SLOTS]:
+                await d.execute(
+                    f"""INSERT INTO hot_index
+                       (brain_id, slot, category, neuron_id, summary, confidence, score, updated_at)
+                       VALUES ({d.phs(8)})""",
+                    (
+                        brain_id,
+                        item["slot"],
+                        item["category"],
+                        item["neuron_id"],
+                        item["summary"][:500],
+                        item.get("confidence"),
+                        item["score"],
+                        now,
+                    ),
+                )
+                count += 1
         return count
 
     async def get_hot_index(self, limit: int = 10) -> list[dict[str, Any]]:
