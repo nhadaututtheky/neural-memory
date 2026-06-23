@@ -255,6 +255,67 @@ class TestSupersession:
         assert "weak_error" not in result
         assert "fix" in result
 
+    async def test_converging_edges_demote_both_outdated(self, storage, config):
+        """#33: two edges converging on the same latest must demote BOTH outdated.
+
+        A RESOLVED_BY C and B RESOLVED_BY C. The second edge previously hit
+        `if current in chain_visited: continue` and skipped demoting its own
+        distinct outdated neuron, leaving it at unsuppressed activation.
+        """
+        await _add_neuron(storage, "A", "old finding A")
+        await _add_neuron(storage, "B", "old finding B")
+        await _add_neuron(storage, "C", "current resolution C")
+        await _add_synapse(storage, "A", "C", SynapseType.RESOLVED_BY)
+        await _add_synapse(storage, "B", "C", SynapseType.RESOLVED_BY)
+
+        pipeline = await _make_pipeline(storage, config)
+        activations = {
+            "A": _activation("A", 0.8),
+            "B": _activation("B", 0.8),
+            "C": _activation("C", 0.5),
+        }
+
+        result = await pipeline._apply_causal_semantics(activations)
+
+        # C is the surviving latest, boosted.
+        assert "C" in result
+        # BOTH outdated neurons demoted to ghost level (0.8 * 0.1 = 0.08).
+        assert result["A"].activation_level == pytest.approx(0.08, rel=0.05)
+        assert result["B"].activation_level == pytest.approx(0.08, rel=0.05)
+        # Both recorded in the supersession map.
+        assert pipeline._supersession_map.get("A") == "C"
+        assert pipeline._supersession_map.get("B") == "C"
+
+    async def test_latest_itself_superseded_by_incoming_edge(self, storage, config):
+        """#77: a 'latest' that is itself superseded by an unvisited newer node.
+
+        A RESOLVED_BY B, and C SUPERSEDES B (C is newer than B). Tracing the
+        chain from A must continue past B to C via the INCOMING SUPERSEDES edge,
+        so C is the boosted ultimate-latest — not B.
+        """
+        await _add_neuron(storage, "A", "original error A")
+        await _add_neuron(storage, "B", "first fix B")
+        await _add_neuron(storage, "C", "newer fix C supersedes B")
+        await _add_synapse(storage, "A", "B", SynapseType.RESOLVED_BY)
+        # C SUPERSEDES B → source=C is newer, target=B is older.
+        await _add_synapse(storage, "C", "B", SynapseType.SUPERSEDES)
+
+        pipeline = await _make_pipeline(storage, config)
+        activations = {
+            "A": _activation("A", 0.7),
+            "B": _activation("B", 0.6),
+            "C": _activation("C", 0.5),
+        }
+
+        result = await pipeline._apply_causal_semantics(activations)
+
+        # C is the true ultimate latest (B is superseded by C).
+        assert "C" in result
+        # A (original) is demoted as outdated.
+        assert result["A"].activation_level < 0.15
+        # The chain resolved to C, not B.
+        assert pipeline._supersession_map.get("A") == "C"
+
 
 # ===========================================================================
 # T3: REINFORCEMENT tests

@@ -221,5 +221,11 @@ class TestPPRActivateFromMultiple:
 
         results, intersections = await ppr.activate_from_multiple([["a1"], ["a2"]])
         assert "shared" in results
-        # shared should be in intersections (reached from both a1 and a2)
-        # Note: with single PPR run, intersection detection depends on source tracking
+        # 'shared' is reachable from BOTH a1 and a2 → must be flagged as a
+        # multi-anchor intersection (#16). The old single-PPR source_anchor
+        # check could attribute each neuron to at most one set, so this could
+        # never fire; the per-set PPR runs now detect it correctly.
+        assert "shared" in intersections
+        # The anchors themselves belong to only one set each → not intersections.
+        assert "a1" not in intersections
+        assert "a2" not in intersections

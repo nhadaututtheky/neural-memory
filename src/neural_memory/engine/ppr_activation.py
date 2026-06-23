@@ -274,23 +274,39 @@ class PPRActivation:
         if not all_anchors:
             return {}, []
 
-        # Run single PPR with all anchors
+        # Run single PPR with all anchors — this is the returned activation map
+        # (combined activation levels from every seed).
         results, _trace = await self.activate(
             anchor_neurons=all_anchors,
             anchor_activations=anchor_activations,
         )
 
-        # Find intersections: neurons reached from multiple anchor sets
+        # Find intersections: neurons reached from multiple anchor sets.
+        #
+        # A combined PPR run records only a SINGLE nearest seed per neuron
+        # (`result.source_anchor`), so the old membership check could attribute
+        # each neuron to at most one set — `len(sets) > 1` was never satisfiable
+        # (#16). Instead, run PPR once per anchor set and intersect the reachable
+        # neuron ids across sets; a neuron in ≥2 per-set result maps is a genuine
+        # multi-constraint intersection.
         if len(anchor_sets) > 1:
             set_membership: dict[str, set[int]] = defaultdict(set)
             for set_idx, anchor_list in enumerate(anchor_sets):
-                anchor_set = set(anchor_list)
-                for nid, result in results.items():
-                    if result.source_anchor in anchor_set:
-                        set_membership[nid].add(set_idx)
+                if not anchor_list:
+                    continue
+                per_set_results, _ = await self.activate(
+                    anchor_neurons=anchor_list,
+                    anchor_activations=anchor_activations,
+                )
+                for nid in per_set_results:
+                    set_membership[nid].add(set_idx)
 
             intersections = sorted(
-                [nid for nid, sets in set_membership.items() if len(sets) > 1],
+                [
+                    nid
+                    for nid, sets in set_membership.items()
+                    if len(sets) > 1 and nid in results
+                ],
                 key=lambda nid: results[nid].activation_level,
                 reverse=True,
             )

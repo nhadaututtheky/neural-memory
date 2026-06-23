@@ -230,10 +230,16 @@ class TestTraceCausalChain:
         assert chain.steps[1].content == "deploy failed"
         assert chain.direction == "effects"
 
-    async def test_total_weight_is_product(self, causal_storage: InMemoryStorage) -> None:
-        """Total weight should be product of step weights."""
+    async def test_total_weight_is_geometric_mean(
+        self, causal_storage: InMemoryStorage
+    ) -> None:
+        """Total weight is the geometric mean of step weights (#34).
+
+        The raw product penalized breadth (n weights all <=1.0 collapse toward 0);
+        the geometric mean normalizes over the number of steps.
+        """
         chain = await trace_causal_chain(causal_storage, "n-a", "causes")
-        expected = 0.8 * 0.9  # weights of the two steps
+        expected = (0.8 * 0.9) ** 0.5  # geometric mean of the two step weights
         assert abs(chain.total_weight - expected) < 1e-9
 
     async def test_max_depth_limit(self, causal_storage: InMemoryStorage) -> None:
