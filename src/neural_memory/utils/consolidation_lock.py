@@ -126,14 +126,28 @@ def acquire_consolidation_lock(brain_id: str = "") -> bool:
 
 
 def release_consolidation_lock(brain_id: str = "") -> None:
-    """Release the consolidation lock."""
+    """Release the consolidation lock.
+
+    Only unlinks the lock when its recorded pid is confirmed to be our own.
+    An unreadable lock (partial write / parse error) is treated as "not ours"
+    and left in place — deleting it could remove a different live agent's lock
+    mid-write and allow concurrent consolidation, the exact corruption this
+    module prevents (#70). Reclamation of a genuinely stale unreadable lock is
+    left to the stale-timeout path in `_try_clear_stale`.
+    """
     lock_file = _lock_path(brain_id)
     try:
-        if lock_file.exists():
-            data = json.loads(lock_file.read_text())
-            if data.get("pid") == os.getpid():
-                lock_file.unlink()
+        if not lock_file.exists():
+            return
+        data = json.loads(lock_file.read_text())
     except (json.JSONDecodeError, OSError):
+        logger.warning(
+            "Consolidation lock unreadable on release; leaving it for the "
+            "stale-timeout path instead of deleting (may belong to another agent)"
+        )
+        return
+
+    if data.get("pid") == os.getpid():
         try:
             lock_file.unlink(missing_ok=True)
         except OSError:

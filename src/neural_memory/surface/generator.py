@@ -110,6 +110,10 @@ class SurfaceGenerator:
         self._token_budget = token_budget
         self._max_graph_nodes = max_graph_nodes
         self._max_signals = max_signals
+        # neuron UUID -> assigned surface node id (e.g. 'd1'), built during
+        # _extract_graph and reused by _build_clusters so clusters reference
+        # short surface ids rather than raw UUIDs (#40/#41).
+        self._node_id_map: dict[str, str] = {}
 
     async def generate(self) -> KnowledgeSurface:
         """Generate a complete KnowledgeSurface from brain.db.
@@ -118,6 +122,7 @@ class SurfaceGenerator:
             A KnowledgeSurface trimmed to the token budget.
         """
         now = utcnow()
+        self._node_id_map = {}  # reset per-generation neuron->surface-id map
 
         # Step 1: Select top neurons by composite score
         scored_neurons = await self._select_top_neurons(now)
@@ -249,9 +254,13 @@ class SurfaceGenerator:
         if missing_ids:
             target_neurons = await self._storage.get_neurons_batch(missing_ids[:100])
 
-        entries: list[GraphEntry] = []
+        # --- Pass 1: assign every surface node ID up front so that BOTH
+        # forward and backward edge references resolve. Iterating in score
+        # order means a higher-scored source can point at a lower-scored
+        # target whose entry doesn't exist yet; building the full
+        # neuron_id -> node_id map first fixes that (#40).
         id_counter: dict[str, int] = defaultdict(int)
-
+        nodes: list[tuple[SurfaceNode, float]] = []
         for neuron, score, _state in scored_neurons:
             node_id = self._make_node_id(neuron, id_counter)
             node = SurfaceNode(
@@ -261,10 +270,16 @@ class SurfaceGenerator:
                 priority=self._score_to_priority(score),
                 neuron_id=neuron.id,
             )
+            nodes.append((node, score))
+            self._node_id_map[neuron.id] = node_id
 
-            # Build edges from synapses
+        # --- Pass 2: build edges now that the full id map exists.
+        entries: list[GraphEntry] = []
+        for node, _score in nodes:
+            source_id = node.neuron_id or ""
+
             edges: list[SurfaceEdge] = []
-            for syn in synapse_map.get(neuron.id, []):
+            for syn in synapse_map.get(source_id, []):
                 if syn.type.value in _SKIP_SYNAPSE_TYPES:
                     continue
                 edge_type = _SYNAPSE_EDGE_MAP.get(syn.type.value, syn.type.value)
@@ -275,8 +290,8 @@ class SurfaceGenerator:
 
                 if syn.target_id in neuron_map:
                     target_n = neuron_map[syn.target_id][0]
-                    # Find the node_id we assigned to this target
-                    target_id_ref = self._find_assigned_id(syn.target_id, entries)
+                    # Resolve via the full map — works for forward refs too.
+                    target_id_ref = self._node_id_map.get(syn.target_id)
                     target_text = self._truncate(target_n.content, 60)
                 elif syn.target_id in target_neurons:
                     target_n = target_neurons[syn.target_id]
@@ -351,9 +366,17 @@ class SurfaceGenerator:
             contents = [neuron_batch[nid].content for nid in component if nid in neuron_batch]
             cluster_name = self._infer_cluster_name(contents, i)
 
-            # Map neuron IDs to surface node IDs (if they exist in graph)
-            # For now, use content-based names
-            node_ids = tuple(sorted(component)[:5])  # Cap refs per cluster
+            # Map neuron UUIDs to their assigned surface node IDs (built in
+            # _extract_graph). Drop neurons that never made it into the graph
+            # so cluster refs always point at real short surface ids — keeps
+            # token_budget._trim_lowest_priority_graph able to scrub them and
+            # keeps the serialized CLUSTERS section consistent (#41).
+            surface_ids = sorted(
+                self._node_id_map[nid] for nid in component if nid in self._node_id_map
+            )
+            node_ids = tuple(surface_ids[:5])  # Cap refs per cluster
+            if not node_ids:
+                continue
 
             result.append(
                 Cluster(
@@ -541,17 +564,6 @@ class SurfaceGenerator:
 
         counter[prefix] = counter.get(prefix, 0) + 1
         return f"{prefix}{counter[prefix]}"
-
-    @staticmethod
-    def _find_assigned_id(
-        neuron_id: str,
-        entries: list[GraphEntry],
-    ) -> str | None:
-        """Find the surface node ID for a neuron_id in existing entries."""
-        for entry in entries:
-            if entry.node.neuron_id == neuron_id:
-                return entry.node.id
-        return None
 
     @staticmethod
     def _truncate(text: str, max_len: int) -> str:

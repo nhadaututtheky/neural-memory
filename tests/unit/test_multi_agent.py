@@ -182,6 +182,18 @@ class TestConsolidationLock:
         # Lock should still exist (different PID)
         assert lock.exists()
 
+    def test_release_does_not_delete_unreadable_lock(self) -> None:
+        """Regression (#70): release must NOT unlink a lock it can't parse
+        (e.g. another agent's partially-written lock) — deleting it would
+        allow concurrent consolidation."""
+        lock = _lock_path()
+        # Simulate a partially-written lock from another live agent.
+        lock.write_text("{not valid json")
+
+        release_consolidation_lock()
+        # Must be left in place for the stale-timeout path to reclaim.
+        assert lock.exists()
+
     def test_lock_contains_pid_and_timestamp(self) -> None:
         """Lock file should contain current PID and recent timestamp."""
         acquire_consolidation_lock()

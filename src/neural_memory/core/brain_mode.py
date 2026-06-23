@@ -213,14 +213,26 @@ class BrainModeConfig:
         """Check if using hybrid (offline-first) mode."""
         return self.mode == BrainMode.HYBRID
 
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
+    def to_dict(self, *, mask_secrets: bool = False) -> dict[str, Any]:
+        """Convert to dictionary for serialization.
+
+        By default emits the real ``api_key`` so the dict round-trips through
+        ``from_dict`` without corruption (#69). For safe display/logging, use
+        ``to_safe_dict()`` (or pass ``mask_secrets=True``), which masks the key
+        to ``'***'`` — that variant is NOT round-trippable.
+        """
+
+        def _key(value: str | None) -> str | None:
+            if mask_secrets and value:
+                return "***"
+            return value
+
         result: dict[str, Any] = {"mode": self.mode.value}
 
         if self.shared:
             result["shared"] = {
                 "server_url": self.shared.server_url,
-                "api_key": "***" if self.shared.api_key else None,
+                "api_key": _key(self.shared.api_key),
                 "timeout": self.shared.timeout,
                 "retry_count": self.shared.retry_count,
                 "retry_delay": self.shared.retry_delay,
@@ -230,7 +242,7 @@ class BrainModeConfig:
             result["hybrid"] = {
                 "local_path": self.hybrid.local_path,
                 "server_url": self.hybrid.server_url,
-                "api_key": "***" if self.hybrid.api_key else None,
+                "api_key": _key(self.hybrid.api_key),
                 "sync_strategy": self.hybrid.sync_strategy.value,
                 "sync_interval_seconds": self.hybrid.sync_interval_seconds,
                 "auto_sync_on_encode": self.hybrid.auto_sync_on_encode,
@@ -239,6 +251,14 @@ class BrainModeConfig:
             }
 
         return result
+
+    def to_safe_dict(self) -> dict[str, Any]:
+        """Convert to dictionary with secrets masked, for display/logging.
+
+        Not round-trippable: ``api_key`` is replaced by ``'***'``. Use
+        ``to_dict()`` for serialization that must survive ``from_dict``.
+        """
+        return self.to_dict(mask_secrets=True)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> BrainModeConfig:

@@ -78,10 +78,25 @@ class MemoryEncryptor:
             if os.name == "nt":
                 key_path.write_bytes(key)
             else:
-                # Atomic creation with restricted permissions on POSIX
-                fd = os.open(str(key_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-                os.write(fd, key)
-                os.close(fd)
+                # Atomic creation with restricted permissions on POSIX.
+                # O_EXCL means a concurrent process may win the race and
+                # create the key first; on that collision (FileExistsError),
+                # read back the now-existing key rather than propagating (#68).
+                try:
+                    fd = os.open(str(key_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                except FileExistsError:
+                    key = key_path.read_bytes().strip()
+                    logger.debug(
+                        "Lost key-creation race for brain %s; loaded existing key", brain_id
+                    )
+                    cipher = Fernet(key)
+                    self._ciphers[brain_id] = cipher
+                    return cipher
+                else:
+                    try:
+                        os.write(fd, key)
+                    finally:
+                        os.close(fd)
             try:
                 if os.name == "nt":
                     self._restrict_windows_acl(key_path)

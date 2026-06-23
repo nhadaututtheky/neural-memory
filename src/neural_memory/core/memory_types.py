@@ -7,7 +7,7 @@ This enables smarter query routing and memory lifecycle management.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from enum import IntEnum, StrEnum
 from functools import lru_cache
@@ -296,20 +296,7 @@ class TypedMemory:
         """Create a new TypedMemory with updated priority."""
         if isinstance(priority, int):
             priority = Priority.from_int(priority)
-        return TypedMemory(
-            fiber_id=self.fiber_id,
-            memory_type=self.memory_type,
-            priority=priority,
-            provenance=self.provenance,
-            expires_at=self.expires_at,
-            project_id=self.project_id,
-            tags=self.tags,
-            metadata=self.metadata,
-            created_at=self.created_at,
-            trust_score=self.trust_score,
-            source=self.source,
-            tier=self.tier,
-        )
+        return replace(self, priority=priority)
 
     def with_tier(self, tier: str) -> TypedMemory:
         """Create a new TypedMemory with updated loading tier.
@@ -317,51 +304,23 @@ class TypedMemory:
         Boundary memories are always HOT — the invariant is enforced here.
         """
         effective_tier = MemoryTier.HOT if self.memory_type == MemoryType.BOUNDARY else tier
-        return TypedMemory(
-            fiber_id=self.fiber_id,
-            memory_type=self.memory_type,
-            priority=self.priority,
-            provenance=self.provenance,
-            expires_at=self.expires_at,
-            project_id=self.project_id,
-            tags=self.tags,
-            metadata=self.metadata,
-            created_at=self.created_at,
-            trust_score=self.trust_score,
-            source=self.source,
-            tier=effective_tier,
-        )
+        return replace(self, tier=effective_tier)
 
     def verify(self) -> TypedMemory:
-        """Create a new TypedMemory marked as verified."""
-        return TypedMemory(
-            fiber_id=self.fiber_id,
-            memory_type=self.memory_type,
-            priority=self.priority,
-            provenance=self.provenance.verify(),
-            expires_at=self.expires_at,
-            project_id=self.project_id,
-            tags=self.tags,
-            metadata=self.metadata,
-            created_at=self.created_at,
-            tier=self.tier,
-        )
+        """Create a new TypedMemory marked as verified.
+
+        Uses ``dataclasses.replace`` so every field (including ``trust_score``
+        and ``source``) is preserved — only ``provenance`` is updated.
+        """
+        return replace(self, provenance=self.provenance.verify())
 
     def extend_expiry(self, days: int) -> TypedMemory:
-        """Create a new TypedMemory with extended expiry."""
+        """Create a new TypedMemory with extended expiry.
+
+        Uses ``dataclasses.replace`` so all other fields are preserved.
+        """
         new_expiry = utcnow() + timedelta(days=days)
-        return TypedMemory(
-            fiber_id=self.fiber_id,
-            memory_type=self.memory_type,
-            priority=self.priority,
-            provenance=self.provenance,
-            expires_at=new_expiry,
-            project_id=self.project_id,
-            tags=self.tags,
-            metadata=self.metadata,
-            created_at=self.created_at,
-            tier=self.tier,
-        )
+        return replace(self, expires_at=new_expiry)
 
 
 # Default expiry settings per memory type
