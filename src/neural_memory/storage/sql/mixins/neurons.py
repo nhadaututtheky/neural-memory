@@ -228,10 +228,19 @@ class NeuronMixin:
         ephemeral: bool | None = None,
         created_before: datetime | None = None,
     ) -> list[Neuron]:
-        # Cache shortcut for exact-match lookups (most repeated pattern)
-        if content_exact is not None and content_contains is None and time_range is None:
+        # Cache shortcut for exact-match lookups (most repeated pattern).
+        # The cache key includes the ephemeral filter so an ephemeral-filtered
+        # result is never served to a caller using a different filter.
+        # created_before is not part of the key, so skip the cache when it is set.
+        cacheable = (
+            content_exact is not None
+            and content_contains is None
+            and time_range is None
+            and created_before is None
+        )
+        if cacheable:
             type_val = type.value if type is not None else None
-            cached = self._neuron_cache.get(content_exact, type_val)
+            cached = self._neuron_cache.get(content_exact, type_val, ephemeral)
             if cached is not None:
                 return cached[offset : offset + limit]
 
@@ -244,18 +253,24 @@ class NeuronMixin:
 
         # ------ Fast exact-content path ------
         if content_exact is not None:
-            row = await d.fetch_one(
-                f"SELECT * FROM neurons WHERE brain_id = {d.ph(1)} AND content = {d.ph(2)}",
-                (brain_id, content_exact),
-            )
+            exact_sql = f"SELECT * FROM neurons WHERE brain_id = {d.ph(1)} AND content = {d.ph(2)}"
+            exact_params: list[Any] = [brain_id, content_exact]
+            if ephemeral is not None:
+                exact_sql += f" AND ephemeral = {d.ph(len(exact_params) + 1)}"
+                exact_params.append(1 if ephemeral else 0)
+            if created_before is not None:
+                exact_sql += f" AND created_at < {d.ph(len(exact_params) + 1)}"
+                exact_params.append(d.serialize_dt(created_before))
+            row = await d.fetch_one(exact_sql, exact_params)
             if row is None:
                 return []
             if type is not None and row["type"] != type.value:
                 return []
             result = [row_to_neuron(row, d)]
-            # Populate cache
-            type_val = type.value if type is not None else None
-            self._neuron_cache.put(content_exact, type_val, result)
+            # Populate cache (only when the key fully captures the filters)
+            if cacheable:
+                type_val = type.value if type is not None else None
+                self._neuron_cache.put(content_exact, type_val, result, ephemeral)
             return result
 
         # ------ FTS path ------
@@ -343,9 +358,9 @@ class NeuronMixin:
 
         # Populate cache for exact-match queries (unreachable here but kept
         # for safety if the flow is refactored later)
-        if content_exact is not None and content_contains is None and time_range is None:
+        if cacheable:
             type_val = type.value if type is not None else None
-            self._neuron_cache.put(content_exact, type_val, result)
+            self._neuron_cache.put(content_exact, type_val, result, ephemeral)
 
         return result
 

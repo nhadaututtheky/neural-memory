@@ -60,6 +60,42 @@ class TestRecordChange:
         )
         assert seq2 > seq1
 
+    async def test_record_change_returns_actual_inserted_id(
+        self, storage_with_brain: SQLiteStorage
+    ) -> None:
+        """Regression #57: returned id is the row just inserted, not MAX(id).
+
+        Interleave inserts for different entities so a stale MAX(id) filtered
+        by entity would diverge from the true sequence. Each returned id must
+        match the id of its own change row as read back from the log.
+        """
+        seqs: list[int] = []
+        specs = [
+            ("neuron", "n-a", "insert"),
+            ("synapse", "s-a", "insert"),
+            ("neuron", "n-a", "update"),  # same entity again
+            ("fiber", "f-a", "insert"),
+            ("neuron", "n-a", "delete"),  # same entity a third time
+        ]
+        for etype, eid, op in specs:
+            seqs.append(
+                await storage_with_brain.record_change(
+                    entity_type=etype, entity_id=eid, operation=op
+                )
+            )
+
+        # Strictly increasing, all distinct.
+        assert seqs == sorted(seqs)
+        assert len(set(seqs)) == len(seqs)
+
+        # The returned id for the LAST n-a change must equal the id of the
+        # delete row, not the id of the most-recent change for any entity.
+        all_changes = await storage_with_brain.get_changes_since(0)
+        by_id = {c.id: c for c in all_changes}
+        last_na_id = seqs[-1]
+        assert by_id[last_na_id].entity_id == "n-a"
+        assert by_id[last_na_id].operation == "delete"
+
 
 class TestGetChangesSince:
     """Test get_changes_since returns changes in order after a given sequence."""

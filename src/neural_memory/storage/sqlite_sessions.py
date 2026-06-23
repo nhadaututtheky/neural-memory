@@ -117,7 +117,9 @@ class SQLiteSessionsMixin:
                 "session_id": row[0],
                 "topics": json.loads(row[1]),
                 "topic_weights": json.loads(row[2]),
-                "top_entities": json.loads(row[3]),
+                # JSON has no tuple type — coerce 2-element arrays back to the
+                # (entity, count) tuples the contract (and consumers) expect.
+                "top_entities": [tuple(e) for e in json.loads(row[3])],
                 "query_count": row[4],
                 "avg_confidence": row[5],
                 "avg_depth": row[6],

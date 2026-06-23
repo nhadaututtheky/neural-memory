@@ -252,10 +252,13 @@ class SQLiteMerkleMixin:
             return []
         hex_prefix = parts[1].lower()
 
-        # Filter by entity_id[:2] matching hex_prefix
-        # Use LOWER(SUBSTR(...)) for case-insensitive matching
+        # Filter by entity_id[:2] matching hex_prefix.
+        # build_tree pads sub-2-char ids with '0' (e.g. 'a' -> 'a0'), so pad in
+        # SQL the same way (SUBSTR(id || '00', 1, 2)) — otherwise a 1-char id is
+        # silently omitted from its bucket (audit #58).
         cursor = await conn.execute(
-            f"SELECT id FROM {table} WHERE brain_id = ? AND LOWER(SUBSTR(id, 1, 2)) = ?",
+            f"SELECT id FROM {table} WHERE brain_id = ? "
+            "AND LOWER(SUBSTR(id || '00', 1, 2)) = ?",
             (brain_id, hex_prefix),
         )
         rows = await cursor.fetchall()

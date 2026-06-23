@@ -360,6 +360,19 @@ class PostgresDialect(Dialect):
         except (ValueError, IndexError):
             return 0
 
+    async def insert_returning_id(self, sql: str, params: Sequence[Any] = ()) -> int:
+        conn = self._get_conn_or_none()
+        if conn is not None:
+            row = await conn.fetchrow(sql, *params)
+        else:
+            pool = self._ensure_pool()
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(sql, *params)
+        if row is None:
+            return 0
+        value = row[0]
+        return int(value) if value is not None else 0
+
     # ------------------------------------------------------------------
     # Placeholder generation
     # ------------------------------------------------------------------

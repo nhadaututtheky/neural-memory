@@ -232,10 +232,14 @@ class MerkleMixin:
             return []
         hex_prefix = parts[1].lower()
 
-        # Filter by entity_id[:2] matching hex_prefix
-        # Use LOWER(SUBSTR(...)) for case-insensitive matching
+        # Filter by entity_id[:2] matching hex_prefix.
+        # MerkleTreeBuilder.build_tree pads sub-2-char ids with '0' (e.g. 'a' ->
+        # 'a0'), so we must pad in SQL the same way: SUBSTR(id || '00', 1, 2).
+        # Without the pad, a 1-char id 'a' yields SUBSTR='a' (len 1) and never
+        # equals the builder's 'a0' bucket — silently omitting it.
         rows = await d.fetch_all(
-            f"SELECT id FROM {table} WHERE brain_id = {d.ph(1)} AND LOWER(SUBSTR(id, 1, 2)) = {d.ph(2)}",
+            f"SELECT id FROM {table} WHERE brain_id = {d.ph(1)} "
+            f"AND LOWER(SUBSTR(id || '00', 1, 2)) = {d.ph(2)}",
             [brain_id, hex_prefix],
         )
         return sorted(str(r["id"]) for r in rows)

@@ -103,16 +103,29 @@ class Dialect(ABC):
         """Execute a write query and return the number of affected rows."""
         ...
 
+    @abstractmethod
     async def execute_returning_count(self, sql: str, params: Sequence[Any] = ()) -> int:
         """Execute a write query that returns a row-count expression and return the count.
 
         Used for INSERT...SELECT statements that use expressions like
         ``SELECT changes()`` (SQLite) or ``SELECT COUNT(*)`` to get the number
         of rows affected by the preceding DML statement.
+
+        Must be implemented per dialect — there is no portable default. A base
+        implementation that returned a fake ``0`` silently reported bulk
+        INSERT...SELECT statements as no-ops on any non-overriding dialect.
         """
-        await self.execute(sql, params)
-        row = await self.fetch_one("SELECT 0 as cnt", ())
-        return row.get("cnt", 0) if row else 0
+        ...
+
+    @abstractmethod
+    async def insert_returning_id(self, sql: str, params: Sequence[Any] = ()) -> int:
+        """Execute an ``INSERT ... RETURNING id`` and return the new row id.
+
+        Replaces the ``SELECT MAX(id)`` round-trip pattern, which races under
+        concurrency and can return a different row's id than the one just
+        inserted. ``sql`` MUST already include a ``RETURNING id`` clause.
+        """
+        ...
 
     # ------------------------------------------------------------------
     # Exception classification

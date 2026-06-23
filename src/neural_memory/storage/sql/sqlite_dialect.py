@@ -140,6 +140,15 @@ class SQLiteDialect(Dialect):
         row = await cursor.fetchone()
         return row[0] if row else 0
 
+    async def insert_returning_id(self, sql: str, params: Sequence[Any] = ()) -> int:
+        conn = self._ensure_conn()
+        async with conn.execute(sql, tuple(params)) as cursor:
+            row = await cursor.fetchone()
+            inserted_id = int(row[0]) if row and row[0] is not None else 0
+        if not self._in_transaction:
+            await conn.commit()
+        return inserted_id
+
     # ------------------------------------------------------------------
     # Placeholder generation
     # ------------------------------------------------------------------

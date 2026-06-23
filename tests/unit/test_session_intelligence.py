@@ -468,7 +468,11 @@ class TestSQLiteSessionSummaries:
         assert s["session_id"] == "sess-1"
         assert s["topics"] == ["auth", "database"]
         assert s["topic_weights"] == {"auth": 0.9, "database": 0.5}
-        assert s["top_entities"] == [["User", 3], ["Session", 1]]
+        # top_entities round-trips back to (entity, count) tuples (audit #74):
+        # JSON serializes tuples as arrays, but the read coerces them back so
+        # consumers relying on tuple semantics (==, hashing) stay correct.
+        assert s["top_entities"] == [("User", 3), ("Session", 1)]
+        assert all(isinstance(e, tuple) for e in s["top_entities"])
         assert s["query_count"] == 5
         assert s["avg_confidence"] == pytest.approx(0.85)
         assert s["avg_depth"] == pytest.approx(1.5)

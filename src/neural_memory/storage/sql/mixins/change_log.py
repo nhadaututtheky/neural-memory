@@ -54,10 +54,15 @@ class ChangeLogMixin:
         brain_id = self._get_brain_id()
         now = d.serialize_dt(utcnow())
 
-        await d.execute(
+        # Use INSERT ... RETURNING id (SQLite 3.35+ / Postgres) to read back the
+        # exact id of the row just inserted. The previous SELECT MAX(id) filtered
+        # by entity returned a stale/other row's id once multiple changes existed
+        # for the same entity, corrupting sequence tracking under concurrency.
+        return await d.insert_returning_id(
             f"""INSERT INTO change_log
                (brain_id, entity_type, entity_id, operation, device_id, changed_at, payload, synced)
-               VALUES ({d.phs(8)})""",
+               VALUES ({d.phs(8)})
+               RETURNING id""",
             [
                 brain_id,
                 entity_type,
@@ -69,14 +74,6 @@ class ChangeLogMixin:
                 0,
             ],
         )
-        # Get the inserted id using a portable query
-        row = await d.fetch_one(
-            f"""SELECT MAX(id) as id FROM change_log
-               WHERE brain_id = {d.ph(1)} AND entity_type = {d.ph(2)}
-                 AND entity_id = {d.ph(3)}""",
-            [brain_id, entity_type, entity_id],
-        )
-        return int(row.get("id", 0)) if row else 0
 
     async def get_changes_since(self, sequence: int = 0, limit: int = 1000) -> list[ChangeEntry]:
         """Get changes after a given sequence number, ordered by id ASC."""

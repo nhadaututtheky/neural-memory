@@ -198,6 +198,45 @@ class TestFindTransitiveClosures:
         result = await find_transitive_closures(store)
         assert result == []
 
+    async def _build_chain(self, store: InMemoryStorage, ids: list[str]) -> None:
+        from itertools import pairwise
+
+        for nid in ids:
+            await store.add_neuron(
+                Neuron.create(type=NeuronType.CONCEPT, content=nid, neuron_id=nid)
+            )
+        for src, dst in pairwise(ids):
+            await store.add_synapse(
+                Synapse.create(
+                    source_id=src, target_id=dst, type=SynapseType.CAUSED_BY, weight=0.9
+                )
+            )
+
+    async def test_max_depth_2_default_only_two_hops(self, store: InMemoryStorage) -> None:
+        """Regression #81: default max_depth=2 infers only A->C, never A->D."""
+        await self._build_chain(store, ["n-a", "n-b", "n-c", "n-d"])
+        result = await find_transitive_closures(store, max_depth=2)
+        pairs = {(s.source_id, s.target_id) for s in result}
+        # A->C and B->D are the only depth-2 closures; A->D requires depth 3.
+        assert ("n-a", "n-c") in pairs
+        assert ("n-b", "n-d") in pairs
+        assert ("n-a", "n-d") not in pairs
+
+    async def test_max_depth_3_infers_longer_chain(self, store: InMemoryStorage) -> None:
+        """Regression #81: max_depth=3 must honor the param and infer A->D."""
+        await self._build_chain(store, ["n-a", "n-b", "n-c", "n-d"])
+        result = await find_transitive_closures(store, max_depth=3)
+        pairs = {(s.source_id, s.target_id) for s in result}
+        assert ("n-a", "n-d") in pairs
+        a_to_d = next(s for s in result if (s.source_id, s.target_id) == ("n-a", "n-d"))
+        assert a_to_d.metadata["_chain"] == ["n-a", "n-b", "n-c", "n-d"]
+        assert a_to_d.metadata["_enriched"] is True
+
+    async def test_max_depth_below_two_returns_empty(self, store: InMemoryStorage) -> None:
+        """max_depth < 2 cannot form a transitive hop."""
+        await self._build_chain(store, ["n-a", "n-b", "n-c"])
+        assert await find_transitive_closures(store, max_depth=1) == []
+
 
 # ── Cross-Cluster Link Tests ─────────────────────────────────────
 

@@ -44,17 +44,22 @@ async def find_transitive_closures(
 ) -> list[Synapse]:
     """Find transitive closure opportunities in CAUSED_BY chains.
 
-    For each A→B→C chain where no A→C exists, create a new
-    CAUSED_BY synapse with weight = 0.5 * min(w_AB, w_BC).
+    For each chain A→…→X of length 2..``max_depth`` where no direct A→X edge
+    exists, create a new CAUSED_BY synapse with weight = 0.5 * min(edge weights
+    along the chain). Higher ``max_depth`` infers longer reaches
+    (e.g. ``max_depth=3`` yields A→D for an A→B→C→D chain).
 
     Args:
         storage: Storage backend
-        max_depth: Maximum chain depth to traverse (default: 2 = A→B→C)
+        max_depth: Maximum chain depth to traverse (default: 2 = A→B→C; >=2)
         max_synapses: Maximum new synapses to create
 
     Returns:
         List of new Synapse objects (not yet persisted)
     """
+    if max_depth < 2:
+        return []
+
     causal_synapses = await storage.get_synapses(type=SynapseType.CAUSED_BY)
     if not causal_synapses:
         return []
@@ -71,31 +76,45 @@ async def find_transitive_closures(
 
     new_synapses: list[Synapse] = []
 
-    # Find A→B→C chains (depth=2)
-    for a_id, a_targets in adjacency.items():
+    # Depth-bounded DFS from each origin A. Track the visited path to avoid
+    # cycles, the running min-weight, and the node sequence for provenance.
+    for a_id in list(adjacency.keys()):
         if len(new_synapses) >= max_synapses:
             break
-        for b_id, w_ab in a_targets:
+
+        # Stack holds (current_node, path_nodes, path_set, min_weight).
+        stack: list[tuple[str, list[str], set[str], float]] = [
+            (a_id, [a_id], {a_id}, float("inf"))
+        ]
+        while stack:
             if len(new_synapses) >= max_synapses:
                 break
-            for c_id, w_bc in adjacency.get(b_id, []):
-                if len(new_synapses) >= max_synapses:
-                    break
-                if a_id == c_id:
-                    continue
-                if (a_id, c_id) in existing_pairs:
-                    continue
-
-                weight = 0.5 * min(w_ab, w_bc)
-                synapse = Synapse.create(
-                    source_id=a_id,
-                    target_id=c_id,
-                    type=SynapseType.CAUSED_BY,
-                    weight=weight,
-                    metadata={"_enriched": True, "_chain": [a_id, b_id, c_id]},
-                )
-                new_synapses.append(synapse)
-                existing_pairs.add((a_id, c_id))
+            node, path, path_set, min_w = stack.pop()
+            # Already at max depth (path has max_depth+1 nodes) — stop expanding.
+            if len(path) > max_depth:
+                continue
+            for next_id, w in adjacency.get(node, []):
+                if next_id in path_set:
+                    continue  # cycle guard
+                new_min = min(min_w, w)
+                new_path = [*path, next_id]
+                # A reachable node beyond a direct hop (depth >= 2) with no
+                # existing A->next edge is a closure candidate.
+                if len(new_path) >= 3 and (a_id, next_id) not in existing_pairs:
+                    weight = 0.5 * new_min
+                    synapse = Synapse.create(
+                        source_id=a_id,
+                        target_id=next_id,
+                        type=SynapseType.CAUSED_BY,
+                        weight=weight,
+                        metadata={"_enriched": True, "_chain": list(new_path)},
+                    )
+                    new_synapses.append(synapse)
+                    existing_pairs.add((a_id, next_id))
+                    if len(new_synapses) >= max_synapses:
+                        break
+                # Continue traversing deeper chains.
+                stack.append((next_id, new_path, path_set | {next_id}, new_min))
 
     return new_synapses
 

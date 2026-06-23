@@ -576,10 +576,12 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
         "DROP TRIGGER IF EXISTS neurons_ad",
         "DROP TRIGGER IF EXISTS neurons_ai",
         "DROP TABLE IF EXISTS neurons_fts",
-        # Rebuild fibers_fts
-        "DROP TRIGGER IF EXISTS fibers_fts_au",
-        "DROP TRIGGER IF EXISTS fibers_fts_ad",
-        "DROP TRIGGER IF EXISTS fibers_fts_ai",
+        # Rebuild fibers_fts. NOTE: the real triggers created by
+        # FIBER_FTS_SETUP_STATEMENTS are named fibers_au/ad/ai (not fibers_fts_*),
+        # so the prior fibers_fts_* names matched nothing and left the triggers live.
+        "DROP TRIGGER IF EXISTS fibers_au",
+        "DROP TRIGGER IF EXISTS fibers_ad",
+        "DROP TRIGGER IF EXISTS fibers_ai",
         "DROP TABLE IF EXISTS fibers_fts",
     ],
     (31, 32): [
