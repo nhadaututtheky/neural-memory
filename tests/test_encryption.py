@@ -129,6 +129,41 @@ class TestMemoryEncryptor:
         encryptor.encrypt("data", "default")
         assert keys_dir.exists()
 
+    @pytest.mark.skipif(os.name == "nt", reason="O_EXCL race path is POSIX-only")
+    def test_first_write_toctou_race_handled(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Regression (#68): if a concurrent process wins the O_EXCL race,
+        encrypt() must read back the existing key instead of raising
+        FileExistsError."""
+        from cryptography.fernet import Fernet
+
+        from neural_memory.safety import encryption as enc_mod
+        from neural_memory.safety.encryption import MemoryEncryptor
+
+        encryptor = MemoryEncryptor(keys_dir=tmp_path)
+        brain_id = "race-brain"
+        key_path = tmp_path / f"{brain_id}.key"
+
+        # Simulate the racing process: a valid key already on disk, and our
+        # O_EXCL open losing the race (FileExistsError) on the first attempt.
+        winner_key = Fernet.generate_key()
+        real_open = os.open
+
+        def fake_open(path: str, flags: int, *args: object) -> int:
+            if str(path) == str(key_path) and (flags & os.O_EXCL):
+                # The winner wrote its key just before our open.
+                key_path.write_bytes(winner_key)
+                raise FileExistsError(17, "File exists", str(path))
+            return real_open(path, flags, *args)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(enc_mod.os, "open", fake_open)
+
+        result = encryptor.encrypt("secret payload", brain_id)
+        # Must succeed and be decryptable with the winner's key (fresh encryptor).
+        fresh = MemoryEncryptor(keys_dir=tmp_path)
+        assert fresh.decrypt(result.ciphertext, brain_id) == "secret payload"
+
 
 class TestEncryptionResult:
     def test_frozen(self) -> None:

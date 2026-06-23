@@ -443,3 +443,60 @@ class TestHybridStorageCreate:
         assert storage._brain_id == "brain-1"
         assert storage._local is not None
         await storage._local.close()
+
+
+class TestHybridStorageIsNeuralStorage:
+    """#30: HybridStorage must be a real NeuralStorage with full surface."""
+
+    def _make_hybrid(self) -> tuple[object, AsyncMock]:
+        from neural_memory.storage.factory import HybridStorage
+
+        local = AsyncMock()
+        remote = AsyncMock()
+        remote.is_connected = False
+        storage = HybridStorage(local=local, remote=remote)
+        storage._brain_id = "brain-1"
+        return storage, local
+
+    def test_is_neural_storage_subclass(self) -> None:
+        from neural_memory.storage.base import NeuralStorage
+        from neural_memory.storage.factory import HybridStorage
+
+        assert issubclass(HybridStorage, NeuralStorage)
+        # No abstract methods left unimplemented → instantiable.
+        assert HybridStorage.__abstractmethods__ == frozenset()
+
+    def test_brain_id_properties(self) -> None:
+        storage, _ = self._make_hybrid()
+        assert storage.brain_id == "brain-1"  # type: ignore[union-attr]
+        assert storage.current_brain_id == "brain-1"  # type: ignore[union-attr]
+
+    @pytest.mark.asyncio
+    async def test_extended_method_delegates_to_local(self) -> None:
+        # An ExtendedStorage method NOT explicitly overridden on HybridStorage
+        # (e.g. add_typed_memory) must delegate to the local backend via
+        # __getattr__ rather than raising AttributeError.
+        storage, local = self._make_hybrid()
+        local.add_typed_memory = AsyncMock(return_value="tm-1")
+
+        tm = MagicMock()
+        result = await storage.add_typed_memory(tm)  # type: ignore[union-attr]
+
+        assert result == "tm-1"
+        local.add_typed_memory.assert_awaited_once_with(tm)
+
+    @pytest.mark.asyncio
+    async def test_batch_method_delegates_to_local(self) -> None:
+        storage, local = self._make_hybrid()
+        local.get_neurons_batch = AsyncMock(return_value={"n1": MagicMock()})
+
+        result = await storage.get_neurons_batch(["n1"])  # type: ignore[union-attr]
+
+        assert "n1" in result
+        local.get_neurons_batch.assert_awaited_once_with(["n1"])
+
+    def test_private_attr_not_delegated(self) -> None:
+        # __getattr__ must not mask private/dunder lookups.
+        storage, _ = self._make_hybrid()
+        with pytest.raises(AttributeError):
+            _ = storage._nonexistent_private  # type: ignore[union-attr]

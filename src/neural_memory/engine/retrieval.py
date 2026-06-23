@@ -1061,7 +1061,7 @@ class ReflexPipeline:
         # Calibration + retriever outcomes + depth prior (all background DB writes)
         _ranked_lists_snapshot = ranked_lists if (ranked_lists and fibers_matched) else None
         _result_fiber_anchor_ids: set[str] = (
-            {next(iter(f.neuron_ids)) for f in fibers_matched if f.neuron_ids}
+            {f.anchor_neuron_id for f in fibers_matched if f.anchor_neuron_id}
             if _ranked_lists_snapshot
             else set()
         )
@@ -2429,6 +2429,10 @@ class ReflexPipeline:
 
         # Shared visited set across all supersession edges (H2 fix)
         chain_visited: set[str] = set()
+        # Memoize latest_id → resolved ultimate_latest so a converging second edge
+        # can reuse the resolved chain WITHOUT re-walking, yet still demote its own
+        # distinct outdated neuron (#33).
+        latest_to_ultimate: dict[str, str] = {}
 
         for source_id, synapses in active_synapses.items():
             supersession_synapses = [s for s in synapses if s.type in SUPERSESSION_TYPES]
@@ -2450,67 +2454,87 @@ class ReflexPipeline:
                     outdated_id = source_id
                     latest_id = syn.target_id
 
-                # Follow chain from latest to find the ULTIMATE latest (max depth 5)
-                chain_depth = 0
-                current = latest_id
-                if current in chain_visited:
-                    continue
-                local_visited: set[str] = {outdated_id, current}
+                # Resolve the ULTIMATE latest. If we have already walked a chain
+                # starting at this latest_id (converging edge), reuse the memoized
+                # result and skip the expensive walk + re-boost — but STILL demote
+                # this edge's distinct outdated neuron below (#33).
+                already_resolved = latest_id in latest_to_ultimate or latest_id in chain_visited
+                if latest_id in latest_to_ultimate:
+                    ultimate_latest = latest_to_ultimate[latest_id]
+                else:
+                    # Follow chain from latest to find the ULTIMATE latest (max depth 5)
+                    chain_depth = 0
+                    current = latest_id
+                    local_visited: set[str] = {outdated_id, current}
 
-                while chain_depth < 5:
-                    chain_depth += 1
-                    next_syns = _get_outgoing_supersession(current)
-                    next_hop = None
-                    for ns in next_syns:
-                        candidate = ns.target_id
-                        if ns.type in SUPERSESSION_SOURCE_IS_NEWER:
-                            # source=current is newer, target is older — wrong direction
-                            continue
-                        # RESOLVED_BY direction: target is newer
-                        if candidate not in local_visited:
-                            next_hop = candidate
-                            break
-
-                    # Also check: is current pointed TO by a SUPERSEDES?
-                    if next_hop is None:
-                        # Check if any node SUPERSEDES current (making current outdated)
+                    while chain_depth < 5:
+                        chain_depth += 1
+                        next_syns = _get_outgoing_supersession(current)
+                        next_hop = None
                         for ns in next_syns:
+                            candidate = ns.target_id
                             if ns.type in SUPERSESSION_SOURCE_IS_NEWER:
-                                # current SUPERSEDES ns.target → current IS the newer
+                                # source=current is newer, target is older — wrong direction
                                 continue
-                        break  # current is the ultimate latest
+                            # RESOLVED_BY direction: target is newer
+                            if candidate not in local_visited:
+                                next_hop = candidate
+                                break
 
-                    if next_hop in local_visited:
-                        break  # cycle detected
-                    local_visited.add(next_hop)
+                        # No outgoing hop: check whether a NEWER node SUPERSEDES
+                        # `current` (i.e. an incoming SUPERSEDES/EVOLVES_FROM edge
+                        # whose source is the newer version). If so, current is not
+                        # actually the latest — walk to that newer source (#77).
+                        if next_hop is None:
+                            incoming = await self._storage.get_synapses(target_id=current)
+                            for ns in incoming:
+                                if ns.type not in SUPERSESSION_SOURCE_IS_NEWER:
+                                    continue
+                                # ns.source SUPERSEDES current → ns.source is newer
+                                if ns.source_id not in local_visited:
+                                    next_hop = ns.source_id
+                                    break
+                            if next_hop is None:
+                                break  # current is the ultimate latest
 
-                    # Prefetch if not cached
-                    if next_hop not in synapses_by_source and next_hop not in chain_synapses_cache:
-                        hop_syns = await self._storage.get_synapses(source_id=next_hop)
-                        chain_synapses_cache[next_hop] = hop_syns
+                        if next_hop in local_visited:
+                            break  # cycle detected
+                        local_visited.add(next_hop)
 
-                    current = next_hop
+                        # Prefetch if not cached
+                        if (
+                            next_hop not in synapses_by_source
+                            and next_hop not in chain_synapses_cache
+                        ):
+                            hop_syns = await self._storage.get_synapses(source_id=next_hop)
+                            chain_synapses_cache[next_hop] = hop_syns
 
-                ultimate_latest = current
-                chain_visited.update(local_visited)
+                        current = next_hop
 
-                # Boost the latest version
-                base_score = source_activation.activation_level
-                boosted_score = min(base_score * 1.2, 1.0)
+                    ultimate_latest = current
+                    chain_visited.update(local_visited)
+                    latest_to_ultimate[latest_id] = ultimate_latest
 
-                if (
-                    ultimate_latest not in result
-                    or result[ultimate_latest].activation_level < boosted_score
-                ):
-                    result[ultimate_latest] = ActivationResult(
-                        neuron_id=ultimate_latest,
-                        activation_level=boosted_score,
-                        hop_distance=source_activation.hop_distance,
-                        path=[*source_activation.path, ultimate_latest],
-                        source_anchor=source_activation.source_anchor,
-                    )
+                # Boost the latest version (only on first resolution of this chain;
+                # converging edges have already boosted it).
+                if not already_resolved:
+                    base_score = source_activation.activation_level
+                    boosted_score = min(base_score * 1.2, 1.0)
 
-                # Demote the outdated version to ghost level
+                    if (
+                        ultimate_latest not in result
+                        or result[ultimate_latest].activation_level < boosted_score
+                    ):
+                        result[ultimate_latest] = ActivationResult(
+                            neuron_id=ultimate_latest,
+                            activation_level=boosted_score,
+                            hop_distance=source_activation.hop_distance,
+                            path=[*source_activation.path, ultimate_latest],
+                            source_anchor=source_activation.source_anchor,
+                        )
+
+                # Demote the outdated version to ghost level (per-edge, always — even
+                # for converging edges whose latest was already resolved) (#33).
                 outdated_activation = result.get(outdated_id)
                 if outdated_activation is not None:
                     ghost_level = outdated_activation.activation_level * 0.1
@@ -2893,22 +2917,25 @@ class ReflexPipeline:
                 for neurons in all_results[len(entity_tasks) :]:
                     keyword_anchors.extend(n.id for n in neurons)
 
-            if entity_anchors:
-                anchor_sets.append(entity_anchors)
-                ranked_lists.append(
-                    [
-                        RankedAnchor(neuron_id=nid, rank=i + 1, retriever="entity")
-                        for i, nid in enumerate(entity_anchors)
-                    ]
-                )
-            if keyword_anchors:
-                anchor_sets.append(keyword_anchors)
-                ranked_lists.append(
-                    [
-                        RankedAnchor(neuron_id=nid, rank=i + 1, retriever="keyword")
-                        for i, nid in enumerate(keyword_anchors)
-                    ]
-                )
+        # Append entity/keyword anchors after BOTH paths (batch + standard).
+        # Previously these blocks were nested inside the standard `else`, so the
+        # InfinityDB batch path silently dropped its entity/keyword anchors (#11).
+        if entity_anchors:
+            anchor_sets.append(entity_anchors)
+            ranked_lists.append(
+                [
+                    RankedAnchor(neuron_id=nid, rank=i + 1, retriever="entity")
+                    for i, nid in enumerate(entity_anchors)
+                ]
+            )
+        if keyword_anchors:
+            anchor_sets.append(keyword_anchors)
+            ranked_lists.append(
+                [
+                    RankedAnchor(neuron_id=nid, rank=i + 1, retriever="keyword")
+                    for i, nid in enumerate(keyword_anchors)
+                ]
+            )
 
         # 3.5 FUZZY SEARCH — typo tolerance when keyword results are sparse
         if self._config.fuzzy_search_enabled and len(keyword_anchors) < 2:

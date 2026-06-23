@@ -43,7 +43,7 @@ class ConfidenceScore:
     fidelity: float
     freshness: float
     familiarity_penalty: float
-    components: dict[str, float] = field(default_factory=dict)
+    components: dict[str, float | str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -114,12 +114,16 @@ def compute_confidence(
     )
     overall = min(1.0, max(0.0, overall))
 
-    # Collect all components
-    components: dict[str, float] = {
+    # Collect all components. 'fidelity_layer' holds the layer NAME (string);
+    # the mapped numeric score lives under 'fidelity_score'. Previously the
+    # numeric value was stored under 'fidelity_layer', so consumers expecting
+    # the label got a float and the name was dropped.
+    components: dict[str, float | str] = {
         "retrieval_score": round(retrieval_score, 4),
         "sufficiency_confidence": round(sufficiency_confidence, 4),
         "quality_score": round(quality_score, 2),
-        "fidelity_layer": fidelity,
+        "fidelity_layer": fidelity_layer,
+        "fidelity_score": round(fidelity, 4),
         "age_days": round((now - created_at).total_seconds() / 86400.0, 1) if created_at else -1,
         "is_familiarity_fallback": 1.0 if is_familiarity_fallback else 0.0,
     }

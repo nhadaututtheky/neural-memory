@@ -420,3 +420,42 @@ async def test_invalidation_called_on_entity_write() -> None:
     # Verify the correct bucket prefix is targeted
     params = conn.execute.call_args[0][1]
     assert "neurons/0a" in params  # bucket prefix for entity_id[:2] = "0a"
+
+
+# ---------------------------------------------------------------------------
+# #58 regression: short-id bucket padding (builder/reader parity)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_bucket_entity_ids_short_id_padded(tmp_path) -> None:
+    """Regression #58: a 1-char id 'a' is filed by the builder under bucket
+    'a0' (ljust pad); the SQL reader must pad identically (SUBSTR(id||'00'))
+    so the id is NOT silently omitted from its bucket list."""
+    from neural_memory.core.brain import Brain, BrainConfig
+    from neural_memory.core.neuron import Neuron, NeuronType
+    from neural_memory.storage.sqlite_store import SQLiteStorage
+
+    storage = SQLiteStorage(tmp_path / "merkle_shortid.db")
+    await storage.initialize()
+    try:
+        brain = Brain.create(name="merkle-shortid", config=BrainConfig())
+        await storage.save_brain(brain)
+        storage.set_brain(brain.id)
+
+        # 1-char id 'a' -> builder bucket 'a0'. 2-char id 'ab' -> bucket 'ab'.
+        await storage.add_neuron(
+            Neuron.create(type=NeuronType.CONCEPT, content="short", neuron_id="a")
+        )
+        await storage.add_neuron(
+            Neuron.create(type=NeuronType.CONCEPT, content="long", neuron_id="ab-xyz")
+        )
+
+        a0_bucket = await storage.get_bucket_entity_ids("neuron", "neurons/a0", is_pro=True)
+        assert "a" in a0_bucket  # would be missing without the SQL pad fix
+
+        ab_bucket = await storage.get_bucket_entity_ids("neuron", "neurons/ab", is_pro=True)
+        assert "ab-xyz" in ab_bucket
+        assert "a" not in ab_bucket  # short id must not leak into the 'ab' bucket
+    finally:
+        await storage.close()

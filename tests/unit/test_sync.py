@@ -212,6 +212,30 @@ class TestSyncManager:
         await manager.disconnect("client-1")
 
     @pytest.mark.asyncio
+    async def test_event_history_buckets_bounded(self) -> None:
+        """#71: distinct brain_id event-history buckets must be LRU-capped."""
+        import neural_memory.server.routes.sync as sync_mod
+
+        manager = SyncManager.instance()
+        original_cap = sync_mod._MAX_HISTORY_BUCKETS
+        sync_mod._MAX_HISTORY_BUCKETS = 5
+        try:
+            for i in range(50):
+                event = SyncEvent(
+                    type=SyncEventType.NEURON_CREATED,
+                    brain_id=f"brain-{i}",
+                    data={"index": i},
+                )
+                await manager.broadcast(event)
+            # Must never exceed the cap regardless of distinct brain_ids pushed.
+            assert len(manager._event_history) <= 5
+            # The most-recently-used bucket survives; the oldest is evicted.
+            assert "brain-49" in manager._event_history
+            assert "brain-0" not in manager._event_history
+        finally:
+            sync_mod._MAX_HISTORY_BUCKETS = original_cap
+
+    @pytest.mark.asyncio
     async def test_get_stats(self) -> None:
         """Test getting stats."""
 

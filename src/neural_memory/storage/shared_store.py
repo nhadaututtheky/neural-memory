@@ -211,6 +211,13 @@ class SharedStorage(SharedFiberBrainMixin, NeuralStorage):
         if time_range:
             params["time_start"] = time_range[0].isoformat()
             params["time_end"] = time_range[1].isoformat()
+        # Forward the ephemeral / created_before filters so a SHARED brain
+        # honors them instead of failing open (leaking ephemeral scratch or
+        # returning future-dated neurons) — closes #29.
+        if ephemeral is not None:
+            params["ephemeral"] = ephemeral
+        if created_before is not None:
+            params["created_before"] = created_before.isoformat()
 
         result = await self._request("GET", "/memory/neurons", params=params)
         return [dict_to_neuron(n) for n in result.get("neurons", [])]

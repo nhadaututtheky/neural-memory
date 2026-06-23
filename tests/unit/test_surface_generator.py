@@ -235,6 +235,40 @@ async def test_skips_temporal_synapse_types():
     assert len(surface.graph[0].edges) == 0
 
 
+async def test_forward_edge_reference_resolves_to_surface_id():
+    """Regression (#40): an edge to a lower-scored (later-iterated) target
+    must still carry a target_id backref, not degrade to text-only."""
+    now = _now()
+    # n1 is higher-scored (iterated first) and points forward to n2.
+    n1 = _neuron_with_id("n1", content="High score source", created_at=now)
+    n2 = _neuron_with_id("n2", content="Low score target", created_at=now)
+
+    syn = _make_synapse(source_id="n1", target_id="n2", stype=SynapseType.RELATED_TO)
+
+    states = {
+        "n1": FakeNeuronState(neuron_id="n1", activation_level=0.95),
+        "n2": FakeNeuronState(neuron_id="n2", activation_level=0.10),
+    }
+
+    storage = _make_storage(
+        neurons=[n1, n2],
+        states=states,
+        synapses_out={"n1": [syn], "n2": []},
+        target_neurons={"n2": n2},
+    )
+
+    gen = SurfaceGenerator(storage, max_graph_nodes=10)
+    surface = await gen.generate()
+
+    n1_entry = next((e for e in surface.graph if "source" in e.node.content), None)
+    n2_entry = next((e for e in surface.graph if "target" in e.node.content), None)
+    assert n1_entry is not None
+    assert n2_entry is not None
+    assert len(n1_entry.edges) >= 1
+    # Forward reference must resolve to the assigned surface node id of n2.
+    assert n1_entry.edges[0].target_id == n2_entry.node.id
+
+
 # ── Tests: CLUSTERS ────────────────────────────────
 
 
@@ -269,6 +303,17 @@ async def test_clusters_from_fiber_cooccurrence():
 
     # Should have at least 1 cluster with both neurons
     assert len(surface.clusters) >= 1
+
+    # Regression (#41): cluster node_ids must be SHORT surface ids (e.g. 'c1'),
+    # mapped from the graph pass — never raw neuron UUIDs.
+    graph_ids = {e.node.id for e in surface.graph}
+    for cluster in surface.clusters:
+        assert cluster.node_ids, "cluster must reference at least one surface node"
+        for nid in cluster.node_ids:
+            assert nid in graph_ids, f"cluster ref {nid!r} is not a surface node id"
+            # Raw neuron ids in this test are 'n1'/'n2'; surface ids are
+            # type-prefixed counters and must differ from the raw UUIDs.
+            assert nid not in {"n1", "n2"}
 
 
 # ── Tests: SIGNALS ─────────────────────────────────

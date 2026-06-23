@@ -85,10 +85,36 @@ def brain_id() -> str:
     return f"test_{uuid.uuid4().hex[:12]}"
 
 
+async def _reset_public_schema() -> None:
+    """Drop + recreate the ``public`` schema for a clean per-test baseline.
+
+    The native backend (``PostgreSQLStorage.ensure_schema``) and the unified
+    dialect backend (``SQLStorage(PostgresDialect)``) share this database but
+    define *physically different* tables (e.g. the dialect ``fibers`` has no
+    ``conductivity`` column, so the native ``idx_fibers_conductivity`` DDL
+    fails). Resetting here makes native tests robust against pollution left by
+    sibling dialect-path tests run earlier in the session.
+    """
+    import asyncpg
+
+    conn = await asyncpg.connect(
+        host=POSTGRES_HOST,
+        port=POSTGRES_PORT,
+        database=POSTGRES_DB,
+        user=POSTGRES_USER,
+        password=POSTGRES_PASSWORD or None,
+    )
+    try:
+        await conn.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+    finally:
+        await conn.close()
+
+
 @pytest_asyncio.fixture
 async def storage(brain_id: str) -> Any:
     """PostgreSQL storage with a clean test brain."""
     deps = _import_deps()
+    await _reset_public_schema()
     store = deps["PostgreSQLStorage"](
         host=POSTGRES_HOST,
         port=POSTGRES_PORT,

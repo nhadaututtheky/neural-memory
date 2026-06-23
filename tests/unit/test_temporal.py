@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 
 import pytest
 
-from neural_memory.extraction.temporal import TemporalExtractor, TimeGranularity, TimeHint
+from neural_memory.extraction.temporal import (
+    TemporalExtractor,
+    TimeGranularity,
+    TimeHint,
+    _resolve_vi_hour,
+)
+
+_VI_HOUR_RE = re.compile(r"(\d{1,2})\s*(?:giờ|h|g)(?:\s*(sáng|chiều|tối))?")
 
 
 class TestTemporalExtractor:
@@ -52,6 +60,38 @@ class TestTemporalExtractor:
         hint = hints[0]
         assert hint.absolute_start.hour >= 12
         assert hint.absolute_end.hour <= 18
+
+    # #67 regression: Vietnamese hour==12 period disambiguation
+
+    def test_vi_12_gio_toi_is_midnight(
+        self, extractor: TemporalExtractor, ref_time: datetime
+    ) -> None:
+        """'12 giờ tối' is midnight (00:xx), not noon."""
+        m = _VI_HOUR_RE.search("12 giờ tối")
+        assert m is not None
+        start, end = _resolve_vi_hour(ref_time, m)
+        midpoint = start + (end - start) / 2
+        assert midpoint.hour == 0  # midnight, not 12 (noon)
+
+    def test_vi_12_gio_sang_is_midnight(
+        self, extractor: TemporalExtractor, ref_time: datetime
+    ) -> None:
+        """'12 giờ sáng' is midnight (00:xx)."""
+        m = _VI_HOUR_RE.search("12 giờ sáng")
+        assert m is not None
+        start, end = _resolve_vi_hour(ref_time, m)
+        midpoint = start + (end - start) / 2
+        assert midpoint.hour == 0
+
+    def test_vi_3_gio_chieu_is_afternoon(
+        self, extractor: TemporalExtractor, ref_time: datetime
+    ) -> None:
+        """'3 giờ chiều' → 15:00 (afternoon promotion still works)."""
+        m = _VI_HOUR_RE.search("3 giờ chiều")
+        assert m is not None
+        start, end = _resolve_vi_hour(ref_time, m)
+        midpoint = start + (end - start) / 2
+        assert midpoint.hour == 15
 
     def test_vi_tuan_truoc(self, extractor: TemporalExtractor, ref_time: datetime) -> None:
         """Test Vietnamese 'tuần trước' (last week)."""

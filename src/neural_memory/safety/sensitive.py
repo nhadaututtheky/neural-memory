@@ -189,6 +189,27 @@ def _get_compiled(pattern_str: str) -> re.Pattern[str]:
     return compiled
 
 
+def _passes_luhn(digits: str) -> bool:
+    """Return True if the digit string passes the Luhn checksum.
+
+    Real credit-card numbers satisfy Luhn; arbitrary long numeric IDs
+    (order/tracking numbers) that merely share a card prefix usually do not,
+    so this gate cuts down over-broad CREDIT_CARD redaction.
+    """
+    nums = [int(c) for c in digits if c.isdigit()]
+    if len(nums) < 13:
+        return False
+    total = 0
+    # Double every second digit from the right.
+    for i, n in enumerate(reversed(nums)):
+        if i % 2 == 1:
+            n *= 2
+            if n > 9:
+                n -= 9
+        total += n
+    return total % 10 == 0
+
+
 def check_sensitive_content(
     content: str,
     patterns: tuple[SensitivePattern, ...] | list[SensitivePattern] | None = None,
@@ -220,6 +241,10 @@ def check_sensitive_content(
         try:
             regex = _get_compiled(pattern.pattern)
             for match in regex.finditer(content):
+                # Gate credit-card matches on a Luhn checksum to avoid flagging
+                # arbitrary long numeric IDs that merely match a card prefix.
+                if pattern.type == SensitiveType.CREDIT_CARD and not _passes_luhn(match.group(0)):
+                    continue
                 matches.append(
                     SensitiveMatch(
                         pattern_name=pattern.name,

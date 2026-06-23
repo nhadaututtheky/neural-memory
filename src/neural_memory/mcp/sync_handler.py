@@ -140,9 +140,27 @@ class SyncToolHandler:
                     engine, brain_id, hub_url, args, strategy
                 )
                 if merkle_result is not None:
-                    return merkle_result
-                # Fallback: Merkle failed or unavailable, continue with change-log sync
-                logger.debug("Merkle sync unavailable, falling back to change-log")
+                    # CRITICAL (finding #1): the Merkle path is pull/reconcile —
+                    # it does NOT push local change-log rows to the hub. For
+                    # 'pull' that is correct. For 'full' we MUST also push local
+                    # changes, otherwise new local memories (preserved by the
+                    # delete-gate, but never sent) never reach the hub. So for
+                    # 'full', fall through to the change-log push when there are
+                    # pending local changes; only return early on pure 'pull' or
+                    # when there is nothing left to push.
+                    if action == "pull" or not request.changes:
+                        return merkle_result
+                    logger.debug(
+                        "Merkle pull complete; pushing %d pending local changes",
+                        len(request.changes),
+                    )
+                    # Re-snapshot pending changes (Merkle reconcile may have
+                    # applied remote inserts/updates which are self-originated
+                    # and excluded from the push anyway).
+                    request = await engine.prepare_sync_request(brain_id)
+                else:
+                    # Fallback: Merkle failed or unavailable, continue with change-log sync
+                    logger.debug("Merkle sync unavailable, falling back to change-log")
 
             # Send to hub (change-log sync)
             import aiohttp
@@ -216,7 +234,7 @@ class SyncToolHandler:
                 message=response_data.get("message", ""),
             )
 
-            result = await engine.process_sync_response(sync_response)
+            result = await engine.process_sync_response(sync_response, request)
             sync_result: dict[str, Any] = {
                 "status": "success",
                 "action": action,

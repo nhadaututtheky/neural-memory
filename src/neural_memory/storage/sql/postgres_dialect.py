@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import logging
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
@@ -11,6 +12,16 @@ from typing import Any
 from neural_memory.storage.sql.dialect import Dialect
 
 logger = logging.getLogger(__name__)
+
+# Per-task transaction connection. A ContextVar (not an instance attribute)
+# so concurrent asyncio tasks each see their OWN active transaction
+# connection — two coroutines entering transaction() at once no longer clobber
+# a shared attribute and leak queries across connections (fix for #17).
+# Module-level so it is shared by the dialect's execute()/fetch_*() helpers;
+# ContextVar isolation is per-task, not per-instance.
+_txn_conn_var: contextvars.ContextVar[Any | None] = contextvars.ContextVar(
+    "postgres_dialect_txn_conn", default=None
+)
 
 
 # Idempotent DDL that creates the tsvector columns + GIN indexes used by
@@ -79,6 +90,87 @@ CREATE INDEX IF NOT EXISTS idx_fibers_summary_tsv
 """
 
 
+# Per-table set of columns the dialect mixins bind via ``serialize_dt`` —
+# i.e. real ``datetime`` objects on the PG path — which therefore MUST be
+# ``TIMESTAMPTZ`` rather than the SQLite ``TEXT``. Columns NOT listed here
+# (notably the ``updated_at TEXT DEFAULT ''`` sync strings on
+# neurons/synapses/fibers, and ``cognitive_state.predicted_at`` /
+# ``resolved_at`` / ``last_evidence_at`` which are bound as ISO strings)
+# stay ``TEXT`` so asyncpg's binding remains type-correct.
+_PG_TIMESTAMP_COLUMNS: dict[str, frozenset[str]] = {
+    "brains": frozenset({"created_at", "updated_at"}),
+    "neurons": frozenset({"created_at", "last_accessed_at"}),
+    "neuron_states": frozenset({"last_activated", "refractory_until", "created_at"}),
+    "synapses": frozenset({"last_activated", "created_at"}),
+    "fibers": frozenset(
+        {"last_conducted", "time_start", "time_end", "last_ghost_shown_at", "created_at"}
+    ),
+    "typed_memories": frozenset({"expires_at", "created_at"}),
+    "projects": frozenset({"start_date", "end_date", "created_at"}),
+    "memory_maturations": frozenset({"stage_entered_at"}),
+    "co_activation_events": frozenset({"created_at"}),
+    "action_events": frozenset({"created_at"}),
+    "brain_versions": frozenset({"created_at"}),
+    "sync_states": frozenset({"last_sync_at"}),
+    "alerts": frozenset({"created_at", "seen_at", "acknowledged_at", "resolved_at"}),
+    "review_schedules": frozenset({"next_review", "last_reviewed", "created_at"}),
+    "depth_priors": frozenset({"last_updated", "created_at"}),
+    "compression_backups": frozenset({"compressed_at"}),
+    "neuron_snapshots": frozenset({"compressed_at"}),
+    "change_log": frozenset({"changed_at"}),
+    "devices": frozenset({"last_sync_at", "registered_at"}),
+    "retrieval_calibration": frozenset({"created_at"}),
+    "tool_events": frozenset({"created_at"}),
+    "training_files": frozenset({"trained_at", "created_at"}),
+    # cognitive_state.created_at is serialize_dt; predicted_at/resolved_at/
+    # last_evidence_at are bound as ISO strings → stay TEXT.
+    "cognitive_state": frozenset({"created_at"}),
+    "hot_index": frozenset({"updated_at"}),
+    "knowledge_gaps": frozenset({"detected_at", "resolved_at"}),
+    "sources": frozenset({"effective_date", "expires_at", "created_at", "updated_at"}),
+    "session_summaries": frozenset({"started_at", "ended_at"}),
+    "retriever_calibration": frozenset({"created_at"}),
+    "tag_cooccurrence": frozenset({"last_seen"}),
+    "drift_clusters": frozenset({"created_at", "resolved_at"}),
+    "merkle_hashes": frozenset({"updated_at"}),
+}
+
+
+def _convert_timestamp_columns(ddl: str) -> str:
+    """Rewrite per-table TEXT timestamp columns to TIMESTAMPTZ.
+
+    Operates on each ``CREATE TABLE IF NOT EXISTS <name> ( ... );`` block
+    independently, converting only the columns listed in
+    ``_PG_TIMESTAMP_COLUMNS`` for that table. This avoids mis-converting
+    same-named columns that are bound as ISO strings in other tables.
+    """
+    import re
+
+    def _convert_block(match: re.Match[str]) -> str:
+        table = match.group("table")
+        block = match.group(0)
+        cols = _PG_TIMESTAMP_COLUMNS.get(table)
+        if not cols:
+            return block
+        for col in cols:
+            # Match "<col> TEXT" at a column-definition boundary (preceded
+            # by whitespace, followed by a word boundary) and swap the type.
+            # ``\g<indent>`` preserves the leading newline/indentation.
+            block = re.sub(
+                rf"(?P<indent>\n\s*){re.escape(col)}\s+TEXT\b",
+                rf"\g<indent>{col} TIMESTAMPTZ",
+                block,
+            )
+        return block
+
+    return re.sub(
+        r"CREATE TABLE IF NOT EXISTS (?P<table>\w+)\s*\(.*?\);",
+        _convert_block,
+        ddl,
+        flags=re.DOTALL,
+    )
+
+
 class PostgresDialect(Dialect):
     """PostgreSQL dialect using asyncpg.
 
@@ -127,6 +219,16 @@ class PostgresDialect(Dialect):
     def name(self) -> str:
         return "postgres"
 
+    def is_integrity_error(self, exc: BaseException) -> bool:
+        try:
+            from asyncpg.exceptions import IntegrityConstraintViolationError
+
+            if isinstance(exc, IntegrityConstraintViolationError):
+                return True
+        except ImportError:
+            pass
+        return super().is_integrity_error(exc)
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -169,13 +271,18 @@ class PostgresDialect(Dialect):
         return self._pool
 
     # ------------------------------------------------------------------
-    # Query execution (transaction-aware: uses _txn_conn when inside
-    # a transaction() block, otherwise acquires from pool per call)
+    # Query execution (transaction-aware: uses the per-task transaction
+    # connection ContextVar when inside a transaction() block, otherwise
+    # acquires from pool per call)
     # ------------------------------------------------------------------
 
     def _get_conn_or_none(self) -> Any:
-        """Return the transaction connection if inside a transaction, else None."""
-        return getattr(self, "_txn_conn", None)
+        """Return the transaction connection if inside a transaction, else None.
+
+        Reads from a ContextVar so concurrent tasks don't see each other's
+        transaction connection (#17).
+        """
+        return _txn_conn_var.get()
 
     async def execute(self, sql: str, params: Sequence[Any] = ()) -> str:
         conn = self._get_conn_or_none()
@@ -252,6 +359,19 @@ class PostgresDialect(Dialect):
             return int(result.split()[-1])
         except (ValueError, IndexError):
             return 0
+
+    async def insert_returning_id(self, sql: str, params: Sequence[Any] = ()) -> int:
+        conn = self._get_conn_or_none()
+        if conn is not None:
+            row = await conn.fetchrow(sql, *params)
+        else:
+            pool = self._ensure_pool()
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(sql, *params)
+        if row is None:
+            return 0
+        value = row[0]
+        return int(value) if value is not None else 0
 
     # ------------------------------------------------------------------
     # Placeholder generation
@@ -336,7 +456,17 @@ class PostgresDialect(Dialect):
         return f"{column} ? ${key_param}"
 
     def json_array_contains(self, column: str, value_param: int) -> str:
-        return f"{column} @> ${value_param}::jsonb"
+        # JSON tag columns (tags/auto_tags/agent_tags) are stored as TEXT on the
+        # unified schema (SQLite-derived), so the column must be cast to jsonb
+        # before the containment operator — ``text @> jsonb`` has no operator.
+        return f"{column}::jsonb @> ${value_param}::jsonb"
+
+    def json_array_contains_param(self, value: Any) -> Any:
+        # ``tags @> $N::jsonb`` needs a JSON document. A bare tag like ``work``
+        # is not valid JSON, so wrap it as a one-element JSON array.
+        import json
+
+        return json.dumps([value])
 
     # ------------------------------------------------------------------
     # Date/time (native TIMESTAMPTZ)
@@ -370,11 +500,12 @@ class PostgresDialect(Dialect):
         conn = await pool.acquire()
         txn = conn.transaction()
         await txn.start()
-        # Temporarily stash the transaction connection so that execute
-        # methods called inside the block can use it.  Since neural-memory
-        # is single-writer async, this is safe.
-        prev_txn_conn = getattr(self, "_txn_conn", None)
-        self._txn_conn = conn
+        # Bind the transaction connection to the CURRENT task via a
+        # ContextVar so execute()/fetch_*() called inside this block route to
+        # it — while a concurrent task running its own transaction() sees its
+        # own connection (not this one). Nested transaction() blocks in the
+        # same task naturally stack via the returned reset token (#17).
+        token = _txn_conn_var.set(conn)
         try:
             yield
             await txn.commit()
@@ -382,7 +513,7 @@ class PostgresDialect(Dialect):
             await txn.rollback()
             raise
         finally:
-            self._txn_conn = prev_txn_conn
+            _txn_conn_var.reset(token)
             await pool.release(conn)
 
     # ------------------------------------------------------------------
@@ -392,33 +523,52 @@ class PostgresDialect(Dialect):
     def get_schema_ddl(self) -> str:
         """Return PostgreSQL-compatible DDL for all schema tables.
 
-        Converts the SQLite SCHEMA by replacing SQLite-specific syntax
-        with PostgreSQL equivalents, hoists the ``projects`` table ahead
-        of any table that forward-references it (PostgreSQL enforces
-        FKs at CREATE TABLE time, unlike SQLite), then appends
-        idempotent ALTER statements that add the ``content_tsv`` /
-        ``summary_tsv`` generated columns + GIN indexes required by FTS
-        (see ``fts_neuron_query`` / ``fts_fiber_query``).
+        Translates the canonical SQLite ``SCHEMA`` into a *physically*
+        Postgres-correct schema that matches what the dialect mixins
+        bind at runtime:
+
+        * SQLite ``INTEGER PRIMARY KEY AUTOINCREMENT`` → ``SERIAL PRIMARY KEY``.
+        * ``content_hash INTEGER`` → ``content_hash BIGINT`` so 64-bit
+          SimHash fingerprints do not overflow PG's signed 32-bit
+          ``INTEGER`` (closes #4).
+        * Every column the mixins bind via ``serialize_dt`` (a real
+          ``datetime`` on the PG path) is emitted as ``TIMESTAMPTZ``
+          instead of SQLite ``TEXT`` — applied **per table** because some
+          ``*_at`` columns (e.g. ``cognitive_state.predicted_at``,
+          ``*.updated_at`` sync strings) are bound as plain ISO strings
+          and MUST stay ``TEXT`` (closes #5).
+        * The ``projects`` table is hoisted ahead of ``typed_memories``,
+          which forward-references it (PostgreSQL enforces FKs at
+          CREATE TABLE time, unlike SQLite).
+        * Appends the idempotent ``content_tsv`` / ``summary_tsv``
+          generated columns + GIN indexes required by FTS, so
+          ``fts_neuron_query`` / ``fts_fiber_query`` resolve (closes #3).
         """
+        import re
+
         from neural_memory.storage.sqlite_schema import SCHEMA
 
         ddl = SCHEMA
         # Replace SQLite AUTOINCREMENT with PostgreSQL SERIAL
         ddl = ddl.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
-        # Remove SQLite-specific pragmas (they appear as comments or
-        # standalone statements that PG would reject).  The SCHEMA
-        # constant does not contain pragmas (those are in initialize()),
-        # but guard against future additions.
-        import re
-
+        # Remove SQLite-specific pragmas (defensive — SCHEMA has none today).
         ddl = re.sub(r"PRAGMA\s+[^;]+;", "", ddl)
+
+        # 64-bit SimHash fingerprint: PG INTEGER is signed 32-bit (#4).
+        ddl = ddl.replace("content_hash INTEGER", "content_hash BIGINT")
+
+        # Per-table TIMESTAMPTZ conversion. Only columns that the dialect
+        # mixins bind through ``serialize_dt`` (i.e. as datetime objects)
+        # are converted; ISO-string columns (sync ``updated_at`` defaults,
+        # cognitive ``predicted_at``/``resolved_at``/``last_evidence_at``)
+        # stay TEXT so asyncpg's str binding stays type-correct.
+        ddl = _convert_timestamp_columns(ddl)
+
         # `typed_memories` declares a FOREIGN KEY to `projects`, but the
         # SCHEMA defines `projects` AFTER `typed_memories`. SQLite is
-        # forgiving here (FKs are only checked on DML); PostgreSQL
-        # rejects the forward reference with `relation "projects" does
-        # not exist`.  Hoist copies of the `brains` and `projects`
-        # CREATE TABLE blocks to the top in dependency order — the
-        # originals later in the script become no-ops thanks to
+        # forgiving (FKs checked on DML); PostgreSQL rejects the forward
+        # reference. Hoist copies of `brains` and `projects` to the top in
+        # dependency order — the originals later become no-ops via
         # IF NOT EXISTS.
         prelude = ""
         for tbl in ("brains", "projects"):
@@ -438,6 +588,10 @@ class PostgresDialect(Dialect):
     # ------------------------------------------------------------------
     # Schema helpers (override for PostgreSQL types)
     # ------------------------------------------------------------------
+
+    def date_trunc_day(self, column: str) -> str:
+        # TIMESTAMPTZ → DATE truncation is native and correct on Postgres.
+        return f"{column}::date"
 
     def auto_increment_pk(self) -> str:
         return "SERIAL PRIMARY KEY"

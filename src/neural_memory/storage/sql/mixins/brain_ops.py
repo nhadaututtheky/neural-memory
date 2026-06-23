@@ -80,17 +80,20 @@ class BrainOpsMixin:
         _dialect: Dialect
         _current_brain_id: str | None
 
+        # Type-only declarations for methods provided by sibling mixins
+        # (ProjectsMixin, TypedMemoryMixin). These live under TYPE_CHECKING so
+        # they do NOT create runtime method bodies that would shadow the real
+        # implementations via MRO (BrainOpsMixin precedes those mixins in the
+        # SQLStorage bases list). A concrete `raise NotImplementedError` body
+        # here previously won the MRO and made add_project/add_typed_memory
+        # always raise on the unified backend.
+        async def add_project(self, project: Project) -> str: ...
+        async def add_typed_memory(self, tm: TypedMemory) -> str: ...
+
     def _get_brain_id(self) -> str:
         raise NotImplementedError
 
     def set_brain(self, brain_id: str) -> None: ...
-
-    # Protocol stubs for methods provided by other mixins
-    async def add_project(self, project: Project) -> str:
-        raise NotImplementedError
-
-    async def add_typed_memory(self, tm: TypedMemory) -> str:
-        raise NotImplementedError
 
     # ================================================================
     # save_brain

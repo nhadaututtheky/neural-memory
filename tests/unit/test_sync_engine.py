@@ -208,15 +208,56 @@ class TestProcessSyncResponse:
         assert result["skipped"] == 1
         assert result["applied"] == 0
 
-    async def test_process_sync_response_marks_synced(self) -> None:
-        """process_sync_response calls mark_synced with hub_sequence."""
+    async def test_process_sync_response_marks_synced_local_sequence(self) -> None:
+        """mark_synced uses the max LOCAL change id from the request, not hub_sequence.
+
+        Finding #12: hub_sequence is in the hub's id space (far larger than any
+        local change_log id); passing it would mark ALL pending local changes
+        synced — including ones never sent. Only the local changes actually
+        included in the request may be marked synced.
+        """
+        storage = _make_mock_storage()
+        engine = SyncEngine(storage, device_id="dev-local")
+
+        # Local request carried changes with local ids 7 and 12.
+        request = SyncRequest(
+            device_id="dev-local",
+            brain_id="brain-test",
+            last_sequence=0,
+            changes=[
+                SyncChange(
+                    sequence=7,
+                    entity_type="neuron",
+                    entity_id="n-7",
+                    operation="insert",
+                    device_id="dev-local",
+                    changed_at="2026-01-15T10:00:00",
+                ),
+                SyncChange(
+                    sequence=12,
+                    entity_type="neuron",
+                    entity_id="n-12",
+                    operation="insert",
+                    device_id="dev-local",
+                    changed_at="2026-01-15T10:00:00",
+                ),
+            ],
+        )
+        response = SyncResponse(hub_sequence=10000, changes=[])
+        await engine.process_sync_response(response, request)
+
+        # Must mark up to the max LOCAL id (12), NOT the hub_sequence (10000).
+        storage.mark_synced.assert_called_once_with(12)
+
+    async def test_process_sync_response_no_request_skips_mark_synced(self) -> None:
+        """Without the originating request, no local changes are marked synced."""
         storage = _make_mock_storage()
         engine = SyncEngine(storage, device_id="dev-local")
 
         response = SyncResponse(hub_sequence=42, changes=[])
         await engine.process_sync_response(response)
 
-        storage.mark_synced.assert_called_once_with(42)
+        storage.mark_synced.assert_not_called()
 
     async def test_process_sync_response_calls_update_device_sync(self) -> None:
         """process_sync_response calls update_device_sync with hub_sequence."""

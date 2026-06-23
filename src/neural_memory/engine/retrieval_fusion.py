@@ -47,7 +47,12 @@ class FusionResult:
 def _normalize(scores: dict[str, float]) -> dict[str, float]:
     """Min-max normalize scores to [0, 1].
 
-    Returns empty dict if input is empty. Returns all-1.0 if all values equal.
+    Returns empty dict if input is empty.
+
+    Degenerate spread (single element, or all values equal) cannot establish a
+    relative ranking, so a confident 1.0 is unjustified — a lone weak hit would
+    otherwise capture its channel's full weight and outrank densely-supported
+    fibers (#50). In that case assign a neutral mid score (0.5) instead.
     """
     if not scores:
         return {}
@@ -57,8 +62,9 @@ def _normalize(scores: dict[str, float]) -> dict[str, float]:
     hi = max(vals)
     spread = hi - lo
 
+    # No meaningful spread (singleton channel or all-equal): neutral mid score.
     if spread < 1e-12:
-        return dict.fromkeys(scores, 1.0)
+        return dict.fromkeys(scores, 0.5)
 
     return {k: (v - lo) / spread for k, v in scores.items()}
 

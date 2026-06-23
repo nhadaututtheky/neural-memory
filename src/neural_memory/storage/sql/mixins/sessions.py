@@ -4,11 +4,37 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime
 from typing import Any
 
 from neural_memory.storage.sql.dialect import Dialect
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_dt(value: str | None) -> datetime | None:
+    """Parse an ISO timestamp string to a datetime, or None.
+
+    ``started_at``/``ended_at`` arrive as ISO strings but the columns are
+    TIMESTAMPTZ on Postgres, where binding a bare string raises a DataError;
+    serialize a real datetime through the dialect instead.
+    """
+    if value is None:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _iso(value: Any) -> Any:
+    """Render a timestamp column as an ISO string across backends.
+
+    SQLite returns the stored ISO string unchanged; Postgres returns a datetime,
+    normalized back to an ISO string for consumer parity.
+    """
+    return value.isoformat() if isinstance(value, datetime) else value
+
 
 # Bounds
 MAX_SUMMARIES_PER_BRAIN = 500
@@ -69,8 +95,8 @@ class SessionsMixin:
                 query_count,
                 round(avg_confidence, 4),
                 round(avg_depth, 2),
-                started_at,
-                ended_at,
+                d.serialize_dt(_parse_dt(started_at)),
+                d.serialize_dt(_parse_dt(ended_at)),
             ],
         )
 
@@ -115,8 +141,8 @@ class SessionsMixin:
                 "query_count": r["query_count"],
                 "avg_confidence": r["avg_confidence"],
                 "avg_depth": r["avg_depth"],
-                "started_at": r["started_at"],
-                "ended_at": r["ended_at"],
+                "started_at": _iso(r["started_at"]),
+                "ended_at": _iso(r["ended_at"]),
             }
             for r in rows
         ]

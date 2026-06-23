@@ -193,7 +193,12 @@ class TestBrainModeConfig:
 
         assert data["mode"] == "shared"
         assert data["shared"]["server_url"] == "http://localhost:8000"
-        assert data["shared"]["api_key"] == "***"  # masked in serialization
+        # to_dict() emits the real key so it round-trips (#69).
+        assert data["shared"]["api_key"] == "key"
+
+        # to_safe_dict() masks the key for display/logging.
+        safe = config.to_safe_dict()
+        assert safe["shared"]["api_key"] == "***"
 
     def test_to_dict_hybrid(self) -> None:
         """Test serialization of hybrid config."""
@@ -269,5 +274,18 @@ class TestBrainModeConfig:
         assert restored.hybrid is not None
         assert restored.hybrid.local_path == original.hybrid.local_path
         assert restored.hybrid.server_url == original.hybrid.server_url
-        assert restored.hybrid.api_key == "***"  # api_key masked in serialization
+        # to_dict() round-trips the real api_key (no '***' corruption) (#69).
+        assert restored.hybrid.api_key == "secret"
         assert restored.hybrid.sync_interval_seconds == original.hybrid.sync_interval_seconds
+
+    def test_to_safe_dict_not_round_trippable(self) -> None:
+        """to_safe_dict() masks the api_key (intentionally not round-trippable)."""
+        original = BrainModeConfig.hybrid_mode(
+            local_path="./test.db",
+            server_url="http://server:8000",
+            api_key="secret",
+        )
+        safe = original.to_safe_dict()
+        assert safe["hybrid"]["api_key"] == "***"
+        # Real serialization must NOT be masked.
+        assert original.to_dict()["hybrid"]["api_key"] == "secret"

@@ -123,7 +123,6 @@ async def detect_interference(
         offset += page_size
 
     results: list[InterferenceResult] = []
-    same_tag_count = 0
 
     for candidate in candidates:
         if candidate.id == new_neuron.id:
@@ -135,9 +134,6 @@ async def detect_interference(
         # Skip near-duplicates (handled by dedup pipeline)
         if dist < _NEAR_DUPLICATE_THRESHOLD:
             continue
-
-        # Count same-tag memories for fan effect
-        same_tag_count += 1
 
         if dist <= _INTERFERENCE_THRESHOLD:
             # Similar enough to interfere
@@ -157,9 +153,36 @@ async def detect_interference(
                 )
             )
 
-    # Check fan effect
+    # Check fan effect.
+    #
+    # The fan-effect driver must count ALL memories sharing a tag with the new
+    # neuron — independent of the near-duplicate skip (the densest clusters ARE
+    # near-dups) and uncapped by the candidate-gathering limit (#51). Compute it
+    # with a dedicated full-brain tag scan, mirroring batch_interference_scan,
+    # rather than reusing the (filtered, capped) interference candidate loop.
     fan_threshold = getattr(config, "fan_effect_threshold", 15)
     fan_threshold = int(fan_threshold) if isinstance(fan_threshold, (int, float)) else 15
+
+    tag_counts: dict[str, int] = {}
+    fan_offset = 0
+    while True:
+        fan_batch = await storage.find_neurons(limit=page_size, offset=fan_offset)
+        if not fan_batch:
+            break
+        for n in fan_batch:
+            if n.id == new_neuron.id:
+                continue
+            if n.id in pinned_ids or n.grounded:
+                continue
+            ntags = set(n.metadata.get("tags", [])) if n.metadata else set()
+            for t in ntags & new_tags:
+                tag_counts[t] = tag_counts.get(t, 0) + 1
+        if len(fan_batch) < page_size:
+            break
+        fan_offset += page_size
+
+    # Fan size = the most overcrowded shared tag.
+    same_tag_count = max(tag_counts.values(), default=0)
     if same_tag_count >= fan_threshold:
         results.append(
             InterferenceResult(

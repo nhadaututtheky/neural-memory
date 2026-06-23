@@ -166,6 +166,7 @@ class LifecycleHandler:
 
         hard = args.get("hard", False)
         reason = args.get("reason", "")
+        confirmed = bool(args.get("confirm", False))
 
         storage = await self.get_storage()
         try:
@@ -187,6 +188,18 @@ class LifecycleHandler:
                 return {"error": "Memory not found"}
             # For neuron-only delete in hard mode
             if hard:
+                # Confirmation gate: align hard-delete safety with nmem_store
+                # delete, which requires confirm=true before destroying data (#79).
+                if not confirmed:
+                    return {
+                        "status": "pending_confirmation",
+                        "memory_id": memory_id,
+                        "will_delete": {"neurons": 1, "fibers": 0, "typed_memory": False},
+                        "message": (
+                            "This will permanently delete the neuron. "
+                            "Call again with confirm=true to proceed."
+                        ),
+                    }
                 await storage.delete_neuron(memory_id)
                 return {
                     "status": "hard_deleted",
@@ -201,6 +214,21 @@ class LifecycleHandler:
             }
 
         if hard:
+            # Confirmation gate for permanent fiber/typed-memory destruction (#79).
+            if not confirmed:
+                return {
+                    "status": "pending_confirmation",
+                    "memory_id": memory_id,
+                    "will_delete": {
+                        "fibers": 1 if fiber is not None else 0,
+                        "typed_memory": typed_mem is not None,
+                    },
+                    "message": (
+                        "This will permanently delete the memory (fiber, typed memory, "
+                        "and associated neurons). Call again with confirm=true to proceed."
+                    ),
+                }
+
             # Permanent deletion: fiber + typed_memory + neurons
             storage.disable_auto_save()
             try:

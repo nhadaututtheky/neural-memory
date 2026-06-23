@@ -39,13 +39,21 @@ def _get(row: Any, key: str, default: Any = None) -> Any:
         return default
 
 
-def _normalize_dt(value: Any) -> datetime | None:
-    """Normalize a datetime value, auto-detecting the backend format.
+def _normalize_dt(value: Any, dialect: Any = None) -> datetime | None:
+    """Normalize a datetime value.
+
+    When an explicit ``dialect`` is supplied, defer to ``dialect.normalize_dt``
+    (the documented contract); otherwise auto-detect the backend format:
 
     - ``None``               → ``None``
     - ``datetime`` object    → strip/normalize tz to naive UTC
     - Anything else         → ``datetime.fromisoformat(str(value))`` (SQLite ISO strings)
     """
+    if dialect is not None and hasattr(dialect, "normalize_dt"):
+        normalized = dialect.normalize_dt(value)
+        if isinstance(normalized, datetime) and normalized.tzinfo is not None:
+            return normalized.astimezone(UTC).replace(tzinfo=None)
+        return normalized if normalized is None or isinstance(normalized, datetime) else None
     if value is None:
         return None
     if isinstance(value, datetime):
@@ -53,6 +61,22 @@ def _normalize_dt(value: Any) -> datetime | None:
             return value.astimezone(UTC).replace(tzinfo=None)
         return value
     return datetime.fromisoformat(str(value))
+
+
+def _resolve_row_dialect(arg1: Any, arg2: Any) -> tuple[Any, Any]:
+    """Resolve the (row, dialect) pair from either call signature.
+
+    Supports both ``fn(row)``, ``fn(row, dialect)`` and ``fn(dialect, row)``.
+    Detects a Dialect by its ``.name`` attribute. Returns ``(row, dialect)``
+    where ``dialect`` may be ``None`` (auto-detect datetime normalization).
+    """
+    if arg2 is None:
+        return arg1, None
+    if hasattr(arg1, "name"):
+        # (dialect, row) order
+        return arg2, arg1
+    # (row, dialect) order — honor the dialect instead of dropping it.
+    return arg1, arg2
 
 
 def _parse_json_field(value: Any) -> Any:
@@ -65,58 +89,48 @@ def _parse_json_field(value: Any) -> Any:
 
 
 def row_to_neuron(dialect_or_row: Any, row_or_dialect: Any = None) -> Neuron:
-    # Support both (dialect, row) and (row, dialect) call signatures.
-    # Detect by checking if first arg is subscriptable with string keys.
-    if row_or_dialect is None:
-        row = dialect_or_row
-    elif hasattr(dialect_or_row, "name"):
-        # dialect_or_row is a Dialect — (dialect, row) order
-        row = row_or_dialect
-    else:
-        # (row, dialect) order
-        row = dialect_or_row
-    """Convert database row to Neuron."""
+    """Convert database row to Neuron.
+
+    Accepts ``(row)``, ``(row, dialect)`` or ``(dialect, row)``.
+    """
+    row, dialect = _resolve_row_dialect(dialect_or_row, row_or_dialect)
     return Neuron(
         id=str(row["id"]),
         type=NeuronType(row["type"]),
         content=str(row["content"]),
         metadata=json.loads(row["metadata"]) if row["metadata"] else {},
         content_hash=int(_get(row, "content_hash", 0)),
-        created_at=_normalize_dt(row["created_at"]) or utcnow(),
+        created_at=_normalize_dt(row["created_at"], dialect) or utcnow(),
         ephemeral=bool(_get(row, "ephemeral", False)),
     )
 
 
 def row_to_neuron_state(dialect_or_row: Any, row_or_dialect: Any = None) -> NeuronState:
-    if row_or_dialect is None:
-        row = dialect_or_row
-    elif hasattr(dialect_or_row, "name"):
-        row = row_or_dialect
-    else:
-        row = dialect_or_row
-    """Convert database row to NeuronState."""
+    """Convert database row to NeuronState.
+
+    Accepts ``(row)``, ``(row, dialect)`` or ``(dialect, row)``.
+    """
+    row, dialect = _resolve_row_dialect(dialect_or_row, row_or_dialect)
     return NeuronState(
         neuron_id=str(row["neuron_id"]),
         activation_level=float(_get(row, "activation_level", 0.0)),
         access_frequency=int(_get(row, "access_frequency", 0)),
-        last_activated=_normalize_dt(_get(row, "last_activated")),
+        last_activated=_normalize_dt(_get(row, "last_activated"), dialect),
         decay_rate=float(_get(row, "decay_rate", 0.1)),
-        created_at=_normalize_dt(row["created_at"]) or utcnow(),
+        created_at=_normalize_dt(row["created_at"], dialect) or utcnow(),
         firing_threshold=float(_get(row, "firing_threshold", 0.3)),
-        refractory_until=_normalize_dt(_get(row, "refractory_until")),
+        refractory_until=_normalize_dt(_get(row, "refractory_until"), dialect),
         refractory_period_ms=float(_get(row, "refractory_period_ms", 500.0)),
         homeostatic_target=float(_get(row, "homeostatic_target", 0.5)),
     )
 
 
 def row_to_synapse(dialect_or_row: Any, row_or_dialect: Any = None) -> Synapse:
-    """Convert database row to Synapse."""
-    if row_or_dialect is None:
-        row = dialect_or_row
-    elif hasattr(dialect_or_row, "name"):
-        row = row_or_dialect
-    else:
-        row = dialect_or_row
+    """Convert database row to Synapse.
+
+    Accepts ``(row)``, ``(row, dialect)`` or ``(dialect, row)``.
+    """
+    row, dialect = _resolve_row_dialect(dialect_or_row, row_or_dialect)
     return Synapse(
         id=str(row["id"]),
         source_id=str(row["source_id"]),
@@ -126,13 +140,17 @@ def row_to_synapse(dialect_or_row: Any, row_or_dialect: Any = None) -> Synapse:
         direction=Direction(_get(row, "direction", "uni")),
         metadata=json.loads(row["metadata"]) if row["metadata"] else {},
         reinforced_count=int(_get(row, "reinforced_count", 0)),
-        last_activated=_normalize_dt(_get(row, "last_activated")),
-        created_at=_normalize_dt(row["created_at"]) or utcnow(),
+        last_activated=_normalize_dt(_get(row, "last_activated"), dialect),
+        created_at=_normalize_dt(row["created_at"], dialect) or utcnow(),
     )
 
 
-def row_to_fiber(dialect: Any, row: Any) -> Fiber:
-    """Convert database row to Fiber."""
+def row_to_fiber(dialect_or_row: Any, row_or_dialect: Any = None) -> Fiber:
+    """Convert database row to Fiber.
+
+    Accepts ``(row)``, ``(row, dialect)`` or ``(dialect, row)``.
+    """
+    row, dialect = _resolve_row_dialect(dialect_or_row, row_or_dialect)
     neuron_ids = _parse_json_field(row["neuron_ids"]) or []
     synapse_ids = _parse_json_field(row["synapse_ids"]) or []
     pathway = _parse_json_field(row["pathway"]) or []
@@ -150,21 +168,21 @@ def row_to_fiber(dialect: Any, row: Any) -> Fiber:
         anchor_neuron_id=str(row["anchor_neuron_id"]),
         pathway=pathway,
         conductivity=float(_get(row, "conductivity", 1.0)),
-        last_conducted=_normalize_dt(_get(row, "last_conducted")),
-        time_start=_normalize_dt(_get(row, "time_start")),
-        time_end=_normalize_dt(_get(row, "time_end")),
+        last_conducted=_normalize_dt(_get(row, "last_conducted"), dialect),
+        time_start=_normalize_dt(_get(row, "time_start"), dialect),
+        time_end=_normalize_dt(_get(row, "time_end"), dialect),
         coherence=float(_get(row, "coherence", 0.0)),
         salience=float(_get(row, "salience", 0.0)),
         frequency=int(_get(row, "frequency", 0)),
         summary=_get(row, "summary"),
         essence=_get(row, "essence"),
-        last_ghost_shown_at=_normalize_dt(_get(row, "last_ghost_shown_at")),
+        last_ghost_shown_at=_normalize_dt(_get(row, "last_ghost_shown_at"), dialect),
         auto_tags=auto_tags,
         agent_tags=agent_tags,
         metadata=metadata,
         compression_tier=int(_get(row, "compression_tier", 0)),
         pinned=bool(_get(row, "pinned", False)),
-        created_at=_normalize_dt(row["created_at"]) or utcnow(),
+        created_at=_normalize_dt(row["created_at"], dialect) or utcnow(),
     )
 
 
@@ -178,12 +196,7 @@ def row_to_brain(dialect_or_row: Any, row_or_dialect: Any = None) -> Brain:
     where ``bm25_enabled``/``high_signal_memory_boost`` silently reverted to
     defaults on every load.
     """
-    if row_or_dialect is None:
-        row = dialect_or_row
-    elif hasattr(dialect_or_row, "name"):
-        row = row_or_dialect
-    else:
-        row = dialect_or_row
+    row, dialect = _resolve_row_dialect(dialect_or_row, row_or_dialect)
     config_data = _parse_json_field(row["config"]) or {}
     valid_fields = {f.name for f in dataclasses.fields(BrainConfig)}
     filtered_config = {k: v for k, v in config_data.items() if k in valid_fields}
@@ -197,8 +210,8 @@ def row_to_brain(dialect_or_row: Any, row_or_dialect: Any = None) -> Brain:
         owner_id=row["owner_id"],
         is_public=bool(_get(row, "is_public", False)),
         shared_with=shared_with,
-        created_at=_normalize_dt(row["created_at"]) or utcnow(),
-        updated_at=_normalize_dt(_get(row, "updated_at")) or utcnow(),
+        created_at=_normalize_dt(row["created_at"], dialect) or utcnow(),
+        updated_at=_normalize_dt(_get(row, "updated_at"), dialect) or utcnow(),
     )
 
 
@@ -221,12 +234,7 @@ def row_to_typed_memory(dialect_or_row: Any, row_or_dialect: Any = None) -> Type
 
     Works with both SQLite (string provenance) and PostgreSQL (possibly native dict).
     """
-    if row_or_dialect is None:
-        row = dialect_or_row
-    elif hasattr(dialect_or_row, "name"):
-        row = row_or_dialect
-    else:
-        row = dialect_or_row
+    row, dialect = _resolve_row_dialect(dialect_or_row, row_or_dialect)
     prov_raw = row["provenance"]
     prov_data = _parse_json_field(prov_raw) or {}
     provenance = Provenance(
@@ -278,11 +286,11 @@ def row_to_typed_memory(dialect_or_row: Any, row_or_dialect: Any = None) -> Type
         memory_type=MemoryType(row["memory_type"]),
         priority=Priority(row["priority"]),
         provenance=provenance,
-        expires_at=_normalize_dt(_get(row, "expires_at")),
+        expires_at=_normalize_dt(_get(row, "expires_at"), dialect),
         project_id=_get(row, "project_id"),
         tags=frozenset(tags_list),
         metadata=metadata,
-        created_at=_normalize_dt(row["created_at"]) or utcnow(),
+        created_at=_normalize_dt(row["created_at"], dialect) or utcnow(),
         trust_score=trust_score,
         source=source,
         tier=tier,
@@ -294,14 +302,9 @@ def _row_to_joined_synapse(dialect_or_row: Any, row_or_dialect: Any = None) -> S
 
     Used by graph traversal in synapses mixin.
     """
-    if row_or_dialect is None:
-        row = dialect_or_row
-    elif hasattr(dialect_or_row, "name"):
-        row = row_or_dialect
-    else:
-        row = dialect_or_row
+    row, dialect = _resolve_row_dialect(dialect_or_row, row_or_dialect)
     s_created = _get(row, "s_created_at") or _get(row, "s_created")
-    created = _normalize_dt(s_created)
+    created = _normalize_dt(s_created, dialect)
     return Synapse(
         id=str(row["s_id"]),
         source_id=str(row["source_id"]),
@@ -311,6 +314,6 @@ def _row_to_joined_synapse(dialect_or_row: Any, row_or_dialect: Any = None) -> S
         direction=Direction(_get(row, "direction", "uni")),
         metadata=_parse_json_field(_get(row, "s_metadata")) or {},
         reinforced_count=int(_get(row, "reinforced_count", 0)),
-        last_activated=_normalize_dt(_get(row, "s_last_activated")),
+        last_activated=_normalize_dt(_get(row, "s_last_activated"), dialect),
         created_at=created or utcnow(),
     )

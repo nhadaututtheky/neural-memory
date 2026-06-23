@@ -100,29 +100,33 @@ class FiberMixin:
             d.serialize_dt(fiber.created_at),  # 23
         ]
 
-        await d.execute(
-            f"""INSERT INTO fibers
-               (id, brain_id, neuron_ids, synapse_ids, anchor_neuron_id,
-                pathway, conductivity, last_conducted,
-                time_start, time_end, coherence, salience, frequency,
-                summary, essence, last_ghost_shown_at,
-                tags, auto_tags, agent_tags, metadata,
-                compression_tier, pinned, created_at)
-               VALUES ({d.phs(23, 1)})""",
-            params,
-        )
+        # Fibers row + junction rows must commit together; otherwise a junction
+        # failure leaves the fibers row claiming neuron_ids that
+        # contains_neuron/find_fibers_batch can't see (#55).
+        async with d.transaction():
+            await d.execute(
+                f"""INSERT INTO fibers
+                   (id, brain_id, neuron_ids, synapse_ids, anchor_neuron_id,
+                    pathway, conductivity, last_conducted,
+                    time_start, time_end, coherence, salience, frequency,
+                    summary, essence, last_ghost_shown_at,
+                    tags, auto_tags, agent_tags, metadata,
+                    compression_tier, pinned, created_at)
+                   VALUES ({d.phs(23, 1)})""",
+                params,
+            )
 
-        # Populate junction table for fast lookups
-        if fiber.neuron_ids:
-            insert_sql = d.insert_or_ignore_sql(
-                "fiber_neurons",
-                ["brain_id", "fiber_id", "neuron_id"],
-                ["brain_id", "fiber_id", "neuron_id"],
-            )
-            await d.execute_many(
-                insert_sql,
-                [(brain_id, fiber.id, nid) for nid in fiber.neuron_ids],
-            )
+            # Populate junction table for fast lookups
+            if fiber.neuron_ids:
+                insert_sql = d.insert_or_ignore_sql(
+                    "fiber_neurons",
+                    ["brain_id", "fiber_id", "neuron_id"],
+                    ["brain_id", "fiber_id", "neuron_id"],
+                )
+                await d.execute_many(
+                    insert_sql,
+                    [(brain_id, fiber.id, nid) for nid in fiber.neuron_ids],
+                )
 
         # Invalidate Merkle hash cache for the affected bucket
         await self.invalidate_merkle_prefix("fiber", fiber.id, is_pro=True)  # type: ignore[attr-defined]
@@ -251,7 +255,7 @@ class FiberMixin:
         if tags is not None and tags:
             tag_conditions = []
             for tag in tags:
-                params.append(tag)
+                params.append(d.json_array_contains_param(tag))
                 tag_conditions.append(d.json_array_contains("tags", n))
                 n += 1
             joiner = " AND " if tag_mode != "or" else " OR "
@@ -321,7 +325,7 @@ class FiberMixin:
         tag_parts: list[str] = []
         if tags:
             for tag in normalize_tags_lower(tags):
-                params.append(tag)
+                params.append(d.json_array_contains_param(tag))
                 tag_parts.append(d.json_array_contains("f.tags", n))
                 n += 1
 
@@ -377,38 +381,43 @@ class FiberMixin:
             brain_id,  # 22
         ]
 
-        await d.execute(
-            f"""UPDATE fibers SET
-               neuron_ids = {d.ph(1)}, synapse_ids = {d.ph(2)},
-               anchor_neuron_id = {d.ph(3)}, pathway = {d.ph(4)},
-               conductivity = {d.ph(5)}, last_conducted = {d.ph(6)},
-               time_start = {d.ph(7)}, time_end = {d.ph(8)},
-               coherence = {d.ph(9)}, salience = {d.ph(10)},
-               frequency = {d.ph(11)}, summary = {d.ph(12)},
-               essence = {d.ph(13)}, last_ghost_shown_at = {d.ph(14)},
-               tags = {d.ph(15)}, auto_tags = {d.ph(16)},
-               agent_tags = {d.ph(17)},
-               metadata = {d.ph(18)}, compression_tier = {d.ph(19)},
-               pinned = {d.ph(20)}
-               WHERE id = {d.ph(21)} AND brain_id = {d.ph(22)}""",
-            params,
-        )
+        # UPDATE + junction DELETE + re-INSERT must be atomic; a re-insert
+        # failure after the junction DELETE would leave fiber_neurons empty
+        # while the fibers row still claims neuron_ids → silently missed by
+        # contains_neuron / find_fibers_batch (#55).
+        async with d.transaction():
+            await d.execute(
+                f"""UPDATE fibers SET
+                   neuron_ids = {d.ph(1)}, synapse_ids = {d.ph(2)},
+                   anchor_neuron_id = {d.ph(3)}, pathway = {d.ph(4)},
+                   conductivity = {d.ph(5)}, last_conducted = {d.ph(6)},
+                   time_start = {d.ph(7)}, time_end = {d.ph(8)},
+                   coherence = {d.ph(9)}, salience = {d.ph(10)},
+                   frequency = {d.ph(11)}, summary = {d.ph(12)},
+                   essence = {d.ph(13)}, last_ghost_shown_at = {d.ph(14)},
+                   tags = {d.ph(15)}, auto_tags = {d.ph(16)},
+                   agent_tags = {d.ph(17)},
+                   metadata = {d.ph(18)}, compression_tier = {d.ph(19)},
+                   pinned = {d.ph(20)}
+                   WHERE id = {d.ph(21)} AND brain_id = {d.ph(22)}""",
+                params,
+            )
 
-        # Refresh junction table
-        await d.execute(
-            f"DELETE FROM fiber_neurons WHERE brain_id = {d.ph(1)} AND fiber_id = {d.ph(2)}",
-            (brain_id, fiber.id),
-        )
-        if fiber.neuron_ids:
-            insert_sql = d.insert_or_ignore_sql(
-                "fiber_neurons",
-                ["brain_id", "fiber_id", "neuron_id"],
-                ["brain_id", "fiber_id", "neuron_id"],
+            # Refresh junction table
+            await d.execute(
+                f"DELETE FROM fiber_neurons WHERE brain_id = {d.ph(1)} AND fiber_id = {d.ph(2)}",
+                (brain_id, fiber.id),
             )
-            await d.execute_many(
-                insert_sql,
-                [(brain_id, fiber.id, nid) for nid in fiber.neuron_ids],
-            )
+            if fiber.neuron_ids:
+                insert_sql = d.insert_or_ignore_sql(
+                    "fiber_neurons",
+                    ["brain_id", "fiber_id", "neuron_id"],
+                    ["brain_id", "fiber_id", "neuron_id"],
+                )
+                await d.execute_many(
+                    insert_sql,
+                    [(brain_id, fiber.id, nid) for nid in fiber.neuron_ids],
+                )
 
     async def update_fiber_metadata(self, fiber_id: str, metadata: dict[str, Any]) -> None:
         """Update only the metadata JSON column for a fiber (lightweight patch).
@@ -564,9 +573,12 @@ class FiberMixin:
         return int(row["cnt"]) if row else 0
 
     async def get_fiber_stage_counts(self, brain_id: str) -> dict[str, int]:
+        # `stage` lives on memory_maturations, not on fibers — the old query
+        # raised on both dialects and pinned consolidation_ratio at 0.0.
         d = self._dialect
         rows = await d.fetch_all(
-            f"SELECT stage, COUNT(*) AS cnt FROM fibers WHERE brain_id = {d.ph(1)} GROUP BY stage",
+            f"SELECT mm.stage AS stage, COUNT(*) AS cnt FROM memory_maturations mm "
+            f"WHERE mm.brain_id = {d.ph(1)} GROUP BY mm.stage",
             (brain_id,),
         )
         return {row["stage"]: int(row["cnt"]) for row in rows}

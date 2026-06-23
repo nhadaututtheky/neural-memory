@@ -401,10 +401,17 @@ class SQLiteFiberMixin:
         brain_id = self._get_brain_id()
         safe_limit = min(limit, 200)
 
+        # `type` and `priority` live on typed_memories (as memory_type /
+        # priority), not on fibers. LEFT JOIN so an un-typed pinned fiber still
+        # appears (with the default type/priority) instead of raising
+        # OperationalError: no such column: type.
         async with conn.execute(
-            "SELECT id, summary, type, priority, tags, created_at "
-            "FROM fibers WHERE brain_id = ? AND pinned = 1 "
-            "ORDER BY created_at DESC LIMIT ?",
+            "SELECT f.id, f.summary, tm.memory_type, tm.priority, f.tags, f.created_at "
+            "FROM fibers f "
+            "LEFT JOIN typed_memories tm "
+            "  ON tm.brain_id = f.brain_id AND tm.fiber_id = f.id "
+            "WHERE f.brain_id = ? AND f.pinned = 1 "
+            "ORDER BY f.created_at DESC LIMIT ?",
             (brain_id, safe_limit),
         ) as cursor:
             rows = await cursor.fetchall()
@@ -416,7 +423,7 @@ class SQLiteFiberMixin:
                     "fiber_id": row[0],
                     "summary": row[1] or "",
                     "type": row[2] or "unknown",
-                    "priority": row[3] or 5,
+                    "priority": row[3] if row[3] is not None else 5,
                     "tags": json.loads(row[4]) if row[4] else [],
                     "created_at": row[5] or "",
                 }
@@ -463,9 +470,13 @@ class SQLiteFiberMixin:
             return row[0] if row else 0
 
     async def get_fiber_stage_counts(self, brain_id: str) -> dict[str, int]:
+        # `stage` lives on memory_maturations, not on fibers — querying
+        # fibers.stage raised OperationalError, which the caller swallowed,
+        # pinning consolidation_ratio at 0.0 forever.
         conn = self._ensure_read_conn()
         async with conn.execute(
-            "SELECT stage, COUNT(*) FROM fibers WHERE brain_id = ? GROUP BY stage",
+            "SELECT mm.stage, COUNT(*) FROM memory_maturations mm "
+            "WHERE mm.brain_id = ? GROUP BY mm.stage",
             (brain_id,),
         ) as cursor:
             rows = await cursor.fetchall()

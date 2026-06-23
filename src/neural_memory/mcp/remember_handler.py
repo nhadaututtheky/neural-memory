@@ -441,6 +441,13 @@ class RememberHandler:
         try:
             storage.disable_auto_save()
             raw_tags = args.get("tags", [])
+            # Guard against type confusion: a client sending tags as a string
+            # (e.g. "python") would otherwise have len() count characters and the
+            # loop iterate characters, silently storing 6 single-char tags (#72).
+            if raw_tags is None:
+                raw_tags = []
+            if not isinstance(raw_tags, list):
+                return {"error": "Invalid tags: expected a list of strings."}
             if len(raw_tags) > 50:
                 return {"error": f"Too many tags ({len(raw_tags)}). Max: 50."}
             tags = set()

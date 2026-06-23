@@ -20,13 +20,16 @@ class TestNormalize:
         assert _normalize({}) == {}
 
     def test_single_value(self) -> None:
+        # A singleton channel has no spread to establish a ranking; it must not
+        # be awarded a confident 1.0 (#50) — neutral mid score instead.
         result = _normalize({"a": 5.0})
-        assert result == {"a": 1.0}
+        assert result == {"a": 0.5}
 
     def test_equal_values(self) -> None:
+        # All-equal multi-element: no spread → neutral mid score, not 1.0 (#50).
         result = _normalize({"a": 3.0, "b": 3.0})
-        assert result["a"] == 1.0
-        assert result["b"] == 1.0
+        assert result["a"] == 0.5
+        assert result["b"] == 0.5
 
     def test_different_values(self) -> None:
         result = _normalize({"a": 0.0, "b": 10.0, "c": 5.0})
@@ -63,7 +66,8 @@ class TestFuseScores:
         results = fuse_scores({}, semantic, {}, FusionWeights())
         assert len(results) == 2
         assert results[0].fiber_id == "f1"
-        # When only semantic channel, weight redistributed to 1.0
+        # Two distinct values -> top normalizes to 1.0; sole active channel
+        # weight redistributed to 1.0 -> fused = 1.0.
         assert results[0].fused_score == pytest.approx(1.0)
 
     def test_balanced_two_channels(self) -> None:
@@ -82,11 +86,12 @@ class TestFuseScores:
         weights = FusionWeights(graph=0.5, semantic=0.3, lexical=0.2)
         results = fuse_scores(graph, semantic, lexical, weights)
         assert len(results) == 2
-        # f1: graph=1.0, semantic=0.0 (normalized min), lexical=0.0 (absent)
-        # f2: graph=0.0 (absent), semantic=1.0 (normalized max), lexical=1.0
+        # graph and lexical are singleton channels -> neutral 0.5 (no spread, #50).
+        # semantic has two distinct values -> f2 normalizes to 1.0.
         r_map = {r.fiber_id: r for r in results}
-        assert r_map["f1"].graph_score == pytest.approx(1.0)
-        assert r_map["f2"].lexical_score == pytest.approx(1.0)
+        assert r_map["f1"].graph_score == pytest.approx(0.5)
+        assert r_map["f2"].lexical_score == pytest.approx(0.5)
+        assert r_map["f2"].semantic_score == pytest.approx(1.0)
 
     def test_weight_redistribution_empty_channel(self) -> None:
         """When lexical channel is empty, its weight is redistributed."""
@@ -96,8 +101,9 @@ class TestFuseScores:
         results = fuse_scores(graph, semantic, {}, weights)
         # Effective weights: graph=0.4/0.8=0.5, semantic=0.4/0.8=0.5
         assert len(results) == 1
-        # Both channels normalized to 1.0, each weighted 0.5 -> fused = 1.0
-        assert results[0].fused_score == pytest.approx(1.0)
+        # Both channels are singletons -> neutral 0.5 each (#50);
+        # 0.5*0.5 + 0.5*0.5 = 0.5 fused.
+        assert results[0].fused_score == pytest.approx(0.5)
 
     def test_different_fiber_sets_across_channels(self) -> None:
         """Fibers can appear in different subsets of channels."""

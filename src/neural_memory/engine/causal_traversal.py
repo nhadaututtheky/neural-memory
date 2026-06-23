@@ -57,7 +57,9 @@ class CausalChain:
         direction: "causes" (tracing what caused the seed)
                    or "effects" (tracing what the seed caused)
         steps: Ordered tuple of causal steps from seed outward
-        total_weight: Product of all step weights (chain confidence)
+        total_weight: Chain confidence — the geometric mean of all step weights
+                      (normalized over the number of steps, so confidence reflects
+                      average link strength and does not decay with breadth).
     """
 
     seed_neuron_id: str
@@ -173,7 +175,16 @@ async def trace_causal_chain(
             steps.append(step)
             queue.append((neuron.id, current_depth + 1))
 
-    total_weight = math.prod(s.weight for s in steps) if steps else 0.0
+    # Confidence = geometric mean of step weights (normalized aggregate), NOT the
+    # raw product (#34). BFS collects a fan-out TREE, not a single path; multiplying
+    # every discovered node's weight makes confidence collapse exponentially with
+    # the NUMBER of nodes (more/stronger evidence → lower confidence, inverted).
+    # The geometric mean normalizes over depth/breadth so it reflects average link
+    # strength: a chain of strong links stays high regardless of how many were found.
+    if steps:
+        total_weight = math.prod(s.weight for s in steps) ** (1.0 / len(steps))
+    else:
+        total_weight = 0.0
 
     return CausalChain(
         seed_neuron_id=seed_neuron_id,

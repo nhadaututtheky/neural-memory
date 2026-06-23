@@ -42,8 +42,15 @@ class ProjectsMixin:
                 ],
             )
             return project.id
-        except Exception:
-            raise ValueError(f"Project {project.id} already exists")
+        except Exception as e:
+            # Only a UNIQUE/PK integrity violation means the project already
+            # exists. Any other failure (connection error, NOT NULL violation,
+            # serialization failure, disk full) must propagate so callers like
+            # import_brain._import_projects don't silently drop valid projects
+            # on a transient fault.
+            if d.is_integrity_error(e):
+                raise ValueError(f"Project {project.id} already exists") from e
+            raise
 
     async def get_project(self, project_id: str) -> Project | None:
         d = self._dialect
@@ -153,7 +160,7 @@ def _dialect_row_to_project(row: dict[str, object]) -> Project:
         start_date=_safe_dt(row["start_date"]) or utcnow(),
         end_date=_safe_dt(row["end_date"]),
         tags=frozenset(json.loads(str(row["tags"]))),
-        priority=int(str(row["priority"])),
+        priority=float(row["priority"]),  # type: ignore[arg-type]
         metadata=json.loads(str(row["metadata"])) if row["metadata"] else {},
         created_at=_safe_dt(row["created_at"]) or utcnow(),
     )

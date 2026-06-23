@@ -224,6 +224,42 @@ class TestTypedMemory:
         # Allow for slight timing variance
         assert extended.days_until_expiry in (29, 30)
 
+    def test_verify_preserves_trust_score_and_source(self) -> None:
+        """Regression (#39): verify() must not drop trust_score/source."""
+        mem = TypedMemory.create(
+            fiber_id="fiber-123",
+            memory_type=MemoryType.FACT,
+            source="user_input",
+            trust_score=0.9,
+            tier="cold",
+        )
+        assert mem.trust_score == 0.9
+        assert mem.source == "user_input"
+
+        verified = mem.verify()
+        assert verified.trust_score == mem.trust_score
+        assert verified.source == "user_input"
+        # Other fields preserved too.
+        assert verified.tier == "cold"
+        assert verified.fiber_id == "fiber-123"
+        # Only provenance changes.
+        assert verified.provenance.verified is True
+
+    def test_extend_expiry_preserves_trust_score_and_source(self) -> None:
+        """Regression (#39): extend_expiry() must not drop trust_score/source."""
+        mem = TypedMemory.create(
+            fiber_id="fiber-123",
+            memory_type=MemoryType.TODO,
+            source="user_input",
+            trust_score=0.8,
+            expires_in_days=7,
+            tier="cold",
+        )
+        extended = mem.extend_expiry(30)
+        assert extended.trust_score == mem.trust_score
+        assert extended.source == "user_input"
+        assert extended.tier == "cold"
+
     def test_create_with_tags(self) -> None:
         """Test creating with tags."""
         mem = TypedMemory.create(

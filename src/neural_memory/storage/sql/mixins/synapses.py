@@ -280,11 +280,26 @@ class SynapseMixin:
                 if key in nid_set:
                     result[key].append(syn)
         elif direction == "both":
-            in_clause, in_params = d.in_clause(2, neuron_ids)
+            # ``in_clause`` is embedded twice. On SQLite each ``?`` is a
+            # distinct positional placeholder, so the second occurrence needs
+            # its own params (built starting after the first set). On Postgres
+            # ``= ANY($N)`` references a single array param, and asyncpg
+            # requires the arg count to equal the highest placeholder index —
+            # so we reuse the *same* ``$2`` array param in both branches
+            # rather than allocating a second one (closes #18).
+            src_clause, src_params = d.in_clause(2, neuron_ids)
+            if d.name == "postgres":
+                # Single array param (``= ANY($2)``): reference $2 twice, no
+                # extra param — asyncpg arg count must equal the max index.
+                tgt_clause, tgt_params = src_clause, []  # type: ignore[var-annotated]
+            else:
+                # Positional placeholders (SQLite-style IN): the second
+                # occurrence needs its own placeholders and values.
+                tgt_clause, tgt_params = d.in_clause(2 + len(src_params), neuron_ids)
             rows = await d.fetch_all(
                 f"SELECT * FROM synapses WHERE brain_id = {d.ph(1)} "
-                f"AND (source_id {in_clause} OR target_id {in_clause})",
-                [brain_id, *in_params, *in_params],
+                f"AND (source_id {src_clause} OR target_id {tgt_clause})",
+                [brain_id, *src_params, *tgt_params],
             )
             for r in rows:
                 syn = row_to_synapse(d, r)

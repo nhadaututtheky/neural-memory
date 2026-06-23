@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -19,6 +20,8 @@ from neural_memory.server.models import (
     StatsResponse,
 )
 from neural_memory.storage.base import NeuralStorage
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/brain",
@@ -272,17 +275,36 @@ async def merge_brain(
         strategy=conflict_strategy,
     )
 
-    # Reset brain data then reimport merged snapshot
+    # Stage the merged snapshot into a temporary brain id FIRST so it is durable
+    # on disk before we clear the real brain. A process crash/OOM/SIGKILL
+    # between clear() and import_brain() can no longer leave the brain
+    # permanently empty — the staging copy survives the process (#47).
+    import uuid
+
+    staging_brain_id = f"__merge_staging_{brain_id}_{uuid.uuid4().hex[:8]}"
+    await storage.import_brain(merged_snapshot, staging_brain_id)
+
+    # Swap: clear + reimport the real brain.
     await storage.clear(brain_id)
     try:
         await storage.import_brain(merged_snapshot, brain_id)
     except Exception:
-        # Restore from pre-merge backup to prevent data loss
+        # Restore from pre-merge backup to prevent data loss. The staging copy
+        # is also left intact as an extra recovery artifact.
         await storage.clear(brain_id)
         await storage.import_brain(local_snapshot, brain_id)
         raise HTTPException(
             status_code=500,
             detail="Merge import failed; brain restored to pre-merge state",
+        )
+
+    # Swap succeeded — drop the staging copy (best-effort).
+    try:
+        await storage.clear(staging_brain_id)
+    except Exception:  # pragma: no cover - best-effort cleanup
+        logger.warning(
+            "Failed to drop merge staging brain %s; left for recovery",
+            staging_brain_id,
         )
 
     return MergeReportResponse(

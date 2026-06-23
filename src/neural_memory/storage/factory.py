@@ -6,6 +6,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from neural_memory.core.brain_mode import BrainMode, BrainModeConfig
+from neural_memory.storage.base import NeuralStorage
 from neural_memory.storage.memory_store import InMemoryStorage
 from neural_memory.storage.shared_store import SharedStorage
 
@@ -21,7 +22,6 @@ if TYPE_CHECKING:
     from neural_memory.core.brain import Brain, BrainSnapshot
     from neural_memory.core.neuron import Neuron, NeuronState, NeuronType
     from neural_memory.core.synapse import Synapse
-    from neural_memory.storage.base import NeuralStorage
 
 
 async def create_storage(
@@ -128,7 +128,7 @@ async def create_storage(
             sync_strategy=config.hybrid.sync_strategy,
             auto_sync_on_encode=config.hybrid.auto_sync_on_encode,
         )
-        return hybrid_storage  # type: ignore[return-value]
+        return hybrid_storage
 
     else:
         raise ValueError(f"Unknown brain mode: {config.mode}")
@@ -159,11 +159,19 @@ async def _try_pro_storage(local_path: str, brain_id: str) -> NeuralStorage | No
         return None
 
 
-class HybridStorage:
+class HybridStorage(NeuralStorage):
     """
     Hybrid storage that combines local SQLite with remote sync.
 
     Provides offline-first capability with optional sync to server.
+
+    Subclasses :class:`NeuralStorage` so every abstract core method is
+    accounted for at instantiation (the explicit overrides below delegate to
+    the local SQLite backend). Batch / extended methods that are *not*
+    overridden here are forwarded to ``self._local`` via :meth:`__getattr__`,
+    so the previously-missing surface (``get_neurons_batch``, typed memory,
+    change log, devices, merkle, alerts, sources, …) no longer raises
+    ``AttributeError`` (closes #30).
     """
 
     def __init__(
@@ -177,6 +185,33 @@ class HybridStorage:
         self._remote = remote
         self._auto_sync = auto_sync_on_encode
         self._brain_id: str | None = None
+
+    @property
+    def brain_id(self) -> str | None:
+        """Current brain context (HybridStorage tracks it on ``_brain_id``)."""
+        return self._brain_id
+
+    @property
+    def current_brain_id(self) -> str | None:
+        """Alias for :attr:`brain_id` (backward compatibility)."""
+        return self._brain_id
+
+    def __getattr__(self, name: str) -> Any:
+        """Delegate any non-overridden storage method to the local backend.
+
+        ``__getattr__`` is only consulted for attributes not found through the
+        normal lookup, so the explicit overrides above always take precedence.
+        Dunder / private names are excluded to avoid masking real
+        AttributeErrors (e.g. during pickling or copy).
+        """
+        if name.startswith("_"):
+            raise AttributeError(name)
+        # ``self._local`` is set in __init__; if it isn't yet, fall through to
+        # a normal AttributeError rather than recursing.
+        local = self.__dict__.get("_local")
+        if local is None:
+            raise AttributeError(name)
+        return getattr(local, name)
 
     @classmethod
     async def create(
@@ -233,7 +268,7 @@ class HybridStorage:
         """Get neuron from local storage."""
         return await self._local.get_neuron(neuron_id)
 
-    async def find_neurons(self, **kwargs: Any) -> list[Neuron]:
+    async def find_neurons(self, **kwargs: Any) -> list[Neuron]:  # type: ignore[override]
         """Find neurons in local storage."""
         return await self._local.find_neurons(**kwargs)
 
@@ -286,7 +321,7 @@ class HybridStorage:
     async def get_synapse(self, synapse_id: str) -> Synapse | None:
         return await self._local.get_synapse(synapse_id)
 
-    async def get_synapses(self, **kwargs: Any) -> list[Synapse]:
+    async def get_synapses(self, **kwargs: Any) -> list[Synapse]:  # type: ignore[override]
         return await self._local.get_synapses(**kwargs)
 
     async def update_synapse(self, synapse: Synapse) -> None:
@@ -308,7 +343,7 @@ class HybridStorage:
                 logger.debug("Remote sync failed for delete_synapse: %s", e)
         return result
 
-    async def get_neighbors(self, neuron_id: str, **kwargs: Any) -> Any:
+    async def get_neighbors(self, neuron_id: str, **kwargs: Any) -> Any:  # type: ignore[override]
         return await self._local.get_neighbors(neuron_id, **kwargs)
 
     async def get_path(
@@ -331,7 +366,7 @@ class HybridStorage:
     async def get_fiber(self, fiber_id: str) -> Any:
         return await self._local.get_fiber(fiber_id)
 
-    async def find_fibers(self, **kwargs: Any) -> Any:
+    async def find_fibers(self, **kwargs: Any) -> Any:  # type: ignore[override]
         return await self._local.find_fibers(**kwargs)
 
     async def update_fiber(self, fiber: Any) -> None:
@@ -353,7 +388,7 @@ class HybridStorage:
                 logger.debug("Remote sync failed for delete_fiber: %s", e)
         return result
 
-    async def get_fibers(self, **kwargs: Any) -> Any:
+    async def get_fibers(self, **kwargs: Any) -> Any:  # type: ignore[override]
         return await self._local.get_fibers(**kwargs)
 
     async def save_brain(self, brain: Brain) -> None:
@@ -423,10 +458,30 @@ class HybridStorage:
             strategy=conflict_strategy,
         )
 
-        # Clear local and reimport merged
+        # Stage the merged snapshot into a temporary brain id FIRST, so that a
+        # crash/error between clear() and import_brain() can never destroy the
+        # only copy of the data (#31). The staging brain is a durable on-disk
+        # recovery copy: only after it is fully imported do we clear+reimport
+        # the real brain, and only after THAT succeeds do we drop the staging
+        # copy. A failure mid-swap leaves the staging brain intact for recovery.
+        import uuid
+
+        staging_brain_id = f"__sync_staging_{self._brain_id}_{uuid.uuid4().hex[:8]}"
+        await self._local.import_brain(merged_snapshot, staging_brain_id)
+        # Swap: clear+reimport the real brain. If anything here fails, the
+        # staging brain is deliberately left intact (NOT cleaned up) so the data
+        # is recoverable — re-running sync re-imports from the merged snapshot.
         await self._local.clear(self._brain_id)
         await self._local.import_brain(merged_snapshot, self._brain_id)
         self._local.set_brain(self._brain_id)
+        # Swap succeeded — drop the now-redundant staging copy (best-effort).
+        try:
+            await self._local.clear(staging_brain_id)
+        except Exception:  # pragma: no cover - best-effort cleanup
+            logger.warning(
+                "Failed to drop sync staging brain %s; left for recovery",
+                staging_brain_id,
+            )
 
         # Push merged to remote
         await self._remote.import_brain(merged_snapshot, self._brain_id)
@@ -454,3 +509,85 @@ class HybridStorage:
         """Close all connections."""
         await self._local.close()
         await self._remote.disconnect()
+
+
+def _install_local_delegators() -> None:
+    """Generate read-through delegators to ``self._local`` for the extended /
+    batch storage surface HybridStorage does not override explicitly.
+
+    HybridStorage subclasses :class:`NeuralStorage`, so it *inherits*
+    ``ExtendedStorage``'s concrete ``raise NotImplementedError`` stubs (typed
+    memory, change log, devices, merkle, alerts, sources, …) plus the optional
+    ``CoreStorage`` batch helpers. Because those are real inherited methods,
+    ``__getattr__`` never fires for them — they would raise NotImplementedError
+    instead of delegating. We therefore install explicit delegators for every
+    such method that HybridStorage does not already define (closes #30).
+    """
+    import inspect
+
+    from neural_memory.storage.base import CoreStorage, ExtendedStorage
+
+    def _make_delegator(method_name: str, *, is_async: bool) -> Any:
+        if is_async:
+
+            async def _adelegator(self: HybridStorage, *args: Any, **kwargs: Any) -> Any:
+                return await getattr(self._local, method_name)(*args, **kwargs)
+
+            deleg: Any = _adelegator
+        else:
+
+            def _sdelegator(self: HybridStorage, *args: Any, **kwargs: Any) -> Any:
+                return getattr(self._local, method_name)(*args, **kwargs)
+
+            deleg = _sdelegator
+
+        deleg.__name__ = method_name
+        deleg.__qualname__ = f"HybridStorage.{method_name}"
+        deleg.__doc__ = f"Delegate {method_name}() to the local backend."
+        return deleg
+
+    # Optional CoreStorage helpers (non-abstract, default to a base impl that
+    # assumes a single SQL backend) that should hit the local store directly.
+    optional_core = {
+        "get_neurons_batch",
+        "get_neuron_states_batch",
+        "update_neuron_states_batch",
+        "update_synapses_batch",
+        "find_neurons_exact_batch",
+        "find_reflex_neurons",
+        "search_fiber_summaries",
+        "update_fiber_metadata",
+        "find_fibers_batch",
+        "get_synapses_for_neurons",
+        "get_neuron_hashes",
+        "has_neuron_by_content_hash",
+        "batch_save",
+        "disable_auto_save",
+        "enable_auto_save",
+    }
+
+    names: set[str] = set(optional_core)
+    for name in vars(ExtendedStorage):
+        if name.startswith("_"):
+            continue
+        if callable(getattr(ExtendedStorage, name, None)):
+            names.add(name)
+
+    for name in names:
+        # Never shadow a method HybridStorage defines explicitly.
+        if name in HybridStorage.__dict__:
+            continue
+        inherited = getattr(HybridStorage, name, None)
+        # Only install if the name is a real (inherited) callable on the class.
+        if not callable(inherited):
+            continue
+        # ``batch_save``/auto-save toggles live on CoreStorage; ensure they exist.
+        if name in optional_core and not (
+            hasattr(CoreStorage, name) or hasattr(ExtendedStorage, name)
+        ):
+            continue
+        is_async = inspect.iscoroutinefunction(inherited)
+        setattr(HybridStorage, name, _make_delegator(name, is_async=is_async))
+
+
+_install_local_delegators()

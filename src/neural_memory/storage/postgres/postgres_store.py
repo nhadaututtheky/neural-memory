@@ -92,18 +92,54 @@ class PostgreSQLStorage(
         self._current_brain_id: str | None = None
 
     async def initialize(self) -> None:
-        """Create connection pool and schema."""
+        """Create connection pool and schema.
+
+        The pool is pinned to ``TimeZone=UTC`` so naive-UTC datetimes
+        (project convention, see ``utils/timeutils``) bound into
+        ``TIMESTAMPTZ`` columns are interpreted as UTC regardless of the
+        server's session timezone (#15). Each pooled connection also
+        registers the pgvector codec so ``list[float]`` embeddings encode
+        to the ``vector`` type on insert (#24).
+        """
         import asyncpg
 
+        conn_kwargs = {
+            "host": self._host,
+            "port": self._port,
+            "database": self._database,
+            "user": self._user,
+            "password": self._password or None,
+        }
+
+        # Ensure the pgvector extension exists BEFORE the pool's per-connection
+        # init runs register_vector — otherwise the codec lookup finds no
+        # ``vector`` type and embedding binds silently fall back to NULL.
+        bootstrap = await asyncpg.connect(**conn_kwargs)
+        try:
+            await bootstrap.execute("CREATE EXTENSION IF NOT EXISTS vector")
+        finally:
+            await bootstrap.close()
+
+        async def _init_conn(conn: Any) -> None:
+            # Register the pgvector codec so add_neuron/update_neuron can
+            # bind list[float] embeddings to the ``vector`` column (#24).
+            try:
+                from pgvector.asyncpg import register_vector
+
+                await register_vector(conn)
+            except Exception:
+                # pgvector python pkg absent — embedding writes degrade to
+                # NULL and queries already guard with try/except. Don't
+                # block pool creation.
+                logger.debug("pgvector codec not registered", exc_info=True)
+
         self._pool = await asyncpg.create_pool(
-            host=self._host,
-            port=self._port,
-            database=self._database,
-            user=self._user,
-            password=self._password or None,
             min_size=1,
             max_size=10,
             command_timeout=60,
+            server_settings={"timezone": "UTC"},
+            init=_init_conn,
+            **conn_kwargs,
         )
         await ensure_schema(self._pool, embedding_dim=self._embedding_dim)
         logger.info("PostgreSQL connected: %s:%d/%s", self._host, self._port, self._database)

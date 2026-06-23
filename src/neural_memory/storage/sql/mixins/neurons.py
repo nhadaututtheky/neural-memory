@@ -228,10 +228,20 @@ class NeuronMixin:
         ephemeral: bool | None = None,
         created_before: datetime | None = None,
     ) -> list[Neuron]:
-        # Cache shortcut for exact-match lookups (most repeated pattern)
-        if content_exact is not None and content_contains is None and time_range is None:
+        # Cache shortcut for exact-match lookups (most repeated pattern).
+        # The cache key includes the ephemeral filter so an ephemeral-filtered
+        # result is never served to a caller using a different filter.
+        # created_before is not part of the key, so skip the cache when it is set.
+        cacheable = (
+            content_exact is not None
+            and content_contains is None
+            and time_range is None
+            and created_before is None
+        )
+        if cacheable:
+            assert content_exact is not None  # cacheable implies content_exact set
             type_val = type.value if type is not None else None
-            cached = self._neuron_cache.get(content_exact, type_val)
+            cached = self._neuron_cache.get(content_exact, type_val, ephemeral)
             if cached is not None:
                 return cached[offset : offset + limit]
 
@@ -244,18 +254,24 @@ class NeuronMixin:
 
         # ------ Fast exact-content path ------
         if content_exact is not None:
-            row = await d.fetch_one(
-                f"SELECT * FROM neurons WHERE brain_id = {d.ph(1)} AND content = {d.ph(2)}",
-                (brain_id, content_exact),
-            )
+            exact_sql = f"SELECT * FROM neurons WHERE brain_id = {d.ph(1)} AND content = {d.ph(2)}"
+            exact_params: list[Any] = [brain_id, content_exact]
+            if ephemeral is not None:
+                exact_sql += f" AND ephemeral = {d.ph(len(exact_params) + 1)}"
+                exact_params.append(1 if ephemeral else 0)
+            if created_before is not None:
+                exact_sql += f" AND created_at < {d.ph(len(exact_params) + 1)}"
+                exact_params.append(d.serialize_dt(created_before))
+            row = await d.fetch_one(exact_sql, exact_params)
             if row is None:
                 return []
             if type is not None and row["type"] != type.value:
                 return []
             result = [row_to_neuron(row, d)]
-            # Populate cache
-            type_val = type.value if type is not None else None
-            self._neuron_cache.put(content_exact, type_val, result)
+            # Populate cache (only when the key fully captures the filters)
+            if cacheable:
+                type_val = type.value if type is not None else None
+                self._neuron_cache.put(content_exact, type_val, result, ephemeral)
             return result
 
         # ------ FTS path ------
@@ -343,9 +359,10 @@ class NeuronMixin:
 
         # Populate cache for exact-match queries (unreachable here but kept
         # for safety if the flow is refactored later)
-        if content_exact is not None and content_contains is None and time_range is None:
+        if cacheable:
+            assert content_exact is not None  # cacheable implies content_exact set
             type_val = type.value if type is not None else None
-            self._neuron_cache.put(content_exact, type_val, result)
+            self._neuron_cache.put(content_exact, type_val, result, ephemeral)
 
         return result
 
@@ -494,9 +511,14 @@ class NeuronMixin:
                     d.serialize_dt(state.created_at),
                 ),
             )
-        except Exception:
-            # Neuron may have been deleted (e.g., by consolidation pruning)
-            # between state read and state write — skip silently.
+        except Exception as e:
+            # Only swallow the expected case: the neuron was deleted
+            # (e.g., by consolidation pruning) between state read and write,
+            # producing a FK/integrity violation on the upsert. Re-raise
+            # everything else (connection drops, serialization failures,
+            # lock timeouts, type errors) so state loss is never silent.
+            if not d.is_integrity_error(e):
+                raise
             logger.debug(
                 "Skipping state update for neuron %s (likely deleted)",
                 state.neuron_id,
@@ -543,8 +565,12 @@ class NeuronMixin:
                      homeostatic_target = EXCLUDED.homeostatic_target""",
                 args_list,
             )
-        except Exception:
-            # Neurons may have been pruned; skip silently.
+        except Exception as e:
+            # Only swallow the expected pruned-neuron FK/integrity case;
+            # re-raise transient/connection/serialization errors so a whole
+            # batch of state updates is never silently discarded.
+            if not d.is_integrity_error(e):
+                raise
             logger.debug("Batch state update partially failed (likely pruned neurons)")
 
     async def get_all_neuron_states(self) -> list[NeuronState]:
@@ -602,7 +628,11 @@ class NeuronMixin:
             params.append(limit)
 
         elif d.supports_ilike:
-            # PostgreSQL non-FTS path — ILIKE prefix match
+            # PostgreSQL non-FTS path — ILIKE prefix match.
+            # Escape LIKE metacharacters (\, %, _) so a user prefix containing
+            # them matches literally instead of acting as a wildcard, mirroring
+            # the SQLite fallback below (closes #20).
+            escaped = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             query = (
                 "SELECT n.id AS neuron_id, n.content, n.type,"
                 " COALESCE(ns.access_frequency, 0) AS access_frequency,"
@@ -612,9 +642,9 @@ class NeuronMixin:
                 " FROM neurons n"
                 " LEFT JOIN neuron_states ns"
                 "   ON n.brain_id = ns.brain_id AND n.id = ns.neuron_id"
-                f" WHERE n.brain_id = {d.ph(1)} AND n.content ILIKE {d.ph(2)}"
+                f" WHERE n.brain_id = {d.ph(1)} AND n.content ILIKE {d.ph(2)} ESCAPE '\\'"
             )
-            params = [brain_id, f"{prefix}%"]
+            params = [brain_id, f"{escaped}%"]
 
             if type_filter is not None:
                 idx = len(params) + 1

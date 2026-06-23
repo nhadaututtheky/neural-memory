@@ -3,11 +3,34 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 from neural_memory.sync.protocol import ConflictStrategy, SyncChange, SyncConflict
+from neural_memory.utils.timeutils import ensure_naive_utc
 
 logger = logging.getLogger(__name__)
+
+# Naive sentinel for unparseable timestamps — sorts oldest. Naive (not tz-aware)
+# to stay comparable with the project's naive-UTC datetimes (utils/timeutils).
+_OLDEST = datetime.min  # noqa: DTZ901 — intentional naive sentinel, matches naive-UTC convention
+
+
+def _parse_changed_at(value: str) -> datetime:
+    """Parse a ``changed_at`` ISO string into a normalized naive-UTC datetime.
+
+    Sources mix naive ISO (changelog), tz-aware ISO (remote payloads over
+    JSON), and occasionally empty/garbage strings. Lexicographic string
+    comparison (finding #42) ranks ``'...+00:00'`` above the same instant in
+    naive form, producing the wrong winner. Normalize to naive UTC so the
+    comparison reflects the actual instant. Unparseable values sort oldest.
+    """
+    if not value:
+        return _OLDEST
+    try:
+        return ensure_naive_utc(datetime.fromisoformat(value))
+    except (ValueError, TypeError):
+        return _OLDEST
 
 
 def resolve_entity_conflict(
@@ -81,8 +104,9 @@ def _pick_winner(
     if strategy == ConflictStrategy.PREFER_REMOTE:
         return remote
     if strategy == ConflictStrategy.PREFER_RECENT:
-        # Compare timestamps — lexicographic ISO comparison is safe for naive UTC
-        if local.changed_at >= remote.changed_at:
+        # Compare timestamps as normalized naive-UTC datetimes (finding #42):
+        # lexicographic ISO comparison breaks across naive vs tz-aware strings.
+        if _parse_changed_at(local.changed_at) >= _parse_changed_at(remote.changed_at):
             return local
         return remote
     if strategy == ConflictStrategy.PREFER_STRONGER:
@@ -172,8 +196,10 @@ def merge_change_lists(
     remote_by_entity: dict[tuple[str, str], SyncChange] = {}
     for change in remote_changes:
         key = (change.entity_type, change.entity_id)
-        # Keep latest remote change per entity
-        if key not in remote_by_entity or change.changed_at > remote_by_entity[key].changed_at:
+        # Keep latest remote change per entity (normalized datetime compare, #42)
+        if key not in remote_by_entity or _parse_changed_at(change.changed_at) > _parse_changed_at(
+            remote_by_entity[key].changed_at
+        ):
             remote_by_entity[key] = change
 
     merged: list[SyncChange] = []

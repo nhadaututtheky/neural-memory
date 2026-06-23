@@ -206,7 +206,9 @@ class TestShouldCompact:
     def test_per_call_true_overrides_config_false(self) -> None:
         args: dict[str, object] = {"compact": True, "query": "test"}
         assert should_compact(tool_args=args, config=ResponseConfig(compact_mode=False))
-        assert "compact" not in args, "compact key should be popped"
+        # #45: should_compact must NOT mutate tool_args — handlers read `compact`
+        # downstream; popping it here silently forced them back to their default.
+        assert "compact" in args, "compact key must NOT be popped (#45)"
 
     def test_per_call_false_overrides_config_true(self) -> None:
         args: dict[str, object] = {"compact": False}
@@ -217,10 +219,13 @@ class TestShouldCompact:
         assert should_compact(tool_args=args, config=ResponseConfig(compact_mode=True))
         assert not should_compact(tool_args=args, config=ResponseConfig(compact_mode=False))
 
-    def test_pops_compact_from_args(self) -> None:
-        args: dict[str, object] = {"compact": True, "query": "test"}
-        should_compact(tool_args=args, config=ResponseConfig())
-        assert "compact" not in args
+    def test_does_not_mutate_args(self) -> None:
+        # Regression for #45: should_compact reads `compact` with .get() and
+        # leaves tool_args untouched so per-tool handlers see the real value.
+        args: dict[str, object] = {"compact": False, "query": "test"}
+        result = should_compact(tool_args=args, config=ResponseConfig(compact_mode=True))
+        assert result is False
+        assert args == {"compact": False, "query": "test"}
 
 
 # ---------- ResponseConfig ----------

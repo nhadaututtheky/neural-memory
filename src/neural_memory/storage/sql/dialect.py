@@ -103,16 +103,62 @@ class Dialect(ABC):
         """Execute a write query and return the number of affected rows."""
         ...
 
+    @abstractmethod
     async def execute_returning_count(self, sql: str, params: Sequence[Any] = ()) -> int:
         """Execute a write query that returns a row-count expression and return the count.
 
         Used for INSERT...SELECT statements that use expressions like
         ``SELECT changes()`` (SQLite) or ``SELECT COUNT(*)`` to get the number
         of rows affected by the preceding DML statement.
+
+        Must be implemented per dialect — there is no portable default. A base
+        implementation that returned a fake ``0`` silently reported bulk
+        INSERT...SELECT statements as no-ops on any non-overriding dialect.
         """
-        await self.execute(sql, params)
-        row = await self.fetch_one("SELECT 0 as cnt", ())
-        return row.get("cnt", 0) if row else 0
+        ...
+
+    @abstractmethod
+    async def insert_returning_id(self, sql: str, params: Sequence[Any] = ()) -> int:
+        """Execute an ``INSERT ... RETURNING id`` and return the new row id.
+
+        Replaces the ``SELECT MAX(id)`` round-trip pattern, which races under
+        concurrency and can return a different row's id than the one just
+        inserted. ``sql`` MUST already include a ``RETURNING id`` clause.
+        """
+        ...
+
+    # ------------------------------------------------------------------
+    # Exception classification
+    # ------------------------------------------------------------------
+
+    def is_integrity_error(self, exc: BaseException) -> bool:
+        """Return True if ``exc`` is an integrity/constraint violation.
+
+        Covers UNIQUE / PRIMARY KEY / FOREIGN KEY / NOT NULL / CHECK
+        violations. Used by callers that want to swallow ONLY the expected
+        constraint failure (e.g. a row referencing a since-deleted parent)
+        while re-raising genuine faults such as connection drops,
+        serialization failures, lock timeouts and type errors.
+
+        The default implementation is dialect-agnostic and inspects the
+        exception's class name + message text. Subclasses should override
+        with precise driver exception types where available.
+        """
+        name = type(exc).__name__
+        if "IntegrityError" in name:
+            return True
+        text = str(exc).upper()
+        return any(
+            marker in text
+            for marker in (
+                "UNIQUE",
+                "FOREIGN KEY",
+                "NOT NULL",
+                "CHECK CONSTRAINT",
+                "PRIMARY KEY",
+                "CONSTRAINT FAILED",
+            )
+        )
 
     # ------------------------------------------------------------------
     # Placeholder generation
@@ -245,6 +291,18 @@ class Dialect(ABC):
         """
         return f"EXISTS (SELECT 1 FROM json_each({column}) WHERE value = {self.ph(value_param)})"
 
+    def json_array_contains_param(self, value: Any) -> Any:
+        """Bind value for the placeholder produced by :meth:`json_array_contains`.
+
+        Callers pass the *logical* element to test for membership; each
+        dialect wraps it into the shape its own ``json_array_contains`` SQL
+        expects. SQLite compares a scalar against ``json_each(...).value``, so
+        the bare value is returned. PostgreSQL uses ``tags @> $N::jsonb``,
+        which requires a JSON *document* — a one-element JSON array
+        (``'["work"]'``) — not the bare string ``work`` (which is invalid JSON).
+        """
+        return value
+
     # ------------------------------------------------------------------
     # Date/time handling
     # ------------------------------------------------------------------
@@ -274,6 +332,16 @@ class Dialect(ABC):
     # ------------------------------------------------------------------
     # Schema helpers
     # ------------------------------------------------------------------
+
+    def date_trunc_day(self, column: str) -> str:
+        """SQL expression truncating an ISO-text timestamp column to its day.
+
+        SQLite stores timestamps as ISO TEXT and has no DATE type:
+        ``CAST(col AS DATE)`` applies NUMERIC affinity and collapses to the
+        year integer, so use the leading 10 chars (``YYYY-MM-DD``) instead.
+        PostgreSQL overrides this with ``col::date`` on its TIMESTAMPTZ column.
+        """
+        return f"SUBSTR({column}, 1, 10)"
 
     def auto_increment_pk(self) -> str:
         """SQL type for an auto-incrementing integer primary key.

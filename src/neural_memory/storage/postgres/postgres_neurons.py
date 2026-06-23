@@ -37,8 +37,9 @@ class PostgresNeuronMixin(PostgresBaseMixin):
 
         await self._query(
             """INSERT INTO neurons
-               (id, brain_id, type, content, metadata, content_hash, created_at, embedding)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)""",
+               (id, brain_id, type, content, metadata, content_hash, created_at,
+                ephemeral, embedding)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)""",
             neuron.id,
             brain_id,
             neuron.type.value,
@@ -46,6 +47,7 @@ class PostgresNeuronMixin(PostgresBaseMixin):
             meta_json,
             neuron.content_hash,
             created,
+            1 if neuron.ephemeral else 0,
             embedding,
         )
 
@@ -107,6 +109,8 @@ class PostgresNeuronMixin(PostgresBaseMixin):
                 return []
             if type is not None and row["type"] != type.value:
                 return []
+            if ephemeral is not None and bool(row["ephemeral"]) != ephemeral:
+                return []
             return [row_to_neuron(row)]
 
         query = "SELECT * FROM neurons WHERE brain_id = $1"
@@ -122,6 +126,14 @@ class PostgresNeuronMixin(PostgresBaseMixin):
                 idx = len(params) + 1
                 query += f" AND content_tsv @@ plainto_tsquery('english', ${idx})"
                 params.append(safe_term)
+
+        if ephemeral is not None:
+            params.append(1 if ephemeral else 0)
+            query += f" AND ephemeral = ${len(params)}"
+
+        if created_before is not None:
+            params.append(created_before)
+            query += f" AND created_at < ${len(params)}"
 
         if time_range is not None:
             start, end = time_range
@@ -177,12 +189,13 @@ class PostgresNeuronMixin(PostgresBaseMixin):
         meta = {k: v for k, v in neuron.metadata.items() if k != "_embedding"}
         r = await self._query(
             """UPDATE neurons SET type = $1, content = $2, metadata = $3, content_hash = $4,
-               embedding = $5
-               WHERE brain_id = $6 AND id = $7""",
+               ephemeral = $5, embedding = $6
+               WHERE brain_id = $7 AND id = $8""",
             neuron.type.value,
             neuron.content,
             json.dumps(meta),
             neuron.content_hash,
+            1 if neuron.ephemeral else 0,
             embedding,
             brain_id,
             neuron.id,
