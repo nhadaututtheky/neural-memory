@@ -573,9 +573,12 @@ class FiberMixin:
         return int(row["cnt"]) if row else 0
 
     async def get_fiber_stage_counts(self, brain_id: str) -> dict[str, int]:
+        # `stage` lives on memory_maturations, not on fibers — the old query
+        # raised on both dialects and pinned consolidation_ratio at 0.0.
         d = self._dialect
         rows = await d.fetch_all(
-            f"SELECT stage, COUNT(*) AS cnt FROM fibers WHERE brain_id = {d.ph(1)} GROUP BY stage",
+            f"SELECT mm.stage AS stage, COUNT(*) AS cnt FROM memory_maturations mm "
+            f"WHERE mm.brain_id = {d.ph(1)} GROUP BY mm.stage",
             (brain_id,),
         )
         return {row["stage"]: int(row["cnt"]) for row in rows}

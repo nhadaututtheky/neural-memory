@@ -25,12 +25,26 @@ class MaturationMixin:
         d = self._dialect
         brain_id = self._get_brain_id()
 
+        # PK is (brain_id, fiber_id): a second save for the same fiber must
+        # UPDATE (stage advance, rehearsal_count++, reinforcement_timestamps
+        # append), not raise a swallowed IntegrityError. A plain INSERT here
+        # blocked the EPISODIC->SEMANTIC maturation transition entirely.
+        sql = d.upsert_sql(
+            "memory_maturations",
+            [
+                "fiber_id",
+                "brain_id",
+                "stage",
+                "stage_entered_at",
+                "rehearsal_count",
+                "reinforcement_timestamps",
+            ],
+            ["brain_id", "fiber_id"],
+            ["stage", "stage_entered_at", "rehearsal_count", "reinforcement_timestamps"],
+        )
         try:
             await d.execute(
-                f"""INSERT INTO memory_maturations
-                (fiber_id, brain_id, stage, stage_entered_at, rehearsal_count,
-                 reinforcement_timestamps)
-                VALUES ({d.phs(6)})""",
+                sql,
                 [
                     record.fiber_id,
                     brain_id,
@@ -40,8 +54,12 @@ class MaturationMixin:
                     json.dumps(record.reinforcement_timestamps),
                 ],
             )
-        except Exception:
-            # Fiber was deleted (e.g., by consolidation) between read and write.
+        except Exception as e:
+            # Only swallow the genuine deleted-fiber FK violation (the fiber
+            # was removed by consolidation between read and write). Re-raise
+            # everything else so maturation loss is never silent.
+            if not d.is_integrity_error(e):
+                raise
             logger.debug("Skipping maturation save for deleted fiber %s", record.fiber_id)
 
     async def get_maturation(self, fiber_id: str) -> MaturationRecord | None:

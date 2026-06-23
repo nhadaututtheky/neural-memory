@@ -42,8 +42,15 @@ class ProjectsMixin:
                 ],
             )
             return project.id
-        except Exception:
-            raise ValueError(f"Project {project.id} already exists")
+        except Exception as e:
+            # Only a UNIQUE/PK integrity violation means the project already
+            # exists. Any other failure (connection error, NOT NULL violation,
+            # serialization failure, disk full) must propagate so callers like
+            # import_brain._import_projects don't silently drop valid projects
+            # on a transient fault.
+            if d.is_integrity_error(e):
+                raise ValueError(f"Project {project.id} already exists") from e
+            raise
 
     async def get_project(self, project_id: str) -> Project | None:
         d = self._dialect

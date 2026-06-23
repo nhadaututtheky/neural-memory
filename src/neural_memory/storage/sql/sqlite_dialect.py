@@ -48,6 +48,13 @@ class SQLiteDialect(Dialect):
     def name(self) -> str:
         return "sqlite"
 
+    def is_integrity_error(self, exc: BaseException) -> bool:
+        import sqlite3
+
+        if isinstance(exc, sqlite3.IntegrityError):
+            return True
+        return super().is_integrity_error(exc)
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------

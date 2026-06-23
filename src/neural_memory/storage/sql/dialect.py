@@ -115,6 +115,39 @@ class Dialect(ABC):
         return row.get("cnt", 0) if row else 0
 
     # ------------------------------------------------------------------
+    # Exception classification
+    # ------------------------------------------------------------------
+
+    def is_integrity_error(self, exc: BaseException) -> bool:
+        """Return True if ``exc`` is an integrity/constraint violation.
+
+        Covers UNIQUE / PRIMARY KEY / FOREIGN KEY / NOT NULL / CHECK
+        violations. Used by callers that want to swallow ONLY the expected
+        constraint failure (e.g. a row referencing a since-deleted parent)
+        while re-raising genuine faults such as connection drops,
+        serialization failures, lock timeouts and type errors.
+
+        The default implementation is dialect-agnostic and inspects the
+        exception's class name + message text. Subclasses should override
+        with precise driver exception types where available.
+        """
+        name = type(exc).__name__
+        if "IntegrityError" in name:
+            return True
+        text = str(exc).upper()
+        return any(
+            marker in text
+            for marker in (
+                "UNIQUE",
+                "FOREIGN KEY",
+                "NOT NULL",
+                "CHECK CONSTRAINT",
+                "PRIMARY KEY",
+                "CONSTRAINT FAILED",
+            )
+        )
+
+    # ------------------------------------------------------------------
     # Placeholder generation
     # ------------------------------------------------------------------
 

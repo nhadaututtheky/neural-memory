@@ -494,9 +494,14 @@ class NeuronMixin:
                     d.serialize_dt(state.created_at),
                 ),
             )
-        except Exception:
-            # Neuron may have been deleted (e.g., by consolidation pruning)
-            # between state read and state write — skip silently.
+        except Exception as e:
+            # Only swallow the expected case: the neuron was deleted
+            # (e.g., by consolidation pruning) between state read and write,
+            # producing a FK/integrity violation on the upsert. Re-raise
+            # everything else (connection drops, serialization failures,
+            # lock timeouts, type errors) so state loss is never silent.
+            if not d.is_integrity_error(e):
+                raise
             logger.debug(
                 "Skipping state update for neuron %s (likely deleted)",
                 state.neuron_id,
@@ -543,8 +548,12 @@ class NeuronMixin:
                      homeostatic_target = EXCLUDED.homeostatic_target""",
                 args_list,
             )
-        except Exception:
-            # Neurons may have been pruned; skip silently.
+        except Exception as e:
+            # Only swallow the expected pruned-neuron FK/integrity case;
+            # re-raise transient/connection/serialization errors so a whole
+            # batch of state updates is never silently discarded.
+            if not d.is_integrity_error(e):
+                raise
             logger.debug("Batch state update partially failed (likely pruned neurons)")
 
     async def get_all_neuron_states(self) -> list[NeuronState]:

@@ -219,6 +219,16 @@ class PostgresDialect(Dialect):
     def name(self) -> str:
         return "postgres"
 
+    def is_integrity_error(self, exc: BaseException) -> bool:
+        try:
+            from asyncpg.exceptions import IntegrityConstraintViolationError
+
+            if isinstance(exc, IntegrityConstraintViolationError):
+                return True
+        except ImportError:
+            pass
+        return super().is_integrity_error(exc)
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
