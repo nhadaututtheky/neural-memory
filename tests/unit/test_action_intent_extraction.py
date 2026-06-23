@@ -113,6 +113,33 @@ class TestExtractActionNeuronsStep:
         assert len(result.action_neurons) == 0
         storage.add_neuron.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_dedup_before_cap_preserves_unique(self) -> None:
+        """Regression for #66.
+
+        Duplicate early matches must not consume the MAX_ACTIONS window and
+        crowd out later unique actions. With 3 dup 'fixed the bug' plus
+        'deployed X'/'shipped Y'/'merged Z', the unique later actions survive.
+        """
+        step = ExtractActionNeuronsStep()
+        storage = AsyncMock()
+        storage.find_neurons_exact_batch = AsyncMock(return_value={})
+        config = AsyncMock()
+
+        ctx = _make_ctx(
+            "fixed the login bug, fixed the login bug, fixed the login bug, "
+            "deployed the api, shipped the report, merged the branch"
+        )
+        result = await step.execute(ctx, storage, config)
+
+        contents = {n.content.lower() for n in result.action_neurons}
+        # 'the login bug' counts once; later unique actions are not dropped.
+        # Old (buggy) cap-before-dedup would yield only 3 (3 dups eat the window).
+        assert len(result.action_neurons) == 4
+        assert "the api" in contents
+        assert "the report" in contents
+        assert "the branch" in contents
+
 
 class TestExtractIntentNeuronsStep:
     @pytest.mark.asyncio

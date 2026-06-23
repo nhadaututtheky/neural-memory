@@ -76,6 +76,11 @@ class PipelineContext:
     # Entities stored here are first-mentions — not yet promoted to neurons
     deferred_entity_refs: list[str] = field(default_factory=list)
 
+    # Prior-anchor fiber IDs captured for newly promoted entities, keyed by
+    # entity text. Captured BEFORE marking refs promoted (which flips
+    # promoted=0 → 1) so the later retroactive-link step still sees them.
+    retro_link_anchor_ids: dict[str, list[str]] = field(default_factory=dict)
+
     # Concept extraction observability — incremented by ExtractConceptNeuronsStep.
     # Surfaced through EncodingResult.extraction_stats only when callers opt in.
     dropped_short: int = 0
@@ -122,6 +127,10 @@ class Pipeline:
     def steps(self) -> list[PipelineStep]:
         """Read-only view of registered steps."""
         return list(self._steps)
+
+    def append(self, step: PipelineStep) -> None:
+        """Append a step to the end of the pipeline."""
+        self._steps.append(step)
 
     async def run(
         self,

@@ -273,3 +273,54 @@ def test_brain_config_lazy_entity_defaults():
     assert config.lazy_entity_enabled is True
     assert config.lazy_entity_promotion_threshold == 2
     assert config.lazy_entity_prune_days == 90
+
+
+# ── #37 regression: prior anchors captured BEFORE marking promoted ──
+
+
+async def test_promotion_captures_prior_anchors_before_marking(monkeypatch):
+    """Regression for #37.
+
+    get_entity_ref_fiber_ids reads promoted=0 rows. The promotion step must
+    snapshot prior anchor IDs BEFORE mark_entity_refs_promoted flips them to
+    promoted=1, otherwise the later retroactive-link step sees nothing.
+    This uses a stateful mock that mimics the real promoted-flag semantics.
+    """
+    entity = FakeEntity(text="PostgreSQL", type=MagicMock(value="technology"))
+    storage = _make_storage()
+    storage.count_entity_refs.return_value = 1  # threshold met → promote
+
+    promoted = {"flag": False}
+
+    async def _get_refs(_text: str) -> list[str]:
+        # Mirrors SQL: returns refs only while promoted=0.
+        return [] if promoted["flag"] else ["anchor-1", "anchor-2"]
+
+    async def _mark(_text: str) -> int:
+        promoted["flag"] = True
+        return 2
+
+    storage.get_entity_ref_fiber_ids = AsyncMock(side_effect=_get_refs)
+    storage.mark_entity_refs_promoted = AsyncMock(side_effect=_mark)
+
+    step = ExtractEntityNeuronsStep(entity_extractor=_make_extractor([entity]))
+    ctx = _make_ctx()
+    result = await step.execute(ctx, storage, _make_config())
+
+    # Captured prior anchors despite refs now being promoted=1.
+    assert result.retro_link_anchor_ids.get("PostgreSQL") == ["anchor-1", "anchor-2"]
+
+
+async def test_find_similar_entity_threads_neuron_type():
+    """Regression for #38: dedup search must be scoped to the entity type so an
+    entity is not collapsed into a same-surface-form CONCEPT neuron."""
+    from neural_memory.engine.pipeline_steps import _find_similar_entity
+
+    storage = AsyncMock()
+    storage.find_neurons = AsyncMock(return_value=[])
+
+    await _find_similar_entity(storage, "python", NeuronType.ENTITY)
+
+    # First call is the exact-match lookup — must carry the type filter.
+    first_call = storage.find_neurons.await_args_list[0]
+    assert first_call.kwargs.get("type") == NeuronType.ENTITY

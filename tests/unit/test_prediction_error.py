@@ -39,6 +39,29 @@ class TestDetectsReversal:
     def test_opposite_stable_unstable(self) -> None:
         assert _detects_reversal("the service is stable", "the service is unstable")
 
+    # ── #76 regression: word-boundary matching, no substring false positives ──
+
+    def test_no_false_reversal_hardware_vs_hardly(self) -> None:
+        """'hard' must not match inside 'hardware'/'hardly' (pair easy/hard)."""
+        assert not _detects_reversal(
+            "the hardware is fine",
+            "hardly any issues here",
+        )
+
+    def test_no_false_reversal_safe_inside_unsafe(self) -> None:
+        """'safe' must not match inside 'unsafe' as the same-side term."""
+        assert not _detects_reversal(
+            "this network handles packets",
+            "the framework is documented",
+        )
+
+    def test_real_easy_hard_reversal_still_detected(self) -> None:
+        """Genuine whole-word easy/hard reversal still fires."""
+        assert _detects_reversal(
+            "the migration was easy",
+            "the migration was hard",
+        )
+
 
 class TestVietnameseReversal:
     """Vietnamese reversal detection tests (issue #119)."""
@@ -195,6 +218,34 @@ class TestComputeSurpriseBonus:
             config=mock_config,
         )
         assert result > 0.0  # Some novelty detected
+
+    @pytest.mark.asyncio
+    async def test_candidate_without_hash_computed_on_the_fly(
+        self, mock_storage: AsyncMock, mock_config: MagicMock
+    ) -> None:
+        """Regression for #75.
+
+        A near-duplicate candidate that lacks a stored content_hash (legacy row)
+        must have its hash computed on the fly — not reported as maximum novelty
+        (2.0). Near-dup → surprise ~0, not 2.0.
+        """
+        content = "PostgreSQL is fast for OLTP workloads"
+
+        existing = MagicMock()
+        existing.id = "legacy-1"
+        existing.content = content
+        existing.content_hash = 0  # legacy: no stored simhash
+
+        mock_storage.find_neurons = AsyncMock(return_value=[existing])
+
+        result = await compute_surprise_bonus(
+            content=content,
+            tags={"postgresql", "oltp"},
+            content_hash=simhash(content),
+            storage=mock_storage,
+            config=mock_config,
+        )
+        assert result == 0.0  # near-duplicate, NOT 2.0
 
 
 class TestPredictionErrorStep:

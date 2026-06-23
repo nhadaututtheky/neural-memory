@@ -369,9 +369,17 @@ class MemoryEncoder:
                 from neural_memory.engine.steps.embedding_step import EmbeddingStep
 
                 provider = _create_provider(config)
-                self._pipeline._steps.append(EmbeddingStep(embedding_provider=provider))
-            except (ImportError, Exception):
-                pass  # Embedding provider not available — skip
+                self._pipeline.append(EmbeddingStep(embedding_provider=provider))
+            except ImportError:
+                # Optional embedding extras not installed — expected, low noise.
+                logger.debug("EmbeddingStep dependencies unavailable; skipping embeddings")
+            except Exception:
+                # Real misconfiguration (bad model name, provider error, etc.).
+                # Surface it loudly instead of silently degrading to keyword-only.
+                logger.warning(
+                    "Failed to initialize EmbeddingStep; semantic search disabled",
+                    exc_info=True,
+                )
 
     @property
     def pipeline(self) -> Pipeline:

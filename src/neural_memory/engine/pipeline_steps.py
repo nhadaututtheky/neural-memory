@@ -217,7 +217,7 @@ class ExtractEntityNeuronsStep:
 
         for entity in entities:
             neuron_type = _entity_type_to_neuron_type(entity.type)
-            existing = await _find_similar_entity(storage, entity.text)
+            existing = await _find_similar_entity(storage, entity.text, neuron_type)
             if existing:
                 # Track for relation extraction only (not for synapse creation)
                 ctx.existing_entity_neurons.append(existing)
@@ -264,8 +264,17 @@ class ExtractEntityNeuronsStep:
             ctx.entity_neurons.append(neuron)
             ctx.neurons_created.append(neuron)
 
-            # If promoted via lazy path, mark refs and do retroactive linking
+            # If promoted via lazy path, capture prior anchors THEN mark refs.
+            # Order matters: get_entity_ref_fiber_ids reads promoted=0 rows, so
+            # we must snapshot them before mark_entity_refs_promoted flips them
+            # to promoted=1 (else the later retroactive-link step sees nothing).
             if lazy_enabled and not is_exception:
+                try:
+                    prior_anchor_ids = await storage.get_entity_ref_fiber_ids(entity.text)
+                except Exception:
+                    prior_anchor_ids = []
+                if prior_anchor_ids:
+                    ctx.retro_link_anchor_ids[neuron.content] = prior_anchor_ids
                 try:
                     await storage.mark_entity_refs_promoted(entity.text)
                 except Exception:
@@ -273,14 +282,23 @@ class ExtractEntityNeuronsStep:
         return ctx
 
 
-async def _find_similar_entity(storage: NeuralStorage, text: str) -> Neuron | None:
-    """Find existing entity neuron with similar content."""
-    existing = await storage.find_neurons(content_exact=text, limit=1)
+async def _find_similar_entity(
+    storage: NeuralStorage, text: str, neuron_type: NeuronType | None = None
+) -> Neuron | None:
+    """Find existing entity neuron with similar content.
+
+    ``neuron_type`` restricts the dedup search to neurons of the expected entity
+    type so an entity does not silently collapse into a pre-existing CONCEPT
+    neuron that merely shares the same surface form (e.g. 'python' the concept
+    vs 'python' the entity). This mirrors ExtractConceptNeuronsStep, which
+    already filters on ``type=NeuronType.CONCEPT``.
+    """
+    existing = await storage.find_neurons(content_exact=text, limit=1, type=neuron_type)
     if existing:
         return existing[0]
 
     normalized = text.lower().replace("-", " ").replace("_", " ").strip()
-    candidates = await storage.find_neurons(content_contains=normalized, limit=5)
+    candidates = await storage.find_neurons(content_contains=normalized, limit=5, type=neuron_type)
     for candidate in candidates:
         candidate_norm = candidate.content.lower().replace("-", " ").replace("_", " ").strip()
         if candidate_norm == normalized:
@@ -290,7 +308,9 @@ async def _find_similar_entity(storage: NeuralStorage, text: str) -> Neuron | No
     if text_hash != 0:
         first_word = text.split()[0] if text.split() else ""
         if len(first_word) >= 3:
-            nearby = await storage.find_neurons(content_contains=first_word, limit=10)
+            nearby = await storage.find_neurons(
+                content_contains=first_word, limit=10, type=neuron_type
+            )
             for candidate in nearby:
                 if candidate.content_hash and is_near_duplicate(text_hash, candidate.content_hash):
                     return candidate
@@ -749,13 +769,17 @@ class ExtractActionNeuronsStep:
         matches = _action_pattern().findall(ctx.content)
         seen: set[str] = set()
 
+        # Dedup across ALL matches first, then cap — so duplicate early matches
+        # don't consume the limited slots and crowd out later unique actions.
         valid_actions: list[str] = []
-        for match in matches[: self.MAX_ACTIONS]:
+        for match in matches:
             action_text = match.strip()
             if len(action_text) < 3 or action_text.lower() in seen:
                 continue
             seen.add(action_text.lower())
             valid_actions.append(action_text)
+
+        valid_actions = valid_actions[: self.MAX_ACTIONS]
 
         if not valid_actions:
             return ctx
@@ -809,13 +833,16 @@ class ExtractIntentNeuronsStep:
         matches = _intent_pattern().findall(ctx.content)
         seen: set[str] = set()
 
+        # Dedup across ALL matches first, then cap (see ExtractActionNeuronsStep).
         valid_intents: list[str] = []
-        for match in matches[: self.MAX_INTENTS]:
+        for match in matches:
             intent_text = match.strip()
             if len(intent_text) < 2 or intent_text.lower() in seen:
                 continue
             seen.add(intent_text.lower())
             valid_intents.append(intent_text)
+
+        valid_intents = valid_intents[: self.MAX_INTENTS]
 
         if not valid_intents:
             return ctx
@@ -1515,10 +1542,10 @@ async def _retroactive_entity_link(
         # Only retroactive-link neurons that were just created (not pre-existing)
         if entity_neuron not in ctx.neurons_created:
             continue
-        try:
-            prev_anchor_ids = await storage.get_entity_ref_fiber_ids(entity_neuron.content)
-        except Exception:
-            continue
+        # Consume the prior anchors captured at promotion time. They were read
+        # BEFORE the refs were marked promoted, so re-querying here (promoted=0)
+        # would always return [] — the historical dead-code bug (#37).
+        prev_anchor_ids = ctx.retro_link_anchor_ids.get(entity_neuron.content, [])
         for anchor_id in prev_anchor_ids:
             # Skip current anchor (already linked above)
             if ctx.anchor_neuron and anchor_id == ctx.anchor_neuron.id:

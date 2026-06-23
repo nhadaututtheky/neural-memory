@@ -401,19 +401,18 @@ def _resolve_vi_hour(ref: datetime, match: re.Match[str]) -> tuple[datetime, dat
 
     if period:
         period = period.lower()
-        if (period == "chiều" and hour < 12) or (period == "tối" and hour < 12):
-            hour += 12
+        if period in ("chiều", "tối"):
+            # Afternoon/evening: 1..11 -> 13..23.
+            if hour < 12:
+                hour += 12
+            elif period == "tối" and hour == 12:
+                # "12 giờ tối" is midnight, not noon.
+                hour = 0
         elif period == "sáng" and hour == 12:
+            # "12 giờ sáng" is midnight.
             hour = 0
 
-    # Assume today if future, yesterday if past
     result = ref.replace(hour=hour, minute=0, second=0, microsecond=0)
-    if result > ref:
-        # Future time today is fine
-        pass
-    else:
-        # Past time could be today or yesterday
-        pass
 
     return (
         result - timedelta(minutes=30),

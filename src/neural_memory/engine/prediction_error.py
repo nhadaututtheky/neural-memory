@@ -80,6 +80,22 @@ _OPPOSITE_PAIRS_REGISTRY: dict[str, list[tuple[str, str]]] = {
 }
 
 
+def _term_in(term: str, text: str) -> bool:
+    """Whole-word/phrase membership test.
+
+    Uses word boundaries so 'hard' does not match inside 'hardware'/'hardly'
+    and 'safe' does not match inside 'unsafe'. Multi-word phrases (e.g. the
+    Vietnamese 'không ổn định') are matched as a contiguous phrase anchored on
+    word boundaries, with internal whitespace allowed to collapse.
+    """
+    if not term:
+        return False
+    parts = term.split()
+    inner = r"\s+".join(re.escape(p) for p in parts)
+    pattern = rf"(?<!\w){inner}(?!\w)"
+    return re.search(pattern, text, re.IGNORECASE | re.UNICODE) is not None
+
+
 def _detects_reversal(content_a: str, content_b: str) -> bool:
     """Detect if two texts express opposite claims about the same topic.
 
@@ -111,9 +127,12 @@ def _detects_reversal(content_a: str, content_b: str) -> bool:
         if len(a_words & b_words) >= 2:
             return True
 
-    # Opposite adjective pairs
+    # Opposite adjective pairs (word-boundary matching to avoid substring
+    # false positives like 'hard' inside 'hardware').
     for pos, neg in opposite_pairs:
-        if (pos in a_lower and neg in b_lower) or (neg in a_lower and pos in b_lower):
+        if (_term_in(pos, a_lower) and _term_in(neg, b_lower)) or (
+            _term_in(neg, a_lower) and _term_in(pos, b_lower)
+        ):
             return True
 
     # Cross-language: also try English patterns if content is Vietnamese
@@ -129,7 +148,9 @@ def _detects_reversal(content_a: str, content_b: str) -> bool:
                 return True
 
         for pos, neg in _OPPOSITE_PAIRS_REGISTRY["en"]:
-            if (pos in a_lower and neg in b_lower) or (neg in a_lower and pos in b_lower):
+            if (_term_in(pos, a_lower) and _term_in(neg, b_lower)) or (
+                _term_in(neg, a_lower) and _term_in(pos, b_lower)
+            ):
                 return True
 
     return False
@@ -177,6 +198,10 @@ async def compute_surprise_bonus(
     # Check for contradictions and compute novelty
     max_reversal_score = 0.0
     min_hamming = 64  # worst case
+    compared = False  # track whether any SimHash comparison actually ran
+
+    # Ensure we have a usable hash for the new content; fall back to computing it.
+    candidate_hash = content_hash or simhash(content)
 
     for neuron in unique[:20]:  # cap to avoid perf issues
         # Contradiction check
@@ -188,13 +213,22 @@ async def compute_surprise_bonus(
             )
             break
 
-        # SimHash novelty
-        if neuron.content_hash and content_hash:
-            dist = hamming_distance(content_hash, neuron.content_hash)
+        # SimHash novelty — compute the candidate's hash on the fly when the
+        # stored neuron lacks one (legacy rows persisted before SimHash).
+        neuron_hash = neuron.content_hash or simhash(neuron.content)
+        if neuron_hash and candidate_hash:
+            dist = hamming_distance(candidate_hash, neuron_hash)
             min_hamming = min(min_hamming, dist)
+            compared = True
 
     if max_reversal_score > 0:
         return min(max_reversal_score, 3.0)
+
+    if not compared:
+        # No usable comparison was possible (e.g. empty content) — treat like
+        # the no-candidate path rather than reporting maximum novelty.
+        logger.debug("Prediction error: no usable hash comparison, surprise=1.5")
+        return 1.5
 
     # Convert hamming distance to surprise:
     # dist < 5: very similar (near-duplicate) → 0.0
