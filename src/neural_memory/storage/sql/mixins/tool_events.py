@@ -3,12 +3,43 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 from neural_memory.storage.sql.dialect import Dialect
 from neural_memory.utils.timeutils import utcnow
 
 logger = logging.getLogger(__name__)
+
+
+def _to_dt(value: Any) -> datetime:
+    """Coerce a created_at value (ISO string, datetime, or missing) to a datetime.
+
+    Callers pass ``created_at`` as an ISO string (e.g. ``utcnow().isoformat()``
+    from the MCP tool-event hook). The ``tool_events.created_at`` column is
+    TIMESTAMPTZ on Postgres, so a bare string raises a DataError there; serialize
+    a real datetime via the dialect instead.
+    """
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return utcnow()
+    return utcnow()
+
+
+def _iso(value: Any) -> Any:
+    """Render a timestamp column for callers expecting an ISO string.
+
+    SQLite returns the stored ISO string unchanged; Postgres returns a datetime
+    object, which we normalize back to an ISO string so consumers (e.g.
+    ``tool_memory`` calling ``datetime.fromisoformat``) behave identically across
+    backends.
+    """
+    return value.isoformat() if isinstance(value, datetime) else value
+
 
 # Cap per brain to prevent unbounded growth
 _MAX_EVENTS_PER_BRAIN = 100_000
@@ -60,7 +91,7 @@ class ToolEventsMixin:
                     ev.get("session_id", ""),
                     ev.get("task_context", ""),
                     0,
-                    ev.get("created_at", d.serialize_dt(utcnow())),
+                    d.serialize_dt(_to_dt(ev.get("created_at"))),
                 ],
             )
             inserted += 1
@@ -100,7 +131,7 @@ class ToolEventsMixin:
                     "duration_ms": row["duration_ms"],
                     "session_id": row["session_id"],
                     "task_context": row["task_context"],
-                    "created_at": row["created_at"],
+                    "created_at": _iso(row["created_at"]),
                 }
             )
         return results

@@ -111,8 +111,13 @@ class PostgresFiberMixin(PostgresBaseMixin):
         if time_overlaps is not None:
             start, end = time_overlaps
             idx = len(params) + 1
-            query += f" AND (time_start IS NULL OR time_start <= ${idx + 1})"
-            query += f" AND (time_end IS NULL OR time_end >= ${idx})"
+            # Overlap test: fiber span [time_start, time_end] intersects the
+            # query window [start, end] iff time_start <= end AND time_end >=
+            # start. params.extend([end, start]) binds $idx=end, $(idx+1)=start,
+            # so time_start compares against $idx and time_end against $(idx+1)
+            # (finding #8 — previously swapped, which inverted the overlap test).
+            query += f" AND (time_start IS NULL OR time_start <= ${idx})"
+            query += f" AND (time_end IS NULL OR time_end >= ${idx + 1})"
             params.extend([end, start])
 
         if min_salience is not None:
