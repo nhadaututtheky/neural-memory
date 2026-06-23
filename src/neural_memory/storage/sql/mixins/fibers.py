@@ -506,9 +506,12 @@ class FiberMixin:
                 (brain_id, safe_limit),
             )
         except Exception:
-            # Fallback if typed_memories table is not available
+            # Fallback if typed_memories table is not available. Alias to the
+            # names the mapper actually reads (memory_type/priority); the old
+            # `summary AS type` was dead — the mapper reads `memory_type`, so
+            # type always resolved to 'unknown' anyway (finding #56).
             rows = await d.fetch_all(
-                f"SELECT id, summary, summary AS type, 5 AS priority, tags, created_at "
+                f"SELECT id, summary, 'unknown' AS memory_type, 5 AS priority, tags, created_at "
                 f"FROM fibers WHERE brain_id = {d.ph(1)} AND pinned = 1 "
                 f"ORDER BY created_at DESC LIMIT {d.ph(2)}",
                 (brain_id, safe_limit),

@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.59.0] — 2026-06-24
+
+Comprehensive audit remediation — 80 fixes across 10 clusters from a whole-library
+adversarial audit (`docs/audits/2026-06-comprehensive-audit.md`). Default SQLite
+path and sync engine fully covered; Postgres backends (opt-in) brought toward
+parity.
+
+### Fixed — Sync data integrity (CRITICAL)
+
+- **Merkle pull-sync no longer deletes un-pushed local memories.** The client
+  reconcile previously computed deletes as `local_ids - remote_ids` and removed
+  every entity the hub lacked — silently destroying memories created locally
+  since the last sync (not yet pushed). Deletes are now gated on un-pushed
+  (`synced=0`) status; pending-push entities are preserved and flushed by the
+  change-log push instead. New regression `tests/unit/test_sync_data_loss_regression.py`.
+- `mark_synced` now uses the local change-log id space (`max(request.changes.sequence)`)
+  instead of the hub's aggregate sequence, which previously marked unsent local
+  changes synced and dropped them; the hub watermark is tracked separately.
+- The neural-aware conflict merge (weight=max, frequency=sum, tags=union,
+  delete-wins) is now actually applied on the hub instead of being computed and
+  discarded in favour of raw last-applied-wins.
+
+### Fixed — Postgres schema & runtime type alignment
+
+- Dialect Postgres DDL now emits correct physical types (TIMESTAMPTZ timestamps,
+  BIGINT `content_hash`, `content_tsv`/`summary_tsv` generated columns + GIN),
+  pins pools to UTC, and registers the pgvector codec. Native Postgres gains the
+  missing `essence`, `last_ghost_shown_at`, `ephemeral`, lifecycle columns and
+  the `typed_memories.project_id` FK to reach SQLite parity.
+- `tool_events.created_at` and `session_summaries.started_at`/`ended_at` are now
+  parsed to datetimes on write and normalized back to ISO on read so the new
+  TIMESTAMPTZ columns round-trip correctly on dialect Postgres.
+- `find_fibers(time_overlaps=...)` on native Postgres no longer inverts the
+  overlap test (placeholders were swapped); fibers inside the window are returned.
+
+### Fixed — Dialect parity, pools & transactions
+
+- Query-level divergences: JSON tag filter shape, project `priority` float cast,
+  `direction='both'` arg count, ILIKE wildcard escaping, day-bucket truncation,
+  generic `BrainConfig` reconstruction, `SharedStorage` filter forwarding, and
+  `HybridStorage` made a real `NeuralStorage`.
+- `ReadPool` acquire/release contract fixed (pooled readers were closed by
+  `async with`), dialect transaction connection moved to a `ContextVar`, and the
+  brain merge / clear-then-import paths made atomic via durable staging so a
+  crash can no longer leave a brain empty.
+
+### Fixed — Retrieval, encode, error-handling, MCP/server, core/crypto
+
+- Retrieval: InfinityDB anchor de-indent, PPR multi-anchor intersection,
+  deterministic retriever-contribution signal, supersession demotion, fusion
+  singleton normalization, interference fan-effect count, causal chain weight.
+- Encode: retroactive entity-link ordering, entity-type-aware dedup,
+  dedup-before-cap, Vietnamese midnight hour, on-the-fly simhash & word-boundary
+  reversal matching, narrowed embedding-init exceptions.
+- Error-handling: narrowed catch-alls to real integrity/FK errors, real upsert
+  for maturation (unblocks EPISODIC→SEMANTIC), fixed non-existent column queries
+  in `list_pinned_fibers` / `get_fiber_stage_counts` (incl. the fallback alias).
+- MCP/server: per-call `compact=false` honored, rate limiter hardened against
+  spoofed `X-Forwarded-For` + unbounded growth, WebSocket per-message error
+  isolation + bounded history, tag-list validation, `nmem_forget` hard-delete
+  confirmation, true graph neuron count.
+- Core/crypto: frozen-dataclass updates via `dataclasses.replace` (no dropped
+  fields), two-pass surface node-id assignment, `BrainModeConfig` api_key
+  round-trip, encryption key TOCTOU handling, consolidation-lock parse-error safety.
+
+### Known gaps (tracked follow-ups)
+
+- `drift_detection` findings #35 (Cartesian-product false positives) and #36
+  (order-dependent `wasserstein_1`) are deferred to a focused follow-up.
+- Postgres backends remain opt-in with no executed CI coverage; a live-Postgres
+  test harness is the planned next step.
+
 ## [4.58.3] — 2026-06-22
 
 ### Fixed — Postgres FTS crash (`missing FROM-clause entry for table "fts"`)
