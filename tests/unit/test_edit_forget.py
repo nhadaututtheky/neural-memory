@@ -216,10 +216,40 @@ class TestNmemForget:
         storage.enable_auto_save = MagicMock()
         server.get_storage = AsyncMock(return_value=storage)
 
-        result = await server.call_tool("nmem_forget", {"memory_id": "fiber-1", "hard": True})
+        result = await server.call_tool(
+            "nmem_forget", {"memory_id": "fiber-1", "hard": True, "confirm": True}
+        )
         assert result["status"] == "hard_deleted"
         storage.delete_typed_memory.assert_awaited_once()
         storage.delete_fiber.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_hard_delete_requires_confirm(self) -> None:
+        """#79: hard delete without confirm returns a preview, deletes nothing."""
+        from neural_memory.core.memory_types import MemoryType, Priority, TypedMemory
+
+        server = _make_server()
+        storage = AsyncMock()
+        storage.current_brain_id = "brain-1"
+
+        typed_mem = TypedMemory.create(
+            fiber_id="fiber-1",
+            memory_type=MemoryType.TODO,
+            priority=Priority.NORMAL,
+            source="test",
+        )
+        storage.get_typed_memory = AsyncMock(return_value=typed_mem)
+        storage.get_fiber = AsyncMock(return_value=MagicMock())
+        storage.delete_typed_memory = AsyncMock()
+        storage.delete_fiber = AsyncMock()
+        storage.disable_auto_save = MagicMock()
+        storage.enable_auto_save = MagicMock()
+        server.get_storage = AsyncMock(return_value=storage)
+
+        result = await server.call_tool("nmem_forget", {"memory_id": "fiber-1", "hard": True})
+        assert result["status"] == "pending_confirmation"
+        storage.delete_typed_memory.assert_not_awaited()
+        storage.delete_fiber.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_hard_delete_neuron_only(self) -> None:
@@ -237,6 +267,28 @@ class TestNmemForget:
         storage.delete_neuron = AsyncMock(return_value=True)
         server.get_storage = AsyncMock(return_value=storage)
 
-        result = await server.call_tool("nmem_forget", {"memory_id": neuron.id, "hard": True})
+        result = await server.call_tool(
+            "nmem_forget", {"memory_id": neuron.id, "hard": True, "confirm": True}
+        )
         assert result["status"] == "hard_deleted"
         storage.delete_neuron.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_hard_delete_neuron_only_requires_confirm(self) -> None:
+        """#79: neuron-only hard delete also gates on confirm."""
+        from neural_memory.core.neuron import Neuron, NeuronType
+
+        server = _make_server()
+        storage = AsyncMock()
+        storage.current_brain_id = "brain-1"
+        storage.get_typed_memory = AsyncMock(return_value=None)
+        storage.get_fiber = AsyncMock(return_value=None)
+
+        neuron = Neuron.create(type=NeuronType.CONCEPT, content="orphan")
+        storage.get_neuron = AsyncMock(return_value=neuron)
+        storage.delete_neuron = AsyncMock(return_value=True)
+        server.get_storage = AsyncMock(return_value=storage)
+
+        result = await server.call_tool("nmem_forget", {"memory_id": neuron.id, "hard": True})
+        assert result["status"] == "pending_confirmation"
+        storage.delete_neuron.assert_not_awaited()

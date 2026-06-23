@@ -271,6 +271,34 @@ class TestMCPToolCalls:
         assert result["memory_type"] == "fact"
 
     @pytest.mark.asyncio
+    async def test_remember_rejects_string_tags(self, server: MCPServer) -> None:
+        """#72: tags as a string must be rejected, not iterated char-by-char."""
+        mock_storage = AsyncMock()
+        mock_brain = MagicMock(id="test-brain", name="test", config=MagicMock())
+        mock_storage.get_brain = AsyncMock(return_value=mock_brain)
+        mock_storage._current_brain_id = "test-brain"
+        mock_storage.brain_id = "test-brain"
+
+        mock_encoder = AsyncMock()
+        mock_encoder.encode = AsyncMock(
+            return_value=MagicMock(fiber=MagicMock(id="fiber-x"), neurons_created=[])
+        )
+
+        with (
+            patch.object(server, "get_storage", return_value=mock_storage),
+            patch("neural_memory.mcp.remember_handler.MemoryEncoder", return_value=mock_encoder),
+        ):
+            result = await server.call_tool(
+                "nmem_remember",
+                {"content": "Test memory", "type": "fact", "tags": "python"},
+            )
+
+        assert "error" in result
+        assert "tags" in result["error"].lower()
+        # Must not have proceeded to encode with corrupted single-char tags.
+        mock_encoder.encode.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_remember_no_brain(self, server: MCPServer) -> None:
         """Test nmem_remember when no brain is configured."""
         mock_storage = AsyncMock()

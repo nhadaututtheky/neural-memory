@@ -63,13 +63,19 @@ class StoreHandler:
     async def _store_browse(self, args: dict[str, Any]) -> dict[str, Any]:
         """Browse the community brain registry."""
         manifests = await _registry.fetch_index()
+        # Coerce limit defensively: a non-int arg (e.g. a string) would otherwise
+        # raise TypeError inside min() and surface as a generic failure (#72).
+        try:
+            limit = min(int(args.get("limit", 20)), 50)
+        except (TypeError, ValueError):
+            limit = 20
         filtered = _registry.filter_index(
             manifests,
             category=args.get("category"),
             search=args.get("search"),
             tag=args.get("tag"),
             sort_by=args.get("sort_by", "created_at"),
-            limit=min(args.get("limit", 20), 50),
+            limit=limit,
         )
 
         if not filtered:

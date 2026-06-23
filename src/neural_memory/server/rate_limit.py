@@ -12,7 +12,7 @@ import asyncio
 import logging
 import os
 import time
-from collections import deque
+from collections import OrderedDict, deque
 from typing import Any
 
 from starlette.requests import Request
@@ -39,15 +39,44 @@ def _get_window() -> int:
         return 60
 
 
+# Hard cap on the number of distinct IP buckets retained. Prevents unbounded
+# dict growth (memory-exhaustion DoS) even after the empty-deque reaper runs.
+_MAX_TRACKED_IPS = 10_000
+
+
+def _get_trusted_proxies() -> frozenset[str]:
+    """Return the set of direct-peer IPs whose X-Forwarded-For we trust.
+
+    Configure via NEURAL_MEMORY_TRUSTED_PROXIES (comma-separated IPs). When the
+    direct peer is NOT in this set, X-Forwarded-For is ignored (it is trivially
+    client-spoofable and would let a caller both bypass the limit and inflate
+    the IP-bucket dict without bound). See audit #46.
+    """
+    raw = str(os.environ.get("NEURAL_MEMORY_TRUSTED_PROXIES", "")).strip()
+    if not raw:
+        return frozenset()
+    return frozenset(p.strip() for p in raw.split(",") if p.strip())
+
+
 def _client_ip(request: Request) -> str:
-    """Return best-effort client IP, considering X-Forwarded-For behind a proxy."""
-    forwarded: str = str(request.headers.get("X-Forwarded-For", "")).strip()
-    if forwarded:
-        # Take the leftmost (originating) IP
-        return forwarded.split(",")[0].strip()
-    if request.client:
-        return str(request.client.host)
-    return "unknown"
+    """Return best-effort client IP.
+
+    X-Forwarded-For is only honored when the direct TCP peer (``request.client``)
+    is a configured trusted reverse proxy. Otherwise the header is ignored and
+    the direct peer address is used as the rate-limit key — preventing XFF
+    spoofing from defeating the limiter or exploding the bucket dict (audit #46).
+    """
+    peer = str(request.client.host) if request.client else "unknown"
+
+    trusted = _get_trusted_proxies()
+    if peer in trusted:
+        forwarded: str = str(request.headers.get("X-Forwarded-For", "")).strip()
+        if forwarded:
+            # Take the leftmost (originating) client IP from the trusted chain.
+            candidate = forwarded.split(",")[0].strip()
+            if candidate:
+                return candidate
+    return peer
 
 
 # BaseHTTPMiddleware is typed as Any in starlette stubs, suppress mypy
@@ -70,8 +99,9 @@ class RateLimitMiddleware(_Base):  # type: ignore[misc]
 
     def __init__(self, app: ASGIApp) -> None:
         super().__init__(app)
-        # ip → deque of request timestamps within current window
-        self._counters: dict[str, deque[float]] = {}
+        # ip → deque of request timestamps within current window.
+        # OrderedDict so we can LRU-evict the oldest bucket when at capacity.
+        self._counters: OrderedDict[str, deque[float]] = OrderedDict()
         self._lock = asyncio.Lock()
         limit = _get_limit()
         window = _get_window()
@@ -96,12 +126,29 @@ class RateLimitMiddleware(_Base):  # type: ignore[misc]
 
         async with self._lock:
             if ip not in self._counters:
+                # LRU-cap: if we are at capacity, evict the least-recently-used
+                # bucket before inserting a new one. Combined with the empty-deque
+                # reaper below this bounds memory regardless of distinct-IP volume.
+                if len(self._counters) >= _MAX_TRACKED_IPS:
+                    self._counters.pop(next(iter(self._counters)), None)
                 self._counters[ip] = deque()
+            else:
+                # Mark as recently used (move to end) so LRU eviction is meaningful.
+                self._counters.move_to_end(ip)
             q = self._counters[ip]
 
             # Evict timestamps outside the window
             while q and q[0] < cutoff:
                 q.popleft()
+
+            # Reaper: drop the bucket entirely once it has no live timestamps.
+            # The eviction loop above only popped stale entries; without this the
+            # empty deque would persist forever, growing the dict unboundedly
+            # under a stream of distinct IPs (audit #46).
+            if not q:
+                del self._counters[ip]
+                q = self._counters[ip] = deque()
+                self._counters.move_to_end(ip)
 
             if len(q) >= limit:
                 oldest = q[0]

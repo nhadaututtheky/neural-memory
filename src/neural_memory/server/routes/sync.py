@@ -7,6 +7,7 @@ import json
 import logging
 import re
 import uuid
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -21,6 +22,21 @@ logger = logging.getLogger(__name__)
 
 # Valid brain ID: alphanumeric, hyphens, underscores, dots (no path separators)
 _BRAIN_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
+_MAX_BRAIN_ID_LEN = 128
+
+# Hard cap on the number of distinct brain_id event-history buckets. Without this,
+# a client pushing 'event' actions with arbitrary unique brain_ids would grow
+# self._event_history without bound (audit #71).
+_MAX_HISTORY_BUCKETS = 1000
+
+
+def _valid_brain_id(brain_id: Any) -> bool:
+    """Return True if brain_id is a safe, bounded, pattern-matching identifier."""
+    return (
+        isinstance(brain_id, str)
+        and 0 < len(brain_id) <= _MAX_BRAIN_ID_LEN
+        and _BRAIN_ID_PATTERN.match(brain_id) is not None
+    )
 
 
 router = APIRouter(
@@ -133,7 +149,9 @@ class SyncManager:
     def __init__(self) -> None:
         self._clients: dict[str, ConnectedClient] = {}
         self._brain_subscriptions: dict[str, set[str]] = {}  # brain_id -> client_ids
-        self._event_history: dict[str, list[SyncEvent]] = {}  # brain_id -> recent events
+        # brain_id -> recent events. OrderedDict so we can LRU-evict the oldest
+        # bucket once _MAX_HISTORY_BUCKETS distinct brain_ids are tracked (#71).
+        self._event_history: OrderedDict[str, list[SyncEvent]] = OrderedDict()
         self._max_history = 100
         self._lock = asyncio.Lock()
 
@@ -214,7 +232,13 @@ class SyncManager:
         # Store in history
         async with self._lock:
             if event.brain_id not in self._event_history:
+                # LRU-cap the number of distinct brain_id buckets so a flood of
+                # unique brain_ids cannot grow history without bound (#71).
+                if len(self._event_history) >= _MAX_HISTORY_BUCKETS:
+                    self._event_history.popitem(last=False)
                 self._event_history[event.brain_id] = []
+            else:
+                self._event_history.move_to_end(event.brain_id)
 
             history = self._event_history[event.brain_id]
             history.append(event)
@@ -283,6 +307,20 @@ def get_sync_manager() -> SyncManager:
     return SyncManager.instance()
 
 
+async def _send_error(websocket: WebSocket, message: str) -> None:
+    """Send a non-fatal error frame; swallow send failures."""
+    try:
+        await websocket.send_text(
+            SyncEvent(
+                type=SyncEventType.ERROR,
+                brain_id="*",
+                data={"error": message},
+            ).to_json()
+        )
+    except (ConnectionError, RuntimeError):
+        logger.debug("Failed to send WS error frame", exc_info=True)
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
     """
@@ -314,80 +352,102 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             if len(data) > _MAX_WS_MESSAGE_SIZE:
                 logger.warning("WebSocket message too large (%d bytes), skipping", len(data))
                 continue
-            message = json.loads(data)
-            action = message.get("action")
 
-            if action == "connect":
-                client_id = f"client-{uuid.uuid4().hex[:8]}"
-                await sync_manager.connect(client_id, websocket)
-                await websocket.send_text(
-                    SyncEvent(
-                        type=SyncEventType.CONNECTED,
-                        brain_id="*",
-                        data={"client_id": client_id},
-                    ).to_json()
-                )
+            # Per-message error isolation: a single malformed frame (bad JSON,
+            # missing keys, unparseable timestamp) must NOT tear down the whole
+            # connection (self-DoS). Report the error and keep the loop alive (#71).
+            try:
+                message = json.loads(data)
+                if not isinstance(message, dict):
+                    raise ValueError("message must be a JSON object")
+                action = message.get("action")
 
-            elif action == "subscribe" and client_id:
-                brain_id = message.get("brain_id")
-                if brain_id and _BRAIN_ID_PATTERN.match(brain_id) and len(brain_id) <= 128:
-                    success = await sync_manager.subscribe(client_id, brain_id)
-                    event_type = SyncEventType.SUBSCRIBED if success else SyncEventType.ERROR
+                if action == "connect":
+                    client_id = f"client-{uuid.uuid4().hex[:8]}"
+                    await sync_manager.connect(client_id, websocket)
                     await websocket.send_text(
                         SyncEvent(
-                            type=event_type,
-                            brain_id=brain_id,
-                            data={
-                                "success": success,
-                                "client_id": client_id,
-                            },
+                            type=SyncEventType.CONNECTED,
+                            brain_id="*",
+                            data={"client_id": client_id},
                         ).to_json()
                     )
 
-            elif action == "unsubscribe" and client_id:
-                brain_id = message.get("brain_id")
-                if brain_id:
-                    success = await sync_manager.unsubscribe(client_id, brain_id)
-                    await websocket.send_text(
-                        SyncEvent(
-                            type=SyncEventType.UNSUBSCRIBED,
-                            brain_id=brain_id,
-                            data={"success": success},
-                        ).to_json()
-                    )
-
-            elif action == "event" and client_id:
-                # Client is pushing an event
-                event_data = message.get("event", {})
-                event = SyncEvent.from_dict(event_data)
-                event = SyncEvent(
-                    type=event.type,
-                    brain_id=event.brain_id,
-                    timestamp=event.timestamp,
-                    data=event.data,
-                    source_client_id=client_id,
-                )
-                # Broadcast to other clients
-                await sync_manager.broadcast(event, exclude_client=client_id)
-
-            elif action == "get_history" and client_id:
-                brain_id = message.get("brain_id")
-                since = message.get("since")
-                if brain_id:
-                    since_dt = datetime.fromisoformat(since) if since else None
-                    events = await sync_manager.get_recent_events(brain_id, since_dt)
-                    await websocket.send_text(
-                        json.dumps(
-                            {
-                                "type": "history",
-                                "brain_id": brain_id,
-                                "events": [e.to_dict() for e in events],
-                            }
+                elif action == "subscribe" and client_id:
+                    brain_id = message.get("brain_id")
+                    if _valid_brain_id(brain_id):
+                        success = await sync_manager.subscribe(client_id, brain_id)
+                        event_type = SyncEventType.SUBSCRIBED if success else SyncEventType.ERROR
+                        await websocket.send_text(
+                            SyncEvent(
+                                type=event_type,
+                                brain_id=brain_id,
+                                data={
+                                    "success": success,
+                                    "client_id": client_id,
+                                },
+                            ).to_json()
                         )
-                    )
+                    else:
+                        await _send_error(websocket, "invalid brain_id")
 
-            elif action == "ping":
-                await websocket.send_text(json.dumps({"type": "pong"}))
+                elif action == "unsubscribe" and client_id:
+                    brain_id = message.get("brain_id")
+                    if _valid_brain_id(brain_id):
+                        success = await sync_manager.unsubscribe(client_id, brain_id)
+                        await websocket.send_text(
+                            SyncEvent(
+                                type=SyncEventType.UNSUBSCRIBED,
+                                brain_id=brain_id,
+                                data={"success": success},
+                            ).to_json()
+                        )
+                    else:
+                        await _send_error(websocket, "invalid brain_id")
+
+                elif action == "event" and client_id:
+                    # Client is pushing an event
+                    event_data = message.get("event", {})
+                    event = SyncEvent.from_dict(event_data)
+                    # Validate the client-supplied brain_id BEFORE it can create a
+                    # new history bucket — prevents arbitrary-key memory growth (#71).
+                    if not _valid_brain_id(event.brain_id):
+                        await _send_error(websocket, "invalid brain_id")
+                    else:
+                        event = SyncEvent(
+                            type=event.type,
+                            brain_id=event.brain_id,
+                            timestamp=event.timestamp,
+                            data=event.data,
+                            source_client_id=client_id,
+                        )
+                        # Broadcast to other clients
+                        await sync_manager.broadcast(event, exclude_client=client_id)
+
+                elif action == "get_history" and client_id:
+                    brain_id = message.get("brain_id")
+                    since = message.get("since")
+                    if _valid_brain_id(brain_id):
+                        since_dt = datetime.fromisoformat(since) if since else None
+                        events = await sync_manager.get_recent_events(brain_id, since_dt)
+                        await websocket.send_text(
+                            json.dumps(
+                                {
+                                    "type": "history",
+                                    "brain_id": brain_id,
+                                    "events": [e.to_dict() for e in events],
+                                }
+                            )
+                        )
+                    else:
+                        await _send_error(websocket, "invalid brain_id")
+
+                elif action == "ping":
+                    await websocket.send_text(json.dumps({"type": "pong"}))
+
+            except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
+                logger.debug("Discarding malformed WebSocket message: %s", e)
+                await _send_error(websocket, "malformed message")
 
     except WebSocketDisconnect:
         pass

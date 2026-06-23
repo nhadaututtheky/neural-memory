@@ -195,7 +195,11 @@ def should_compact(
     Returns:
         True if response should be compacted.
     """
-    per_call = tool_args.pop("compact", None)
+    # IMPORTANT: read without mutating tool_args. Popping here would strip the
+    # `compact` key before per-tool handlers (e.g. _remember/_recall) read it,
+    # forcing them back to their default (True) and silently ignoring an explicit
+    # per-call `compact=false` (audit #45).
+    per_call = tool_args.get("compact")
     if per_call is not None:
         return bool(per_call)
     return config.compact_mode

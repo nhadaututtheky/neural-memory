@@ -796,8 +796,24 @@ def create_app(
 
         # Fetch paginated neurons (offset + limit + 1 to detect if more exist)
         all_neurons = await storage.find_neurons(limit=offset + capped_limit)
-        total_neurons = len(all_neurons)
         paginated = all_neurons[offset : offset + capped_limit]
+
+        # Report the TRUE total neuron count (not just the number fetched on this
+        # page). Previously total_neurons == len(all_neurons), capped at
+        # offset+limit, so a paginating client under-counted pages and stopped
+        # early (audit #80). Use the storage stats count_query when available.
+        total_neurons = len(all_neurons)
+        brain_id = storage.brain_id
+        if brain_id:
+            try:
+                stats_full = await storage.get_stats(brain_id)
+                total_neurons = int(stats_full.get("neuron_count", total_neurons))
+            except Exception:
+                import logging
+
+                logging.getLogger(__name__).debug(
+                    "get_graph_data: get_stats failed, using page length", exc_info=True
+                )
 
         # Fetch synapses with a capped limit
         synapses = await storage.get_all_synapses()

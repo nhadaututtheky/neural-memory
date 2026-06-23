@@ -207,7 +207,9 @@ class TestForgetUntypedFiber:
         storage.enable_auto_save = MagicMock()
         server.get_storage = AsyncMock(return_value=storage)
 
-        result = await server.call_tool("nmem_forget", {"memory_id": "fiber-untyped", "hard": True})
+        result = await server.call_tool(
+            "nmem_forget", {"memory_id": "fiber-untyped", "hard": True, "confirm": True}
+        )
         assert result["status"] == "hard_deleted"
         assert result.get("untyped") is True
         # No typed_memory to delete, but the fiber must be removed.
