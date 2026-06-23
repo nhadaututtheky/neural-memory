@@ -302,11 +302,7 @@ class PPRActivation:
                     set_membership[nid].add(set_idx)
 
             intersections = sorted(
-                [
-                    nid
-                    for nid, sets in set_membership.items()
-                    if len(sets) > 1 and nid in results
-                ],
+                [nid for nid, sets in set_membership.items() if len(sets) > 1 and nid in results],
                 key=lambda nid: results[nid].activation_level,
                 reverse=True,
             )

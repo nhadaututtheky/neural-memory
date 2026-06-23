@@ -268,7 +268,7 @@ class HybridStorage(NeuralStorage):
         """Get neuron from local storage."""
         return await self._local.get_neuron(neuron_id)
 
-    async def find_neurons(self, **kwargs: Any) -> list[Neuron]:
+    async def find_neurons(self, **kwargs: Any) -> list[Neuron]:  # type: ignore[override]
         """Find neurons in local storage."""
         return await self._local.find_neurons(**kwargs)
 
@@ -321,7 +321,7 @@ class HybridStorage(NeuralStorage):
     async def get_synapse(self, synapse_id: str) -> Synapse | None:
         return await self._local.get_synapse(synapse_id)
 
-    async def get_synapses(self, **kwargs: Any) -> list[Synapse]:
+    async def get_synapses(self, **kwargs: Any) -> list[Synapse]:  # type: ignore[override]
         return await self._local.get_synapses(**kwargs)
 
     async def update_synapse(self, synapse: Synapse) -> None:
@@ -343,7 +343,7 @@ class HybridStorage(NeuralStorage):
                 logger.debug("Remote sync failed for delete_synapse: %s", e)
         return result
 
-    async def get_neighbors(self, neuron_id: str, **kwargs: Any) -> Any:
+    async def get_neighbors(self, neuron_id: str, **kwargs: Any) -> Any:  # type: ignore[override]
         return await self._local.get_neighbors(neuron_id, **kwargs)
 
     async def get_path(
@@ -366,7 +366,7 @@ class HybridStorage(NeuralStorage):
     async def get_fiber(self, fiber_id: str) -> Any:
         return await self._local.get_fiber(fiber_id)
 
-    async def find_fibers(self, **kwargs: Any) -> Any:
+    async def find_fibers(self, **kwargs: Any) -> Any:  # type: ignore[override]
         return await self._local.find_fibers(**kwargs)
 
     async def update_fiber(self, fiber: Any) -> None:
@@ -388,7 +388,7 @@ class HybridStorage(NeuralStorage):
                 logger.debug("Remote sync failed for delete_fiber: %s", e)
         return result
 
-    async def get_fibers(self, **kwargs: Any) -> Any:
+    async def get_fibers(self, **kwargs: Any) -> Any:  # type: ignore[override]
         return await self._local.get_fibers(**kwargs)
 
     async def save_brain(self, brain: Brain) -> None:
@@ -582,7 +582,9 @@ def _install_local_delegators() -> None:
         if not callable(inherited):
             continue
         # ``batch_save``/auto-save toggles live on CoreStorage; ensure they exist.
-        if name in optional_core and not (hasattr(CoreStorage, name) or hasattr(ExtendedStorage, name)):
+        if name in optional_core and not (
+            hasattr(CoreStorage, name) or hasattr(ExtendedStorage, name)
+        ):
             continue
         is_async = inspect.iscoroutinefunction(inherited)
         setattr(HybridStorage, name, _make_delegator(name, is_async=is_async))

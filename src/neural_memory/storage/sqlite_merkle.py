@@ -257,8 +257,7 @@ class SQLiteMerkleMixin:
         # SQL the same way (SUBSTR(id || '00', 1, 2)) — otherwise a 1-char id is
         # silently omitted from its bucket (audit #58).
         cursor = await conn.execute(
-            f"SELECT id FROM {table} WHERE brain_id = ? "
-            "AND LOWER(SUBSTR(id || '00', 1, 2)) = ?",
+            f"SELECT id FROM {table} WHERE brain_id = ? AND LOWER(SUBSTR(id || '00', 1, 2)) = ?",
             (brain_id, hex_prefix),
         )
         rows = await cursor.fetchall()

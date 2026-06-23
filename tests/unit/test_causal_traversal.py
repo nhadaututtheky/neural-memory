@@ -230,9 +230,7 @@ class TestTraceCausalChain:
         assert chain.steps[1].content == "deploy failed"
         assert chain.direction == "effects"
 
-    async def test_total_weight_is_geometric_mean(
-        self, causal_storage: InMemoryStorage
-    ) -> None:
+    async def test_total_weight_is_geometric_mean(self, causal_storage: InMemoryStorage) -> None:
         """Total weight is the geometric mean of step weights (#34).
 
         The raw product penalized breadth (n weights all <=1.0 collapse toward 0);

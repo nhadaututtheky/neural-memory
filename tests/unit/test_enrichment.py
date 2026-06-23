@@ -207,9 +207,7 @@ class TestFindTransitiveClosures:
             )
         for src, dst in pairwise(ids):
             await store.add_synapse(
-                Synapse.create(
-                    source_id=src, target_id=dst, type=SynapseType.CAUSED_BY, weight=0.9
-                )
+                Synapse.create(source_id=src, target_id=dst, type=SynapseType.CAUSED_BY, weight=0.9)
             )
 
     async def test_max_depth_2_default_only_two_hops(self, store: InMemoryStorage) -> None:

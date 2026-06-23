@@ -11,7 +11,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, TypeGuard
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
@@ -30,7 +30,7 @@ _MAX_BRAIN_ID_LEN = 128
 _MAX_HISTORY_BUCKETS = 1000
 
 
-def _valid_brain_id(brain_id: Any) -> bool:
+def _valid_brain_id(brain_id: Any) -> TypeGuard[str]:
     """Return True if brain_id is a safe, bounded, pattern-matching identifier."""
     return (
         isinstance(brain_id, str)

@@ -291,7 +291,7 @@ class SynapseMixin:
             if d.name == "postgres":
                 # Single array param (``= ANY($2)``): reference $2 twice, no
                 # extra param — asyncpg arg count must equal the max index.
-                tgt_clause, tgt_params = src_clause, []
+                tgt_clause, tgt_params = src_clause, []  # type: ignore[var-annotated]
             else:
                 # Positional placeholders (SQLite-style IN): the second
                 # occurrence needs its own placeholders and values.

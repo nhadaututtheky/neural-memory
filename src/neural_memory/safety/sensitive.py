@@ -243,9 +243,7 @@ def check_sensitive_content(
             for match in regex.finditer(content):
                 # Gate credit-card matches on a Luhn checksum to avoid flagging
                 # arbitrary long numeric IDs that merely match a card prefix.
-                if pattern.type == SensitiveType.CREDIT_CARD and not _passes_luhn(
-                    match.group(0)
-                ):
+                if pattern.type == SensitiveType.CREDIT_CARD and not _passes_luhn(match.group(0)):
                     continue
                 matches.append(
                     SensitiveMatch(

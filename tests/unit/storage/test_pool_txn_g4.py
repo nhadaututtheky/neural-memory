@@ -118,9 +118,7 @@ async def test_get_neuron_hashes_does_not_break_pool() -> None:
         await storage.save_brain(brain)
         storage.set_brain(brain.id)
 
-        await storage.add_neuron(
-            Neuron.create(type=NeuronType.CONCEPT, content="python")
-        )
+        await storage.add_neuron(Neuron.create(type=NeuronType.CONCEPT, content="python"))
 
         # Many more calls than pool_size (3). Pre-fix, pooled readers closed
         # one-by-one and a later read raised on a closed connection.

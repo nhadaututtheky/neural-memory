@@ -83,9 +83,7 @@ async def find_transitive_closures(
             break
 
         # Stack holds (current_node, path_nodes, path_set, min_weight).
-        stack: list[tuple[str, list[str], set[str], float]] = [
-            (a_id, [a_id], {a_id}, float("inf"))
-        ]
+        stack: list[tuple[str, list[str], set[str], float]] = [(a_id, [a_id], {a_id}, float("inf"))]
         while stack:
             if len(new_synapses) >= max_synapses:
                 break

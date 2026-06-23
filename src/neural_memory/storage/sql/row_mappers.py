@@ -53,7 +53,7 @@ def _normalize_dt(value: Any, dialect: Any = None) -> datetime | None:
         normalized = dialect.normalize_dt(value)
         if isinstance(normalized, datetime) and normalized.tzinfo is not None:
             return normalized.astimezone(UTC).replace(tzinfo=None)
-        return normalized
+        return normalized if normalized is None or isinstance(normalized, datetime) else None
     if value is None:
         return None
     if isinstance(value, datetime):

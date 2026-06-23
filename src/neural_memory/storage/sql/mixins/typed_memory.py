@@ -474,9 +474,7 @@ class TypedMemoryMixin:
         # raises a DataError there. Parse to a datetime and serialize through
         # the dialect (datetime on PG, ISO string on SQLite) like every other
         # timestamp write does (closes #19).
-        expires_dt = (
-            datetime.fromisoformat(new_expires_at) if new_expires_at is not None else None
-        )
+        expires_dt = datetime.fromisoformat(new_expires_at) if new_expires_at is not None else None
 
         cnt = await d.execute_count(
             f"""UPDATE typed_memories

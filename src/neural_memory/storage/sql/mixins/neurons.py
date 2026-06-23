@@ -239,6 +239,7 @@ class NeuronMixin:
             and created_before is None
         )
         if cacheable:
+            assert content_exact is not None  # cacheable implies content_exact set
             type_val = type.value if type is not None else None
             cached = self._neuron_cache.get(content_exact, type_val, ephemeral)
             if cached is not None:
@@ -359,6 +360,7 @@ class NeuronMixin:
         # Populate cache for exact-match queries (unreachable here but kept
         # for safety if the flow is refactored later)
         if cacheable:
+            assert content_exact is not None  # cacheable implies content_exact set
             type_val = type.value if type is not None else None
             self._neuron_cache.put(content_exact, type_val, result, ephemeral)
 
