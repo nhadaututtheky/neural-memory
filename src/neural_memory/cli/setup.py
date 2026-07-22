@@ -359,9 +359,19 @@ def setup_hooks_claude() -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-# Regex form of the Claude expression ``tool != X && tool != Y && tool != Z``.
-# Codex matchers use Python-style regex against ``tool_name``.
-_CODEX_POSTTOOL_REGEX = r"^(?!TodoRead$|TodoWrite$|TaskList$).+$"
+# Codex matchers are compiled by the Rust ``regex`` crate, which has **no
+# look-around**. A negative lookahead makes Codex reject the whole hook at
+# startup ("invalid matcher ... look-around ... is not supported"), so the hook
+# never runs. Match everything instead and let ``post_tool_use.py`` drop the
+# noisy tools via ``_NOISE_TOOLS`` — it already does that defensively, which is
+# what made the lookahead redundant in the first place.
+_CODEX_POSTTOOL_REGEX = r".+"
+
+# The look-around form shipped before 4.59.1. Existing installs still carry it in
+# ``~/.codex/config.toml``, and the installer's idempotence check would otherwise
+# leave the broken matcher in place forever, so re-running the installer repairs
+# it in place.
+_CODEX_POSTTOOL_REGEX_LEGACY = r"^(?!TodoRead$|TodoWrite$|TaskList$).+$"
 
 
 def _codex_hook_specs() -> list[tuple[str, str | None, str, int]]:
@@ -433,16 +443,35 @@ def _render_codex_hook_entry(
     return "\n".join(lines) + "\n"
 
 
+def repair_codex_legacy_matcher(config_text: str) -> tuple[str, bool]:
+    """Rewrite the pre-4.59.1 look-around PostToolUse matcher to the valid form.
+
+    Codex rejects the look-around matcher outright, so an install carrying it has
+    a dead PostToolUse hook and prints an ``invalid matcher`` error on every
+    start. Operates on raw text rather than a parse/re-serialise round trip so a
+    hand-edited ``config.toml`` keeps its comments and ordering.
+
+    Returns ``(text, changed)``.
+    """
+    legacy_line = f'matcher = "{_toml_escape(_CODEX_POSTTOOL_REGEX_LEGACY)}"'
+    if legacy_line not in config_text:
+        return config_text, False
+    fixed_line = f'matcher = "{_toml_escape(_CODEX_POSTTOOL_REGEX)}"'
+    return config_text.replace(legacy_line, fixed_line), True
+
+
 def setup_hooks_codex() -> str:
     """Auto-configure NeuralMemory hooks in Codex CLI (``~/.codex/config.toml``).
 
     Appends NM ``[[hooks.<Event>]]`` array-of-tables for SessionStart,
     PostToolUse, and Stop. Skips events that already have an NM entry so
-    re-runs are idempotent.
+    re-runs are idempotent, but still repairs a legacy look-around matcher left
+    by an older version.
 
-    Returns ``"added"`` (new entries appended), ``"exists"`` (no-op),
-    ``"failed"`` (I/O error), or ``"not_found"`` (no ``~/.codex`` directory
-    — caller should suggest the user install Codex CLI first).
+    Returns ``"added"`` (new entries appended), ``"repaired"`` (no new entries,
+    but a broken legacy matcher was fixed), ``"exists"`` (no-op), ``"failed"``
+    (I/O error), or ``"not_found"`` (no ``~/.codex`` directory — caller should
+    suggest the user install Codex CLI first).
     """
     codex_dir = Path.home() / ".codex"
     if not codex_dir.exists():
@@ -457,23 +486,29 @@ def setup_hooks_codex() -> str:
             continue
         blocks_to_append.append(_render_codex_hook_entry(event, matcher, command, timeout))
 
-    if not blocks_to_append:
+    try:
+        existing_text = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+    except OSError:
+        return "failed"
+
+    existing_text, repaired = repair_codex_legacy_matcher(existing_text)
+
+    if not blocks_to_append and not repaired:
         return "exists"
 
     try:
-        existing_text = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
-        if existing_text and not existing_text.endswith("\n"):
-            existing_text += "\n"
-        if existing_text and not existing_text.endswith("\n\n"):
-            existing_text += "\n"
-        header = (
-            "# ── NeuralMemory hooks (auto-added) ──\n"
-            "# Lifecycle handlers — safe to re-run `nmem hooks install`.\n"
-        )
-        config_path.write_text(
-            existing_text + header + "\n".join(blocks_to_append), encoding="utf-8"
-        )
-        return "added"
+        if blocks_to_append:
+            if existing_text and not existing_text.endswith("\n"):
+                existing_text += "\n"
+            if existing_text and not existing_text.endswith("\n\n"):
+                existing_text += "\n"
+            header = (
+                "# ── NeuralMemory hooks (auto-added) ──\n"
+                "# Lifecycle handlers — safe to re-run `nmem hooks install`.\n"
+            )
+            existing_text += header + "\n".join(blocks_to_append)
+        config_path.write_text(existing_text, encoding="utf-8")
+        return "added" if blocks_to_append else "repaired"
     except OSError:
         return "failed"
 

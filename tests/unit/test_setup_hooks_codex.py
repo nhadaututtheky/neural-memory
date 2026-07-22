@@ -7,11 +7,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 from neural_memory.cli.setup import (
+    _CODEX_POSTTOOL_REGEX,
+    _CODEX_POSTTOOL_REGEX_LEGACY,
     _codex_command_is_nmem,
     _codex_event_has_nmem_hook,
     _codex_load_toml,
     _render_codex_hook_entry,
     _toml_escape,
+    repair_codex_legacy_matcher,
     setup_hooks_codex,
 )
 
@@ -155,6 +158,73 @@ class TestSetupHooksCodex:
             result = setup_hooks_codex()
         # We treat unreadable existing config as empty and still write hooks
         assert result in {"added", "failed"}
+
+
+class TestCodexMatcherRegex:
+    """Codex compiles matchers with the Rust regex crate — no look-around."""
+
+    def test_posttool_matcher_has_no_lookaround(self) -> None:
+        assert "(?!" not in _CODEX_POSTTOOL_REGEX
+        assert "(?=" not in _CODEX_POSTTOOL_REGEX
+        assert "(?<" not in _CODEX_POSTTOOL_REGEX
+
+    def test_posttool_matcher_matches_real_tool_names(self) -> None:
+        import re
+
+        pattern = re.compile(_CODEX_POSTTOOL_REGEX)
+        for tool in ("shell_command", "exec", "apply_patch", "Edit", "TodoWrite"):
+            assert pattern.match(tool), tool
+
+
+class TestRepairLegacyMatcher:
+    def test_rewrites_the_legacy_lookaround_line(self) -> None:
+        text = (
+            "[[hooks.PostToolUse]]\n"
+            f'matcher = "{_toml_escape(_CODEX_POSTTOOL_REGEX_LEGACY)}"\n'
+            'command = "nmem-hook-post-tool-use"\n'
+        )
+        fixed, changed = repair_codex_legacy_matcher(text)
+        assert changed is True
+        assert "(?!" not in fixed
+        assert f'matcher = "{_CODEX_POSTTOOL_REGEX}"' in fixed
+        assert tomllib.loads(fixed)["hooks"]["PostToolUse"][0]["matcher"] == _CODEX_POSTTOOL_REGEX
+
+    def test_leaves_an_already_valid_config_alone(self) -> None:
+        text = '[[hooks.PostToolUse]]\nmatcher = ".+"\ncommand = "nmem-hook-post-tool-use"\n'
+        fixed, changed = repair_codex_legacy_matcher(text)
+        assert changed is False
+        assert fixed == text
+
+    def test_rerun_repairs_an_existing_install_in_place(self, tmp_path: Path) -> None:
+        codex_dir = tmp_path / ".codex"
+        codex_dir.mkdir()
+        config = codex_dir / "config.toml"
+        # An install from before the fix: all three NM hooks present, but the
+        # PostToolUse matcher is the look-around form Codex rejects.
+        config.write_text(
+            '# user comment kept\n[[hooks.SessionStart]]\ncommand = "nmem-hook-session-start"\n\n'
+            "[[hooks.PostToolUse]]\n"
+            f'matcher = "{_toml_escape(_CODEX_POSTTOOL_REGEX_LEGACY)}"\n'
+            'command = "nmem-hook-post-tool-use"\n\n'
+            '[[hooks.Stop]]\ncommand = "nmem-hook-stop"\n',
+            encoding="utf-8",
+        )
+        with patch("neural_memory.cli.setup.Path.home", return_value=tmp_path):
+            result = setup_hooks_codex()
+        text = config.read_text(encoding="utf-8")
+        assert result == "repaired"
+        assert "(?!" not in text
+        assert "# user comment kept" in text, "raw-text repair must preserve comments"
+        # No duplicate hook entries were appended.
+        parsed = tomllib.loads(text)
+        assert len(parsed["hooks"]["PostToolUse"]) == 1
+
+    def test_repair_is_idempotent(self, tmp_path: Path) -> None:
+        codex_dir = tmp_path / ".codex"
+        codex_dir.mkdir()
+        with patch("neural_memory.cli.setup.Path.home", return_value=tmp_path):
+            assert setup_hooks_codex() == "added"
+            assert setup_hooks_codex() == "exists"
 
 
 class TestLoadToml:

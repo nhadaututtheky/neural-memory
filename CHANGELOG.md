@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.59.1] — 2026-07-22
+
+### Fixed — Codex hook installer wrote a matcher Codex cannot compile
+
+- **`nmem hooks install` no longer produces a dead PostToolUse hook on Codex CLI.**
+  The installer wrote `matcher = "^(?!TodoRead$|TodoWrite$|TaskList$).+$"` on the
+  assumption that Codex matchers are Python regex. They are not — Codex compiles
+  them with the Rust `regex` crate, which has **no look-around**. Codex rejected
+  the matcher at startup on every single launch:
+
+  ```
+  invalid matcher "^(?!TodoRead$|TodoWrite$|TaskList$).+$" in ~/.codex/config.toml:
+    regex parse error: look-around, including look-ahead and look-behind, is not supported
+  ```
+
+  and the hook never ran, so nothing was captured for deferred consolidation on
+  Codex. The matcher is now `.+`; the excluded tools were always filtered inside
+  `post_tool_use.py` via `_NOISE_TOOLS`, which is what made the look-around
+  redundant to begin with.
+
+- **Re-running the installer repairs an existing broken install.** The idempotence
+  check skips events that already have an NM entry, so an install from before this
+  fix would have kept the rejected matcher forever. `setup_hooks_codex()` now
+  rewrites the legacy matcher in place (raw-text edit, so hand-added comments and
+  ordering in `config.toml` survive) and reports `repaired`.
+
+### Tests
+
+- 9 new tests in `tests/unit/test_setup_hooks_codex.py`: the shipped matcher is
+  asserted look-around-free and matched against real Codex tool names
+  (`shell_command`, `exec`, `apply_patch`), plus in-place repair, comment
+  preservation, no duplicate entries, and idempotence. 30 pass in that module.
+
 ## [4.59.0] — 2026-06-24
 
 Comprehensive audit remediation — 80 fixes across 10 clusters from a whole-library

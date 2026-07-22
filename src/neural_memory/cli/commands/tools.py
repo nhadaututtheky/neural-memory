@@ -295,6 +295,7 @@ def init(
         codex_status = setup_hooks_codex()
         codex_labels = {
             "added": "3 hooks installed (SessionStart, PostToolUse, Stop)",
+            "repaired": "already configured — repaired invalid PostToolUse matcher",
             "exists": "already configured",
             "not_found": "Codex CLI not detected (~/.codex/ not found)",
             "failed": "failed to write config.toml",
