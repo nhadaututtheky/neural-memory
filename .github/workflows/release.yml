@@ -194,7 +194,23 @@ jobs:
         run: |
           npm ci || npm install
           npm run build
-          npm publish --access public || echo "Version already published — skipping"
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::NPM_TOKEN secret is empty — set it in repo settings, then re-run this job."
+            exit 1
+          fi
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          CODE=$?
+          echo "$OUT"
+          set -e
+          if [ $CODE -ne 0 ]; then
+            if echo "$OUT" | grep -qiE "cannot publish over|EPUBLISHCONFLICT|previously published version"; then
+              echo "Version already published — skipping"
+            else
+              echo "::error::npm publish failed (exit $CODE). This is NOT an already-published skip."
+              exit $CODE
+            fi
+          fi
 
   # ── Publish npm (MCP wrapper) ─────────────────────────────────
   publish-npm-mcp:
@@ -227,7 +243,23 @@ jobs:
             fs.writeFileSync('server.json', JSON.stringify(srv, null, 2) + '\n');
           "
           echo "Publishing neural-memory-mcp@$VERSION"
-          npm publish --access public || echo "Version already published — skipping"
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::NPM_TOKEN secret is empty — set it in repo settings, then re-run this job."
+            exit 1
+          fi
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          CODE=$?
+          echo "$OUT"
+          set -e
+          if [ $CODE -ne 0 ]; then
+            if echo "$OUT" | grep -qiE "cannot publish over|EPUBLISHCONFLICT|previously published version"; then
+              echo "Version already published — skipping"
+            else
+              echo "::error::npm publish failed (exit $CODE). This is NOT an already-published skip."
+              exit $CODE
+            fi
+          fi
 
   # ── Publish to ClawHub (OpenClaw skills registry) ──────────────
   publish-clawhub:
