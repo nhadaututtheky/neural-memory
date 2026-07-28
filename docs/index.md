@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="https://neuralmemory.theio.vn/landing/pro-landing.html" target="_blank"><img src="https://img.shields.io/badge/Neural_Memory_Pro-6366f1?style=for-the-badge&logo=lightning&logoColor=white" alt="Neural Memory Pro"></a>
+  <a href="https://neuralmemory.theio.vn/landing/pro-landing.html" target="_blank"><img src="https://img.shields.io/badge/Neural_Memory_Pro-0f766e?style=for-the-badge&logo=lightning&logoColor=white" alt="Neural Memory Pro"></a>
   <a href="https://buymeacoffee.com/vietnamit"><img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me A Coffee"></a>
 </p>
 

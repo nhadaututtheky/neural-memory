@@ -12,6 +12,14 @@
 **Your AI agent forgets everything between sessions. Neural Memory gives it a brain.**
 
 <p align="center">
+  <strong><a href="https://neuralmemory.theio.vn">Website</a></strong> ·
+  <a href="https://neuralmemory.theio.vn/guides/quickstart-guide/">Quickstart</a> ·
+  <a href="https://neuralmemory.theio.vn/api/mcp-tools/">MCP Tools</a> ·
+  <a href="https://neuralmemory.theio.vn/landing/pro-landing.html">Pro</a> ·
+  <a href="https://neuralmemory.theio.vn/changelog/">Changelog</a>
+</p>
+
+<p align="center">
   <img src="docs/assets/images/hero-brain.svg" alt="Neural Memory — spreading activation" width="720"/>
 </p>
 
@@ -22,6 +30,10 @@ pip install neural-memory
 ```
 
 Restart your AI tool. Your agent now remembers — no `init` needed, the MCP server auto-initializes on first use.
+
+**Already installed?** `nmem update` upgrades in place and detects whether you installed via pip or from source. `nmem update --check` only reports what is available.
+
+> The CLI is `nmem` (or the longer `neural-memory`). There is no `nm` binary.
 
 ---
 
@@ -37,7 +49,7 @@ Restart your AI tool. Your agent now remembers — no `init` needed, the MCP ser
 
 Everything else — sessions, context loading, habit tracking, maintenance — works transparently in the background.
 
-> [All 63 MCP tools →](https://nhadaututtheky.github.io/neural-memory/api/mcp-tools/)
+> [All 63 MCP tools →](https://neuralmemory.theio.vn/api/mcp-tools/)
 
 ---
 
@@ -83,7 +95,7 @@ nmem sync --auto       # auto-sync after every remember/recall
 
 Sync uses **Merkle delta** — only diffs travel, not the full brain. Fast, efficient, private.
 
-> [Cloud Sync setup guide →](https://nhadaututtheky.github.io/neural-memory/guides/cloud-sync/)
+> [Cloud Sync setup guide →](https://neuralmemory.theio.vn/guides/cloud-sync/)
 
 ---
 
@@ -94,7 +106,7 @@ Sync uses **Merkle delta** — only diffs travel, not the full brain. Fast, effi
 - **Spreading activation** — memories surface by association, not keyword match
 - **Cognitive reasoning** — hypothesize, submit evidence, make predictions, verify with Bayesian confidence
 - **Workload presets** — `nmem config preset {balanced,safe-cost,max-recall,chat-heavy}` tune the brain for SaaS, frugal mode, deep retention, or conversational agents
-- **Temporal recall** — `nmem_causal` exposes `temporal_range` and `temporal_neighborhood` actions; see the [Temporal Recall Recipes guide](https://nhadaututtheky.github.io/neural-memory/guides/temporal-recipes/)
+- **Temporal recall** — `nmem_causal` exposes `temporal_range` and `temporal_neighborhood` actions; see the [Temporal Recall Recipes guide](https://neuralmemory.theio.vn/guides/temporal-recipes/)
 
 #### Knowledge Ingestion
 - **Train from documents** — PDF, DOCX, PPTX, HTML, JSON, XLSX, CSV ingested into permanent brain knowledge
@@ -204,13 +216,13 @@ Pro  (HNSW):  7 results — includes "JWT rotation", "session hardening", "OAuth
 
 ```bash
 pip install neural-memory                 # Pro features included
-nmem pro activate YOUR_LICENSE_KEY       # activate license
-nmem pro status                          # verify: Pro: Active
+nmem shared activate --key NM-PRO-XXXX-XXXX-XXXX   # activate license
+nmem shared status                                 # verify: Pro: Active
 ```
 
-**[$9/mo](https://nhadaututtheky.github.io/neural-memory/landing/pricing/)** — 30-day money-back guarantee. All free tools keep working. Downgrade anytime, keep your data.
+**[$9/mo](https://neuralmemory.theio.vn/landing/pricing/)** — 30-day money-back guarantee. All free tools keep working. Downgrade anytime, keep your data.
 
-> [Pro quickstart →](https://nhadaututtheky.github.io/neural-memory/guides/pro-quickstart/) · [Full comparison →](https://nhadaututtheky.github.io/neural-memory/landing/pro/) · [Pricing →](https://nhadaututtheky.github.io/neural-memory/landing/pricing/)
+> [Pro quickstart →](https://neuralmemory.theio.vn/guides/pro-quickstart/) · [Full comparison →](https://neuralmemory.theio.vn/landing/pro/) · [Pricing →](https://neuralmemory.theio.vn/landing/pricing/)
 
 ---
 
@@ -265,7 +277,7 @@ Set memory slot in `~/.openclaw/openclaw.json`:
 Already using Neural Memory? Just activate your key:
 
 ```bash
-nmem pro activate YOUR_LICENSE_KEY    # activate license
+nmem shared activate --key NM-PRO-XXXX-XXXX-XXXX   # activate license
 ```
 
 Then enable InfinityDB (semantic search engine):
@@ -277,7 +289,7 @@ storage_backend = "infinitydb"
 
 Restart your MCP server. Existing memories are auto-migrated from SQLite to InfinityDB on first startup.
 
-> [Get a license →](https://nhadaututtheky.github.io/neural-memory/landing/pricing/) · [Pro quickstart →](https://nhadaututtheky.github.io/neural-memory/guides/pro-quickstart/)
+> [Get a license →](https://neuralmemory.theio.vn/landing/pricing/) · [Pro quickstart →](https://neuralmemory.theio.vn/guides/pro-quickstart/)
 
 </details>
 
@@ -314,14 +326,14 @@ Zero LLM calls, zero API cost. [Full benchmarks →](docs/benchmarks.md)
 
 | Guide | Description |
 |-------|-------------|
-| [Quickstart Guide](https://nhadaututtheky.github.io/neural-memory/guides/quickstart-guide/) | Interactive guide with animated demos |
-| [Pro Quickstart](https://nhadaututtheky.github.io/neural-memory/guides/pro-quickstart/) | Get started with Pro features |
-| [CLI Reference](https://nhadaututtheky.github.io/neural-memory/getting-started/cli-reference/) | All 66 CLI commands |
-| [MCP Tools Reference](https://nhadaututtheky.github.io/neural-memory/api/mcp-tools/) | All 63 MCP tools with parameters |
-| [Cloud Sync](https://nhadaututtheky.github.io/neural-memory/guides/cloud-sync/) | Multi-device sync setup |
-| [Brain Health Guide](https://nhadaututtheky.github.io/neural-memory/guides/brain-health/) | Understanding and improving brain health |
-| [Embedding Setup](https://nhadaututtheky.github.io/neural-memory/guides/embedding-setup/) | Configure embedding providers |
-| [Architecture](https://nhadaututtheky.github.io/neural-memory/architecture/overview/) | Technical design deep-dive |
+| [Quickstart Guide](https://neuralmemory.theio.vn/guides/quickstart-guide/) | Interactive guide with animated demos |
+| [Pro Quickstart](https://neuralmemory.theio.vn/guides/pro-quickstart/) | Get started with Pro features |
+| [CLI Reference](https://neuralmemory.theio.vn/getting-started/cli-reference/) | All 82 CLI commands |
+| [MCP Tools Reference](https://neuralmemory.theio.vn/api/mcp-tools/) | All 63 MCP tools with parameters |
+| [Cloud Sync](https://neuralmemory.theio.vn/guides/cloud-sync/) | Multi-device sync setup |
+| [Brain Health Guide](https://neuralmemory.theio.vn/guides/brain-health/) | Understanding and improving brain health |
+| [Embedding Setup](https://neuralmemory.theio.vn/guides/embedding-setup/) | Configure embedding providers |
+| [Architecture](https://neuralmemory.theio.vn/architecture/overview/) | Technical design deep-dive |
 
 ## Development
 
