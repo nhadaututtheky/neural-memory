@@ -17,8 +17,14 @@ Same safe, reversible mechanism as the concept pruner:
   1. Match neurons whose content starts with the literal ``[SESSION]`` marker.
      (In SQLite ``LIKE`` the brackets are literal — only ``%``/``_`` are wildcards —
      so ``content LIKE '[SESSION]%'`` matches exactly that prefix.)
-  2. Mark matches ``lifecycle_state = 'stale'`` so the recall pipeline skips them.
-     Nothing is deleted; ``--unprune`` restores them from the JSON backup.
+  2. Mark matches with BOTH exclusion markers:
+       - ``metadata._status = 'expired'`` — the marker retrieval actually gates on:
+         ``_filter_by_status`` default-allows only ``active`` (NeuronStatus contract,
+         see ``core/neuron.py``), so this is what removes dumps from recall.
+       - ``lifecycle_state = 'stale'`` — bookkeeping column used by this script's
+         own idempotence check, consistent with ``prune-noisy-concepts.py``.
+     The original ``_status`` is preserved in ``metadata._prev_status`` so
+     ``--unprune`` restores it faithfully. Nothing is deleted.
 
 Usage:
   python scripts/prune-session-dumps.py            # dry-run (default)
@@ -102,11 +108,11 @@ def count_session_dumps(cur: sqlite3.Cursor) -> int:
 def report_sample(cur: sqlite3.Cursor, limit: int = 8) -> list[tuple]:
     """Show a sample of session-dump neurons (type + one-line content preview)."""
     cur.execute(
-        "SELECT type, substr(replace(content, char(10), ' '), 1, 70) AS preview "
+        "SELECT type, substr(replace(content, char(10), ' '), 1, 70) AS preview "  # noqa: S608 — LIMIT is an internal int, not user input
         "FROM neurons "
         "WHERE content LIKE ? "
         "AND (lifecycle_state IS NULL OR lifecycle_state != 'stale') "
-        f"LIMIT {limit}",
+        f"LIMIT {int(limit)}",
         (SESSION_PREFIX,),
     )
     return cur.fetchall()
@@ -142,11 +148,20 @@ def dump_affected(dbs: list[Path]) -> list[dict]:
 
 
 def prune(cur: sqlite3.Cursor) -> int:
-    """Mark active session-dump neurons stale. Returns affected row count."""
+    """Mark active session-dump neurons excluded from recall. Returns affected row count.
+
+    Sets ``metadata._status = 'expired'`` (the value retrieval's
+    ``_filter_by_status`` actually gates on) plus the ``lifecycle_state``
+    bookkeeping column. The prior ``_status`` is stashed in
+    ``metadata._prev_status`` so unprune can restore it exactly.
+    """
     cur.execute(
         "UPDATE neurons "
         "SET lifecycle_state = 'stale', "
-        "metadata = json_set(COALESCE(metadata, '{}'), '$.pruned_reason', ?) "
+        "metadata = json_set(COALESCE(metadata, '{}'), "
+        "    '$.pruned_reason', ?, "
+        "    '$._prev_status', COALESCE(json_extract(metadata, '$._status'), 'active'), "
+        "    '$._status', 'expired') "
         "WHERE content LIKE ? "
         "AND (lifecycle_state IS NULL OR lifecycle_state != 'stale')",
         (PRUNED_REASON, SESSION_PREFIX),
@@ -178,9 +193,14 @@ def unprune(dump_path: str) -> int:
                 restorable.append(r["neuron_id"])
         if restorable:
             placeholders = ",".join("?" for _ in restorable)
+            # Restore _status from the stashed _prev_status (default 'active'),
+            # then drop the bookkeeping keys this script added.
             cur.execute(
-                "UPDATE neurons SET lifecycle_state = NULL, "
-                "metadata = json_remove(COALESCE(metadata, '{}'), '$.pruned_reason') "
+                "UPDATE neurons SET lifecycle_state = NULL, "  # noqa: S608 — interpolation is '?' placeholders only
+                "metadata = json_remove("
+                "    json_set(COALESCE(metadata, '{}'), "
+                "        '$._status', COALESCE(json_extract(metadata, '$._prev_status'), 'active')), "
+                "    '$.pruned_reason', '$._prev_status') "
                 f"WHERE id IN ({placeholders})",
                 restorable,
             )
@@ -207,7 +227,11 @@ def main() -> None:
         if arg == "--unprune" and i + 1 < len(sys.argv):
             dump_path = sys.argv[i + 1]
 
-    if do_unprune and dump_path:
+    if do_unprune:
+        if not dump_path:
+            print("Error: --unprune requires a dump file path")
+            print(f"  Usage: python {sys.argv[0]} --unprune {BACKUP_FILE}")
+            sys.exit(1)
         print("=" * 60)
         print("  NeuralMemory -- Session-Dump Unprune")
         print(f"  Dump file: {dump_path}")
@@ -225,6 +249,11 @@ def main() -> None:
 
     if do_dump:
         affected = dump_affected(dbs)
+        if not affected:
+            # Don't clobber an existing rollback backup with an empty list
+            # (e.g. running --dump after --execute finds nothing active).
+            print(f"\nNo active session-dump neurons found; {BACKUP_FILE} not written")
+            return
         with open(BACKUP_FILE, "w") as f:
             json.dump(affected, f, indent=2)
         print(f"\nDumped {len(affected)} affected neuron(s) to {BACKUP_FILE}")
