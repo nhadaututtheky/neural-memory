@@ -216,8 +216,8 @@ Pro  (HNSW):  7 results — includes "JWT rotation", "session hardening", "OAuth
 
 ```bash
 pip install neural-memory                 # Pro features included
-nmem pro activate YOUR_LICENSE_KEY       # activate license
-nmem pro status                          # verify: Pro: Active
+nmem shared activate --key NM-PRO-XXXX-XXXX-XXXX   # activate license
+nmem shared status                                 # verify: Pro: Active
 ```
 
 **[$9/mo](https://neuralmemory.theio.vn/landing/pricing/)** — 30-day money-back guarantee. All free tools keep working. Downgrade anytime, keep your data.
@@ -277,7 +277,7 @@ Set memory slot in `~/.openclaw/openclaw.json`:
 Already using Neural Memory? Just activate your key:
 
 ```bash
-nmem pro activate YOUR_LICENSE_KEY    # activate license
+nmem shared activate --key NM-PRO-XXXX-XXXX-XXXX   # activate license
 ```
 
 Then enable InfinityDB (semantic search engine):
