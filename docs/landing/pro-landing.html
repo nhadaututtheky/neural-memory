@@ -599,6 +599,14 @@
       cursor: pointer;
     }
 
+    .claim-note {
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--text-muted);
+      margin-top: 10px;
+    }
+    .claim-note a { color: var(--brand); }
+
     /* Static fallback for a failed 3D scene */
     #scene-fallback {
       position: fixed;
@@ -1348,19 +1356,22 @@
           <div class="stat-grid">
             <div class="stat-card">
               <div class="stat-value" style="color:var(--emerald)">100x</div>
-              <div class="stat-label">Faster at 100K neurons</div>
+              <div class="stat-label">Projected at 100K neurons</div>
             </div>
             <div class="stat-card">
               <div class="stat-value" style="color:var(--amber)">10s</div>
-              <div class="stat-label">vs 5 hours (Free)</div>
+              <div class="stat-label">vs ~5 hours (projected)</div>
             </div>
           </div>
           <table class="compare-table">
             <tr><th>Neurons</th><th>Free</th><th>Pro</th></tr>
             <tr><td>1,000</td><td>~2s</td><td style="color:var(--emerald)">~0.1s</td></tr>
             <tr><td>10,000</td><td>~3 min</td><td style="color:var(--emerald)">~1s</td></tr>
-            <tr><td>100,000</td><td>~5 hours</td><td style="color:var(--emerald)">~10s</td></tr>
+            <tr><td>100,000*</td><td>~5 hours*</td><td style="color:var(--emerald)">~10s*</td></tr>
           </table>
+          <p class="claim-note">* Projected from the O(N&sup2;) vs O(N log N) complexity difference.
+            Measured runs go up to ~10K neurons &mdash;
+            <a href="https://neuralmemory.theio.vn/benchmarks/">see methodology</a>.</p>
           <div class="code-block">
             <span style="color:var(--cyan)">nmem_pro_merge</span>(
             <br>&nbsp;&nbsp;similarity_threshold=<span style="color:var(--amber)">0.85</span>,
@@ -1424,13 +1435,15 @@
           <div class="stat-grid">
             <div class="stat-card">
               <div class="stat-value" style="color:var(--amber)">92%</div>
-              <div class="stat-label">Savings at 1M neurons</div>
+              <div class="stat-label">Modelled saving at 1M</div>
             </div>
             <div class="stat-card">
               <div class="stat-value" style="color:var(--emerald)">120 MB</div>
-              <div class="stat-label">vs 1.5 GB (Free)</div>
+              <div class="stat-label">vs 1.5 GB (modelled)</div>
             </div>
           </div>
+          <p class="claim-note">Figures are modelled from the per-tier byte sizes above, not measured
+            on a 1M-neuron corpus. Actual saving depends on how your memories distribute across tiers.</p>
         `,
         engine: `
           <div class="feature-tag" style="color:var(--cyan)">INFINITYDB ENGINE</div>
@@ -1447,19 +1460,23 @@
           <div class="stat-grid">
             <div class="stat-card">
               <div class="stat-value" style="color:var(--cyan)">&lt;5ms</div>
-              <div class="stat-label">Search at 1M neurons</div>
+              <div class="stat-label">HNSW vector search</div>
             </div>
             <div class="stat-card">
-              <div class="stat-value" style="color:var(--emerald)">2M+</div>
-              <div class="stat-label">Neurons tested</div>
+              <div class="stat-value" style="color:var(--emerald)">2.8&times;</div>
+              <div class="stat-label">Faster recall than SQLite</div>
             </div>
           </div>
+          <p class="claim-note">&lt;5ms is the ANN index lookup, not end-to-end recall. Measured
+            end-to-end p50 at ~5.5K neurons: <strong>47ms</strong> on InfinityDB vs 134ms on SQLite
+            (<code>scripts/benchmark_backends.py</code>) &mdash;
+            <a href="https://neuralmemory.theio.vn/benchmarks/">methodology</a>.</p>
           <table class="compare-table">
             <tr><th></th><th>Free (SQLite)</th><th>Pro (InfinityDB)</th></tr>
             <tr><td>Recall</td><td>Keyword (FTS5)</td><td style="color:var(--brand)">Semantic (HNSW)</td></tr>
-            <tr><td>Speed (10K)</td><td>~500ms</td><td style="color:var(--brand)">&lt;5ms</td></tr>
-            <tr><td>Scale</td><td>~50K</td><td style="color:var(--brand)">2M+</td></tr>
-            <tr><td>Storage (1M)</td><td>~5 GB</td><td style="color:var(--brand)">~1 GB</td></tr>
+            <tr><td>Recall p50 (~5.5K, measured)</td><td>134ms</td><td style="color:var(--brand)">47ms</td></tr>
+            <tr><td>Design target</td><td>~50K</td><td style="color:var(--brand)">1M+</td></tr>
+            <tr><td>Storage (1M, modelled)</td><td>~5 GB</td><td style="color:var(--brand)">~1 GB</td></tr>
             <tr><td>Graph</td><td>SQL JOINs</td><td style="color:var(--brand)">Native BFS &lt;1ms</td></tr>
             <tr><td>Crash recovery</td><td>SQLite WAL</td><td style="color:var(--brand)">Custom WAL + replay</td></tr>
             <tr><td>MCP tools</td><td>63</td><td style="color:var(--brand)">63 + 3 Pro</td></tr>
