@@ -17,7 +17,11 @@ test.describe("Dashboard Smoke Tests", () => {
   })
 
   test("health page loads", async ({ page }) => {
-    await page.goto("/health")
+    // Canonical route. The legacy "/health" alias cannot be hard-loaded in dev:
+    // vite.config.ts proxies /health to the API on :8000, so the request never
+    // reaches the SPA. In production the dashboard sits under a basename, so
+    // the real path is /ui/health and there is no collision.
+    await page.goto("/insights?tab=health")
     await expect(page.locator("body")).toBeVisible()
     await expect(page.getByRole("navigation")).toBeVisible()
   })
@@ -58,11 +62,22 @@ test.describe("Dashboard Smoke Tests", () => {
     const themeBtn = page.getByTestId("theme-toggle")
     await expect(themeBtn).toBeVisible()
 
-    const htmlBefore = await page.locator("html").getAttribute("class")
+    // The cycle is light -> dark -> system and starts at "system". Asserting
+    // that ONE click flips the `dark` class is wrong: with a light OS,
+    // system -> light leaves the class absent both before and after. Assert on
+    // the persisted choice, then walk the cycle far enough to prove the class
+    // really does get applied.
+    const storedBefore = await page.evaluate(() => localStorage.getItem("nm-theme"))
     await themeBtn.click()
-    const htmlAfter = await page.locator("html").getAttribute("class")
-    // Class should change (dark ↔ light ↔ system)
-    expect(htmlAfter).not.toBe(htmlBefore)
+    const storedAfter = await page.evaluate(() => localStorage.getItem("nm-theme"))
+    expect(storedAfter).not.toBe(storedBefore)
+
+    let sawDark = await page.locator("html.dark").count()
+    for (let i = 0; i < 3 && sawDark === 0; i++) {
+      await themeBtn.click()
+      sawDark = await page.locator("html.dark").count()
+    }
+    expect(sawDark).toBeGreaterThan(0)
   })
 
   test("Phosphor icons render (no broken SVGs)", async ({ page }) => {
