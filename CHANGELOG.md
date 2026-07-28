@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Consolidation summary_fiber self-amplifying pollution loop
+
+- **`_summarize()` no longer creates tag-repetition pollution.** The method now
+  excludes existing `summary_fiber` entries from the clustering pool to prevent
+  a self-amplifying loop where each cycle re-ingested the previous cycle's output.
+- **Tag-repetition pattern detection.** Source fiber summaries matching the
+  signature `[tag1, tag2] [tag1, tag2] ...` are now filtered out before
+  constructing the cluster's concept content, preventing nested bracket pollution.
+- **`_essence_backfill()` rejects polluted anchor content.** The same
+  tag-repetition pattern check is applied to anchor neuron content before
+  generating essence, preventing propagation of pollution into the essence field.
+
 ## [4.59.1] — 2026-07-22
 
 ### Fixed — Codex hook installer wrote a matcher Codex cannot compile

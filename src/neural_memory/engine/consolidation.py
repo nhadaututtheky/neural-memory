@@ -48,6 +48,13 @@ _CAUSAL_SYNAPSE_TYPES = frozenset(
     }
 )
 
+# Tag-repetition pollution signature: content that is nothing but two or more
+# adjacent bracketed groups (e.g. "[tag1, tag2] [tag1, tag2] …"). Produced by
+# older _summarize cycles that re-ingested their own "[tags] summary" output —
+# each pass nested the previous pass's bracket prefix, compounding exponentially.
+# Used to keep polluted summaries out of new concept content and essence backfill.
+_TAG_POLLUTION_RE = re.compile(r"^\[.+\](?:\s*\[.+\])+")
+
 
 class ConsolidationStrategy(StrEnum):
     """Available consolidation strategies."""
@@ -1099,7 +1106,12 @@ class ConsolidationEngine:
         if len(fibers) < self._config.summarize_min_cluster_size:
             return
 
-        fiber_list = [f for f in fibers if f.tags]
+        # Exclude existing summary_fibers to prevent self-amplifying pollution loop.
+        # Summary fibers carry the same tags as their source cluster, so they would
+        # be re-ingested on the next cycle, compounding any pollution exponentially.
+        fiber_list = [
+            f for f in fibers if f.tags and f.metadata.get("_consolidation") != "summary_fiber"
+        ]
 
         # Cap fiber count for O(N²) pair comparison — keep highest-salience
         max_fibers_for_clustering = 1000
@@ -1174,14 +1186,23 @@ class ConsolidationEngine:
 
             cluster_fibers = [fiber_list[i] for i in members]
 
-            summaries = [f.summary for f in cluster_fibers if f.summary]
+            # Filter out fibers whose summary matches the tag-repetition pollution
+            # pattern, then dedup before joining to reduce redundancy.
+            unique_summaries = list(
+                dict.fromkeys(
+                    f.summary
+                    for f in cluster_fibers
+                    if f.summary and not _TAG_POLLUTION_RE.match(f.summary)
+                )
+            )
+
             all_tags: set[str] = set()
             for f in cluster_fibers:
                 all_tags |= f.tags
 
             summary_content = (
-                "; ".join(summaries[:10])
-                if summaries
+                "; ".join(unique_summaries[:10])
+                if unique_summaries
                 else f"Cluster of {len(cluster_fibers)} memories"
             )
             tag_label = ", ".join(sorted(all_tags)[:5])
@@ -1395,6 +1416,17 @@ class ConsolidationEngine:
 
             anchor = await self._storage.get_neuron(fiber.anchor_neuron_id)
             if not anchor or not anchor.content:
+                continue
+
+            # Reject anchor content that matches tag-repetition pollution
+            # (same defence as _summarize — prevents essence backfill from
+            # propagating garbage through the generator into the fiber)
+            if _TAG_POLLUTION_RE.match(anchor.content):
+                logger.debug(
+                    "Skipping essence backfill for fiber %s: anchor content "
+                    "matches tag-repetition pattern",
+                    fiber.id,
+                )
                 continue
 
             # Get priority from typed memory for cost guard
