@@ -1,0 +1,122 @@
+name: Republish npm
+
+# Manual recovery path for the npm channel.
+#
+# The release workflow only fires on a tag push, so when a publish step failed
+# there was no way to retry it — GitHub will not re-run jobs from a run it has
+# already marked successful, which is exactly what happened in v4.60.0 (both npm
+# jobs failed on `need auth` but reported green). The only recovery was cutting a
+# throwaway tag, which would also re-trigger PyPI, ClawHub and the GitHub
+# release for a version that already shipped.
+#
+# This publishes ONLY the npm packages, for a version that already exists.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish, without the leading v (e.g. 4.60.0)"
+        required: true
+        type: string
+      target:
+        description: "Which package(s) to publish"
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - plugin
+          - mcp
+
+permissions:
+  contents: read
+
+jobs:
+  plugin:
+    name: Publish OpenClaw plugin (neuralmemory)
+    if: inputs.target == 'both' || inputs.target == 'plugin'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: v${{ inputs.version }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Build and publish
+        working-directory: integrations/neuralmemory
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::NPM_TOKEN secret is empty."
+            exit 1
+          fi
+          npm ci || npm install
+          npm run build
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          CODE=$?
+          echo "$OUT"
+          set -e
+          if [ $CODE -ne 0 ]; then
+            if echo "$OUT" | grep -qiE "cannot publish over|EPUBLISHCONFLICT|previously published version"; then
+              echo "Already published — nothing to do."
+            else
+              echo "::error::npm publish failed (exit $CODE)."
+              exit $CODE
+            fi
+          fi
+
+  mcp:
+    name: Publish MCP wrapper (neural-memory-mcp)
+    if: inputs.target == 'both' || inputs.target == 'mcp'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: v${{ inputs.version }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Sync version and publish
+        working-directory: npm-package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::NPM_TOKEN secret is empty."
+            exit 1
+          fi
+          node -e "
+            const fs = require('fs');
+            const v = process.env.VERSION;
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = v;
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+            const srv = JSON.parse(fs.readFileSync('server.json', 'utf8'));
+            srv.version = v;
+            srv.packages[0].version = v;
+            fs.writeFileSync('server.json', JSON.stringify(srv, null, 2) + '\n');
+          "
+          echo "Publishing neural-memory-mcp@$VERSION"
+          set +e
+          OUT=$(npm publish --access public 2>&1)
+          CODE=$?
+          echo "$OUT"
+          set -e
+          if [ $CODE -ne 0 ]; then
+            if echo "$OUT" | grep -qiE "cannot publish over|EPUBLISHCONFLICT|previously published version"; then
+              echo "Already published — nothing to do."
+            else
+              echo "::error::npm publish failed (exit $CODE)."
+              exit $CODE
+            fi
+          fi
