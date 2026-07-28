@@ -258,7 +258,14 @@ Add to your editor's MCP config:
 </details>
 
 <details>
-<summary><b>OpenClaw (Plugin)</b></summary>
+<summary><b>OpenClaw (Skill or Plugin)</b></summary>
+
+**Skill — one click via ClawHub.** Published on every release:
+
+[clawhub.ai/skills/neural-memory](https://clawhub.ai/skills/neural-memory)
+
+**Plugin — memory slot replacement.** Use this if you want NeuralMemory to *be*
+OpenClaw's memory provider rather than a skill it calls:
 
 ```bash
 pip install neural-memory && npm install -g neuralmemory

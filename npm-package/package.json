@@ -1,7 +1,7 @@
 {
   "name": "neural-memory-mcp",
   "version": "4.43.0",
-  "description": "Persistent memory for AI agents — 57 MCP tools, spreading activation recall, neuroscience-inspired consolidation. Works with Claude, GPT, Gemini.",
+  "description": "Persistent memory for AI agents — 63 MCP tools, spreading activation recall, neuroscience-inspired consolidation. Works with Claude, GPT, Gemini.",
   "type": "module",
   "mcpName": "io.github.nhadaututtheky/neural-memory",
   "bin": {
