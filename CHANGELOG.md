@@ -7,17 +7,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.60.0] — 2026-07-28
+
+### Fixed — Pruned memories were never actually hidden from recall
+
+`lifecycle_state` is a derived column: no retrieval path reads it, and the
+`lifecycle` consolidation strategy recomputes it from heat and age on every run.
+Both prune scripts wrote only that column, so everything they "pruned" stayed
+fully recallable — and the marker was erased by the next consolidation pass.
+
+- Recall visibility is gated solely by `metadata._status`. Both scripts now set
+  it, stashing the prior value in `metadata._prev_status` for a faithful
+  `--unprune`. Re-running repairs rows an older version marked `stale`.
+- Session-dump text reaches recall through three independent surfaces:
+  `neurons.content`, `fibers.summary` and `fibers.essence`. Only the first was
+  covered; the other two kept leaking whole transcripts into recall.
+- Dump neurons are matched by signature anywhere in the text, not just as a
+  prefix — concept extraction re-emitted transcript fragments starting with
+  `Duration = 74s` or `User`, which a prefix rule never saw. Length is
+  deliberately not a signal: the longest neurons in a real brain were imported
+  legal texts and tax records.
+- The shared marker logic now lives in `scripts/_prune_status.py`; the bug
+  existed twice because the logic was copied.
+- Fixed a `UnicodeEncodeError` that aborted a run mid-way through on a cp1252
+  console when previewing non-ASCII content.
+- `lifecycle_state` documented as derived and consolidation-owned in the SQLite
+  and Postgres schemas.
+
 ### Fixed — Consolidation summary_fiber self-amplifying pollution loop
 
-- **`_summarize()` no longer creates tag-repetition pollution.** The method now
-  excludes existing `summary_fiber` entries from the clustering pool to prevent
-  a self-amplifying loop where each cycle re-ingested the previous cycle's output.
-- **Tag-repetition pattern detection.** Source fiber summaries matching the
-  signature `[tag1, tag2] [tag1, tag2] ...` are now filtered out before
-  constructing the cluster's concept content, preventing nested bracket pollution.
-- **`_essence_backfill()` rejects polluted anchor content.** The same
-  tag-repetition pattern check is applied to anchor neuron content before
-  generating essence, preventing propagation of pollution into the essence field.
+Contributed by @SparkofSpike.
+
+- `_summarize()` excludes existing `summary_fiber` entries from the clustering
+  pool. They carry their source cluster's tags, so each cycle re-ingested the
+  previous cycle's output and nested the `[tags]` prefix exponentially.
+- Summaries matching the tag-repetition signature are filtered before building
+  concept content, and `_essence_backfill()` skips polluted anchors.
+
+### Fixed — Dashboard rendered a blank page in development
+
+`main.tsx` hardcoded the router basename to `/ui` unless the path was
+`/dashboard`, but Vite dev serves at the root, so the basename never matched and
+`npm run dev` produced an empty tree. This had quietly reduced the Playwright
+suite to 1 of 8 passing; it is 11 of 11 now.
+
+### Added — Living Brain 3D has actual anatomy
+
+The brain was an icosphere stretched to an ellipsoid with two sine terms. It now
+has procedurally generated gyri and sulci, a longitudinal fissure separating the
+hemispheres, a cerebellum with a transverse seam, and a brainstem — with no new
+dependency and no model asset. The mesh and the layout containment force
+evaluate the same surface function, so nodes tuck into the folds instead of
+poking through them.
+
+Node position now means something: regions are assigned to communities detected
+from the synapse graph by weighted label propagation, replacing a fixed
+neuron-type-to-axis lookup that duplicated the color channel.
+
+### Changed — One design system across dashboard and site
+
+- Six competing color palettes collapsed into one module with a per-axis
+  no-duplicate-hex invariant. `entity` used to render as two different colors
+  depending on the page, one of which meant `attribute` elsewhere.
+- Brand primary moved off the stock `#6366f1` indigo, which failed WCAG AA
+  (4.47:1 for white label text). The landing page moved with it.
+- Sidebar and command palette now share one navigation list. `/living-brain`
+  had no sidebar entry at all, and PRO badges marked six items when only two
+  pages are wholly gated.
+
+### Fixed — Landing page accessibility and unverifiable claims
+
+- The six feature labels were `<div>`s with click handlers and were the only
+  route to five of the six panels, so keyboard and screen-reader users could
+  reach exactly one. They are buttons now.
+- The scene depends on a CDN importmap with no fallback; a failed fetch left a
+  blank canvas with no way into the content. Added a static feature list.
+- Benchmark numbers audited against the artifacts in `scripts/`. "2M+ neurons
+  tested" was false — the largest completed run is ~5.5K neurons and the 1M
+  attempt aborted at 250K. `<5ms` described the index lookup, not end-to-end
+  recall (measured p50: 47ms). Compression savings had no benchmark at all and
+  are now labelled as modelled.
+
+### Fixed — Documentation pointed users at a command that does not exist
+
+The README told users to run `nmem pro activate` in three places. There is no
+`nmem pro` command; activation is `nmem shared activate --key NM-PRO-…`. Anyone
+who bought Pro and followed the README could not activate it.
+
+- README now links the website, which it never mentioned, and documents
+  `nmem update`.
+- Documentation links point at the canonical `neuralmemory.theio.vn` declared in
+  `mkdocs.yml`, not `github.io`.
+- Stale counts corrected: 82 CLI commands (not 66), 63 MCP tools (not 52).
 
 ## [4.59.1] — 2026-07-22
 

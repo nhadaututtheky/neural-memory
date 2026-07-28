@@ -341,7 +341,7 @@ Zero LLM calls, zero API cost. [Full benchmarks →](docs/benchmarks.md)
 git clone https://github.com/nhadaututtheky/neural-memory
 cd neural-memory && pip install -e ".[dev]"
 nmem doctor --dev        # Verify contributor setup
-pytest tests/ -v          # 7400+ tests
+pytest tests/ -v          # 7600+ tests
 ruff check src/ tests/    # Lint
 ```
 
