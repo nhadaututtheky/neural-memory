@@ -6,9 +6,15 @@ time, but existing noisy neurons remain in the database and surface during recal
 This script:
   1. Expands the noise set to cover common single-word code identifiers and
      generic nouns that carry zero topical signal.
-  2. Marks matching neurons as stale (lifecycle_state = 'stale') so the recall
-     pipeline naturally skips them.
+  2. Sets metadata._status = 'expired' so the recall pipeline skips them. That
+     is the ONLY marker retrieval reads — see scripts/_prune_status.py for why
+     the lifecycle_state column does not work for this (issue #195). The prior
+     status is stashed in metadata._prev_status so --unprune restores exactly.
   3. Reports what was cleaned so we can assess if more filtering is needed.
+
+Nothing is deleted. Re-running also repairs rows that an earlier version of
+this script marked 'stale' without setting _status — those were left fully
+recallable.
 
 Usage:
   python scripts/prune-noisy-concepts.py           # dry-run (default)
@@ -22,10 +28,20 @@ Supports BRAIN_PATH env var to override ~/.neuralmemory base directory.
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 import sys
 from pathlib import Path
+
+from _prune_status import (
+    MARK_PRUNED_SET_SQL,
+    STILL_VISIBLE_SQL,
+    find_brain_dbs,
+    has_neuron_columns,
+    make_stdout_safe,
+    restore_by_reason,
+)
+
+PRUNED_REASON = "noisy_low_signal"
 
 # ── Noise patterns ──────────────────────────────────────────
 # Short generic words that leak through entity extraction and
@@ -403,37 +419,6 @@ CODE_NOISE: set[str] = {
 # ── Helpers ─────────────────────────────────────────────────
 
 
-def _get_brain_base() -> Path:
-    """Resolve brain storage directory from env var or default."""
-    env_path = os.environ.get("BRAIN_PATH", "")
-    if env_path:
-        return Path(env_path)
-    return Path.home() / ".neuralmemory"
-
-
-def find_brain_dbs() -> list[Path]:
-    """Find all brain databases in the neural-memory directory."""
-    candidates: list[Path] = []
-    base = _get_brain_base()
-
-    # Main brain
-    main = base / "brain.db"
-    if main.exists():
-        candidates.append(main)
-
-    # Named brains
-    brains_dir = base / "brains"
-    if brains_dir.exists():
-        candidates.extend(brains_dir.glob("*.db"))
-
-    # Also check for any .db files directly in the base dir (alternate layouts)
-    for f in base.glob("*.db"):
-        if f not in candidates:
-            candidates.append(f)
-
-    return candidates
-
-
 def _noise_placeholders() -> tuple[set[str], str]:
     """Build placeholder string for SQL IN clause from noise sets."""
     noise_lower = {w.lower() for w in SHORT_NOISE | CODE_NOISE}
@@ -448,7 +433,7 @@ def count_noisy_neurons(cur: sqlite3.Cursor) -> int:
         "SELECT COUNT(*) FROM neurons "
         "WHERE type IN ('concept', 'entity') "
         f"AND LOWER(content) IN ({placeholders}) "
-        "AND (lifecycle_state IS NULL OR lifecycle_state != 'stale')"
+        f"AND {STILL_VISIBLE_SQL}"
     )
     cur.execute(sql, list(noise_lower))
     result = cur.fetchone()
@@ -464,24 +449,21 @@ def prune_noisy_neurons(cur: sqlite3.Cursor, dry_run: bool = True) -> int:
             "SELECT COUNT(*) FROM neurons "
             "WHERE type IN ('concept', 'entity') "
             f"AND LOWER(content) IN ({placeholders}) "
-            "AND (lifecycle_state IS NULL OR lifecycle_state != 'stale')"
+            f"AND {STILL_VISIBLE_SQL}"
         )
         cur.execute(dry_sql, list(noise_lower))
         result = cur.fetchone()
         return result[0] if result else 0
 
-    empty_obj = "'{}'"
-    json_val = "'" + '"noisy_low_signal"' + "'"
+    # S608 is ignored file-wide in pyproject: every interpolated fragment here
+    # is a static constant or a '?'-placeholder string, never user input.
     update_sql = (
-        "UPDATE neurons "
-        "SET lifecycle_state = 'stale', "
-        f"metadata = json_set(COALESCE(metadata, {empty_obj}), "
-        f"'$.pruned_reason', {json_val}) "
+        f"UPDATE neurons SET {MARK_PRUNED_SET_SQL} "
         "WHERE type IN ('concept', 'entity') "
         f"AND LOWER(content) IN ({placeholders}) "
-        "AND (lifecycle_state IS NULL OR lifecycle_state != 'stale')"
+        f"AND {STILL_VISIBLE_SQL}"
     )
-    cur.execute(update_sql, list(noise_lower))
+    cur.execute(update_sql, [PRUNED_REASON, *noise_lower])
     return cur.rowcount
 
 
@@ -493,7 +475,7 @@ def report_noise_sample(cur: sqlite3.Cursor, limit: int = 15) -> list[tuple]:
         "FROM neurons "
         "WHERE type IN ('concept', 'entity') "
         f"AND LOWER(content) IN ({placeholders}) "
-        "AND (lifecycle_state IS NULL OR lifecycle_state != 'stale') "
+        f"AND {STILL_VISIBLE_SQL} "
         "GROUP BY type, content "
         "ORDER BY cnt DESC "
         f"LIMIT {limit}"
@@ -511,8 +493,7 @@ def dump_affected_neurons(dbs: list[Path]) -> list[dict]:
     for db_path in dbs:
         conn = sqlite3.connect(str(db_path))
         cur = conn.cursor()
-        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='neurons'")
-        if not cur.fetchone():
+        if not has_neuron_columns(cur, "content", "type", "metadata"):
             conn.close()
             continue
 
@@ -522,7 +503,7 @@ def dump_affected_neurons(dbs: list[Path]) -> list[dict]:
             FROM neurons
             WHERE type IN ('concept', 'entity')
             AND LOWER(content) IN ({placeholders})
-            AND (lifecycle_state IS NULL OR lifecycle_state != 'stale')
+            AND {STILL_VISIBLE_SQL}
             """,
             list(noise_lower),
         )
@@ -560,30 +541,20 @@ def unprune_neurons(dump_path: str) -> int:
     for brain_path, brain_records in brains.items():
         conn = sqlite3.connect(brain_path)
         cur = conn.cursor()
-        restorable = []
-        for r in brain_records:
-            nid = r["neuron_id"]
-            cur.execute("SELECT lifecycle_state FROM neurons WHERE id = ?", (nid,))
-            row = cur.fetchone()
-            if row and row[0] == "stale":
-                restorable.append(nid)
-
-        if restorable:
-            placeholders = ",".join("?" for _ in restorable)
-            cur.execute(
-                f"""
-                UPDATE neurons
-                SET lifecycle_state = NULL,
-                    metadata = json_remove(COALESCE(metadata, '{{}}'), '$.pruned_reason')
-                WHERE id IN ({placeholders})
-                """,
-                restorable,
-            )
+        # Restore only rows still carrying this script's marker — matching on
+        # lifecycle_state would both miss rows consolidation has since
+        # recomputed and wrongly claim rows another process marked stale.
+        restored = restore_by_reason(
+            cur,
+            [r["neuron_id"] for r in brain_records],
+            PRUNED_REASON,
+        )
+        if restored:
             conn.commit()
-            total_restored += cur.rowcount
-            print(f"  Restored {cur.rowcount} neurons in {Path(brain_path).name}")
+            total_restored += restored
+            print(f"  Restored {restored} neurons in {Path(brain_path).name}")
         else:
-            print(f"  No stale neurons to restore in {Path(brain_path).name}")
+            print(f"  Nothing pruned by this script to restore in {Path(brain_path).name}")
         conn.close()
 
     return total_restored
@@ -594,6 +565,7 @@ def unprune_neurons(dump_path: str) -> int:
 
 def main() -> None:
     """Run the prune, showing report with optional --execute to apply."""
+    make_stdout_safe()
     args = set(sys.argv[1:])
     dry_run = "--execute" not in args
     do_dump = "--dump" in args
@@ -606,7 +578,11 @@ def main() -> None:
             dump_path = sys.argv[i + 1]
 
     # Unprune mode
-    if do_unprune and dump_path:
+    if do_unprune:
+        if not dump_path:
+            print("Error: --unprune requires a dump file path")
+            print(f"  Usage: python {sys.argv[0]} --unprune prune-dump.json")
+            sys.exit(1)
         print("=" * 60)
         print("  NeuralMemory -- Unprune Mode")
         print(f"  Dump file: {dump_path}")
@@ -627,6 +603,11 @@ def main() -> None:
     if do_dump:
         affected = dump_affected_neurons(dbs)
         dump_file = Path("prune-dump.json")
+        if not affected:
+            # Never clobber an existing rollback backup with an empty list
+            # (e.g. running --dump again after --execute finds nothing left).
+            print(f"\nNo still-visible noisy neurons found; {dump_file} not written")
+            return
         with open(dump_file, "w") as f:
             json.dump(affected, f, indent=2)
         print(f"\nDumped {len(affected)} affected neuron(s) to {dump_file}")

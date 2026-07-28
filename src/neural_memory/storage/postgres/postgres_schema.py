@@ -49,6 +49,8 @@ _INIT_SQL_TEMPLATE = [
         updated_at TEXT DEFAULT '',
         created_at TIMESTAMPTZ NOT NULL,
         last_accessed_at TIMESTAMPTZ,
+        -- DERIVED, consolidation-owned; recomputed from heat + age on every
+        -- `lifecycle` run. NOT a recall gate — retrieval reads metadata._status.
         lifecycle_state TEXT DEFAULT 'active',
         frozen INTEGER DEFAULT 0,
         ephemeral INTEGER DEFAULT 0,
