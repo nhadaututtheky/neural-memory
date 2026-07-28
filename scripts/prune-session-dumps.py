@@ -13,18 +13,23 @@ transcripts" memory-quality rule, dominate recall's "Related Information" surfac
 inflate the neuron count, and drag down the brain's freshness/purity grade. A real
 audit (my-brain.v2) found 428 such neurons active in a single brain.
 
-Same safe, reversible mechanism as the concept pruner:
-  1. Match neurons whose content starts with the literal ``[SESSION]`` marker.
-     (In SQLite ``LIKE`` the brackets are literal — only ``%``/``_`` are wildcards —
-     so ``content LIKE '[SESSION]%'`` matches exactly that prefix.)
-  2. Mark matches with BOTH exclusion markers:
-       - ``metadata._status = 'expired'`` — the marker retrieval actually gates on:
-         ``_filter_by_status`` default-allows only ``active`` (NeuronStatus contract,
-         see ``core/neuron.py``), so this is what removes dumps from recall.
-       - ``lifecycle_state = 'stale'`` — bookkeeping column used by this script's
-         own idempotence check, consistent with ``prune-noisy-concepts.py``.
-     The original ``_status`` is preserved in ``metadata._prev_status`` so
-     ``--unprune`` restores it faithfully. Nothing is deleted.
+Dump text reaches recall through THREE independent surfaces, and all three
+have to be cleared — clearing fewer leaves the transcript readable:
+
+  1. ``neurons.content`` — matched on the session-flush signatures in
+     ``SESSION_PATTERNS``, anywhere in the text rather than only as a prefix.
+     Matches are marked with ``metadata._status = 'expired'``, which is the
+     marker retrieval actually gates on (``_filter_by_status`` default-allows
+     only ``active``). ``lifecycle_state`` is written too but means nothing —
+     see ``scripts/_prune_status.py``. The prior ``_status`` is stashed in
+     ``metadata._prev_status`` so ``--unprune`` restores it faithfully.
+  2. ``fibers.summary`` — read directly by the fiber-summary retrieval tier,
+     which consults only the fiber's *anchor* neuron for status. A dump fiber
+     anchored on an ordinary concept therefore leaks regardless of step 1.
+  3. ``fibers.essence`` — a second, separate text field on the same row.
+
+Nothing is deleted: neurons are hidden, fiber text is blanked, and both are
+saved to the JSON backup for ``--unprune``.
 
 Usage:
   python scripts/prune-session-dumps.py            # dry-run (default)
@@ -38,116 +43,114 @@ Supports BRAIN_PATH env var to override the ~/.neuralmemory base directory.
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 import sys
 from pathlib import Path
 
-# ── Match pattern ───────────────────────────────────────────
-# Neurons whose content begins with this literal marker are session-transcript
-# dumps. LIKE treats the brackets literally (only % and _ are wildcards), so this
-# is an exact prefix match, not a character class.
-SESSION_PREFIX = "[SESSION]%"
+from _prune_status import (
+    MARK_PRUNED_SET_SQL,
+    STILL_VISIBLE_SQL,
+    find_brain_dbs,
+    has_neuron_columns,
+    make_stdout_safe,
+    restore_by_reason,
+)
+
 BACKUP_FILE = "prune-session-dump.json"
 PRUNED_REASON = "session_transcript_dump"
+
+# ── Match patterns ──────────────────────────────────────────
+# Signatures of the session-flush template. LIKE treats the brackets literally
+# (only % and _ are wildcards), so "[SESSION]" is matched as text.
+#
+# Matching the marker ANYWHERE, not just as a prefix, is deliberate: concept
+# extraction re-emitted fragments of these transcripts as their own neurons,
+# and those start with things like "Duration = 74s" or "User", so a prefix rule
+# missed them entirely.
+#
+# Length is NOT part of the signature, and must not be: the longest neurons in
+# a real brain turned out to be imported Vietnamese legal texts and company tax
+# records. A size threshold would have destroyed them. These three markers hit
+# 50 dump fragments and 0 of those documents.
+SESSION_PATTERNS = (
+    "%[SESSION]%",
+    "%Key exchanges:%",
+    "%SESSION END%",
+)
+
+_CONTENT_MATCH = " OR ".join("content LIKE ?" for _ in SESSION_PATTERNS)
 
 # A dump still surfaces in recall unless metadata._status hides it — that is the
 # only marker retrieval reads. Match on that (NOT on lifecycle_state) so re-running
 # the script also repairs rows an older version marked 'stale' without setting
 # _status (they were still fully recallable).
-NEEDS_PRUNE_WHERE = (
-    "content LIKE ? "
-    "AND COALESCE(json_extract(metadata, '$._status'), 'active') NOT IN ('expired', 'superseded')"
-)
+NEEDS_PRUNE_WHERE = f"({_CONTENT_MATCH}) AND {STILL_VISIBLE_SQL}"
 
 # ── Helpers ─────────────────────────────────────────────────
 
 
-def _get_brain_base() -> Path:
-    """Resolve brain storage directory from env var or default."""
-    env_path = os.environ.get("BRAIN_PATH", "")
-    if env_path:
-        return Path(env_path)
-    return Path.home() / ".neuralmemory"
-
-
-def find_brain_dbs() -> list[Path]:
-    """Find all brain databases in the neural-memory directory."""
-    candidates: list[Path] = []
-    base = _get_brain_base()
-
-    main = base / "brain.db"
-    if main.exists():
-        candidates.append(main)
-
-    brains_dir = base / "brains"
-    if brains_dir.exists():
-        candidates.extend(sorted(brains_dir.glob("*.db")))
-
-    for f in sorted(base.glob("*.db")):
-        if f not in candidates:
-            candidates.append(f)
-
-    return candidates
-
-
-def _prunable(cur: sqlite3.Cursor) -> bool:
-    """True only if this DB has a `neurons` table with the columns we touch —
-    older/alternate-schema brains may lack `content`/`lifecycle_state`; skip them
-    rather than crash."""
-    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='neurons'")
-    if cur.fetchone() is None:
-        return False
-    cols = {r[1] for r in cur.execute("PRAGMA table_info(neurons)")}
-    return {"content", "lifecycle_state"}.issubset(cols)
-
-
 def _fibers_prunable(cur: sqlite3.Cursor) -> bool:
-    """True if this DB has a `fibers` table with a `summary` column."""
+    """True if this DB has a `fibers` table with both text columns we clear."""
     cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='fibers'")
     if cur.fetchone() is None:
         return False
     cols = {r[1] for r in cur.execute("PRAGMA table_info(fibers)")}
-    return "summary" in cols
+    return {"summary", "essence"}.issubset(cols)
+
+
+# Fibers carry the dump text in TWO columns and both reach recall independently.
+_FIBER_MATCH = {
+    col: " OR ".join(f"{col} LIKE ?" for _ in SESSION_PATTERNS) for col in ("summary", "essence")
+}
 
 
 def count_dump_fibers(cur: sqlite3.Cursor) -> int:
-    """Count fibers whose own summary is a session dump.
+    """Count fibers carrying session-dump text in `summary` or `essence`.
 
-    Neuron-level pruning does not cover these: the fiber-summary retrieval tier
+    Neuron-level pruning does not cover these. The fiber-summary retrieval tier
     reads ``fibers.summary`` directly, and ``_filter_fibers_by_status`` only
-    consults the *anchor* neuron. A dump fiber anchored on an ordinary concept
-    neuron therefore keeps leaking the transcript into recall.
+    consults the *anchor* neuron, so a dump fiber anchored on an ordinary
+    concept neuron keeps leaking the transcript. ``essence`` is a second,
+    separate surface — blanking only the summary leaves the dump readable
+    through the essence field, which is exactly what happened the first time.
     """
     cur.execute(
-        "SELECT COUNT(*) FROM fibers WHERE summary LIKE ?",
-        (SESSION_PREFIX,),
+        f"SELECT COUNT(*) FROM fibers WHERE ({_FIBER_MATCH['summary']}) "  # noqa: S608 — static fragments, '?' params
+        f"OR ({_FIBER_MATCH['essence']})",
+        (*SESSION_PATTERNS, *SESSION_PATTERNS),
     )
     result = cur.fetchone()
     return result[0] if result else 0
 
 
-def prune_fibers(cur: sqlite3.Cursor) -> int:
-    """Blank session-dump fiber summaries. Returns affected row count.
+def prune_fibers(cur: sqlite3.Cursor) -> tuple[int, int]:
+    """Blank dump text from fiber `summary` and `essence`.
 
-    The fiber itself is kept (it still links real neurons); only the polluted
-    summary text is cleared. Retrieval skips fibers with an empty summary
+    Returns ``(summaries_blanked, essences_blanked)``.
+
+    The fiber itself is kept — it still links real neurons; only the polluted
+    text goes. Retrieval skips fibers with an empty summary
     (``_try_fiber_summary_tier``: ``if not summary: continue``), and the
     ``fibers_au`` trigger keeps the ``fibers_fts`` index in sync automatically.
-    Original summaries go to the JSON backup for ``--unprune``.
+    Originals go to the JSON backup for ``--unprune``.
     """
     cur.execute(
-        "UPDATE fibers SET summary = NULL WHERE summary LIKE ?",
-        (SESSION_PREFIX,),
+        f"UPDATE fibers SET summary = NULL WHERE {_FIBER_MATCH['summary']}",  # noqa: S608 — static fragment, '?' params
+        SESSION_PATTERNS,
     )
-    return cur.rowcount
+    summaries = cur.rowcount
+    cur.execute(
+        f"UPDATE fibers SET essence = NULL WHERE {_FIBER_MATCH['essence']}",  # noqa: S608 — static fragment, '?' params
+        SESSION_PATTERNS,
+    )
+    return summaries, cur.rowcount
 
 
 def count_session_dumps(cur: sqlite3.Cursor) -> int:
     """Count session-dump neurons still visible to recall."""
     cur.execute(
         f"SELECT COUNT(*) FROM neurons WHERE {NEEDS_PRUNE_WHERE}",  # noqa: S608 — static WHERE fragment, '?' params
-        (SESSION_PREFIX,),
+        SESSION_PATTERNS,
     )
     result = cur.fetchone()
     return result[0] if result else 0
@@ -158,7 +161,7 @@ def report_sample(cur: sqlite3.Cursor, limit: int = 8) -> list[tuple]:
     cur.execute(
         "SELECT type, substr(replace(content, char(10), ' '), 1, 70) AS preview "  # noqa: S608 — static WHERE fragment; LIMIT is an internal int
         f"FROM neurons WHERE {NEEDS_PRUNE_WHERE} LIMIT {int(limit)}",
-        (SESSION_PREFIX,),
+        SESSION_PATTERNS,
     )
     return cur.fetchall()
 
@@ -174,10 +177,10 @@ def dump_affected(dbs: list[Path]) -> list[dict]:
     for db_path in dbs:
         conn = sqlite3.connect(str(db_path))
         cur = conn.cursor()
-        if _prunable(cur):
+        if has_neuron_columns(cur, "content", "metadata"):
             cur.execute(
                 f"SELECT id, type, content, lifecycle_state FROM neurons WHERE {NEEDS_PRUNE_WHERE}",  # noqa: S608 — static WHERE fragment, '?' params
-                (SESSION_PREFIX,),
+                SESSION_PATTERNS,
             )
             for row in cur.fetchall():
                 affected.append(
@@ -192,8 +195,9 @@ def dump_affected(dbs: list[Path]) -> list[dict]:
                 )
         if _fibers_prunable(cur):
             cur.execute(
-                "SELECT id, summary FROM fibers WHERE summary LIKE ?",
-                (SESSION_PREFIX,),
+                f"SELECT id, summary, essence FROM fibers "  # noqa: S608 — static fragments, '?' params
+                f"WHERE ({_FIBER_MATCH['summary']}) OR ({_FIBER_MATCH['essence']})",
+                (*SESSION_PATTERNS, *SESSION_PATTERNS),
             )
             for row in cur.fetchall():
                 affected.append(
@@ -202,6 +206,7 @@ def dump_affected(dbs: list[Path]) -> list[dict]:
                         "brain": str(db_path),
                         "fiber_id": row[0],
                         "summary": row[1],
+                        "essence": row[2],
                     }
                 )
         conn.close()
@@ -217,14 +222,8 @@ def prune(cur: sqlite3.Cursor) -> int:
     ``metadata._prev_status`` so unprune can restore it exactly.
     """
     cur.execute(
-        "UPDATE neurons "  # noqa: S608 — static WHERE fragment, '?' params
-        "SET lifecycle_state = 'stale', "
-        "metadata = json_set(COALESCE(metadata, '{}'), "
-        "    '$.pruned_reason', ?, "
-        "    '$._prev_status', COALESCE(json_extract(metadata, '$._status'), 'active'), "
-        "    '$._status', 'expired') "
-        f"WHERE {NEEDS_PRUNE_WHERE}",
-        (PRUNED_REASON, SESSION_PREFIX),
+        f"UPDATE neurons SET {MARK_PRUNED_SET_SQL} WHERE {NEEDS_PRUNE_WHERE}",  # noqa: S608 — static fragments, '?' params
+        (PRUNED_REASON, *SESSION_PATTERNS),
     )
     return cur.rowcount
 
@@ -252,48 +251,34 @@ def unprune(dump_path: str) -> int:
         for r in brain_records:
             if r.get("kind") != "fiber":
                 continue
+            # Restore each column only where it is still blank, so text
+            # rewritten since the backup is never clobbered. Backups predating
+            # essence support simply have no "essence" key.
             cur.execute(
                 "UPDATE fibers SET summary = ? WHERE id = ? AND summary IS NULL",
                 (r["summary"], r["fiber_id"]),
             )
             fiber_restored += cur.rowcount
+            if r.get("essence") is not None:
+                cur.execute(
+                    "UPDATE fibers SET essence = ? WHERE id = ? AND essence IS NULL",
+                    (r["essence"], r["fiber_id"]),
+                )
+                fiber_restored += cur.rowcount
         if fiber_restored:
             conn.commit()
             total += fiber_restored
             print(f"  Restored {fiber_restored} fiber summaries in {Path(brain_path).name}")
 
-        restorable = []
-        for r in brain_records:
-            # Records without `kind` come from a pre-fiber-support backup — neurons.
-            if r.get("kind", "neuron") != "neuron":
-                continue
-            # Restore only rows this script pruned (identified by its own marker),
-            # not rows some other process happened to mark stale.
-            cur.execute(
-                "SELECT json_extract(metadata, '$.pruned_reason') FROM neurons WHERE id = ?",
-                (r["neuron_id"],),
-            )
-            row = cur.fetchone()
-            if row and row[0] == PRUNED_REASON:
-                restorable.append(r["neuron_id"])
-        if restorable:
-            placeholders = ",".join("?" for _ in restorable)
-            # Restore _status from the stashed _prev_status (default 'active'),
-            # then drop the bookkeeping keys this script added.
-            cur.execute(
-                "UPDATE neurons SET lifecycle_state = NULL, "  # noqa: S608 — interpolation is '?' placeholders only
-                "metadata = json_remove("
-                "    json_set(COALESCE(metadata, '{}'), "
-                "        '$._status', COALESCE(json_extract(metadata, '$._prev_status'), 'active')), "
-                "    '$.pruned_reason', '$._prev_status') "
-                f"WHERE id IN ({placeholders})",
-                restorable,
-            )
+        # Records without `kind` come from a pre-fiber-support backup — neurons.
+        neuron_ids = [r["neuron_id"] for r in brain_records if r.get("kind", "neuron") == "neuron"]
+        restored = restore_by_reason(cur, neuron_ids, PRUNED_REASON)
+        if restored:
             conn.commit()
-            total += cur.rowcount
-            print(f"  Restored {cur.rowcount} neurons in {Path(brain_path).name}")
+            total += restored
+            print(f"  Restored {restored} neurons in {Path(brain_path).name}")
         else:
-            print(f"  No stale neurons to restore in {Path(brain_path).name}")
+            print(f"  Nothing pruned by this script to restore in {Path(brain_path).name}")
         conn.close()
     return total
 
@@ -302,6 +287,7 @@ def unprune(dump_path: str) -> int:
 
 
 def main() -> None:
+    make_stdout_safe()
     args = set(sys.argv[1:])
     dry_run = "--execute" not in args
     do_dump = "--dump" in args
@@ -355,7 +341,7 @@ def main() -> None:
         name = db_path.name
         conn = sqlite3.connect(str(db_path))
         cur = conn.cursor()
-        has_neurons = _prunable(cur)
+        has_neurons = has_neuron_columns(cur, "content", "metadata")
         has_fibers = _fibers_prunable(cur)
         if not has_neurons and not has_fibers:
             conn.close()
@@ -369,7 +355,7 @@ def main() -> None:
             conn.close()
             continue
 
-        print(f"\n  [{name}] {found} session-dump neuron(s), {found_fibers} dump fiber summaries")
+        print(f"\n  [{name}] {found} session-dump neuron(s), {found_fibers} dump fiber(s)")
         if found:
             for typ, preview in report_sample(cur):
                 print(f'      {typ:8s} "{preview}"')
@@ -377,16 +363,16 @@ def main() -> None:
         if not dry_run:
             all_affected.extend(dump_affected([db_path]))
             pruned = prune(cur) if has_neurons else 0
-            pruned_fibers = prune_fibers(cur) if has_fibers else 0
+            blanked_sum, blanked_ess = prune_fibers(cur) if has_fibers else (0, 0)
             conn.commit()
             total_pruned += pruned
-            total_fibers_pruned += pruned_fibers
-            print(f"    -> Pruned {pruned} neuron(s), blanked {pruned_fibers} fiber summaries")
-        else:
+            total_fibers_pruned += blanked_sum + blanked_ess
             print(
-                f"    -> Would prune {found} neuron(s) + "
-                f"{found_fibers} fiber summaries (use --execute)"
+                f"    -> Pruned {pruned} neuron(s), blanked "
+                f"{blanked_sum} summaries + {blanked_ess} essences"
             )
+        else:
+            print(f"    -> Would prune {found} neuron(s) + {found_fibers} fiber(s) (use --execute)")
         conn.close()
 
     if not dry_run and all_affected:
@@ -398,13 +384,13 @@ def main() -> None:
     if dry_run:
         print(
             f"  Total: {total_found} session-dump neuron(s) + "
-            f"{total_fibers} dump fiber summaries across {len(dbs)} DB(s)"
+            f"{total_fibers} dump fiber(s) across {len(dbs)} DB(s)"
         )
         print("  Run with --execute to apply (writes a rollback backup)")
     else:
         print(
             f"  Pruned: {total_pruned} session-dump neuron(s), "
-            f"blanked {total_fibers_pruned} fiber summaries"
+            f"blanked {total_fibers_pruned} fiber text field(s)"
         )
     print(f"{'=' * 60}")
 

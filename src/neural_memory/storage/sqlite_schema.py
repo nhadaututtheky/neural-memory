@@ -772,6 +772,10 @@ CREATE TABLE IF NOT EXISTS neurons (
     updated_at TEXT DEFAULT '',  -- Last modification timestamp
     created_at TEXT NOT NULL,
     last_accessed_at TEXT,  -- Updated on every recall hit (batch)
+    -- DERIVED, consolidation-owned. Recomputed from heat + age for every neuron
+    -- on each `lifecycle` consolidation run, so any value written here is
+    -- overwritten. NOT a recall gate: no retrieval path reads this column.
+    -- To hide a neuron from recall set metadata._status (see NeuronStatus).
     lifecycle_state TEXT DEFAULT 'active',  -- ACTIVE | WARM | COOL | COMPRESSED | ARCHIVED
     frozen INTEGER DEFAULT 0,  -- 1 = never compress
     ephemeral INTEGER DEFAULT 0,  -- 1 = session-scoped, auto-expires, never synced
