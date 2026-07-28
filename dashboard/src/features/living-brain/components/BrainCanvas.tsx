@@ -8,7 +8,9 @@ import { BrainShell } from "./BrainShell"
 import { DEFAULT_BRAIN_RADII } from "../engine/force-3d"
 import type { BrainLayout, PositionedNeuron } from "../engine/types"
 
-const BRAIN_BG = "#050814"
+// Warm near-black, tuned to sit beside --color-background (#0c0b09) in dark
+// mode. The old #050814 was cool navy and made the canvas look pasted in.
+const BRAIN_BG = "#0a0908"
 const SHELL_PADDING = 1.08
 
 interface BrainCanvasProps {
@@ -169,7 +171,7 @@ export function BrainCanvas({
 
       <ambientLight intensity={0.25} />
       <pointLight position={[60, 80, 120]} intensity={1.2} color="#ffffff" />
-      <pointLight position={[-100, -60, -80]} intensity={0.6} color="#7b61ff" />
+      <pointLight position={[-100, -60, -80]} intensity={0.6} color="#2dd4bf" />
 
       <Suspense fallback={null}>
         {showBrainShell && <BrainShell radii={radii} />}
