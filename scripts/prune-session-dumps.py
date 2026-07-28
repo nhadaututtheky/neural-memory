@@ -51,6 +51,15 @@ SESSION_PREFIX = "[SESSION]%"
 BACKUP_FILE = "prune-session-dump.json"
 PRUNED_REASON = "session_transcript_dump"
 
+# A dump still surfaces in recall unless metadata._status hides it — that is the
+# only marker retrieval reads. Match on that (NOT on lifecycle_state) so re-running
+# the script also repairs rows an older version marked 'stale' without setting
+# _status (they were still fully recallable).
+NEEDS_PRUNE_WHERE = (
+    "content LIKE ? "
+    "AND COALESCE(json_extract(metadata, '$._status'), 'active') NOT IN ('expired', 'superseded')"
+)
+
 # ── Helpers ─────────────────────────────────────────────────
 
 
@@ -94,11 +103,9 @@ def _prunable(cur: sqlite3.Cursor) -> bool:
 
 
 def count_session_dumps(cur: sqlite3.Cursor) -> int:
-    """Count active (non-stale) session-dump neurons."""
+    """Count session-dump neurons still visible to recall."""
     cur.execute(
-        "SELECT COUNT(*) FROM neurons "
-        "WHERE content LIKE ? "
-        "AND (lifecycle_state IS NULL OR lifecycle_state != 'stale')",
+        f"SELECT COUNT(*) FROM neurons WHERE {NEEDS_PRUNE_WHERE}",  # noqa: S608 — static WHERE fragment, '?' params
         (SESSION_PREFIX,),
     )
     result = cur.fetchone()
@@ -108,11 +115,8 @@ def count_session_dumps(cur: sqlite3.Cursor) -> int:
 def report_sample(cur: sqlite3.Cursor, limit: int = 8) -> list[tuple]:
     """Show a sample of session-dump neurons (type + one-line content preview)."""
     cur.execute(
-        "SELECT type, substr(replace(content, char(10), ' '), 1, 70) AS preview "  # noqa: S608 — LIMIT is an internal int, not user input
-        "FROM neurons "
-        "WHERE content LIKE ? "
-        "AND (lifecycle_state IS NULL OR lifecycle_state != 'stale') "
-        f"LIMIT {int(limit)}",
+        "SELECT type, substr(replace(content, char(10), ' '), 1, 70) AS preview "  # noqa: S608 — static WHERE fragment; LIMIT is an internal int
+        f"FROM neurons WHERE {NEEDS_PRUNE_WHERE} LIMIT {int(limit)}",
         (SESSION_PREFIX,),
     )
     return cur.fetchall()
@@ -128,9 +132,7 @@ def dump_affected(dbs: list[Path]) -> list[dict]:
             conn.close()
             continue
         cur.execute(
-            "SELECT id, type, content, lifecycle_state FROM neurons "
-            "WHERE content LIKE ? "
-            "AND (lifecycle_state IS NULL OR lifecycle_state != 'stale')",
+            f"SELECT id, type, content, lifecycle_state FROM neurons WHERE {NEEDS_PRUNE_WHERE}",  # noqa: S608 — static WHERE fragment, '?' params
             (SESSION_PREFIX,),
         )
         for row in cur.fetchall():
@@ -156,14 +158,13 @@ def prune(cur: sqlite3.Cursor) -> int:
     ``metadata._prev_status`` so unprune can restore it exactly.
     """
     cur.execute(
-        "UPDATE neurons "
+        "UPDATE neurons "  # noqa: S608 — static WHERE fragment, '?' params
         "SET lifecycle_state = 'stale', "
         "metadata = json_set(COALESCE(metadata, '{}'), "
         "    '$.pruned_reason', ?, "
         "    '$._prev_status', COALESCE(json_extract(metadata, '$._status'), 'active'), "
         "    '$._status', 'expired') "
-        "WHERE content LIKE ? "
-        "AND (lifecycle_state IS NULL OR lifecycle_state != 'stale')",
+        f"WHERE {NEEDS_PRUNE_WHERE}",
         (PRUNED_REASON, SESSION_PREFIX),
     )
     return cur.rowcount
@@ -187,9 +188,14 @@ def unprune(dump_path: str) -> int:
         cur = conn.cursor()
         restorable = []
         for r in brain_records:
-            cur.execute("SELECT lifecycle_state FROM neurons WHERE id = ?", (r["neuron_id"],))
+            # Restore only rows this script pruned (identified by its own marker),
+            # not rows some other process happened to mark stale.
+            cur.execute(
+                "SELECT json_extract(metadata, '$.pruned_reason') FROM neurons WHERE id = ?",
+                (r["neuron_id"],),
+            )
             row = cur.fetchone()
-            if row and row[0] == "stale":
+            if row and row[0] == PRUNED_REASON:
                 restorable.append(r["neuron_id"])
         if restorable:
             placeholders = ",".join("?" for _ in restorable)
