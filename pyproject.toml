@@ -162,7 +162,7 @@ docs = [
 
 [project.urls]
 Homepage = "https://neuralmemory.theio.vn"
-Documentation = "https://nhadaututtheky.github.io/neural-memory"
+Documentation = "https://neuralmemory.theio.vn"
 Repository = "https://github.com/nhadaututtheky/neural-memory"
 Issues = "https://github.com/nhadaututtheky/neural-memory/issues"
 Changelog = "https://github.com/nhadaututtheky/neural-memory/blob/main/CHANGELOG.md"
