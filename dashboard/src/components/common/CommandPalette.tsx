@@ -6,16 +6,7 @@ import { useFibers } from "@/api/hooks/useDashboard"
 import { api } from "@/api/client"
 import { useTranslation } from "react-i18next"
 import {
-  SquaresFour,
   Lightbulb,
-  Graph,
-  ShareNetwork,
-  Cloud,
-  Gear,
-  Sparkle,
-  ChartLine,
-  Gauge,
-  HardDrive,
   MagnifyingGlass,
   Stack,
   Brain,
@@ -23,6 +14,8 @@ import {
   Command as CommandIcon,
 } from "@phosphor-icons/react"
 import { openUpgradeModal } from "@/components/common/UpgradeModal"
+import { navItems } from "@/components/layout/nav-items"
+import { colorForMemoryType } from "@/lib/neuron-colors"
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -38,38 +31,21 @@ interface NeuronResult {
 /*  Navigation pages                                                   */
 /* ------------------------------------------------------------------ */
 
-const pages = [
-  { path: "/", icon: SquaresFour, labelKey: "nav.overview" },
+// Deep links into the Insights tab-shell. These are palette-only: they are
+// query-param views of one nav entry, not routes of their own.
+const insightsTabs = [
   { path: "/insights?tab=health", icon: Lightbulb, labelKey: "nav.health" },
   { path: "/insights?tab=timeline", icon: Lightbulb, labelKey: "nav.timeline" },
   { path: "/insights?tab=evolution", icon: Lightbulb, labelKey: "nav.evolution" },
   { path: "/insights?tab=tools", icon: Lightbulb, labelKey: "nav.toolStats" },
-  { path: "/graph", icon: Graph, labelKey: "nav.graph" },
-  { path: "/diagrams", icon: ShareNetwork, labelKey: "nav.mindmap" },
-  { path: "/visualize", icon: ChartLine, labelKey: "nav.visualize" },
-  { path: "/oracle", icon: Sparkle, labelKey: "nav.oracle" },
-  { path: "/sync", icon: Cloud, labelKey: "nav.sync" },
-  { path: "/storage", icon: HardDrive, labelKey: "nav.storage" },
-  { path: "/tier-analytics", icon: Gauge, labelKey: "nav.tierAnalytics" },
-  { path: "/settings", icon: Gear, labelKey: "nav.settings" },
-] as const
+]
 
-/* ------------------------------------------------------------------ */
-/*  Neuron type badge colors                                           */
-/* ------------------------------------------------------------------ */
-
-const TYPE_COLORS: Record<string, string> = {
-  fact: "#06b6d4",
-  decision: "#f59e0b",
-  error: "#ef4444",
-  insight: "#8b5cf6",
-  preference: "#ec4899",
-  workflow: "#059669",
-  instruction: "#6366f1",
-  pattern: "#14b8a6",
-  concept: "#6366f1",
-  entity: "#06b6d4",
-}
+// Derived from the sidebar's list so the two can never drift — the old local
+// copy had already lost /store and /living-brain.
+const pages = [
+  ...navItems.map(({ to, icon, labelKey }) => ({ path: to, icon, labelKey })),
+  ...insightsTabs,
+]
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
@@ -263,8 +239,8 @@ export function CommandPalette() {
                       <span
                         className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
                         style={{
-                          backgroundColor: `${TYPE_COLORS[neuron.type] ?? "#94a3b8"}20`,
-                          color: TYPE_COLORS[neuron.type] ?? "#94a3b8",
+                          backgroundColor: `${colorForMemoryType(neuron.type)}20`,
+                          color: colorForMemoryType(neuron.type),
                         }}
                       >
                         {neuron.type}

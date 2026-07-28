@@ -1,49 +1,19 @@
 import { NavLink } from "react-router-dom"
-import {
-  SquaresFour,
-  Lightbulb,
-  Graph,
-  ShareNetwork,
-  Cloud,
-  HardDrive,
-  Gear,
-  Brain,
-  Sparkle,
-  ChartLine,
-  Gauge,
-  Storefront,
-} from "@phosphor-icons/react"
-import type { Icon } from "@phosphor-icons/react"
+import { Brain } from "@phosphor-icons/react"
 import { cn } from "@/lib/utils"
 import { useLayoutStore } from "@/stores/useLayoutStore"
+import { useIsPro } from "@/api/hooks/useDashboard"
 import { useTranslation } from "react-i18next"
-
-interface NavItem {
-  to: string
-  icon: Icon
-  labelKey: string
-  separator?: boolean
-}
-
-const navItems: NavItem[] = [
-  // ── Core (Free) ──
-  { to: "/", icon: SquaresFour, labelKey: "nav.overview" },
-  { to: "/insights", icon: Lightbulb, labelKey: "nav.insights" },
-  { to: "/graph", icon: Graph, labelKey: "nav.graph" },
-  { to: "/diagrams", icon: ShareNetwork, labelKey: "nav.mindmap" },
-  // ── Pro ──
-  { to: "/visualize", icon: ChartLine, labelKey: "nav.visualize", separator: true },
-  { to: "/oracle", icon: Sparkle, labelKey: "nav.oracle" },
-  { to: "/sync", icon: Cloud, labelKey: "nav.sync" },
-  { to: "/store", icon: Storefront, labelKey: "nav.store" },
-  { to: "/storage", icon: HardDrive, labelKey: "nav.storage" },
-  { to: "/tier-analytics", icon: Gauge, labelKey: "nav.tierAnalytics" },
-  // ── Settings ──
-  { to: "/settings", icon: Gear, labelKey: "nav.settings", separator: true },
-]
+import {
+  NAV_GROUP_LABEL_KEYS,
+  NAV_GROUP_ORDER,
+  navItemsByGroup,
+  type NavGroup,
+} from "./nav-items"
 
 export function Sidebar() {
   const sidebarOpen = useLayoutStore((s) => s.sidebarOpen)
+  const isPro = useIsPro()
   const { t } = useTranslation()
 
   return (
@@ -64,31 +34,69 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 p-2" aria-label={t("common.mainNavigation")}>
-        {navItems.map(({ to, icon: Icon, labelKey, separator }) => {
-          const label = t(labelKey)
+      <nav
+        className="flex-1 overflow-y-auto p-2"
+        aria-label={t("common.mainNavigation")}
+      >
+        {NAV_GROUP_ORDER.map((group: NavGroup) => {
+          const items = navItemsByGroup(group)
+          if (items.length === 0) return null
+          const groupLabel = t(NAV_GROUP_LABEL_KEYS[group])
+
           return (
-            <div key={to}>
-              {separator && (
-                <div className="my-2 border-t border-sidebar-border" />
+            <div key={group} className="mb-3 last:mb-0">
+              {sidebarOpen ? (
+                // Presentational: the accessible grouping comes from the
+                // aria-label on the list below, so this heading is not
+                // announced twice and never receives focus.
+                <p
+                  aria-hidden="true"
+                  className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/45"
+                >
+                  {groupLabel}
+                </p>
+              ) : (
+                // Collapsed: a rule stands in for the heading so the grouping
+                // is still legible at 64px.
+                <div className="mx-2 my-2 border-t border-sidebar-border" />
               )}
-              <NavLink
-                to={to}
-                end={to === "/"}
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors cursor-pointer",
-                    isActive
-                      ? "bg-sidebar-accent text-sidebar-primary"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                    !sidebarOpen && "justify-center px-0",
+
+              <ul className="space-y-1" aria-label={groupLabel}>
+                {items.map(({ to, icon: Icon, labelKey, pro }) => {
+                  const label = t(labelKey)
+                  const showProBadge = pro && !isPro
+                  return (
+                    <li key={to}>
+                      <NavLink
+                        to={to}
+                        end={to === "/"}
+                        className={({ isActive }) =>
+                          cn(
+                            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors cursor-pointer",
+                            isActive
+                              ? "bg-sidebar-accent text-sidebar-primary"
+                              : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                            !sidebarOpen && "justify-center px-0",
+                          )
+                        }
+                        title={showProBadge ? `${label} (Pro)` : label}
+                      >
+                        <Icon className="size-5 shrink-0" aria-hidden="true" />
+                        {sidebarOpen && (
+                          <>
+                            <span className="truncate">{label}</span>
+                            {showProBadge && (
+                              <span className="ml-auto rounded bg-sidebar-primary/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sidebar-primary">
+                                {t("license.pro", "Pro")}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </NavLink>
+                    </li>
                   )
-                }
-                title={label}
-              >
-                <Icon className="size-5 shrink-0" aria-hidden="true" />
-                {sidebarOpen && <span>{label}</span>}
-              </NavLink>
+                })}
+              </ul>
             </div>
           )
         })}

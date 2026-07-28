@@ -15,7 +15,14 @@
     "tierAnalytics": "Phân tích Tier",
     "settings": "Cài đặt",
     "store": "Cửa hàng Brain",
-    "livingBrain": "Não Sống"
+    "livingBrain": "Não Sống",
+    "groups": {
+      "core": "Tổng quan",
+      "visualize": "Trực quan",
+      "data": "Dữ liệu",
+      "analyze": "Phân tích",
+      "settings": "Hệ thống"
+    }
   },
   "common": {
     "confirm": "Xác nhận",

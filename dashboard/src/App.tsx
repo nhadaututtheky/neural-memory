@@ -25,16 +25,17 @@ export default function App() {
     <Routes>
       <Route element={<AppShell />}>
         <Route index element={<SuspensePage><OverviewPage /></SuspensePage>} />
+        {/* Declared in sidebar order — see components/layout/nav-items.ts */}
         <Route path="insights" element={<SuspensePage><InsightsPage /></SuspensePage>} />
         <Route path="graph" element={<SuspensePage><GraphPage /></SuspensePage>} />
-        <Route path="living-brain" element={<SuspensePage><LivingBrainPage /></SuspensePage>} />
         <Route path="diagrams" element={<SuspensePage><DiagramsPage /></SuspensePage>} />
-        <Route path="visualize" element={<SuspensePage><VisualizePage /></SuspensePage>} />
-        <Route path="oracle" element={<SuspensePage><OraclePage /></SuspensePage>} />
+        <Route path="living-brain" element={<SuspensePage><LivingBrainPage /></SuspensePage>} />
         <Route path="sync" element={<SuspensePage><SyncPage /></SuspensePage>} />
         <Route path="store" element={<SuspensePage><StorePage /></SuspensePage>} />
         <Route path="storage" element={<SuspensePage><StoragePage /></SuspensePage>} />
         <Route path="tier-analytics" element={<SuspensePage><TierAnalyticsPage /></SuspensePage>} />
+        <Route path="visualize" element={<SuspensePage><VisualizePage /></SuspensePage>} />
+        <Route path="oracle" element={<SuspensePage><OraclePage /></SuspensePage>} />
         <Route path="settings" element={<SuspensePage><SettingsPage /></SuspensePage>} />
 
         {/* Legacy redirects — preserve bookmarks */}
