@@ -102,6 +102,47 @@ def _prunable(cur: sqlite3.Cursor) -> bool:
     return {"content", "lifecycle_state"}.issubset(cols)
 
 
+def _fibers_prunable(cur: sqlite3.Cursor) -> bool:
+    """True if this DB has a `fibers` table with a `summary` column."""
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='fibers'")
+    if cur.fetchone() is None:
+        return False
+    cols = {r[1] for r in cur.execute("PRAGMA table_info(fibers)")}
+    return "summary" in cols
+
+
+def count_dump_fibers(cur: sqlite3.Cursor) -> int:
+    """Count fibers whose own summary is a session dump.
+
+    Neuron-level pruning does not cover these: the fiber-summary retrieval tier
+    reads ``fibers.summary`` directly, and ``_filter_fibers_by_status`` only
+    consults the *anchor* neuron. A dump fiber anchored on an ordinary concept
+    neuron therefore keeps leaking the transcript into recall.
+    """
+    cur.execute(
+        "SELECT COUNT(*) FROM fibers WHERE summary LIKE ?",
+        (SESSION_PREFIX,),
+    )
+    result = cur.fetchone()
+    return result[0] if result else 0
+
+
+def prune_fibers(cur: sqlite3.Cursor) -> int:
+    """Blank session-dump fiber summaries. Returns affected row count.
+
+    The fiber itself is kept (it still links real neurons); only the polluted
+    summary text is cleared. Retrieval skips fibers with an empty summary
+    (``_try_fiber_summary_tier``: ``if not summary: continue``), and the
+    ``fibers_au`` trigger keeps the ``fibers_fts`` index in sync automatically.
+    Original summaries go to the JSON backup for ``--unprune``.
+    """
+    cur.execute(
+        "UPDATE fibers SET summary = NULL WHERE summary LIKE ?",
+        (SESSION_PREFIX,),
+    )
+    return cur.rowcount
+
+
 def count_session_dumps(cur: sqlite3.Cursor) -> int:
     """Count session-dump neurons still visible to recall."""
     cur.execute(
@@ -123,28 +164,46 @@ def report_sample(cur: sqlite3.Cursor, limit: int = 8) -> list[tuple]:
 
 
 def dump_affected(dbs: list[Path]) -> list[dict]:
-    """Dump affected (brain, neuron_id, content) rows for rollback."""
+    """Dump affected neuron and fiber rows for rollback.
+
+    Records carry a ``kind`` discriminator (``"neuron"`` / ``"fiber"``). Backups
+    written by earlier versions have no ``kind`` key; ``unprune`` treats those as
+    neurons for backward compatibility.
+    """
     affected: list[dict] = []
     for db_path in dbs:
         conn = sqlite3.connect(str(db_path))
         cur = conn.cursor()
-        if not _prunable(cur):
-            conn.close()
-            continue
-        cur.execute(
-            f"SELECT id, type, content, lifecycle_state FROM neurons WHERE {NEEDS_PRUNE_WHERE}",  # noqa: S608 — static WHERE fragment, '?' params
-            (SESSION_PREFIX,),
-        )
-        for row in cur.fetchall():
-            affected.append(
-                {
-                    "brain": str(db_path),
-                    "neuron_id": row[0],
-                    "type": row[1],
-                    "content": row[2],
-                    "lifecycle_state": row[3],
-                }
+        if _prunable(cur):
+            cur.execute(
+                f"SELECT id, type, content, lifecycle_state FROM neurons WHERE {NEEDS_PRUNE_WHERE}",  # noqa: S608 — static WHERE fragment, '?' params
+                (SESSION_PREFIX,),
             )
+            for row in cur.fetchall():
+                affected.append(
+                    {
+                        "kind": "neuron",
+                        "brain": str(db_path),
+                        "neuron_id": row[0],
+                        "type": row[1],
+                        "content": row[2],
+                        "lifecycle_state": row[3],
+                    }
+                )
+        if _fibers_prunable(cur):
+            cur.execute(
+                "SELECT id, summary FROM fibers WHERE summary LIKE ?",
+                (SESSION_PREFIX,),
+            )
+            for row in cur.fetchall():
+                affected.append(
+                    {
+                        "kind": "fiber",
+                        "brain": str(db_path),
+                        "fiber_id": row[0],
+                        "summary": row[1],
+                    }
+                )
         conn.close()
     return affected
 
@@ -171,7 +230,7 @@ def prune(cur: sqlite3.Cursor) -> int:
 
 
 def unprune(dump_path: str) -> int:
-    """Restore neurons from a previously saved dump file."""
+    """Restore neurons and fiber summaries from a previously saved dump file."""
     with open(dump_path) as f:
         records = json.load(f)
     if not records:
@@ -186,8 +245,28 @@ def unprune(dump_path: str) -> int:
     for brain_path, brain_records in brains.items():
         conn = sqlite3.connect(brain_path)
         cur = conn.cursor()
+
+        # Fiber summaries: restore only where the summary is still blank, so a
+        # summary rewritten since the backup is never silently clobbered.
+        fiber_restored = 0
+        for r in brain_records:
+            if r.get("kind") != "fiber":
+                continue
+            cur.execute(
+                "UPDATE fibers SET summary = ? WHERE id = ? AND summary IS NULL",
+                (r["summary"], r["fiber_id"]),
+            )
+            fiber_restored += cur.rowcount
+        if fiber_restored:
+            conn.commit()
+            total += fiber_restored
+            print(f"  Restored {fiber_restored} fiber summaries in {Path(brain_path).name}")
+
         restorable = []
         for r in brain_records:
+            # Records without `kind` come from a pre-fiber-support backup — neurons.
+            if r.get("kind", "neuron") != "neuron":
+                continue
             # Restore only rows this script pruned (identified by its own marker),
             # not rows some other process happened to mark stale.
             cur.execute(
@@ -267,35 +346,47 @@ def main() -> None:
         return
 
     total_found = 0
+    total_fibers = 0
     total_pruned = 0
+    total_fibers_pruned = 0
     all_affected: list[dict] = []
 
     for db_path in dbs:
         name = db_path.name
         conn = sqlite3.connect(str(db_path))
         cur = conn.cursor()
-        if not _prunable(cur):
+        has_neurons = _prunable(cur)
+        has_fibers = _fibers_prunable(cur)
+        if not has_neurons and not has_fibers:
             conn.close()
             continue
 
-        found = count_session_dumps(cur)
+        found = count_session_dumps(cur) if has_neurons else 0
+        found_fibers = count_dump_fibers(cur) if has_fibers else 0
         total_found += found
-        if found == 0:
+        total_fibers += found_fibers
+        if found == 0 and found_fibers == 0:
             conn.close()
             continue
 
-        print(f"\n  [{name}] {found} session-dump neuron(s)")
-        for typ, preview in report_sample(cur):
-            print(f'      {typ:8s} "{preview}"')
+        print(f"\n  [{name}] {found} session-dump neuron(s), {found_fibers} dump fiber summaries")
+        if found:
+            for typ, preview in report_sample(cur):
+                print(f'      {typ:8s} "{preview}"')
 
         if not dry_run:
             all_affected.extend(dump_affected([db_path]))
-            pruned = prune(cur)
+            pruned = prune(cur) if has_neurons else 0
+            pruned_fibers = prune_fibers(cur) if has_fibers else 0
             conn.commit()
             total_pruned += pruned
-            print(f"    -> Pruned {pruned}")
+            total_fibers_pruned += pruned_fibers
+            print(f"    -> Pruned {pruned} neuron(s), blanked {pruned_fibers} fiber summaries")
         else:
-            print(f"    -> Would prune {found} (use --execute)")
+            print(
+                f"    -> Would prune {found} neuron(s) + "
+                f"{found_fibers} fiber summaries (use --execute)"
+            )
         conn.close()
 
     if not dry_run and all_affected:
@@ -305,10 +396,16 @@ def main() -> None:
 
     print(f"\n{'=' * 60}")
     if dry_run:
-        print(f"  Total: {total_found} session-dump neuron(s) across {len(dbs)} DB(s)")
+        print(
+            f"  Total: {total_found} session-dump neuron(s) + "
+            f"{total_fibers} dump fiber summaries across {len(dbs)} DB(s)"
+        )
         print("  Run with --execute to apply (writes a rollback backup)")
     else:
-        print(f"  Pruned: {total_pruned} session-dump neuron(s)")
+        print(
+            f"  Pruned: {total_pruned} session-dump neuron(s), "
+            f"blanked {total_fibers_pruned} fiber summaries"
+        )
     print(f"{'=' * 60}")
 
 
