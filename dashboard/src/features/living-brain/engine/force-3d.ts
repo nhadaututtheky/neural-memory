@@ -7,6 +7,7 @@ import {
   type SimulationLinkDatum,
 } from "d3-force-3d"
 import { applyBrainConstraint } from "./brain-constraint"
+import { detectCommunities } from "./communities"
 import { applyCorticalZones } from "./cortical-zones"
 
 export interface ForceNode extends SimulationNodeDatum {
@@ -50,14 +51,9 @@ export function runForceLayout(
   const iterations = opts.iterations ?? 200
   const radii = opts.radii ?? DEFAULT_BRAIN_RADII
   const constrain = opts.constrain ?? true
-  const zones = opts.zones ?? rawNodes.some((n) => n.type !== undefined)
 
   const nodes: ForceNode[] = rawNodes.map((n) => ({ id: n.id }))
   const nodeIndex = new Map(nodes.map((n) => [n.id, n]))
-  const typeById = new Map<string, string>()
-  for (const rn of rawNodes) {
-    if (rn.type) typeById.set(rn.id, rn.type)
-  }
 
   const links: ForceLink[] = rawLinks
     .filter((l) => nodeIndex.has(l.source) && nodeIndex.has(l.target))
@@ -66,6 +62,20 @@ export function runForceLayout(
       target: l.target,
       weight: l.weight,
     }))
+
+  // Regions are handed to link-derived communities, so zones need edges to
+  // mean anything — an edgeless graph gets no zone pull at all.
+  const zones = opts.zones ?? links.length > 0
+  const { communityById, orderedCommunities } = zones
+    ? detectCommunities(
+        rawNodes.map((n) => n.id),
+        links.map((l) => ({
+          source: l.source as string,
+          target: l.target as string,
+          weight: l.weight,
+        })),
+      )
+    : { communityById: new Map<string, string>(), orderedCommunities: [] as string[] }
 
   const sim = forceSimulation(nodes, 3)
     .force(
@@ -93,7 +103,12 @@ export function runForceLayout(
       applyBrainConstraint(nodes, { radii, insetFactor: 0.95, strength: 0.25 })
     }
     if (zones) {
-      applyCorticalZones(nodes, alpha, { radii, typeById, strength: 0.05 })
+      applyCorticalZones(nodes, alpha, {
+        radii,
+        communityById,
+        orderedCommunities,
+        strength: 0.05,
+      })
     }
   }
 

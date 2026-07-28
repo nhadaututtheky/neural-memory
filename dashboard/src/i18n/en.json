@@ -15,7 +15,14 @@
     "tierAnalytics": "Tier Analytics",
     "settings": "Settings",
     "store": "Brain Store",
-    "livingBrain": "Living Brain"
+    "livingBrain": "Living Brain",
+    "groups": {
+      "core": "Overview",
+      "visualize": "Visualize",
+      "data": "Data",
+      "analyze": "Analyze",
+      "settings": "System"
+    }
   },
   "common": {
     "confirm": "Confirm",
@@ -130,6 +137,8 @@
     "action": "action",
     "state": "state",
     "other": "other",
+    "relation": "relation",
+    "attribute": "attribute",
     "view2D": "2D",
     "view3D": "3D Living"
   },

@@ -1,37 +1,56 @@
 import type { ForceNode } from "./force-3d"
 
 /**
- * Anatomical anchor points, expressed as fractions of brain radii (-1..1).
+ * Cortical region anchors, expressed as fractions of brain radii (-1..1).
  * Multiplied by (rx, ry, rz) at apply-time.
  *
  *   +Z = frontal   |  -Z = occipital
- *   +Y = parietal  |  -Y = cerebellar
- *   ±X = temporal
+ *   +Y = superior  |  -Y = inferior
+ *   ±X = right / left hemisphere
+ *
+ * These are real regions of the shell, and — unlike the map this replaced —
+ * they are handed out to detected COMMUNITIES rather than to neuron types.
+ * Anchoring by type meant position duplicated the color channel and pulled
+ * every same-type node into one clump; anchoring by community means physical
+ * proximity reflects "these memories actually link to each other".
+ *
+ * Both hemispheres are represented so the cloud fills the whole volume instead
+ * of collapsing onto the midline.
  */
-export const ZONE_ANCHORS: Readonly<Record<string, readonly [number, number, number]>> = {
-  decision: [0, 0.25, 0.7],
-  concept: [0.7, 0.45, 0.0],
-  entity: [0, 0.7, 0.15],
-  action: [0, 0.0, 0.3],
-  state: [0, 0.1, -0.65],
-  time: [0, -0.1, 0.0],
-  relation: [-0.65, 0.35, 0.1],
-  preference: [0.0, 0.55, -0.35],
-  attribute: [-0.5, -0.15, 0.3],
-  other: [0, 0, 0],
-}
+export const REGION_ANCHORS: ReadonlyArray<readonly [number, number, number]> = [
+  [0.42, 0.32, 0.55], // right frontal
+  [-0.42, 0.32, 0.55], // left frontal
+  [0.52, 0.28, -0.08], // right parietal
+  [-0.52, 0.28, -0.08], // left parietal
+  [0.58, -0.18, 0.12], // right temporal
+  [-0.58, -0.18, 0.12], // left temporal
+  [0.28, 0.14, -0.58], // right occipital
+  [-0.28, 0.14, -0.58], // left occipital
+  [0.0, 0.52, 0.12], // superior medial / vertex
+  [0.0, -0.32, -0.52], // cerebellar
+]
+
+/** Nodes with no community (isolated, no synapses) drift to the center. */
+const UNASSIGNED_ANCHOR: readonly [number, number, number] = [0, 0, 0]
 
 export interface CorticalZoneOptions {
   radii: readonly [number, number, number]
-  typeById: ReadonlyMap<string, string>
+  /** node id → community id, from `detectCommunities`. */
+  communityById: ReadonlyMap<string, string>
+  /** Community ids largest-first; index into REGION_ANCHORS follows this order. */
+  orderedCommunities: readonly string[]
   strength?: number
 }
 
 /**
- * Soft attraction toward each neuron-type's anatomical anchor.
- * Called per simulation tick; scales nudge by current alpha so motion
- * cools as the layout settles. Capped at 0.03 to prevent early-tick
- * overshoot when alpha is near 1.0.
+ * Soft attraction toward each node's community region.
+ *
+ * Called per simulation tick; scales the nudge by current alpha so motion cools
+ * as the layout settles. Capped at 0.03 to prevent early-tick overshoot when
+ * alpha is near 1.0.
+ *
+ * The pull is deliberately weak — it biases where a cluster lands without
+ * overriding the link forces that decide the cluster's internal shape.
  */
 export function applyCorticalZones(
   nodes: ForceNode[],
@@ -41,10 +60,18 @@ export function applyCorticalZones(
   const [rx, ry, rz] = opts.radii
   const k = Math.min(0.03, (opts.strength ?? 0.05) * alpha)
 
+  // Communities beyond the anchor count wrap around, so a brain with many
+  // small clusters still spreads them out rather than piling the tail at 0,0,0.
+  const anchorByCommunity = new Map<string, readonly [number, number, number]>()
+  opts.orderedCommunities.forEach((community, i) => {
+    anchorByCommunity.set(community, REGION_ANCHORS[i % REGION_ANCHORS.length])
+  })
+
   for (const n of nodes) {
-    const type = opts.typeById.get(n.id)
-    if (!type) continue
-    const anchor = ZONE_ANCHORS[type] ?? ZONE_ANCHORS.other
+    const community = opts.communityById.get(n.id)
+    const anchor =
+      (community !== undefined ? anchorByCommunity.get(community) : undefined) ??
+      UNASSIGNED_ANCHOR
     const tx = anchor[0] * rx
     const ty = anchor[1] * ry
     const tz = anchor[2] * rz

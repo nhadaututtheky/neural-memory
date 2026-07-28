@@ -1,5 +1,6 @@
 import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
+import { colorForMemoryType } from "@/lib/neuron-colors"
 import {
   AreaChart,
   Area,
@@ -42,18 +43,6 @@ const TOOLTIP_STYLE = {
 
 const AXIS_TICK = { fill: "var(--color-muted-foreground)", fontSize: 11 }
 
-const TYPE_COLORS: Record<string, string> = {
-  fact: "#3b82f6",
-  decision: "#8b5cf6",
-  error: "#ef4444",
-  insight: "#f59e0b",
-  preference: "#10b981",
-  workflow: "#06b6d4",
-  instruction: "#ec4899",
-  concept: "#6366f1",
-  entity: "#14b8a6",
-  pattern: "#f97316",
-}
 
 const HEALTH_KEYS = [
   { key: "connectivity", label: "Connectivity" },
@@ -204,7 +193,7 @@ function TypeDistributionChart() {
                 {pieData.map((entry) => (
                   <Cell
                     key={entry.name}
-                    fill={TYPE_COLORS[entry.name] ?? "#64748b"}
+                    fill={colorForMemoryType(entry.name)}
                   />
                 ))}
               </Pie>

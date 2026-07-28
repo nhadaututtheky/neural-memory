@@ -7,21 +7,17 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { NetworkGraph } from "./NetworkGraph"
 import { ModeToggle, type GraphMode } from "@/features/living-brain/components/ModeToggle"
+import { NEURON_TYPE_COLORS, colorForNeuronType } from "@/lib/neuron-colors"
 import { useTranslation } from "react-i18next"
 
 const MODE_STORAGE_KEY = "nm.graph.mode"
 
 const LIMIT_OPTIONS = [100, 250, 500, 1000] as const
 
-const LEGEND_KEYS = ["concept", "entity", "time", "action", "state", "other"] as const
-const LEGEND_COLORS: Record<string, string> = {
-  concept: "#6366f1",
-  entity: "#06b6d4",
-  time: "#f59e0b",
-  action: "#059669",
-  state: "#8b5cf6",
-  other: "#a8a29e",
-}
+// Derived from the palette module so the legend can never drift from what the
+// graph actually renders — the old local copy omitted `relation` and
+// `attribute`, hiding two node types from the legend entirely.
+const LEGEND_KEYS = Object.keys(NEURON_TYPE_COLORS)
 
 interface SelectedNode {
   id: string
@@ -94,12 +90,12 @@ export default function GraphPage() {
             )}
           </CardTitle>
           {/* Inline legend */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {LEGEND_KEYS.map((key) => (
               <div key={key} className="flex items-center gap-1">
                 <div
                   className="size-2 rounded-full"
-                  style={{ backgroundColor: LEGEND_COLORS[key] }}
+                  style={{ backgroundColor: colorForNeuronType(key) }}
                 />
                 <span className="text-[10px] capitalize text-muted-foreground">
                   {t(`graph.${key}`)}

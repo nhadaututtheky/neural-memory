@@ -19,12 +19,8 @@ import {
   Lightning,
 } from "@phosphor-icons/react"
 import { useTierAnalytics, useTierHistory, type TierChangeEvent } from "./useTierAnalytics"
+import { TIER_COLORS } from "@/lib/neuron-colors"
 
-const TIER_COLORS = {
-  hot: "#ef4444",
-  warm: "#f59e0b",
-  cold: "#3b82f6",
-} as const
 
 function VelocityCard({
   label,

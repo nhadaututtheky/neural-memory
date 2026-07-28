@@ -20,54 +20,36 @@ import {
 import "@xyflow/react/dist/style.css"
 import Dagre from "@dagrejs/dagre"
 import type { FiberDiagramResponse } from "@/api/types"
+import {
+  MINDMAP_ROLE_COLORS,
+  NEURON_DEFAULT_COLOR,
+  NEURON_TYPE_COLORS,
+  colorForSynapseType,
+  withAlpha,
+} from "@/lib/neuron-colors"
 
 /* ------------------------------------------------------------------ */
 /*  Color palette                                                      */
 /* ------------------------------------------------------------------ */
 
+// Neuron-type hues come from the shared palette; only the two structural
+// mindmap roles (root = the fiber, group = a synthetic grouping node) are
+// looked up separately. TYPE_BG is derived rather than hand-maintained.
 const TYPE_COLORS: Record<string, string> = {
-  concept: "#6366f1",
-  entity: "#06b6d4",
-  time: "#f59e0b",
-  action: "#059669",
-  state: "#8b5cf6",
-  other: "#a8a29e",
-  relation: "#ec4899",
-  attribute: "#14b8a6",
-  root: "#f97316",
-  group: "#64748b",
+  ...NEURON_TYPE_COLORS,
+  ...MINDMAP_ROLE_COLORS,
 }
 
-const TYPE_BG: Record<string, string> = {
-  concept: "#6366f115",
-  entity: "#06b6d415",
-  time: "#f59e0b15",
-  action: "#05966915",
-  state: "#8b5cf615",
-  other: "#a8a29e15",
-  relation: "#ec489915",
-  attribute: "#14b8a615",
-  root: "#f9731620",
-  group: "#64748b15",
-}
+const TYPE_BG: Record<string, string> = Object.fromEntries(
+  Object.entries(TYPE_COLORS).map(([key, hex]) => [
+    key,
+    withAlpha(hex, key === "root" ? "20" : "15"),
+  ]),
+)
 
 /* ------------------------------------------------------------------ */
 /*  Synapse type styling                                               */
 /* ------------------------------------------------------------------ */
-
-const SYNAPSE_COLORS: Record<string, string> = {
-  CAUSED_BY: "#ef4444",
-  RELATES_TO: "#6366f1",
-  PART_OF: "#059669",
-  LEADS_TO: "#f59e0b",
-  CONTAINS: "#06b6d4",
-  DEPENDS_ON: "#ec4899",
-  SIMILAR_TO: "#8b5cf6",
-  CONTRAST: "#f97316",
-  RESOLVED_BY: "#10b981",
-  TEMPORAL: "#eab308",
-  SEMANTIC: "#a855f7",
-}
 
 const SYNAPSE_LABELS: Record<string, string> = {
   CAUSED_BY: "caused by",
@@ -84,7 +66,7 @@ const SYNAPSE_LABELS: Record<string, string> = {
 }
 
 function getSynapseColor(type: string): string {
-  return SYNAPSE_COLORS[type] ?? "#94a3b8"
+  return colorForSynapseType(type)
 }
 
 function getSynapseLabel(type: string): string {
@@ -700,7 +682,7 @@ function FiberMindmapInner({ diagram, fiberName, onSelectNeuron }: FiberMindmapP
           className="!bg-card !border-border !shadow-sm [&>button]:!bg-card [&>button]:!border-border [&>button]:!fill-foreground"
         />
         <MiniMap
-          nodeColor={(n) => TYPE_COLORS[(n.data as MindmapNodeData)?.neuronType] ?? "#a8a29e"}
+          nodeColor={(n) => TYPE_COLORS[(n.data as MindmapNodeData)?.neuronType] ?? NEURON_DEFAULT_COLOR}
           maskColor="rgba(0,0,0,0.15)"
           className="!bg-card !border-border"
         />

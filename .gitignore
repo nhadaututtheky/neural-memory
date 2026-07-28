@@ -239,3 +239,7 @@ scripts/benchmark_*_results.json
 
 # Test artifacts
 *.brain
+
+# Playwright artifacts
+dashboard/test-results/
+dashboard/playwright-report/
