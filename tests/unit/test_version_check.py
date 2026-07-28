@@ -84,7 +84,7 @@ class TestGetUpdateHint:
 def _make_handler(
     *,
     update_available: bool = False,
-    version_info: VersionInfo | None | str = "auto",
+    version_info: VersionInfo | str | None = "auto",
 ) -> MagicMock:
     """Create a mock handler with VersionCheckHandler.get_update_hint."""
     from neural_memory.mcp.version_check_handler import VersionCheckHandler
