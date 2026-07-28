@@ -130,6 +130,8 @@
     "action": "hành động",
     "state": "trạng thái",
     "other": "khác",
+    "relation": "quan hệ",
+    "attribute": "thuộc tính",
     "view2D": "2D",
     "view3D": "Não Sống"
   },

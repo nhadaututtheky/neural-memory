@@ -18,12 +18,9 @@ import {
 } from "recharts"
 import { useTranslation } from "react-i18next"
 
-const RANGE_OPTIONS = [7, 14, 30, 90] as const
+import { chartSeriesColor } from "@/lib/neuron-colors"
 
-const BAR_COLORS = [
-  "#6366f1", "#10b981", "#f59e0b", "#ef4444", "#06b6d4",
-  "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#64748b",
-] as const
+const RANGE_OPTIONS = [7, 14, 30, 90] as const
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`
@@ -190,7 +187,7 @@ export default function ToolStatsPage() {
                   />
                   <Bar dataKey="count" radius={[0, 4, 4, 0]}>
                     {topTools.map((_, i) => (
-                      <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />
+                      <Cell key={i} fill={chartSeriesColor(i)} />
                     ))}
                   </Bar>
                 </BarChart>

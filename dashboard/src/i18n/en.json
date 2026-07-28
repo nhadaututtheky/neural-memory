@@ -130,6 +130,8 @@
     "action": "action",
     "state": "state",
     "other": "other",
+    "relation": "relation",
+    "attribute": "attribute",
     "view2D": "2D",
     "view3D": "3D Living"
   },
