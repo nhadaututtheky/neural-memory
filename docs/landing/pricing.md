@@ -31,7 +31,7 @@
 
 Everything in Free, plus:
 
-- **InfinityDB engine** — HNSW vector search, <5ms at 1M neurons
+- **InfinityDB engine** — HNSW vector search; <5ms index lookup (measured end-to-end recall p50 47ms at ~5.5K neurons)
 - **Cone Queries** — semantic recall by meaning, not keywords
 - **Smart Merge** — O(N×k) consolidation, scales to 100K+
 - **Directional Compression** — multi-axis semantic preservation

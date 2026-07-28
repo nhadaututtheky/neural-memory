@@ -57,16 +57,16 @@ The difference isn't speed. It's **recall quality**. Your agent remembers by mea
 | | Free (SQLite) | Pro (InfinityDB) |
 |--|---------------|-------------------|
 | **Recall method** | Keyword match (FTS5 BM25) | Semantic similarity (HNSW) |
-| **Search speed** | ~500ms at 10K neurons | **~5ms** at 10K neurons |
+| **Recall p50 (measured, ~5.5K)** | 134ms | **47ms** |
 | **Search quality** | Exact/fuzzy word match | Meaning-based match |
-| **Scale tested** | ~50K neurons | 2M+ neurons |
+| **Largest benchmarked run** | ~5.5K neurons | ~5.5K neurons |
 | **Vector storage** | Not stored | Persistent mmap on disk |
 | **Compression** | Text-level (sentence trimming) | Vector-level (5-tier adaptive) |
 | **Consolidation** | O(N²) brute-force | O(N×k) HNSW neighbor clustering |
 | **Graph traversal** | SQL JOINs per hop | Native adjacency BFS, <1ms |
 | **Crash recovery** | SQLite WAL | Custom WAL + idempotent replay |
-| **MCP tools** | 63 tools | 52 + 3 Pro-exclusive |
-| **Storage per 1M neurons** | ~5 GB | **~1 GB** (with tier compression) |
+| **MCP tools** | 63 tools | 63 + 3 Pro-exclusive |
+| **Storage per 1M neurons (modelled)** | ~5 GB | **~1 GB** (with tier compression) |
 
 ---
 
