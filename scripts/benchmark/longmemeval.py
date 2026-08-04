@@ -9,13 +9,14 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import gc
+import hashlib
 import json
 import logging
+import os
 import sys
 import time
-import warnings
 from pathlib import Path
+from typing import BinaryIO
 
 # Ensure the NM source tree and repo root are importable when run directly
 _repo_root = Path(__file__).resolve().parents[2]
@@ -38,19 +39,55 @@ logging.basicConfig(
 )
 logger = logging.getLogger("longmemeval")
 
-from scripts.benchmark.config import BenchmarkConfig, parse_args
-from scripts.benchmark.data_loader import LMEInstance, load_dataset
-from scripts.benchmark.ingest import IngestResult, ingest_instance
-from scripts.benchmark.judge import BaseJudge, create_judge
-from scripts.benchmark.metrics import QuestionResult
-from scripts.benchmark.reader import BaseReader, create_reader
-from scripts.benchmark.report import print_report, save_report
+from scripts.benchmark.config import BenchmarkConfig, parse_args  # noqa: E402
+from scripts.benchmark.data_loader import LMEInstance, load_dataset  # noqa: E402
+from scripts.benchmark.ingest import IngestResult, ingest_instance  # noqa: E402
+from scripts.benchmark.judge import BaseJudge, create_judge  # noqa: E402
+from scripts.benchmark.metrics import QuestionResult  # noqa: E402
+from scripts.benchmark.reader import BaseReader, create_reader  # noqa: E402
+from scripts.benchmark.report import print_report, save_report  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Checkpoint helpers
 # ---------------------------------------------------------------------------
 
 _CHECKPOINT_FILE = "checkpoint.jsonl"
+
+
+def _safe_instance_path(root: Path, question_id: str, suffix: str) -> Path:
+    """Derive an opaque per-instance path contained by the requested root."""
+    resolved_root = root.resolve()
+    filename = f"{hashlib.sha256(question_id.encode('utf-8')).hexdigest()}{suffix}"
+    path = (resolved_root / filename).resolve()
+    if not path.is_relative_to(resolved_root):
+        raise ValueError("benchmark instance path escaped its root")
+    return path
+
+
+def _acquire_output_lock(output_dir: Path) -> BinaryIO:
+    """Hold a non-blocking process lock for one legacy output directory."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    lock_file = (output_dir.resolve() / ".longmemeval.lock").open("a+b")
+    lock_file.seek(0, os.SEEK_END)
+    if lock_file.tell() == 0:
+        lock_file.write(b"0")
+        lock_file.flush()
+    lock_file.seek(0)
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        lock_file.close()
+        raise RuntimeError(
+            f"another LongMemEval process is already using output directory {output_dir}"
+        ) from exc
+    return lock_file
 
 
 def _checkpoint_path(output_dir: Path) -> Path:
@@ -206,8 +243,8 @@ async def _open_storage(backend: str, db_path: Path) -> object:
         except ImportError:
             pass
 
-    from neural_memory.storage.sql.sqlite_dialect import SQLiteDialect
     from neural_memory.storage.sql.sql_storage import SQLStorage
+    from neural_memory.storage.sql.sqlite_dialect import SQLiteDialect
 
     dialect = SQLiteDialect(str(db_path))
     storage = SQLStorage(dialect)
@@ -230,7 +267,7 @@ async def _process_instance(
     t0 = time.perf_counter()
 
     brain_dir = config.output_dir / "brains"
-    db_path = brain_dir / f"{instance.question_id}.db"
+    db_path = _safe_instance_path(brain_dir, instance.question_id, ".db")
 
     # Clean up stale WAL/SHM files from previous crashed runs
     for suffix in ("-wal", "-shm"):
@@ -317,12 +354,7 @@ def _build_context(
 # ---------------------------------------------------------------------------
 
 
-async def main() -> None:
-    config = parse_args()
-
-    # Ensure output dirs exist
-    config.output_dir.mkdir(parents=True, exist_ok=True)
-
+async def _run(config: BenchmarkConfig) -> None:
     # Load dataset
     instances = load_dataset(config.variant, config.data_dir)
     print(f"Loaded {len(instances)} instances (variant={config.variant})")
@@ -386,7 +418,7 @@ async def main() -> None:
             flush=True,
         )
 
-        result_file = _tmp_dir / f"{inst.question_id}.json"
+        result_file = _safe_instance_path(_tmp_dir, inst.question_id, ".json")
         if result_file.exists():
             result_file.unlink()
 
@@ -510,6 +542,16 @@ async def main() -> None:
     # Final report
     print_report(results, config)
     save_report(results, config, config.output_dir)
+
+
+async def main() -> None:
+    config = parse_args()
+    config.output_dir.mkdir(parents=True, exist_ok=True)
+    output_lock = _acquire_output_lock(config.output_dir)
+    try:
+        await _run(config)
+    finally:
+        output_lock.close()
 
 
 if __name__ == "__main__":

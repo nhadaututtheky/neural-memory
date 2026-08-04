@@ -233,7 +233,8 @@ npm-package/.mcpregistry_registry_token
 mcp-publisher.exe
 
 # Benchmark
-scripts/benchmark/results/
+scripts/benchmark/results/*
+!scripts/benchmark/results/nm_inprocess_20260418_075113.json
 scripts/benchmark/data/
 scripts/benchmark_*_results.json
 

@@ -1,11 +1,12 @@
 """Baseline retrievers for LongMemEval — used to compare NM vs dumb approaches.
 
-Three baselines implemented:
-    1. FTS5: SQLite full-text search (BM25) — the "dumb but fast" baseline
-    2. Embedding: sentence-transformers + cosine — the "semantic but shallow" baseline
-    3. Full-context (recency): top-k most-recent sessions, no relevance ranking
+Four baselines implemented:
+    1. Naive: deterministic query-token overlap across complete sessions
+    2. FTS5: SQLite full-text search (BM25) — the "dumb but fast" baseline
+    3. Embedding: sentence-transformers + cosine — the "semantic but shallow" baseline
+    4. Full-context (recency): top-k most-recent sessions, no relevance ranking
 
-All three return a deduplicated list of session_ids ranked by relevance.
+All four return a deduplicated list of session_ids ranked by relevance.
 No LLM API calls needed — this runs entirely offline.
 """
 
@@ -13,13 +14,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import sqlite3
-import tempfile
 import time
 from dataclasses import dataclass
-from pathlib import Path
 
 from scripts.benchmark.data_loader import LMEInstance, Session
+from scripts.benchmark.evidence import PINNED_EMBEDDING_REVISION
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,37 @@ class RetrievalOutput:
 
 
 # ---------------------------------------------------------------------------
-# Baseline 1: FTS5 BM25
+# Baseline 1: Naive token overlap
+# ---------------------------------------------------------------------------
+
+
+def _tokens(text: str) -> set[str]:
+    return set(re.findall(r"[\w]+", text.casefold(), flags=re.UNICODE))
+
+
+def retrieve_naive(instance: LMEInstance, top_k: int = 10) -> RetrievalOutput:
+    """Rank complete sessions by query-token overlap with stable ID tie-breaking."""
+    t0 = time.perf_counter()
+    query_tokens = _tokens(instance.question)
+    ranked = sorted(
+        (
+            (len(query_tokens & _tokens(_session_text(session))), session.session_id)
+            for session in instance.sessions
+        ),
+        key=lambda item: (-item[0], item[1]),
+    )[: max(0, top_k)]
+    return RetrievalOutput(
+        session_ids=[session_id for _, session_id in ranked],
+        elapsed_sec=time.perf_counter() - t0,
+        extra={
+            "method": "naive_token_overlap",
+            "scores": [score for score, _ in ranked],
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Baseline 2: FTS5 BM25
 # ---------------------------------------------------------------------------
 
 
@@ -74,7 +105,7 @@ def retrieve_fts5(instance: LMEInstance, top_k: int = 10) -> RetrievalOutput:
         cursor = conn.execute(
             "SELECT session_id, bm25(sessions) AS score "
             "FROM sessions WHERE sessions MATCH ? "
-            "ORDER BY score LIMIT ?",
+            "ORDER BY score, session_id LIMIT ?",
             (query, top_k),
         )
         ranked = [str(r[0]) for r in cursor.fetchall()]
@@ -149,21 +180,25 @@ def _fts5_escape(query: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Baseline 2: Embedding (sentence-transformers + cosine)
+# Baseline 3: Embedding (sentence-transformers + cosine)
 # ---------------------------------------------------------------------------
 
 
-_MODEL_CACHE: dict[str, object] = {}
+_MODEL_CACHE: dict[tuple[str, str], object] = {}
 
 
-def _get_embedder(model_name: str = "all-MiniLM-L6-v2") -> object:
+def _get_embedder(
+    model_name: str = "all-MiniLM-L6-v2",
+    revision: str = PINNED_EMBEDDING_REVISION,
+) -> object:
     """Lazy-load and cache the sentence-transformer model."""
-    if model_name in _MODEL_CACHE:
-        return _MODEL_CACHE[model_name]
+    cache_key = (model_name, revision)
+    if cache_key in _MODEL_CACHE:
+        return _MODEL_CACHE[cache_key]
     from sentence_transformers import SentenceTransformer
 
-    model = SentenceTransformer(model_name)
-    _MODEL_CACHE[model_name] = model
+    model = SentenceTransformer(model_name, revision=revision)
+    _MODEL_CACHE[cache_key] = model
     return model
 
 
@@ -171,13 +206,14 @@ def retrieve_embedding(
     instance: LMEInstance,
     top_k: int = 10,
     model_name: str = "all-MiniLM-L6-v2",
+    revision: str = PINNED_EMBEDDING_REVISION,
 ) -> RetrievalOutput:
     """Rank sessions by cosine similarity between embeddings of session + question."""
     import numpy as np
 
     t0 = time.perf_counter()
 
-    embedder = _get_embedder(model_name)
+    embedder = _get_embedder(model_name, revision)
 
     session_texts = [_session_text(s) for s in instance.sessions]
     session_ids = [s.session_id for s in instance.sessions]
@@ -191,9 +227,11 @@ def retrieve_embedding(
     )[0]
 
     scores = np.asarray(session_embs) @ np.asarray(query_emb)
-    # argsort descending
-    order = np.argsort(-scores)[:top_k]
-    ranked = [session_ids[i] for i in order]
+    order = sorted(
+        range(len(session_ids)),
+        key=lambda index: (-float(scores[index]), session_ids[index]),
+    )[:top_k]
+    ranked = [session_ids[index] for index in order]
 
     elapsed = time.perf_counter() - t0
 
@@ -203,13 +241,14 @@ def retrieve_embedding(
         extra={
             "method": "embedding_cosine",
             "model": model_name,
-            "top_score": float(scores[order[0]]) if len(order) else 0.0,
+            "revision": revision,
+            "top_score": float(scores[order[0]]) if order else 0.0,
         },
     )
 
 
 # ---------------------------------------------------------------------------
-# Baseline 3: Recency (top-k most-recent sessions — strawman for full-context)
+# Baseline 4: Recency (top-k most-recent sessions — strawman for full-context)
 # ---------------------------------------------------------------------------
 
 
@@ -239,6 +278,7 @@ def retrieve_recency(instance: LMEInstance, top_k: int = 10) -> RetrievalOutput:
 
 
 BASELINES = {
+    "naive": retrieve_naive,
     "fts5": retrieve_fts5,
     "embedding": retrieve_embedding,
     "recency": retrieve_recency,

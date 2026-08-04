@@ -7,6 +7,7 @@ results gracefully when hnswlib is not installed or no index exists.
 from __future__ import annotations
 
 import logging
+import os
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -39,6 +40,8 @@ class VectorSearchMixin:
         )
 
         if not is_available():
+            if os.environ.get("NMEM_REQUIRE_EMBEDDING") == "1":
+                raise RuntimeError("hnswlib is required for benchmark vector search")
             if not self._vector_cold_start_warned:
                 logger.debug("hnswlib not installed — knn_search disabled")
                 self._vector_cold_start_warned = True
@@ -49,6 +52,8 @@ class VectorSearchMixin:
         if db_path is not None:
             db_path = getattr(db_path, "_db_path", None)
         if db_path is None:
+            if os.environ.get("NMEM_REQUIRE_EMBEDDING") == "1":
+                raise RuntimeError("benchmark vector search requires a SQLite database path")
             return None
 
         from pathlib import Path
@@ -64,6 +69,8 @@ class VectorSearchMixin:
             self._vector_available = True
             return index
         except Exception:
+            if os.environ.get("NMEM_REQUIRE_EMBEDDING") == "1":
+                raise
             logger.debug("Failed to open vector index", exc_info=True)
             return None
 
@@ -80,6 +87,8 @@ class VectorSearchMixin:
         """
         index = self._ensure_vector_index()
         if index is None or index.count == 0:
+            if os.environ.get("NMEM_REQUIRE_EMBEDDING") == "1":
+                raise RuntimeError("benchmark vector index is unavailable or empty")
             if not self._vector_cold_start_warned:
                 logger.info("No vector index found. Run `nmem embed` to enable semantic search.")
                 self._vector_cold_start_warned = True

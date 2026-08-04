@@ -11,6 +11,7 @@ continues without embeddings.
 from __future__ import annotations
 
 import logging
+import os
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -51,6 +52,8 @@ class EmbeddingStep:
                 await storage.vector_index_add(anchor.id, vector)
 
         except Exception:
+            if os.environ.get("NMEM_REQUIRE_EMBEDDING") == "1":
+                raise
             logger.debug(
                 "EmbeddingStep failed for neuron %s — continuing without embedding",
                 anchor.id,

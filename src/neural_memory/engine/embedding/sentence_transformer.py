@@ -19,8 +19,13 @@ class SentenceTransformerEmbedding(EmbeddingProvider):
     cost at zero when the embedding layer is disabled.
     """
 
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
+    def __init__(
+        self,
+        model_name: str = "all-MiniLM-L6-v2",
+        revision: str | None = None,
+    ) -> None:
         self._model_name = model_name
+        self._revision = revision
         self._model: Any | None = None
         self._dimension: int = _DEFAULT_DIMENSION
 
@@ -36,7 +41,13 @@ class SentenceTransformerEmbedding(EmbeddingProvider):
                     "Install it with: pip install sentence-transformers"
                 ) from exc
 
-            self._model = SentenceTransformer(self._model_name)
+            if self._revision is None:
+                self._model = SentenceTransformer(self._model_name)
+            else:
+                self._model = SentenceTransformer(
+                    self._model_name,
+                    revision=self._revision,
+                )
             embedding_dim: int | None = getattr(
                 self._model, "get_sentence_embedding_dimension", lambda: None
             )()

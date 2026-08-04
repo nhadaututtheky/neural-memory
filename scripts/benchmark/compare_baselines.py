@@ -17,6 +17,7 @@ import logging
 import sys
 import time
 from pathlib import Path
+from typing import cast
 
 # Make imports work when run directly
 _repo_root = Path(__file__).resolve().parents[2]
@@ -36,21 +37,20 @@ for _name in [
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("compare_baselines")
 
-from scripts.benchmark.baselines import BASELINES, retrieve
-from scripts.benchmark.data_loader import LMEInstance, load_dataset
-from scripts.benchmark.metrics import (
+from scripts.benchmark.baselines import BASELINES, retrieve  # noqa: E402
+from scripts.benchmark.data_loader import LMEInstance, load_dataset  # noqa: E402
+from scripts.benchmark.metrics import (  # noqa: E402
     QuestionResult,
     compute_metrics_by_type,
     compute_retrieval_metrics,
 )
-
 
 # ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
 
-async def _run_method(
+async def run_baseline_method(
     method: str, instances: list[LMEInstance], top_k: int
 ) -> tuple[list[QuestionResult], float]:
     """Run one baseline across all instances, return per-instance results."""
@@ -136,8 +136,9 @@ def _format_report(
         all_types.update(by_type.keys())
 
     if nm_baseline is not None and "by_type" in nm_baseline:
-        by_method_type["NM (current)"] = nm_baseline["by_type"]  # type: ignore[assignment]
-        all_types.update(nm_baseline["by_type"].keys())  # type: ignore[arg-type]
+        nm_by_type = cast("dict[str, dict[str, float]]", nm_baseline["by_type"])
+        by_method_type["NM (current)"] = nm_by_type
+        all_types.update(nm_by_type)
 
     method_order = ["NM (current)"] if nm_baseline is not None else []
     method_order += list(all_results.keys())
@@ -178,8 +179,8 @@ def _format_report(
 # ---------------------------------------------------------------------------
 
 
-def _load_nm_baseline(path: Path | None, instance_ids: set[str]) -> dict[str, object] | None:
-    """Load prior NM benchmark results and filter to the chosen instance subset."""
+def _load_nm_baseline(path: Path | None, instance_ids: list[str]) -> dict[str, object] | None:
+    """Load prior NM results only when they cover the exact requested sample."""
     if path is None or not path.exists():
         logger.info("NM baseline JSON not provided — skipping NM row")
         return None
@@ -188,19 +189,26 @@ def _load_nm_baseline(path: Path | None, instance_ids: set[str]) -> dict[str, ob
         data = json.load(f)
 
     per_question = data.get("results") or data.get("per_question") or []
-    filtered: list[QuestionResult] = []
+    by_id: dict[str, QuestionResult] = {}
     for item in per_question:
         qid = item.get("question_id")
-        if qid is None or (instance_ids and qid not in instance_ids):
+        if not isinstance(qid, str) or (instance_ids and qid not in set(instance_ids)):
             continue
         try:
-            filtered.append(QuestionResult.from_dict(item))
-        except Exception:  # noqa: BLE001
+            if qid in by_id:
+                logger.warning(
+                    "NM baseline contains duplicate question ID %s — skipping NM row", qid
+                )
+                return None
+            by_id[qid] = QuestionResult.from_dict(item)
+        except (KeyError, TypeError, ValueError):
             logger.debug("Could not parse NM result item: %s", item)
 
-    if not filtered:
-        logger.warning("NM baseline had no matching instances — skipping NM row")
+    missing_ids = [question_id for question_id in instance_ids if question_id not in by_id]
+    if missing_ids:
+        logger.warning("NM baseline misses requested IDs %s — skipping NM row", missing_ids)
         return None
+    filtered = [by_id[question_id] for question_id in instance_ids]
 
     m = compute_retrieval_metrics(filtered)
     by_type = compute_metrics_by_type(filtered)
@@ -268,10 +276,10 @@ async def main() -> None:
         instances = instances[: args.limit]
         print(f"Using first {len(instances)} instances (variant={args.variant})")
 
-    instance_id_set = {i.question_id for i in instances}
+    instance_ids = [instance.question_id for instance in instances]
 
     # Load NM baseline if provided
-    nm_baseline = _load_nm_baseline(args.nm_results, instance_id_set)
+    nm_baseline = _load_nm_baseline(args.nm_results, instance_ids)
     if nm_baseline is not None:
         print(
             f"NM baseline loaded: {nm_baseline['n']} instances, "
@@ -287,7 +295,7 @@ async def main() -> None:
             print(f"Skipping unknown method: {method}")
             continue
         print(f"\n=== Running {method} ===", flush=True)
-        results, elapsed = await _run_method(method, instances, args.top_k)
+        results, elapsed = await run_baseline_method(method, instances, args.top_k)
         all_results[method] = results
         total_elapsed[method] = elapsed
         m = compute_retrieval_metrics(results)
@@ -310,7 +318,7 @@ async def main() -> None:
     out_json: dict[str, object] = {
         "variant": args.variant,
         "n_instances": len(instances),
-        "instance_ids": sorted(instance_id_set),
+        "instance_ids": instance_ids,
         "methods": {},
         "nm_baseline": nm_baseline,
     }

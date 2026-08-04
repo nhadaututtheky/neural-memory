@@ -7,6 +7,7 @@ import collections
 import heapq
 import logging
 import math
+import os
 import time
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -2718,6 +2719,8 @@ class ReflexPipeline:
         try:
             query_vec = await self._embedding_provider.embed(query)
         except Exception:
+            if os.environ.get("NMEM_REQUIRE_EMBEDDING") == "1":
+                raise
             logger.debug("Embedding query failed (non-critical)", exc_info=True)
             return []
 
@@ -2728,6 +2731,8 @@ class ReflexPipeline:
                 threshold = self._config.embedding_similarity_threshold
                 return [nid for nid, sim in knn_results if sim >= threshold][:top_k]
             except Exception:
+                if os.environ.get("NMEM_REQUIRE_EMBEDDING") == "1":
+                    raise
                 logger.debug("HNSW knn_search failed, falling back to scan", exc_info=True)
 
         # Fallback: O(N) scan with pairwise similarity

@@ -357,3 +357,27 @@ class TestProviderCache:
             assert mock_st.call_count == 2
 
         _provider_cache.clear()
+
+    def test_cache_keys_and_provider_include_benchmark_revision(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Benchmark revision pinning must reach the provider and its cache key."""
+        from neural_memory.engine.semantic_discovery import _create_provider
+
+        config = BrainConfig(
+            embedding_provider="sentence_transformer",
+            embedding_model="test-model",
+        )
+        monkeypatch.setenv("NMEM_SENTENCE_TRANSFORMER_REVISION", "pinned-revision")
+        with patch(
+            "neural_memory.engine.embedding.sentence_transformer.SentenceTransformerEmbedding",
+        ) as mock_st:
+            _create_provider(config)
+
+        mock_st.assert_called_once_with(
+            model_name="test-model",
+            revision="pinned-revision",
+        )
+        assert ("sentence_transformer", "test-model", "pinned-revision") in _provider_cache
+        _provider_cache.clear()

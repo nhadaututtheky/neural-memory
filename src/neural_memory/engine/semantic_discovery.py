@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -122,7 +123,7 @@ def _auto_detect_provider() -> tuple[str, str]:
 
 
 # Module-level singleton cache — avoids reloading models per tool call (#100)
-_provider_cache: dict[tuple[str, str], Any] = {}
+_provider_cache: dict[tuple[str, str, str | None], Any] = {}
 
 
 def _create_provider(config: BrainConfig, task_type: str = "RETRIEVAL_QUERY") -> Any:
@@ -139,13 +140,14 @@ def _create_provider(config: BrainConfig, task_type: str = "RETRIEVAL_QUERY") ->
     """
     provider_name = config.embedding_provider
     model_name = config.embedding_model
+    revision = os.environ.get("NMEM_SENTENCE_TRANSFORMER_REVISION")
 
     # Auto-detect best available provider
     if provider_name == "auto":
         provider_name, model_name = _auto_detect_provider()
         logger.info("Auto-detected embedding provider: %s (model: %s)", provider_name, model_name)
 
-    cache_key = (provider_name, model_name)
+    cache_key = (provider_name, model_name, revision)
     if cache_key in _provider_cache:
         return _provider_cache[cache_key]
 
@@ -155,7 +157,10 @@ def _create_provider(config: BrainConfig, task_type: str = "RETRIEVAL_QUERY") ->
             SentenceTransformerEmbedding,
         )
 
-        provider = SentenceTransformerEmbedding(model_name=model_name)
+        if revision is None:
+            provider = SentenceTransformerEmbedding(model_name=model_name)
+        else:
+            provider = SentenceTransformerEmbedding(model_name=model_name, revision=revision)
     elif provider_name == "openai":
         from neural_memory.engine.embedding.openai_embedding import OpenAIEmbedding
 

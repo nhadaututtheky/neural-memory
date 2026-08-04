@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -155,6 +156,8 @@ async def ingest_instance(
                 )
                 fiber_ids.append(result.fiber.id)
             except Exception:
+                if os.environ.get("NMEM_REQUIRE_EMBEDDING") == "1":
+                    raise
                 logger.exception(
                     "Failed to encode turn %d of session %s in instance %s",
                     turn_index,
@@ -200,8 +203,6 @@ async def ingest_instance(
 
 async def _create_storage(backend: str, db_path: Path) -> object:
     """Create and initialize the storage backend."""
-    import warnings
-
     if backend == "infinitydb":
         try:
             from neural_memory.pro.storage_adapter import InfinityDBStorage
@@ -215,8 +216,8 @@ async def _create_storage(backend: str, db_path: Path) -> object:
                 "Make sure the Pro package is installed."
             )
 
-    from neural_memory.storage.sql.sqlite_dialect import SQLiteDialect
     from neural_memory.storage.sql.sql_storage import SQLStorage
+    from neural_memory.storage.sql.sqlite_dialect import SQLiteDialect
 
     dialect = SQLiteDialect(str(db_path))
     storage = SQLStorage(dialect)

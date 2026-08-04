@@ -325,6 +325,34 @@ class TestSentenceTransformerEmbedding:
         assert provider.dimension == 768
         mock_st_class.assert_called_once_with("custom-model")
 
+    def test_ensure_model_passes_explicit_revision(self) -> None:
+        """Pinned benchmark revisions should reach SentenceTransformer."""
+        import sys
+        import types
+        import unittest.mock
+
+        from neural_memory.engine.embedding.sentence_transformer import (
+            SentenceTransformerEmbedding,
+        )
+
+        provider = SentenceTransformerEmbedding(
+            model_name="custom-model",
+            revision="pinned-revision",
+        )
+        mock_st_module = types.ModuleType("sentence_transformers")
+        mock_model_instance = unittest.mock.MagicMock()
+        mock_model_instance.get_sentence_embedding_dimension.return_value = 768
+        mock_st_class = unittest.mock.MagicMock(return_value=mock_model_instance)
+        mock_st_module.SentenceTransformer = mock_st_class
+
+        with unittest.mock.patch.dict(sys.modules, {"sentence_transformers": mock_st_module}):
+            provider._ensure_model()
+
+        mock_st_class.assert_called_once_with(
+            "custom-model",
+            revision="pinned-revision",
+        )
+
 
 # ── OpenAIEmbedding tests ───────────────────────────────────────
 
