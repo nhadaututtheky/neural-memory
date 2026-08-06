@@ -1,0 +1,16 @@
+name: neuralmemory
+version: 1.0.0
+description: "NeuralMemory — brain-inspired persistent memory for Hermes agents (port of the OpenClaw plugin). Neurons, synapses, fibers: spreading-activation recall, auto-context injection, auto-capture."
+author: "nhadaututtheky (original), Rei Stewart (Hermes port)"
+provides_tools:
+  - nmem_remember
+  - nmem_recall
+  - nmem_context
+  - nmem_stats
+  - nmem_health
+  - memory_search
+  - memory_get
+provides_hooks:
+  - pre_llm_call
+  - post_llm_call
+  - on_session_reset
