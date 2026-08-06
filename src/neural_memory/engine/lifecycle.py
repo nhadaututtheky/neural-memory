@@ -4,6 +4,9 @@ Implements the Ebbinghaus forgetting curve for natural memory decay
 and reinforcement for frequently accessed memories.
 """
 
+# Background maintenance should degrade gracefully if a synapse disappears
+# between enumeration and update.
+
 from __future__ import annotations
 
 import logging
@@ -238,13 +241,29 @@ class DecayManager:
                 if new_weight < self.prune_threshold:
                     report.synapses_pruned += 1
                     if not dry_run:
-                        # Zero out weight for pruned synapses
+                        # A synapse can be deleted after enumeration but before update.
                         pruned_synapse = synapse.decay(0.0)
-                        await storage.update_synapse(pruned_synapse)
+                        try:
+                            await storage.update_synapse(pruned_synapse)
+                        except ValueError as exc:
+                            if f"Synapse {synapse.id} does not exist" not in str(exc):
+                                raise
+                            logger.warning(
+                                "Skipping decay update for missing synapse %s",
+                                synapse.id,
+                            )
 
                 elif not dry_run:
                     decayed_synapse = synapse.decay(decay_factor)
-                    await storage.update_synapse(decayed_synapse)
+                    try:
+                        await storage.update_synapse(decayed_synapse)
+                    except ValueError as exc:
+                        if f"Synapse {synapse.id} does not exist" not in str(exc):
+                            raise
+                        logger.warning(
+                            "Skipping decay update for missing synapse %s",
+                            synapse.id,
+                        )
 
         report.duration_ms = (time.perf_counter() - start_time) * 1000
         return report

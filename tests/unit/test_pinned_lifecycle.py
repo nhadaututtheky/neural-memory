@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace as dc_replace
 from datetime import timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -147,6 +148,42 @@ class TestPinnedDecayBypass:
         assert updated_state.activation_level < 1.0
 
         await storage.close()
+
+
+class TestDecayMissingSynapse:
+    """Test decay tolerates synapses deleted mid-run."""
+
+    @pytest.fixture()
+    def decay_manager(self):
+        from neural_memory.engine.lifecycle import DecayManager
+
+        return DecayManager(decay_rate=0.1, prune_threshold=0.01, min_age_days=0)
+
+    async def test_missing_synapse_is_skipped(self, decay_manager):
+        old_time = utcnow() - timedelta(days=30)
+        synapse = Synapse.create(
+            source_id="n1",
+            target_id="n2",
+            type=SynapseType.RELATED_TO,
+            weight=0.5,
+            synapse_id="syn-missing",
+        )
+        synapse = dc_replace(synapse, last_activated=old_time)
+
+        storage = AsyncMock()
+        storage.get_pinned_neuron_ids.return_value = set()
+        storage.get_fibers.return_value = []
+        storage.get_all_neuron_states.return_value = []
+        storage.get_all_synapses.return_value = [synapse]
+        storage.update_synapse.side_effect = ValueError(
+            f"Synapse {synapse.id} does not exist"
+        )
+
+        report = await decay_manager.apply_decay(storage)
+
+        assert report.synapses_processed == 1
+        assert report.synapses_decayed == 1
+        storage.update_synapse.assert_awaited_once()
 
 
 class TestPinnedCompressionBypass:
