@@ -35,7 +35,7 @@ _RE_NEURON_BULLETS = re.compile(
     r'^-\s*\[(?:concept|entity|decision|error|preference|insight|memory|fact|workflow|instruction|pattern)\].*$',
     re.MULTILINE | re.IGNORECASE,
 )
-_RE_NM_WRAPPERS = re.compile(r'^\[NeuralMemory\s*[—–-].*\]$', re.MULTILINE)
+_RE_NM_WRAPPERS = re.compile(r'^\[NeuralMemory\s*[—–-].*\]$', re.MULTILINE)  # noqa: RUF001 — em/en dashes are parity-critical: they match upstream's own "[NeuralMemory — …]" wrapper format
 _RE_META_LABELS = re.compile(
     r'^(?:Conversation info|Sender|Context|System)\s*\(.*?\)\s*:?\s*$',
     re.MULTILINE | re.IGNORECASE,
@@ -177,7 +177,7 @@ def make_pre_llm_hook(mcp: NeuralMemoryMcpClient, cfg: PluginConfig,
                 data = json.loads(raw) if raw else {}
                 if isinstance(data, dict) and data.get("answer") and (data.get("confidence") or 0) > 0.1:
                     parts.append(f"[NeuralMemory — relevant context]\n{data['answer']}")
-            except Exception as err:  # noqa: BLE001 — recall must never break a turn
+            except Exception as err:
                 logger.warning("Auto-context failed: %s", err)
 
         if not parts:
@@ -217,7 +217,7 @@ def make_post_llm_hook(mcp: NeuralMemoryMcpClient,
 
             if len(text) > 50:
                 mcp.call_tool("nmem_auto", {"action": "process", "text": text})
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             logger.warning("Auto-capture failed: %s", err)
 
     return hook
@@ -233,7 +233,7 @@ def make_session_reset_hook(mcp: NeuralMemoryMcpClient,
         try:
             mcp.call_tool("nmem_auto", {"action": "process",
                                         "text": "[session boundary — reset]"})
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             logger.warning("Session boundary flush failed: %s", err)
 
     return hook

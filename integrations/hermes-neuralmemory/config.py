@@ -105,7 +105,7 @@ def load_plugin_config() -> PluginConfig:
         entries = (cfg.get("plugins") or {}).get("entries") or {}
         entry = entries.get("neuralmemory") or {}
         raw = dict(entry.get("config") or {})
-    except Exception:  # noqa: BLE001 — fail open to defaults, never crash agent on config read
+    except Exception:
         # Fail open to defaults — a broken config read must never crash the agent.
         raw = {}
 

@@ -94,7 +94,7 @@ def make_call_fn(mcp) -> Callable[[str, dict], str]:
         if not mcp.connected:
             try:
                 mcp.ensure_connected()
-            except Exception as err:  # noqa: BLE001
+            except Exception as err:
                 return json.dumps({
                     "error": True,
                     "message": f"NeuralMemory auto-connect failed: {err}",
@@ -105,7 +105,7 @@ def make_call_fn(mcp) -> Callable[[str, dict], str]:
                 return json.dumps(json.loads(raw))
             except (json.JSONDecodeError, TypeError):
                 return json.dumps({"text": raw})
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             return json.dumps({
                 "error": True,
                 "message": f"Tool {tool_name} failed: {err}",

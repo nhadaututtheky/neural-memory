@@ -23,8 +23,40 @@ from __future__ import annotations
 
 import logging
 import threading
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .mcp_client import NeuralMemoryMcpClient
 
 logger = logging.getLogger("hermes.plugins.neuralmemory")
+
+# ── Singleton MCP client pool (port of the mcpClients Map in index.ts) ──
+# Multiple register() calls share one connected client per (pythonPath, brain).
+_mcp_clients: dict[str, NeuralMemoryMcpClient] = {}
+_mcp_clients_lock = threading.Lock()
+
+
+def _get_or_create_mcp_client(cfg) -> NeuralMemoryMcpClient:
+    """Port of getOrCreateMcpClient(): keyed pool, thread-safe double-check."""
+    from .mcp_client import NeuralMemoryMcpClient
+
+    key = f"{cfg.python_path}::{cfg.brain}"
+    existing = _mcp_clients.get(key)
+    if existing is not None:
+        logger.debug('Reusing existing MCP client for brain "%s"', cfg.brain)
+        return existing
+    with _mcp_clients_lock:
+        existing = _mcp_clients.get(key)
+        if existing is not None:
+            return existing
+        client = NeuralMemoryMcpClient(
+            python_path=cfg.python_path,
+            brain=cfg.brain,
+            timeout=cfg.timeout,
+            init_timeout=cfg.init_timeout,
+        )
+        _mcp_clients[key] = client
+        return client
 
 # Hermes plugin context object (duck-typed per the plugin contract).
 
@@ -33,7 +65,6 @@ def register(ctx) -> None:
     """Hermes plugin entry point — called once at plugin load (sync)."""
     from .config import load_plugin_config
     from .hooks import make_post_llm_hook, make_pre_llm_hook, make_session_reset_hook
-    from .mcp_client import NeuralMemoryMcpClient
     from .tools_proxy import (
         create_compatibility_tools,
         create_fallback_tools,
@@ -42,23 +73,12 @@ def register(ctx) -> None:
 
     cfg = load_plugin_config()
 
-    # ── Singleton MCP client (port of getOrCreateMcpClient) ──
-    # Hermes is multi-threaded; use the official thread-safe helper when
-    # available, else a locked fallback.
-    def _build_client() -> NeuralMemoryMcpClient:
-        return NeuralMemoryMcpClient(
-            python_path=cfg.python_path,
-            brain=cfg.brain,
-            timeout=cfg.timeout,
-            init_timeout=cfg.init_timeout,
-        )
-
-    try:
-        from plugins.plugin_utils import lazy_singleton
-        get_client = lazy_singleton(_build_client)
-        mcp = get_client()
-    except Exception:  # noqa: BLE001 — plugin_utils unavailable outside Hermes core
-        mcp = _build_client()
+    # ── Singleton MCP client pool (port of getOrCreateMcpClient) ──
+    # Module-level pool keyed by (pythonPath, brain), exactly mirroring the
+    # upstream mcpClients Map. A bare lazy_singleton(_build_client) would be
+    # keyed per factory CLOSURE — a new singleton on every register() call,
+    # spawning duplicate MCP processes (reviewer finding M3).
+    mcp = _get_or_create_mcp_client(cfg)
 
     # ── Register fallback + compat tools synchronously ─────────
     # Port of OpenClaw's sync register() + deferred MCP connection.
@@ -91,9 +111,9 @@ def register(ctx) -> None:
             try:
                 dynamic = create_tools_from_mcp(mcp)
                 logger.info("NeuralMemory MCP discovered %d tools", len(dynamic))
-            except Exception as err:  # noqa: BLE001
+            except Exception as err:
                 logger.warning("Tool discovery failed: %s", err)
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             logger.warning("NeuralMemory MCP startup connect failed: %s "
                            "(tools auto-reconnect on first call)", err)
 

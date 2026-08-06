@@ -140,7 +140,7 @@ class NeuralMemoryMcpClient:
         self._stderr_lines: list[str] = []
 
         try:
-            self._proc = subprocess.Popen(
+            self._proc = subprocess.Popen(  # noqa: S603 — pythonPath comes from validated plugin config; args are static
                 [self._python_path, "-m", "neural_memory.mcp"],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
@@ -216,7 +216,7 @@ class NeuralMemoryMcpClient:
                     proc.wait(timeout=3)
                 except subprocess.TimeoutExpired:
                     proc.kill()
-            except Exception:  # noqa: BLE001, S110 — best-effort teardown
+            except Exception:
                 pass
         logger.info("MCP client closed")
 
@@ -258,7 +258,7 @@ class NeuralMemoryMcpClient:
             try:
                 proc.stdin.write(frame)
                 proc.stdin.flush()
-            except (BrokenPipeError, OSError, ValueError):  # noqa: S110 — dead-pipe writes are expected after process exit
+            except (BrokenPipeError, OSError, ValueError):
                 pass
 
     # ── Reader threads ───────────────────────────────
@@ -267,17 +267,32 @@ class NeuralMemoryMcpClient:
         proc = self._proc
         if proc is None or proc.stdout is None:
             return
-        buffered = 0
-        for line in iter(proc.stdout.readline, b""):
-            buffered += len(line)
-            if buffered > MAX_BUFFER_BYTES:
+        stdout = proc.stdout
+        # Port of mcp-client.ts drainBuffer(): cap the UNDRAINED buffer only.
+        # Consumed bytes are removed as lines are processed, so a long-lived
+        # connection never trips the cap on well-formed traffic.
+        raw_buffer = b""
+        for chunk in iter(lambda: stdout.read(65536), b""):
+            raw_buffer += chunk
+            if len(raw_buffer) > MAX_BUFFER_BYTES:
                 logger.error("MCP buffer exceeded %d bytes — killing process", MAX_BUFFER_BYTES)
                 try:
                     proc.kill()
-                except Exception:  # noqa: BLE001
+                except Exception:
                     pass
                 return
+            raw_buffer = self._drain_buffer(raw_buffer)
+
+    def _drain_buffer(self, raw_buffer: bytes) -> bytes:
+        """Parse complete newline-delimited messages; return the undrained remainder."""
+        while True:
+            newline_index = raw_buffer.find(b"\n")
+            if newline_index == -1:
+                break
+            line = raw_buffer[:newline_index]
+            raw_buffer = raw_buffer[newline_index + 1:]
             self._handle_line(line)
+        return raw_buffer
 
     def _read_stderr(self) -> None:
         proc = self._proc

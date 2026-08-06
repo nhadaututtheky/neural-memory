@@ -333,6 +333,35 @@ class TestMcpClientConstants(unittest.TestCase):
         self.assertEqual(env.get("NEURALMEMORY_BRAIN"), "custom-brain")
         self.assertNotIn("NEURALMEMORY_BRAIN", mcp_client.build_child_env("default"))
 
+    def test_drain_buffer_consumes_parsed_lines(self):
+        """M1 fix: the cap applies to the UNDRAINED buffer, not cumulative bytes."""
+        from hermes_plugins.neuralmemory import mcp_client
+        client = mcp_client.NeuralMemoryMcpClient("python", "b")
+        seen: list[dict] = []
+        client._handle_message = lambda m: seen.append(m)
+        buf = b'{"id":1,"result":{}}\n{"id":2,"result":{"x":1}}\n{"partial"'
+        rest = client._drain_buffer(buf)
+        self.assertEqual(rest, b'{"partial"')  # partial line stays buffered
+        self.assertEqual(len(seen), 2)
+
+    def test_pool_keyed_by_pythonpath_and_brain(self):
+        """M3 fix: pool reuses one client per (pythonPath, brain) across calls."""
+        import hermes_plugins.neuralmemory as plugin
+        from hermes_plugins.neuralmemory.config import resolve_config
+        cfg_a = resolve_config({"brain": "a"})
+        cfg_a2 = resolve_config({"brain": "a"})
+        cfg_b = resolve_config({"brain": "b"})
+        plugin._mcp_clients.clear()
+        try:
+            c1 = plugin._get_or_create_mcp_client(cfg_a)
+            c2 = plugin._get_or_create_mcp_client(cfg_a2)
+            c3 = plugin._get_or_create_mcp_client(cfg_b)
+            self.assertIs(c1, c2)
+            self.assertIsNot(c1, c3)
+            self.assertEqual(len(plugin._mcp_clients), 2)
+        finally:
+            plugin._mcp_clients.clear()
+
 
 if __name__ == "__main__":
     unittest.main()
