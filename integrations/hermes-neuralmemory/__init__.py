@@ -32,10 +32,13 @@ logger = logging.getLogger("hermes.plugins.neuralmemory")
 def register(ctx) -> None:
     """Hermes plugin entry point — called once at plugin load (sync)."""
     from .config import load_plugin_config
+    from .hooks import make_post_llm_hook, make_pre_llm_hook, make_session_reset_hook
     from .mcp_client import NeuralMemoryMcpClient
-    from .tools_proxy import create_compatibility_tools, create_fallback_tools, create_tools_from_mcp
-    from .hooks import (make_post_llm_hook, make_pre_llm_hook,
-                        make_session_reset_hook)
+    from .tools_proxy import (
+        create_compatibility_tools,
+        create_fallback_tools,
+        create_tools_from_mcp,
+    )
 
     cfg = load_plugin_config()
 

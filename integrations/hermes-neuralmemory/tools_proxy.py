@@ -7,7 +7,8 @@ same 5 fallback tools and 2 compat shims with identical schemas.
 from __future__ import annotations
 
 import json
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 # ── Schema normalization ───────────────────────────
 
@@ -247,10 +248,15 @@ def create_tools_from_mcp(mcp) -> list[dict]:
     call = make_call_fn(mcp)
     tools = []
     for t in mcp_tools:
+        tool_name = t.get("name", "")
+
+        def _make_handler(name: str):
+            return lambda params, **kw: call(name, params)
+
         tools.append({
-            "name": t.get("name", ""),
-            "description": t.get("description") or f"NeuralMemory tool: {t.get('name')}",
+            "name": tool_name,
+            "description": t.get("description") or f"NeuralMemory tool: {tool_name}",
             "parameters": to_safe_schema(t.get("inputSchema")),
-            "handler": (lambda name: lambda params, **kw: call(name, params))(t.get("name", "")),
+            "handler": _make_handler(tool_name),
         })
     return tools

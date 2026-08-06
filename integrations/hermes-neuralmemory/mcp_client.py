@@ -14,8 +14,7 @@ import logging
 import os
 import subprocess
 import threading
-import time
-from typing import Any, Callable
+from typing import Any
 
 logger = logging.getLogger("hermes.plugins.neuralmemory")
 
@@ -64,7 +63,7 @@ def build_child_env(brain: str) -> dict[str, str]:
 
 
 class _Pending:
-    __slots__ = ("event", "result", "error")
+    __slots__ = ("error", "event", "result")
 
     def __init__(self) -> None:
         self.event = threading.Event()
@@ -127,7 +126,7 @@ class NeuralMemoryMcpClient:
         try:
             self.connect()
             self._connected = True
-        except Exception as exc:  # noqa: BLE001 — re-raised to all waiters
+        except Exception as exc:
             self._connect_error = exc
             raise
         finally:
@@ -217,7 +216,7 @@ class NeuralMemoryMcpClient:
                     proc.wait(timeout=3)
                 except subprocess.TimeoutExpired:
                     proc.kill()
-            except Exception:  # noqa: BLE001 — best-effort teardown
+            except Exception:  # noqa: BLE001, S110 — best-effort teardown
                 pass
         logger.info("MCP client closed")
 
@@ -259,7 +258,7 @@ class NeuralMemoryMcpClient:
             try:
                 proc.stdin.write(frame)
                 proc.stdin.flush()
-            except (BrokenPipeError, OSError, ValueError):
+            except (BrokenPipeError, OSError, ValueError):  # noqa: S110 — dead-pipe writes are expected after process exit
                 pass
 
     # ── Reader threads ───────────────────────────────
