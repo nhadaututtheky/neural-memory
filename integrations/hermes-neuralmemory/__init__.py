@@ -64,7 +64,12 @@ def _get_or_create_mcp_client(cfg) -> NeuralMemoryMcpClient:
 def register(ctx) -> None:
     """Hermes plugin entry point — called once at plugin load (sync)."""
     from .config import load_plugin_config
-    from .hooks import make_post_llm_hook, make_pre_llm_hook, make_session_reset_hook
+    from .hooks import (
+        make_post_llm_hook,
+        make_pre_llm_hook,
+        make_session_end_hook,
+        make_session_reset_hook,
+    )
     from .tools_proxy import (
         create_compatibility_tools,
         create_fallback_tools,
@@ -135,6 +140,11 @@ def register(ctx) -> None:
     # (port of before_reset → Hermes on_session_reset)
     if cfg.auto_flush:
         ctx.register_hook("on_session_reset", make_session_reset_hook(mcp, cfg))
+
+    # MCP process teardown at session end
+    # (port of service.stop() → Hermes on_session_end; also evicts the pool entry
+    # so a later register() builds a fresh client — reviewer MINOR-2)
+    ctx.register_hook("on_session_end", make_session_end_hook(mcp, cfg))
 
     logger.info(
         "NeuralMemory registered (brain: %s, autoContext: %s, autoCapture: %s, "

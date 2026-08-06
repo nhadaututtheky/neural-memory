@@ -11,7 +11,7 @@ scope: standard
 
 ## Source of truth (canon)
 Upstream: https://github.com/nhadaututtheky/neural-memory — `integrations/neuralmemory/` (v1.17.0, TypeScript, OpenClaw).
-Reference copy lives alongside this plugin at `../neuralmemory/` in this repo.
+Local reference copy: `openclaw-src/` in this workspace.
 
 ## Principle
 FAITHFUL PORT, not rewrite. Every function, regex, default, and hook behavior maps 1:1 to the
@@ -34,8 +34,10 @@ OpenClaw source unless Hermes forces an adaptation. Adaptations are listed and j
 | 11 | `before_reset` → session boundary flush | `on_session_reset` | PORT 1:1 |
 | 12 | `gateway_start` → consolidation (nmem_consolidate enrich) | NO EQUIVALENT hook in plugin API | DROPPED (documented; users can run nmem_consolidate manually) |
 | 13 | `stripPromptMetadata` (7 regex passes) | same regexes | PORT 1:1 |
-| 14 | `sanitizeAutoCapture` | same regexes | PORT 1:1 |
+| 14 | `sanitizeAutoCapture` | same regexes, incl. the stricter `\]\s` neuron-bullet variant (canon index.ts:134) | PORT 1:1 |
 | 15 | Config validation (brain name regex, ranges for depth/tokens/timeouts) | same validators | PORT 1:1 |
+| 16 | `service.stop()` → close MCP + evict pool entry | `on_session_end` hook → `mcp.close()` + pool eviction | PORT 1:1 (added after reviewer MINOR-2) |
+| 17 | `agent_end` reads only `ev.messages` | `post_llm_call` falls back to `assistant_response` kwarg when history has no assistant strings | ADAPTED (documented; Hermes guarantees the kwarg, history shape differs) |
 
 ## Hermes contract facts (verified in source)
 - Manifest: `plugin.yaml` with `name`, `version`, `description`, `provides_tools`, `provides_hooks`

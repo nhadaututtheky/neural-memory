@@ -137,7 +137,10 @@ class NeuralMemoryMcpClient:
     def connect(self) -> None:
         """Spawn the MCP process and complete the initialize handshake. Port of connect()."""
         env = build_child_env(self._brain)
+        # Generation-scoped stderr capture (reviewer M3-5): a previous generation's
+        # stderr thread must never append into the new generation's diagnostics.
         self._stderr_lines: list[str] = []
+        stderr_lines = self._stderr_lines
 
         try:
             self._proc = subprocess.Popen(  # noqa: S603 — pythonPath comes from validated plugin config; args are static
@@ -157,7 +160,7 @@ class NeuralMemoryMcpClient:
         # Reader threads for stdout (JSON-RPC) and stderr (diagnostics)
         threading.Thread(target=self._read_stdout, daemon=True,
                          name="nmem-mcp-stdout").start()
-        threading.Thread(target=self._read_stderr, daemon=True,
+        threading.Thread(target=self._read_stderr, args=(stderr_lines,), daemon=True,
                          name="nmem-mcp-stderr").start()
         threading.Thread(target=self._wait_exit, daemon=True,
                          name="nmem-mcp-exit").start()
@@ -170,7 +173,10 @@ class NeuralMemoryMcpClient:
                 "clientInfo": {"name": CLIENT_NAME, "version": CLIENT_VERSION},
             }, timeout_override=self._init_timeout)
         except Exception as err:
-            stderr = "\n".join(self._stderr_lines)
+            # Reviewer M2: tear down the failed generation — a hung child and its
+            # reader threads must not leak, and a later retry must not orphan it.
+            self._teardown_failed_connect()
+            stderr = "\n".join(stderr_lines)
             detail = (f"\nPython stderr:\n{stderr}" if stderr
                       else "\nNo stderr output — the Python process may have hung.")
             raise RuntimeError(
@@ -216,9 +222,28 @@ class NeuralMemoryMcpClient:
                     proc.wait(timeout=3)
                 except subprocess.TimeoutExpired:
                     proc.kill()
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 — best-effort teardown
                 pass
         logger.info("MCP client closed")
+
+    def _teardown_failed_connect(self) -> None:
+        """Kill a child whose handshake failed (reviewer M2).
+
+        Popen succeeded but initialize failed/timed out — without this the
+        hung child and its reader threads leak, and a later ensure_connected
+        retry would overwrite self._proc and orphan the first process.
+        """
+        self._reject_all(RuntimeError("MCP initialize failed — connect aborted"))
+        proc, self._proc = self._proc, None
+        if proc is not None:
+            try:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+            except Exception:  # noqa: BLE001, S110 — best-effort teardown
+                pass
 
     # ── JSON-RPC protocol layer ──────────────────────────
 
@@ -294,15 +319,15 @@ class NeuralMemoryMcpClient:
             self._handle_line(line)
         return raw_buffer
 
-    def _read_stderr(self) -> None:
+    def _read_stderr(self, stderr_lines: list[str]) -> None:
         proc = self._proc
         if proc is None or proc.stderr is None:
             return
         for raw in iter(proc.stderr.readline, b""):
             msg = raw.decode("utf-8", errors="replace").strip()
             if msg:
-                if len(self._stderr_lines) < MAX_STDERR_LINES:
-                    self._stderr_lines.append(msg)
+                if len(stderr_lines) < MAX_STDERR_LINES:
+                    stderr_lines.append(msg)
                 logger.warning("[mcp stderr] %s", msg)
 
     def _wait_exit(self) -> None:

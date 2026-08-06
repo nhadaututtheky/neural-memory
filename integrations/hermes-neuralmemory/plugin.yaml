@@ -14,3 +14,4 @@ provides_hooks:
   - pre_llm_call
   - post_llm_call
   - on_session_reset
+  - on_session_end

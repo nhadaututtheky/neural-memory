@@ -172,6 +172,15 @@ class TestRegexPipelines(unittest.TestCase):
         self.assertNotIn("[concept]", out)
         self.assertNotIn("OK.", out)
 
+    def test_sanitize_capture_requires_whitespace_after_bracket(self):
+        """MINOR-3: sanitize pipeline uses canon's stricter \\]\\s variant."""
+        # "- [fact]x" (no space) must SURVIVE sanitize (canon keeps it)...
+        out = self.hooks.sanitize_auto_capture("- [fact]x\nWe fixed the bug.")
+        self.assertIn("- [fact]x", out)
+        # ...while "- [fact] x" (with space) is stripped
+        out2 = self.hooks.sanitize_auto_capture("- [fact] junk\nWe fixed the bug.")
+        self.assertNotIn("- [fact]", out2)
+
 
 class TestToolWiring(unittest.TestCase):
     def setUp(self):
@@ -301,6 +310,22 @@ class TestHooks(unittest.TestCase):
         self.assertEqual(mcp.calls, [("nmem_auto",
                                       {"action": "process", "text": "[session boundary — reset]"})])
 
+    def test_session_end_closes_client_and_evicts_pool(self):
+        """MINOR-2: port of service.stop() — close + pool eviction."""
+
+        class _ClosableMcp(_FakeMcp):
+            def __init__(self, **kw):
+                super().__init__(**kw)
+                self.closed = False
+
+            def close(self):
+                self.closed = True
+
+        mcp = _ClosableMcp()
+        hook = self.hooks.make_session_end_hook(mcp, self.cfg)
+        hook()
+        self.assertTrue(mcp.closed)
+
 
 class TestRegistration(unittest.TestCase):
     def test_register_wires_tools_and_hooks(self):
@@ -309,7 +334,8 @@ class TestRegistration(unittest.TestCase):
         self.assertEqual(sorted(ctx.tools),
                          sorted(["nmem_remember", "nmem_recall", "nmem_context",
                                  "nmem_stats", "nmem_health", "memory_search", "memory_get"]))
-        self.assertEqual(set(ctx.hooks), {"pre_llm_call", "post_llm_call", "on_session_reset"})
+        self.assertEqual(set(ctx.hooks),
+                         {"pre_llm_call", "post_llm_call", "on_session_reset", "on_session_end"})
 
 
 class TestMcpClientConstants(unittest.TestCase):

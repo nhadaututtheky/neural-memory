@@ -35,6 +35,13 @@ _RE_NEURON_BULLETS = re.compile(
     r'^-\s*\[(?:concept|entity|decision|error|preference|insight|memory|fact|workflow|instruction|pattern)\].*$',
     re.MULTILINE | re.IGNORECASE,
 )
+# sanitizeAutoCapture variant (canon index.ts:134): requires whitespace after the
+# bracket — stricter than the stripPromptMetadata variant above. Do NOT merge these
+# two; they are intentionally different in canon (reviewer MINOR-3).
+_RE_NEURON_BULLETS_WS = re.compile(
+    r'^-\s*\[(?:concept|entity|decision|error|preference|insight|memory|fact|workflow|instruction|pattern)\]\s.*$',
+    re.MULTILINE | re.IGNORECASE,
+)
 _RE_NM_WRAPPERS = re.compile(r'^\[NeuralMemory\s*[—–-].*\]$', re.MULTILINE)  # noqa: RUF001 — em/en dashes are parity-critical: they match upstream's own "[NeuralMemory — …]" wrapper format
 _RE_META_LABELS = re.compile(
     r'^(?:Conversation info|Sender|Context|System)\s*\(.*?\)\s*:?\s*$',
@@ -92,7 +99,8 @@ def sanitize_auto_capture(raw: str) -> str:
     # Strip [NeuralMemory — ...] wrapper lines
     cleaned = _RE_NM_WRAPPERS.sub("", cleaned)
     # Strip neuron-type bullet lines (- [concept] ..., - [error] ...)
-    cleaned = _RE_NEURON_BULLETS.sub("", cleaned)
+    # Canon uses the stricter whitespace-required variant here (index.ts:134).
+    cleaned = _RE_NEURON_BULLETS_WS.sub("", cleaned)
     # Strip metadata labels
     cleaned = re.sub(
         r'^(?:Conversation info|Sender|Context)\s*\(.*?\)\s*:?\s*$',
@@ -233,7 +241,30 @@ def make_session_reset_hook(mcp: NeuralMemoryMcpClient,
         try:
             mcp.call_tool("nmem_auto", {"action": "process",
                                         "text": "[session boundary — reset]"})
-        except Exception as err:
+        except Exception as err:  # noqa: BLE001
             logger.warning("Session boundary flush failed: %s", err)
+
+    return hook
+
+
+def make_session_end_hook(mcp: NeuralMemoryMcpClient,
+                          cfg: PluginConfig) -> Callable[..., None]:
+    """Port of service.stop() → Hermes on_session_end.
+
+    Canon stop() closes the MCP process and evicts the pool entry so the next
+    register() creates a fresh client (index.ts:382-388).
+    """
+
+    def hook(**kwargs: Any) -> None:
+        try:
+            from . import _mcp_clients
+            _mcp_clients.pop(f"{cfg.python_path}::{cfg.brain}", None)
+        except Exception:  # noqa: BLE001 — eviction is best-effort
+            pass
+        try:
+            mcp.close()
+        except Exception as err:  # noqa: BLE001
+            logger.warning("MCP close on session end failed: %s", err)
+        logger.info("NeuralMemory MCP service stopped (session end)")
 
     return hook

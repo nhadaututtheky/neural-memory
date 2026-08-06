@@ -7,6 +7,7 @@ Values are read from Hermes config.yaml: plugins.entries.neuralmemory
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 
@@ -64,7 +65,6 @@ def resolve_config(raw: dict | None) -> PluginConfig:
         v = merged.get(key)
         if isinstance(v, (int, float)) and not isinstance(v, bool):
             try:
-                import math
                 if math.isfinite(v) and lo <= v <= hi:
                     return int(v)
             except (TypeError, ValueError):
