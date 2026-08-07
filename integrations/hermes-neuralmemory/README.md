@@ -28,6 +28,21 @@ nmem-mcp --help             # verify
 
 ## Install
 
+### Option A — `hermes plugins install` (recommended)
+
+The plugin is published in the [neural-memory](https://github.com/nhadaututtheky/neural-memory)
+monorepo. Install it directly from GitHub (the installer handles the subdirectory):
+
+```bash
+hermes plugins install nhadaututtheky/neural-memory/integrations/hermes-neuralmemory
+hermes plugins enable neuralmemory
+```
+
+The installer shows `after-install.md` with dependency + config steps. Restart
+Hermes when done.
+
+### Option B — manual copy
+
 1. Copy this directory to `~/.hermes/plugins/neuralmemory/`
    (on this machine: `G:\hermes\profiles\<profile>\plugins\neuralmemory\`).
 2. Enable it in `config.yaml` (Hermes user plugins are opt-in):
