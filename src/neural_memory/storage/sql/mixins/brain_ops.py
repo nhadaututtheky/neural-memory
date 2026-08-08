@@ -725,10 +725,12 @@ class BrainOpsMixin:
                     ),
                 )
 
+                priority_value = tm_data.get("priority", Priority.NORMAL.value)
+                priority = Priority(int(priority_value))
                 typed_memory = TypedMemory(
                     fiber_id=tm_data["fiber_id"],
                     memory_type=MemoryType(tm_data["memory_type"]),
-                    priority=Priority(tm_data.get("priority", "normal")),
+                    priority=priority,
                     provenance=provenance,
                     expires_at=(
                         datetime.fromisoformat(tm_data["expires_at"])

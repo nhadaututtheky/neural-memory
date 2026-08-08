@@ -5,7 +5,12 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from neural_memory.core.brain_mode import BrainMode, BrainModeConfig
+from neural_memory.core.brain_mode import (
+    BrainMode,
+    BrainModeConfig,
+    StorageAdapter,
+    normalize_storage_adapter,
+)
 from neural_memory.storage.base import NeuralStorage
 from neural_memory.storage.memory_store import InMemoryStorage
 from neural_memory.storage.shared_store import SharedStorage
@@ -67,15 +72,6 @@ async def create_storage(
     """
     if config.mode == BrainMode.LOCAL:
         if local_path:
-            # --- Unified SQL adapter paths ---
-            if backend == "unified":
-                dialect = SQLiteDialect(db_path=local_path)
-                unified = SQLStorage(dialect)
-                await unified.initialize()
-                unified.set_brain(brain_id)
-                logger.info("Using unified SQLStorage with SQLiteDialect")
-                return unified
-
             if backend == "postgres":
                 # Expects local_path to be unused; connection params come
                 # from environment or a future config extension.  For now
@@ -87,16 +83,10 @@ async def create_storage(
                 logger.info("Using unified SQLStorage with PostgresDialect")
                 return unified
 
-            # --- Legacy path (default) ---
-            # Check if Pro plugin provides an alternative storage engine
-            pro_storage = await _try_pro_storage(local_path, brain_id)
-            if pro_storage is not None:
-                return pro_storage
-
-            local_storage = SQLiteStorage(local_path)
-            await local_storage.initialize()
-            local_storage.set_brain(brain_id)
-            return local_storage
+            adapter = normalize_storage_adapter(
+                "unified" if backend == "unified" else config.storage_adapter
+            )
+            return await _create_local_storage(local_path, brain_id, adapter)
         else:
             mem_storage = InMemoryStorage()
             mem_storage.set_brain(brain_id)
@@ -127,6 +117,7 @@ async def create_storage(
             api_key=config.hybrid.api_key,
             sync_strategy=config.hybrid.sync_strategy,
             auto_sync_on_encode=config.hybrid.auto_sync_on_encode,
+            storage_adapter=normalize_storage_adapter(config.storage_adapter),
         )
         return hybrid_storage
 
@@ -159,6 +150,33 @@ async def _try_pro_storage(local_path: str, brain_id: str) -> NeuralStorage | No
         return None
 
 
+async def _create_local_storage(
+    local_path: str,
+    brain_id: str,
+    storage_adapter: StorageAdapter,
+) -> NeuralStorage:
+    """Create one local adapter without falling back from explicit unified mode."""
+    if storage_adapter == "unified":
+        unified_storage = SQLStorage(SQLiteDialect(db_path=local_path))
+        try:
+            await unified_storage.initialize()
+        except Exception:
+            await unified_storage.close()
+            raise
+        unified_storage.set_brain(brain_id)
+        logger.info("Using unified SQLStorage with SQLiteDialect")
+        return unified_storage
+
+    pro_storage = await _try_pro_storage(local_path, brain_id)
+    if pro_storage is not None:
+        return pro_storage
+
+    legacy_storage = SQLiteStorage(local_path)
+    await legacy_storage.initialize()
+    legacy_storage.set_brain(brain_id)
+    return legacy_storage
+
+
 class HybridStorage(NeuralStorage):
     """
     Hybrid storage that combines local SQLite with remote sync.
@@ -176,7 +194,7 @@ class HybridStorage(NeuralStorage):
 
     def __init__(
         self,
-        local: SQLiteStorage,
+        local: NeuralStorage,
         remote: SharedStorage,
         *,
         auto_sync_on_encode: bool = True,
@@ -223,11 +241,10 @@ class HybridStorage(NeuralStorage):
         api_key: str | None = None,
         sync_strategy: str = "bidirectional",
         auto_sync_on_encode: bool = True,
+        storage_adapter: StorageAdapter = "legacy",
     ) -> HybridStorage:
         """Create and initialize hybrid storage."""
-        local = SQLiteStorage(local_path)
-        await local.initialize()
-        local.set_brain(brain_id)
+        local = await _create_local_storage(local_path, brain_id, storage_adapter)
 
         remote = SharedStorage(
             server_url=server_url,

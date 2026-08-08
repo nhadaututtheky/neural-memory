@@ -25,6 +25,8 @@ from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from neural_memory.core.brain_mode import StorageAdapter, normalize_storage_adapter
+
 if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
 
@@ -1348,6 +1350,9 @@ class UnifiedConfig:
     # Storage backend: "sqlite" (default), "postgres", or "infinitydb"
     storage_backend: str = "sqlite"
 
+    # SQLite implementation pilot: "legacy" (default) or "unified"
+    storage_adapter: StorageAdapter = "legacy"
+
     # Tool memory auto-capture
     tool_memory: ToolMemoryConfig = field(default_factory=ToolMemoryConfig)
 
@@ -1472,6 +1477,7 @@ class UnifiedConfig:
             storage_backend=_validate_storage_backend(
                 str(data.get("storage_backend") or sync_data.get("storage_backend") or "sqlite")
             ),
+            storage_adapter=normalize_storage_adapter(data.get("storage_adapter", "legacy")),
             postgres=PostgresConfig.from_dict(data.get("postgres", {})),
             proactive=ProactiveConfig.from_dict(data.get("proactive", {})),
             response=ResponseConfig.from_dict(data.get("response", {})),
@@ -1501,6 +1507,7 @@ class UnifiedConfig:
             f'version = "{self.version}"',
             f'current_brain = "{self.current_brain}"',
             f'storage_backend = "{_sanitize_toml_str(self.storage_backend)}"',
+            f'storage_adapter = "{normalize_storage_adapter(self.storage_adapter)}"',
             "",
             "# Brain behavior settings",
             "[brain]",
@@ -1985,7 +1992,7 @@ async def get_shared_storage(brain_name: str | None = None) -> NeuralStorage:
     across CLI, MCP, and other tools. Storage instances are cached
     to avoid connection leaks.
 
-    Respects config.storage_backend: "sqlite" (default), "postgres", or "infinitydb".
+    Respects physical ``storage_backend`` and the separate SQLite ``storage_adapter`` pilot.
 
     Args:
         brain_name: Brain name, or use config's current_brain if None
@@ -2032,7 +2039,12 @@ async def get_shared_storage(brain_name: str | None = None) -> NeuralStorage:
     # Auto-detect is NOT done to avoid breaking existing SQLite setups.
 
     # Default: SQLite backend
-    return await _get_sqlite_storage(config, name, brain_name)
+    return await _get_sqlite_storage(
+        config,
+        name,
+        brain_name,
+        normalize_storage_adapter(getattr(config, "storage_adapter", "legacy")),
+    )
 
 
 async def _migrate_brain_runtime_config(
@@ -2090,23 +2102,38 @@ async def _get_sqlite_storage(
     config: UnifiedConfig,
     name: str,
     brain_name: str | None,
+    storage_adapter: StorageAdapter | None = None,
 ) -> NeuralStorage:
-    """Create or return cached SQLiteStorage (lock-protected against races)."""
+    """Create or return a cached adapter-specific SQLite storage."""
     lock = _get_storage_lock()
     from neural_memory.core.brain import Brain
+    from neural_memory.storage.sql import SQLStorage
+    from neural_memory.storage.sql.sqlite_dialect import SQLiteDialect
     from neural_memory.storage.sqlite_store import SQLiteStorage
+
+    adapter = storage_adapter or normalize_storage_adapter(
+        getattr(config, "storage_adapter", "legacy")
+    )
 
     # Auto-migrate flat-layout DB → brains/ layout (one-time, non-blocking)
     _migrate_legacy_db(config, brain_name)
 
-    db_path = config.get_brain_db_path(brain_name)
-    cache_key = str(db_path)
+    db_path = config.get_brain_db_path(name)
+    cache_key = f"sqlite:{adapter}:{db_path.resolve()}"
 
     async with lock:
         # Return cached storage if available and still open
         if cache_key in _storage_cache:
             cached = _storage_cache[cache_key]
-            if getattr(cached, "_conn", None) is not None:
+            legacy_live = adapter == "legacy" and getattr(cached, "_conn", None) is not None
+            dialect = getattr(cached, "_dialect", None)
+            unified_live = (
+                adapter == "unified"
+                and isinstance(cached, SQLStorage)
+                and isinstance(dialect, SQLiteDialect)
+                and getattr(dialect, "_conn", None) is not None
+            )
+            if legacy_live or unified_live:
                 cached.set_brain(name)
                 return cached
 
@@ -2114,7 +2141,11 @@ async def _get_sqlite_storage(
         db_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Create and initialize storage
-        storage = SQLiteStorage(db_path)
+        storage: NeuralStorage
+        if adapter == "unified":
+            storage = SQLStorage(SQLiteDialect(db_path))
+        else:
+            storage = SQLiteStorage(db_path)
         try:
             await storage.initialize()
         except Exception:

@@ -371,7 +371,6 @@ branch = true
 omit = [
     "src/neural_memory/pro/infinitydb/*",
     "src/neural_memory/pro/storage_adapter*.py",
-    "src/neural_memory/storage/sql/*",
 ]
 
 [tool.coverage.report]

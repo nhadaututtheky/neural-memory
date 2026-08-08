@@ -300,6 +300,11 @@ class NeuronMixin:
                 query += f" AND n.ephemeral = {d.ph(idx)}"
                 params.append(1 if ephemeral else 0)
 
+            if created_before is not None:
+                idx = len(params) + 1
+                query += f" AND n.created_at <= {d.ph(idx)}"
+                params.append(d.serialize_dt(created_before))
+
             idx = len(params) + 1
             # The FTS term is bound at param index 1 — reuse it for the
             # dialect-aware rank expression (SQLite: fts.rank;
@@ -349,6 +354,11 @@ class NeuronMixin:
                 idx = len(params) + 1
                 query += f" AND ephemeral = {d.ph(idx)}"
                 params.append(1 if ephemeral else 0)
+
+            if created_before is not None:
+                idx = len(params) + 1
+                query += f" AND created_at <= {d.ph(idx)}"
+                params.append(d.serialize_dt(created_before))
 
             idx = len(params) + 1
             query += f" ORDER BY id LIMIT {d.ph(idx)} OFFSET {d.ph(idx + 1)}"

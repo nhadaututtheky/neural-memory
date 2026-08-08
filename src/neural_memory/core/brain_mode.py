@@ -2,9 +2,23 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
+
+logger = logging.getLogger(__name__)
+
+StorageAdapter = Literal["legacy", "unified"]
+_VALID_STORAGE_ADAPTERS = {"legacy", "unified"}
+
+
+def normalize_storage_adapter(value: object) -> StorageAdapter:
+    """Validate an adapter selector, warning and falling back to legacy."""
+    if isinstance(value, str) and value in _VALID_STORAGE_ADAPTERS:
+        return value  # type: ignore[return-value]
+    logger.warning("Unknown storage_adapter '%s', falling back to 'legacy'", value)
+    return "legacy"
 
 
 class BrainMode(StrEnum):
@@ -136,6 +150,9 @@ class BrainModeConfig:
     mode: BrainMode = BrainMode.LOCAL
     """Current storage mode."""
 
+    storage_adapter: StorageAdapter = "legacy"
+    """Local SQLite implementation used by LOCAL and HYBRID modes."""
+
     shared: SharedConfig | None = None
     """Configuration for shared mode."""
 
@@ -143,9 +160,12 @@ class BrainModeConfig:
     """Configuration for hybrid mode."""
 
     @classmethod
-    def local(cls) -> BrainModeConfig:
+    def local(cls, storage_adapter: StorageAdapter = "legacy") -> BrainModeConfig:
         """Create local-only configuration."""
-        return cls(mode=BrainMode.LOCAL)
+        return cls(
+            mode=BrainMode.LOCAL,
+            storage_adapter=normalize_storage_adapter(storage_adapter),
+        )
 
     @classmethod
     def shared_mode(
@@ -179,6 +199,7 @@ class BrainModeConfig:
         api_key: str | None = None,
         sync_interval: int = 60,
         strategy: SyncStrategy = SyncStrategy.BIDIRECTIONAL,
+        storage_adapter: StorageAdapter = "legacy",
     ) -> BrainModeConfig:
         """
         Create hybrid (offline-first) configuration.
@@ -192,6 +213,7 @@ class BrainModeConfig:
         """
         return cls(
             mode=BrainMode.HYBRID,
+            storage_adapter=normalize_storage_adapter(storage_adapter),
             hybrid=HybridConfig(
                 local_path=local_path,
                 server_url=server_url,
@@ -227,7 +249,10 @@ class BrainModeConfig:
                 return "***"
             return value
 
-        result: dict[str, Any] = {"mode": self.mode.value}
+        result: dict[str, Any] = {
+            "mode": self.mode.value,
+            "storage_adapter": self.storage_adapter,
+        }
 
         if self.shared:
             result["shared"] = {
@@ -290,4 +315,9 @@ class BrainModeConfig:
                 conflict_resolution=h.get("conflict_resolution", "prefer_local"),
             )
 
-        return cls(mode=mode, shared=shared, hybrid=hybrid)
+        return cls(
+            mode=mode,
+            storage_adapter=normalize_storage_adapter(data.get("storage_adapter", "legacy")),
+            shared=shared,
+            hybrid=hybrid,
+        )

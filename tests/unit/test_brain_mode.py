@@ -181,7 +181,7 @@ class TestBrainModeConfig:
         config = BrainModeConfig.local()
         data = config.to_dict()
 
-        assert data == {"mode": "local"}
+        assert data == {"mode": "local", "storage_adapter": "legacy"}
 
     def test_to_dict_shared(self) -> None:
         """Test serialization of shared config."""
@@ -219,6 +219,15 @@ class TestBrainModeConfig:
 
         assert config.mode == BrainMode.LOCAL
         assert config.shared is None
+        assert config.storage_adapter == "legacy"
+
+    def test_storage_adapter_roundtrip(self) -> None:
+        config = BrainModeConfig.local(storage_adapter="unified")
+
+        restored = BrainModeConfig.from_dict(config.to_dict())
+
+        assert config.storage_adapter == "unified"
+        assert restored.storage_adapter == "unified"
 
     def test_from_dict_shared(self) -> None:
         """Test deserialization of shared config."""

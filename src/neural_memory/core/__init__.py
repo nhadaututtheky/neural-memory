@@ -6,6 +6,7 @@ from neural_memory.core.brain_mode import (
     BrainModeConfig,
     HybridConfig,
     SharedConfig,
+    StorageAdapter,
     SyncStrategy,
 )
 from neural_memory.core.fiber import Fiber
@@ -31,6 +32,7 @@ __all__ = [
     "BrainModeConfig",
     "SharedConfig",
     "HybridConfig",
+    "StorageAdapter",
     "SyncStrategy",
     # Memory structures
     "Fiber",
