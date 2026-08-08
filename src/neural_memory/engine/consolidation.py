@@ -315,6 +315,30 @@ class ConsolidationEngine:
         self._config = config or ConsolidationConfig()
         self._dream_decay_multiplier = dream_decay_multiplier
         self._tier_config = tier_config
+        # Run-scoped fiber snapshot: shared across non-mutating strategies, then
+        # invalidated after any strategy that creates/deletes/rewrites fibers.
+        self._fiber_snapshot: list[Fiber] | None = None
+        self._fiber_snapshot_report_id: int | None = None
+
+    # Strategies that mutate the fiber set — force re-scan after they finish.
+    _FIBER_MUTATING_STRATEGIES: frozenset[ConsolidationStrategy] = frozenset(
+        {
+            ConsolidationStrategy.PRUNE,
+            ConsolidationStrategy.MERGE,
+            ConsolidationStrategy.SUMMARIZE,
+            ConsolidationStrategy.SMART_MERGE,
+            ConsolidationStrategy.LIFECYCLE,
+            ConsolidationStrategy.COMPRESS,
+            ConsolidationStrategy.INTERFERENCE,
+            ConsolidationStrategy.DEDUP,
+            ConsolidationStrategy.MATURE,
+        }
+    )
+
+    def _invalidate_fiber_snapshot(self) -> None:
+        """Drop the run-scoped fiber snapshot (must re-page after mutations)."""
+        self._fiber_snapshot = None
+        self._fiber_snapshot_report_id = None
 
     async def _load_fibers_paged(
         self,
@@ -322,13 +346,25 @@ class ConsolidationEngine:
         *,
         page_size: int = 1000,
         max_pages: int = 50,
+        force_reload: bool = False,
     ) -> list[Fiber]:
         """Load fibers via offset pagination; never silently truncate.
+
+        Within a single ``run()``, the first load is cached and reused until a
+        fiber-mutating strategy invalidates it (or ``force_reload`` is set).
 
         When the scan hits ``max_pages`` with more rows remaining, marks the
         report as partial and emits a truncation warning instead of pretending
         the full set was loaded.
         """
+        report_id = id(report) if report is not None else None
+        if (
+            not force_reload
+            and self._fiber_snapshot is not None
+            and self._fiber_snapshot_report_id == report_id
+        ):
+            return list(self._fiber_snapshot)
+
         page_size = max(1, min(page_size, 1000))
         max_pages = max(1, max_pages)
         all_fibers: list[Fiber] = []
@@ -360,7 +396,10 @@ class ConsolidationEngine:
                 if report is not None:
                     report.fiber_scan_truncated = True
                     report.fiber_scan_warnings.append(msg)
-        return all_fibers
+
+        self._fiber_snapshot = all_fibers
+        self._fiber_snapshot_report_id = report_id
+        return list(all_fibers)
 
     async def _run_strategy(
         self,
@@ -432,6 +471,7 @@ class ConsolidationEngine:
         reference_time = ensure_naive_utc(reference_time) if reference_time else utcnow()
         report = ConsolidationReport(started_at=reference_time, dry_run=dry_run)
         start = time.perf_counter()
+        self._invalidate_fiber_snapshot()
 
         # Normalize string strategies to enum values (callers may pass raw strings)
         normalized: list[ConsolidationStrategy] = [
@@ -493,9 +533,14 @@ class ConsolidationEngine:
                         strategy.value,
                         strategy_elapsed,
                     )
+                    # Fiber-mutating strategies must not leave a stale shared snapshot.
+                    if strategy in self._FIBER_MUTATING_STRATEGIES:
+                        self._invalidate_fiber_snapshot()
             else:
                 continue
             break  # break outer loop if inner broke due to total timeout
+
+        self._invalidate_fiber_snapshot()
 
         if timed_out_strategies:
             report.extra["timed_out_strategies"] = timed_out_strategies

@@ -108,9 +108,12 @@ class FiberStore:
         name_contains: str | None = None,
         fiber_type: str | None = None,
         limit: int = 100,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
-        """Find fibers matching filters."""
+        """Find fibers matching filters with offset/limit pagination."""
         results: list[dict[str, Any]] = []
+        skipped = 0
+        need = max(0, offset)
         for fiber in self._fibers.values():
             if fiber_type is not None and fiber.get("type") != fiber_type:
                 continue
@@ -118,6 +121,9 @@ class FiberStore:
                 name = fiber.get("name", "")
                 if name_contains.lower() not in name.lower():
                     continue
+            if skipped < need:
+                skipped += 1
+                continue
             results.append({**fiber, "neuron_ids": list(fiber.get("neuron_ids", []))})
             if len(results) >= limit:
                 break

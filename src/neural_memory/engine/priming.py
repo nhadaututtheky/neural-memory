@@ -12,12 +12,13 @@ with exponential decay so stale primes fade quickly.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from neural_memory.core.neuron import NeuronType
+from neural_memory.core.neuron import Neuron, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
 
 if TYPE_CHECKING:
@@ -285,37 +286,41 @@ async def prime_from_habits(
     target_ids = list(dict.fromkeys(syn.target_id for syn, _ in pending))
     targets = await storage.get_neurons_batch(target_ids)
 
+    # Collect predictive targets first, then fan-out related lookups concurrently
+    # (no sequential per-target get_neuron; related search is parallelized).
+    work: list[tuple[str, float]] = []  # (target_text, boost)
     for syn, weight in pending:
-        if predicted_count >= MAX_HABIT_TOPICS:
+        if len(work) >= MAX_HABIT_TOPICS:
             break
         target_neuron = targets.get(syn.target_id)
         if target_neuron is None:
             continue
-
-        # Check if this topic is NOT already in the session (truly predictive)
         target_text = target_neuron.content.lower().strip()
         topic_ema = session_state.topic_ema.get(target_text, 0.0)
         if topic_ema >= TOPIC_EMA_THRESHOLD:
             continue  # Already primed by topic primer
+        work.append((target_text, HABIT_PRIME_LEVEL * weight * aggressiveness))
 
+    if not work:
+        return priming_map
+
+    async def _related(text: str, boost: float) -> tuple[str, float, list[Neuron]]:
         try:
-            related = await storage.find_neurons(
-                content_contains=target_text,
-                limit=10,
-            )
+            related = await storage.find_neurons(content_contains=text, limit=10)
+            return text, boost, related
         except Exception:
-            logger.debug("Habit related lookup failed for '%s'", target_text, exc_info=True)
-            continue
+            logger.debug("Habit related lookup failed for '%s'", text, exc_info=True)
+            return text, boost, []
 
-        boost = HABIT_PRIME_LEVEL * weight * aggressiveness
+    results = await asyncio.gather(*[_related(text, boost) for text, boost in work])
+    for _text, boost, related in results:
+        predicted_count += 1
         for n in related:
             n_boost = boost
             if (n.metadata or {}).get("_abstraction_induced"):
                 n_boost = boost * ABSTRACTION_BOOST_MULT
             existing = priming_map.get(n.id, 0.0)
             priming_map[n.id] = max(existing, n_boost)
-
-        predicted_count += 1
 
     return priming_map
 

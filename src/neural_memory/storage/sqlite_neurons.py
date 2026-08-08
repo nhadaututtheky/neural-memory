@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import sqlite3
 from datetime import datetime, timedelta
@@ -14,6 +15,8 @@ from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
     import aiosqlite
+
+logger = logging.getLogger(__name__)
 
 
 def _build_fts_query(search_term: str) -> str:
@@ -449,12 +452,8 @@ class SQLiteNeuronMixin:
             await conn.commit()
         except sqlite3.IntegrityError:
             # Neuron was deleted (e.g., by consolidation pruning) between
-            # state read and state write — skip silently.
-            import logging
-
-            logging.getLogger(__name__).debug(
-                "Skipping state update for deleted neuron %s", state.neuron_id
-            )
+            # state read and state write — skip with a debug log.
+            logger.debug("Skipping state update for deleted neuron %s", state.neuron_id)
 
     async def update_neuron_states_batch(self, states: list[NeuronState]) -> None:
         """Update multiple neuron states in one batch."""
@@ -490,19 +489,50 @@ class SQLiteNeuronMixin:
             )
             await conn.commit()
         except sqlite3.IntegrityError:
-            pass  # Neurons may have been pruned; skip silently as in update_neuron_state
+            # Do not discard the whole batch — fall back per-row so valid
+            # states still land after a partial FK failure.
+            logger.warning(
+                "Batch state update integrity error; falling back per-row (%d states)",
+                len(states),
+            )
+            skipped = 0
+            for state in states:
+                try:
+                    await self.update_neuron_state(state)
+                except sqlite3.IntegrityError:
+                    skipped += 1
+                    logger.warning(
+                        "Skipping state update for pruned neuron %s",
+                        state.neuron_id,
+                    )
+            if skipped:
+                logger.warning(
+                    "Batch state update: %d/%d rows skipped after integrity fallback",
+                    skipped,
+                    len(states),
+                )
 
     async def get_all_neuron_states(self) -> list[NeuronState]:
-        """Get all neuron states for current brain."""
+        """Get all neuron states for current brain (paged; no silent 10k cap)."""
         conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
-
-        async with conn.execute(
-            "SELECT * FROM neuron_states WHERE brain_id = ? LIMIT 10000",
-            (brain_id,),
-        ) as cursor:
-            rows = await cursor.fetchall()
-            return [row_to_neuron_state(row) for row in rows]
+        page_size = 2000
+        offset = 0
+        all_states: list[NeuronState] = []
+        while True:
+            async with conn.execute(
+                "SELECT * FROM neuron_states WHERE brain_id = ? "
+                "ORDER BY neuron_id LIMIT ? OFFSET ?",
+                (brain_id, page_size, offset),
+            ) as cursor:
+                rows = list(await cursor.fetchall())
+            if not rows:
+                break
+            all_states.extend(row_to_neuron_state(row) for row in rows)
+            if len(rows) < page_size:
+                break
+            offset += page_size
+        return all_states
 
     async def suggest_neurons(
         self,

@@ -73,3 +73,28 @@ async def test_load_fibers_paged_sets_truncation_flag() -> None:
     assert len(fibers) == 4
     assert report.fiber_scan_truncated is True
     assert report.fiber_scan_warnings
+
+
+@pytest.mark.asyncio
+async def test_fiber_snapshot_shared_then_invalidated() -> None:
+    engine = ConsolidationEngine(storage=AsyncMock())
+    page = [
+        Fiber.create(
+            neuron_ids={"n1"},
+            synapse_ids=set(),
+            anchor_neuron_id="n1",
+            summary="only",
+        )
+    ]
+    engine._storage.get_fibers = AsyncMock(return_value=page)
+    report = ConsolidationReport()
+
+    first = await engine._load_fibers_paged(report)
+    second = await engine._load_fibers_paged(report)
+    assert first == second
+    # Second call must reuse snapshot (only one storage hit for the first load)
+    assert engine._storage.get_fibers.await_count == 1
+
+    engine._invalidate_fiber_snapshot()
+    await engine._load_fibers_paged(report)
+    assert engine._storage.get_fibers.await_count == 2

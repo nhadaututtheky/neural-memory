@@ -297,6 +297,8 @@ class TestHabitPriming:
         result = await prime_from_habits(storage, session)
         assert "n_jwt1" in result
         assert result["n_jwt1"] <= HABIT_PRIME_LEVEL
+        storage.get_neurons_batch.assert_awaited_once()
+        storage.get_neuron.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_low_weight_synapse_skipped(self):

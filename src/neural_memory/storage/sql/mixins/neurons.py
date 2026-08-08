@@ -639,22 +639,54 @@ class NeuronMixin:
                 args_list,
             )
         except Exception as e:
-            # Only swallow the expected pruned-neuron FK/integrity case;
-            # re-raise transient/connection/serialization errors so a whole
-            # batch of state updates is never silently discarded.
+            # Integrity failures (pruned FK targets) must not discard valid rows.
+            # Fall back per-item; re-raise non-integrity errors immediately.
             if not d.is_integrity_error(e):
                 raise
-            logger.debug("Batch state update partially failed (likely pruned neurons)")
+            logger.warning(
+                "Batch state update hit integrity error; falling back per-row (%d states)",
+                len(states),
+            )
+            skipped = 0
+            for state in states:
+                try:
+                    await self.update_neuron_state(state)
+                except Exception as row_err:
+                    if d.is_integrity_error(row_err):
+                        skipped += 1
+                        logger.warning(
+                            "Skipping state update for pruned neuron %s",
+                            state.neuron_id,
+                        )
+                    else:
+                        raise
+            if skipped:
+                logger.warning(
+                    "Batch state update: %d/%d rows skipped after integrity fallback",
+                    skipped,
+                    len(states),
+                )
 
     async def get_all_neuron_states(self) -> list[NeuronState]:
-        """Get all neuron states for current brain."""
+        """Get all neuron states for current brain (paged; no silent 10k cap)."""
         d = self._dialect
         brain_id = self._get_brain_id()
-        rows = await d.fetch_all(
-            f"SELECT * FROM neuron_states WHERE brain_id = {d.ph(1)} LIMIT 10000",
-            (brain_id,),
-        )
-        return [row_to_neuron_state(d, row) for row in rows]
+        page_size = 2000
+        offset = 0
+        all_states: list[NeuronState] = []
+        while True:
+            rows = await d.fetch_all(
+                f"SELECT * FROM neuron_states WHERE brain_id = {d.ph(1)} "
+                f"ORDER BY neuron_id LIMIT {d.ph(2)} OFFSET {d.ph(3)}",
+                (brain_id, page_size, offset),
+            )
+            if not rows:
+                break
+            all_states.extend(row_to_neuron_state(d, row) for row in rows)
+            if len(rows) < page_size:
+                break
+            offset += page_size
+        return all_states
 
     async def suggest_neurons(
         self,

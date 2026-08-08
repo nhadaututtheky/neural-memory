@@ -102,10 +102,19 @@ class DecayManager:
             pinned_neuron_ids = await storage.get_pinned_neuron_ids()
 
         # Preload grounded neuron IDs — grounded neurons resist all decay
+        # Page through find_neurons so large brains are not silently truncated.
         grounded_neuron_ids: set[str] = set()
         try:
-            all_neurons = await storage.find_neurons(limit=5000)
-            grounded_neuron_ids = {n.id for n in all_neurons if n.grounded}
+            page_size = 1000
+            offset = 0
+            while True:
+                page = await storage.find_neurons(limit=page_size, offset=offset)
+                if not page:
+                    break
+                grounded_neuron_ids.update(n.id for n in page if n.grounded)
+                if len(page) < page_size:
+                    break
+                offset += page_size
         except Exception:
             logger.debug("Grounded neuron preload failed (non-critical)", exc_info=True)
 
@@ -205,8 +214,13 @@ class DecayManager:
 
         synapse_updates: list[Any] = []
         for synapse in synapses:
-            # Skip synapses connected to pinned neurons
-            if synapse.source_id in pinned_neuron_ids or synapse.target_id in pinned_neuron_ids:
+            # Skip synapses connected to pinned or grounded neurons
+            if (
+                synapse.source_id in pinned_neuron_ids
+                or synapse.target_id in pinned_neuron_ids
+                or synapse.source_id in grounded_neuron_ids
+                or synapse.target_id in grounded_neuron_ids
+            ):
                 continue
 
             # Use last_activated if available, otherwise fall back to created_at

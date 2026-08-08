@@ -236,13 +236,26 @@ class PostgresNeuronMixin(PostgresBaseMixin):
         return {str(r["neuron_id"]): row_to_neuron_state(r) for r in rows}
 
     async def get_all_neuron_states(self) -> list[NeuronState]:
-        """Get all neuron states for current brain."""
+        """Get all neuron states for current brain (paged; no silent 10k cap)."""
         brain_id = self._get_brain_id()
-        rows = await self._query_ro(
-            "SELECT * FROM neuron_states WHERE brain_id = $1 LIMIT 10000",
-            brain_id,
-        )
-        return [row_to_neuron_state(r) for r in rows]
+        page_size = 2000
+        offset = 0
+        all_states: list[NeuronState] = []
+        while True:
+            rows = await self._query_ro(
+                "SELECT * FROM neuron_states WHERE brain_id = $1 "
+                "ORDER BY neuron_id LIMIT $2 OFFSET $3",
+                brain_id,
+                page_size,
+                offset,
+            )
+            if not rows:
+                break
+            all_states.extend(row_to_neuron_state(r) for r in rows)
+            if len(rows) < page_size:
+                break
+            offset += page_size
+        return all_states
 
     async def update_neuron_state(self, state: NeuronState) -> None:
         brain_id = self._get_brain_id()

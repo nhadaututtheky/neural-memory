@@ -1032,12 +1032,14 @@ class InfinityDB:
         name_contains: str | None = None,
         fiber_type: str | None = None,
         limit: int = 100,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
-        """Find fibers matching filters."""
+        """Find fibers matching filters with offset/limit pagination."""
         return self._fibers.find_fibers(
             name_contains=name_contains,
             fiber_type=fiber_type,
             limit=limit,
+            offset=offset,
         )
 
     async def add_neuron_to_fiber(self, fiber_id: str, neuron_id: str) -> bool:

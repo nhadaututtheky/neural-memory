@@ -748,21 +748,32 @@ class InfinityDBStorage(
         descending: bool = True,
         offset: int = 0,
     ) -> list[Fiber]:
-        # Fetch extra to allow sorting, then trim with offset/limit
-        fetch_limit = min(max((limit + max(0, offset)) * 3, limit + limit), 1000)
-        results = await self.db.find_fibers(limit=fetch_limit)
+        """Page fibers without a silent global 1k ceiling that drops later pages."""
+        limit = min(max(1, limit), 1000)
+        offset = max(0, offset)
+        fetch_limit = min(max(limit + offset, (offset + limit) * 2), offset + limit * 5 + 50)
+        results = await self.db.find_fibers(limit=fetch_limit, offset=0)
         fibers = [_meta_to_fiber(f) for f in results]
-        # Sort by requested field
         sort_key = {
             "created_at": lambda f: f.created_at or _EPOCH,
             "salience": lambda f: f.salience,
             "frequency": lambda f: f.frequency,
         }.get(order_by, lambda f: f.created_at or _EPOCH)
         fibers.sort(key=sort_key, reverse=descending)
-        start = max(0, offset)
-        return fibers[start : start + limit]
+        return fibers[offset : offset + limit]
 
     async def get_fibers_by_ids(self, fiber_ids: list[str]) -> dict[str, Fiber]:
+        """Batch-fetch fibers via in-memory FiberStore when available."""
+        if not fiber_ids:
+            return {}
+        store = getattr(self.db, "_fibers", None)
+        if store is not None and hasattr(store, "get_fiber"):
+            results: dict[str, Fiber] = {}
+            for fiber_id in fiber_ids:
+                raw = store.get_fiber(fiber_id)
+                if raw is not None:
+                    results[fiber_id] = _meta_to_fiber(raw)
+            return results
         results: dict[str, Fiber] = {}
         for fiber_id in fiber_ids:
             fiber = await self.get_fiber(fiber_id)
