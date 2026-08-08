@@ -82,6 +82,9 @@ class NeuronMixin:
     - ``invalidate_merkle_prefix(...)`` (from merkle mixin)
     """
 
+    # SimHash snapshot: (brain_id, data_version|None, monotonic_ts, hashes)
+    _hash_snapshot: tuple[str, int | None, float, list[tuple[str, int]]] | None
+
     if TYPE_CHECKING:
         _dialect: Dialect
         _neuron_cache: NeuronLookupCache
@@ -189,7 +192,7 @@ class NeuronMixin:
 
     def _invalidate_hash_snapshot(self) -> None:
         """Drop cached SimHash snapshot (writes / brain switch)."""
-        self._hash_snapshot = None  # type: ignore[attr-defined]
+        self._hash_snapshot = None
 
     async def _read_sqlite_data_version(self) -> int | None:
         """Return SQLite PRAGMA data_version, or None on non-SQLite backends."""
@@ -235,7 +238,7 @@ class NeuronMixin:
             (brain_id,),
         )
         hashes = [(str(row["id"]), int(row["content_hash"])) for row in rows]
-        self._hash_snapshot = (brain_id, data_version, time.monotonic(), hashes)  # type: ignore[attr-defined]
+        self._hash_snapshot = (brain_id, data_version, time.monotonic(), hashes)
         return list(hashes)
 
     async def find_neurons_exact_batch(
