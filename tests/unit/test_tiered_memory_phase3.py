@@ -263,7 +263,8 @@ class TestLifecycleDecay:
 
         storage.get_all_neuron_states = AsyncMock(return_value=[state])
         storage.get_all_synapses = AsyncMock(return_value=[])
-        storage.update_neuron_state = AsyncMock()
+        storage.update_neuron_states_batch = AsyncMock()
+        storage.update_synapses_batch = AsyncMock()
 
         hot_tm = TypedMemory.create(fiber_id="f1", memory_type=MemoryType.FACT, tier="hot")
         fiber_mock = MagicMock()
@@ -275,16 +276,17 @@ class TestLifecycleDecay:
             return []
 
         storage.find_typed_memories = AsyncMock(side_effect=find_typed)
-        storage.get_fiber = AsyncMock(return_value=fiber_mock)
+        storage.get_fibers_by_ids = AsyncMock(return_value={"f1": fiber_mock})
 
         report = await manager.apply_decay(storage, reference_time=ref_time)
 
-        # Verify decay processed and applied
+        # Verify decay processed and applied via batch write
         assert report.neurons_processed == 1
         assert report.neurons_decayed == 1
-        assert storage.update_neuron_state.called
-        updated = storage.update_neuron_state.call_args[0][0]
-        assert updated.activation_level >= 0.5
+        assert storage.update_neuron_states_batch.called
+        updated_batch = storage.update_neuron_states_batch.call_args[0][0]
+        assert len(updated_batch) == 1
+        assert updated_batch[0].activation_level >= 0.5
 
     @pytest.mark.asyncio
     async def test_cold_neuron_decays_faster(self) -> None:

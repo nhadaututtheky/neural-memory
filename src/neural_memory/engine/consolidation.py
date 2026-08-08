@@ -1409,7 +1409,7 @@ class ConsolidationEngine:
         maturations = await self._storage.find_maturations()
         maturation_map = {m.fiber_id: m for m in maturations}
 
-        fibers = await self._storage.get_fibers(limit=10000)
+        fibers = await self._load_fibers_paged(report)
         patterns, extraction_report = extract_patterns(
             fibers=fibers,
             maturations=maturation_map,
@@ -1457,7 +1457,7 @@ class ConsolidationEngine:
         max_backfill = 2000  # Safety cap to avoid runaway
 
         # Fetch fibers in one batch (get_fibers has no offset param; limit=1000 is storage cap)
-        fibers = await self._storage.get_fibers(limit=1000)
+        fibers = await self._load_fibers_paged(report)
         candidates = [f for f in fibers if not f.essence]
 
         backfilled = 0
@@ -1606,7 +1606,7 @@ class ConsolidationEngine:
             neurons = await self._storage.get_neurons_batch(list(neuron_ids))
             content_map = {nid: n.content for nid, n in neurons.items()}
 
-            fibers = await self._storage.get_fibers(limit=10000)
+            fibers = await self._load_fibers_paged(report)
             existing_tags: set[str] = set()
             for f in fibers:
                 existing_tags |= f.tags
@@ -2172,7 +2172,7 @@ class ConsolidationEngine:
         - Never-recalled after 90 days + not pinned → ``_prune_candidate: true``
         """
         try:
-            fibers = await self._storage.get_fibers(limit=10000)
+            fibers = await self._load_fibers_paged(report)
         except Exception:
             logger.error("LIFECYCLE fiber pass: failed to fetch fibers", exc_info=True)
             return
