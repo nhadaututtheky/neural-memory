@@ -43,7 +43,9 @@ PINNED_TOP_K = 10
 PINNED_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 PINNED_EMBEDDING_REVISION = "c9745ed1d9f207416be6d2e6f8de32d1f16199bf"
 PINNED_RETRIEVAL_PROFILE = "longmemeval-reflex-v1"
-PINNED_SOURCE_ARTIFACT_SHA256 = "9bec85547f78f347cc224afda90f83864f066d5b5ac01e7bec4b8691db9f6204"
+# Canonical pin is the Git-blob / LF bytes of the source artifact.
+# Never pin a Windows autocrlf (CRLF) checkout hash — CI checks out LF.
+PINNED_SOURCE_ARTIFACT_SHA256 = "80da95d7dabe772f494932d21c6940345254f68b6accf394e817d1b917e83522"
 PINNED_SOURCE_PROVENANCE = "legacy_regression_anchor"
 PINNED_QUALITY_FLOORS = {"recall_at_5": 0.466, "ndcg_at_5": 0.464}
 PINNED_LAST_GOOD = {"recall_at_5": 0.84, "ndcg_at_5": 0.6253950480719784}

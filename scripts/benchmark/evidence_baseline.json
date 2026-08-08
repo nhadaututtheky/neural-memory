@@ -6,7 +6,7 @@
   "embedding_model": "all-MiniLM-L6-v2",
   "embedding_revision": "c9745ed1d9f207416be6d2e6f8de32d1f16199bf",
   "source_artifact": "scripts/benchmark/results/nm_inprocess_20260418_075113.json",
-  "source_artifact_sha256": "9bec85547f78f347cc224afda90f83864f066d5b5ac01e7bec4b8691db9f6204",
+  "source_artifact_sha256": "80da95d7dabe772f494932d21c6940345254f68b6accf394e817d1b917e83522",
   "source_git_sha": "33bc46c88ac274e9c2438c1cf225ebf23022378c",
   "source_git_sha_basis": "closest repository commit preceding the artifact timestamp; legacy artifact omitted Git provenance",
   "source_provenance": "legacy_regression_anchor",

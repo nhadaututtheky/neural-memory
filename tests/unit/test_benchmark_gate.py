@@ -334,11 +334,12 @@ def test_pinned_baseline_matches_source_artifact_and_corpus() -> None:
     source_metrics = compute_retrieval_metrics(source_results)
     source_ids = [row["question_id"] for row in source["results"]]
 
-    assert (
-        hashlib.sha256(source_path.read_bytes()).hexdigest() == baseline["source_artifact_sha256"]
-    )
+    # Hash Git-canonical LF bytes so Windows autocrlf checkouts match CI/Linux.
+    source_bytes = source_path.read_bytes().replace(b"\r\n", b"\n")
+    assert hashlib.sha256(source_bytes).hexdigest() == baseline["source_artifact_sha256"]
     if corpus_path.exists():
-        assert hashlib.sha256(corpus_path.read_bytes()).hexdigest() == baseline["corpus_sha256"]
+        corpus_bytes = corpus_path.read_bytes().replace(b"\r\n", b"\n")
+        assert hashlib.sha256(corpus_bytes).hexdigest() == baseline["corpus_sha256"]
     assert source_metrics.recall_at_5 == baseline["metrics"]["recall_at_5"]
     assert source_metrics.ndcg_at_5 == baseline["metrics"]["ndcg_at_5"]
     assert source_ids == baseline["source_instance_ids"]

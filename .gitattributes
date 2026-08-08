@@ -1,0 +1,4 @@
+# Benchmark evidence artifacts are content-addressed by SHA-256 of LF bytes.
+# Force LF so Windows autocrlf checkouts do not re-pin the wrong hash.
+scripts/benchmark/results/** text eol=lf
+scripts/benchmark/evidence_baseline.json text eol=lf
