@@ -132,11 +132,9 @@ class DecayManager:
                 for tm in boundary_mems:
                     fiber_tier_pairs.append((tm.fiber_id, "hot"))
 
-                # Deduplicate fiber IDs and resolve fibers
-                unique_fids = {fid for fid, _ in fiber_tier_pairs}
-                fiber_cache: dict[str, Any] = {}
-                for fid in unique_fids:
-                    fiber_cache[fid] = await storage.get_fiber(fid)
+                # Deduplicate fiber IDs and batch-resolve fibers
+                unique_fids = list({fid for fid, _ in fiber_tier_pairs})
+                fiber_cache = await storage.get_fibers_by_ids(unique_fids)
 
                 # Build neuron→tier map (boundary "hot" entries added last → override)
                 for fid, tier_val in fiber_tier_pairs:
@@ -151,6 +149,7 @@ class DecayManager:
         states = await storage.get_all_neuron_states()
         report.neurons_processed = len(states)
 
+        neuron_updates: list[Any] = []
         for state in states:
             # Skip neurons belonging to pinned (KB) fibers or grounded neurons
             if state.neuron_id in pinned_neuron_ids or state.neuron_id in grounded_neuron_ids:
@@ -195,12 +194,16 @@ class DecayManager:
                         activation_level=final_level,
                         last_activated=reference_time,
                     )
-                    await storage.update_neuron_state(decayed_state)
+                    neuron_updates.append(decayed_state)
+
+        if neuron_updates:
+            await storage.update_neuron_states_batch(neuron_updates)
 
         # Get all synapses and apply decay
         synapses = await storage.get_all_synapses()
         report.synapses_processed = len(synapses)
 
+        synapse_updates: list[Any] = []
         for synapse in synapses:
             # Skip synapses connected to pinned neurons
             if synapse.source_id in pinned_neuron_ids or synapse.target_id in pinned_neuron_ids:
@@ -239,12 +242,13 @@ class DecayManager:
                     report.synapses_pruned += 1
                     if not dry_run:
                         # Zero out weight for pruned synapses
-                        pruned_synapse = synapse.decay(0.0)
-                        await storage.update_synapse(pruned_synapse)
+                        synapse_updates.append(synapse.decay(0.0))
 
                 elif not dry_run:
-                    decayed_synapse = synapse.decay(decay_factor)
-                    await storage.update_synapse(decayed_synapse)
+                    synapse_updates.append(synapse.decay(decay_factor))
+
+        if synapse_updates:
+            await storage.update_synapses_batch(synapse_updates)
 
         report.duration_ms = (time.perf_counter() - start_time) * 1000
         return report

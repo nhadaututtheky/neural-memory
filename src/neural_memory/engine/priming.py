@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from neural_memory.core.neuron import NeuronType
-from neural_memory.core.synapse import SynapseType
+from neural_memory.core.synapse import Synapse, SynapseType
 
 if TYPE_CHECKING:
     from neural_memory.engine.session_state import SessionState
@@ -252,12 +252,12 @@ async def prime_from_habits(
     priming_map: dict[str, float] = {}
     predicted_count = 0
 
+    # Collect concept topics + BEFORE synapses first, then batch-fetch targets.
+    pending: list[tuple[Synapse, float]] = []  # (synapse, weight already filtered)
     for topic in top_topics:
-        if predicted_count >= MAX_HABIT_TOPICS:
+        if predicted_count + len(pending) >= MAX_HABIT_TOPICS:
             break
-
         try:
-            # Find the CONCEPT neuron for this topic
             concept_neurons = await storage.find_neurons(
                 content_exact=topic,
                 type=NeuronType.CONCEPT,
@@ -265,49 +265,57 @@ async def prime_from_habits(
             )
             if not concept_neurons:
                 continue
-
             concept = concept_neurons[0]
-
-            # Get outgoing BEFORE synapses (topic_a → topic_b pattern)
             synapses = await storage.get_synapses(
                 source_id=concept.id,
                 type=SynapseType.BEFORE,
             )
-
             for syn in synapses:
                 if syn.weight < HABIT_CONFIDENCE_THRESHOLD:
                     continue
-                if predicted_count >= MAX_HABIT_TOPICS:
+                if predicted_count + len(pending) >= MAX_HABIT_TOPICS:
                     break
-
-                # The target is the predicted next topic
-                target_neuron = await storage.get_neuron(syn.target_id)
-                if target_neuron is None:
-                    continue
-
-                # Check if this topic is NOT already in the session (truly predictive)
-                target_text = target_neuron.content.lower().strip()
-                topic_ema = session_state.topic_ema.get(target_text, 0.0)
-                if topic_ema >= TOPIC_EMA_THRESHOLD:
-                    continue  # Already primed by topic primer
-
-                # Find related neurons for this predicted topic
-                related = await storage.find_neurons(
-                    content_contains=target_text,
-                    limit=10,
-                )
-                boost = HABIT_PRIME_LEVEL * syn.weight * aggressiveness
-                for n in related:
-                    n_boost = boost
-                    if (n.metadata or {}).get("_abstraction_induced"):
-                        n_boost = boost * ABSTRACTION_BOOST_MULT
-                    existing = priming_map.get(n.id, 0.0)
-                    priming_map[n.id] = max(existing, n_boost)
-
-                predicted_count += 1
-
+                pending.append((syn, syn.weight))
         except Exception:
             logger.debug("Habit priming failed for topic '%s'", topic, exc_info=True)
+
+    if not pending:
+        return priming_map
+
+    target_ids = list(dict.fromkeys(syn.target_id for syn, _ in pending))
+    targets = await storage.get_neurons_batch(target_ids)
+
+    for syn, weight in pending:
+        if predicted_count >= MAX_HABIT_TOPICS:
+            break
+        target_neuron = targets.get(syn.target_id)
+        if target_neuron is None:
+            continue
+
+        # Check if this topic is NOT already in the session (truly predictive)
+        target_text = target_neuron.content.lower().strip()
+        topic_ema = session_state.topic_ema.get(target_text, 0.0)
+        if topic_ema >= TOPIC_EMA_THRESHOLD:
+            continue  # Already primed by topic primer
+
+        try:
+            related = await storage.find_neurons(
+                content_contains=target_text,
+                limit=10,
+            )
+        except Exception:
+            logger.debug("Habit related lookup failed for '%s'", target_text, exc_info=True)
+            continue
+
+        boost = HABIT_PRIME_LEVEL * weight * aggressiveness
+        for n in related:
+            n_boost = boost
+            if (n.metadata or {}).get("_abstraction_induced"):
+                n_boost = boost * ABSTRACTION_BOOST_MULT
+            existing = priming_map.get(n.id, 0.0)
+            priming_map[n.id] = max(existing, n_boost)
+
+        predicted_count += 1
 
     return priming_map
 

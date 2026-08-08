@@ -10,6 +10,7 @@ from typing import Any
 
 import aiosqlite
 
+from neural_memory.storage.read_pool import DEFAULT_POOL_SIZE, ReadPool
 from neural_memory.storage.sql.dialect import Dialect
 
 logger = logging.getLogger(__name__)
@@ -22,9 +23,16 @@ class SQLiteDialect(Dialect):
     Handles commit after each write, FTS5 virtual tables, and WAL mode.
     """
 
-    def __init__(self, db_path: str | Path) -> None:
+    def __init__(
+        self,
+        db_path: str | Path,
+        *,
+        pool_size: int = DEFAULT_POOL_SIZE,
+    ) -> None:
         self._db_path = Path(db_path).resolve()
         self._conn: aiosqlite.Connection | None = None
+        self._read_pool: ReadPool | None = None
+        self._pool_size = pool_size
         self._has_fts: bool = False
         self._in_transaction: bool = False
 
@@ -73,9 +81,17 @@ class SQLiteDialect(Dialect):
         await self._conn.execute("PRAGMA cache_size=-8000")
         await self._conn.commit()
 
+        # Reader pool (WAL): parallel reads outside explicit transactions.
+        # Inside transaction(), reads stay on the writer for read-your-writes.
+        self._read_pool = ReadPool(self._db_path, pool_size=self._pool_size)
+        await self._read_pool.initialize()
+
         logger.info("SQLite dialect initialized: %s", self._db_path)
 
     async def close(self) -> None:
+        if self._read_pool is not None:
+            await self._read_pool.close()
+            self._read_pool = None
         if self._conn:
             await self._conn.close()
             self._conn = None
@@ -84,6 +100,21 @@ class SQLiteDialect(Dialect):
         if self._conn is None:
             raise RuntimeError("SQLiteDialect not initialized — call initialize() first")
         return self._conn
+
+    def _read_conn(self) -> aiosqlite.Connection:
+        """Prefer a pooled reader; fall back to writer if pool unavailable."""
+        if self._read_pool is not None and not self._in_transaction:
+            return self._read_pool.acquire()
+        return self._ensure_conn()
+
+    @asynccontextmanager
+    async def _read_connection(self) -> AsyncIterator[aiosqlite.Connection]:
+        """Txn-aware read connection CM (pool outside txn, writer inside)."""
+        if self._read_pool is not None and not self._in_transaction:
+            async with self._read_pool.connection() as conn:
+                yield conn
+            return
+        yield self._ensure_conn()
 
     # ------------------------------------------------------------------
     # Query execution
@@ -97,22 +128,22 @@ class SQLiteDialect(Dialect):
         return ""
 
     async def fetch_all(self, sql: str, params: Sequence[Any] = ()) -> list[dict[str, Any]]:
-        conn = self._ensure_conn()
-        async with conn.execute(sql, tuple(params)) as cursor:
-            rows = await cursor.fetchall()
-            if not rows:
-                return []
-            columns = [desc[0] for desc in cursor.description]
-            return [dict(zip(columns, row, strict=False)) for row in rows]
+        async with self._read_connection() as conn:
+            async with conn.execute(sql, tuple(params)) as cursor:
+                rows = await cursor.fetchall()
+                if not rows:
+                    return []
+                columns = [desc[0] for desc in cursor.description]
+                return [dict(zip(columns, row, strict=False)) for row in rows]
 
     async def fetch_one(self, sql: str, params: Sequence[Any] = ()) -> dict[str, Any] | None:
-        conn = self._ensure_conn()
-        async with conn.execute(sql, tuple(params)) as cursor:
-            row = await cursor.fetchone()
-            if row is None:
-                return None
-            columns = [desc[0] for desc in cursor.description]
-            return dict(zip(columns, row, strict=False))
+        async with self._read_connection() as conn:
+            async with conn.execute(sql, tuple(params)) as cursor:
+                row = await cursor.fetchone()
+                if row is None:
+                    return None
+                columns = [desc[0] for desc in cursor.description]
+                return dict(zip(columns, row, strict=False))
 
     async def execute_many(self, sql: str, args_list: Sequence[Sequence[Any]]) -> None:
         conn = self._ensure_conn()

@@ -134,6 +134,31 @@ async def test_get_neuron_hashes_does_not_break_pool() -> None:
 
 
 @pytest.mark.asyncio
+async def test_unified_dialect_uses_read_pool_outside_txn() -> None:
+    """Outside a transaction, fetch_all must use the pooled reader."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        dialect = SQLiteDialect(Path(tmpdir) / "pool.db", pool_size=2)
+        await dialect.initialize()
+        try:
+            assert dialect._read_pool is not None
+            assert dialect._read_pool.size == 2
+            await dialect.execute(
+                "CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)",
+            )
+            await dialect.execute("INSERT INTO t (v) VALUES ('a')")
+            rows = await dialect.fetch_all("SELECT v FROM t")
+            assert rows == [{"v": "a"}]
+
+            # Inside a transaction, reads still see uncommitted writer state.
+            async with dialect.transaction():
+                await dialect.execute("INSERT INTO t (v) VALUES ('b')")
+                inside = await dialect.fetch_all("SELECT v FROM t ORDER BY id")
+                assert [r["v"] for r in inside] == ["a", "b"]
+        finally:
+            await dialect.close()
+
+
+@pytest.mark.asyncio
 async def test_unified_get_neuron_hashes_survives_repeated_reads() -> None:
     """Unified SQLStorage get_neuron_hashes must stay usable under reuse."""
     with tempfile.TemporaryDirectory() as tmpdir:

@@ -163,6 +163,9 @@ class ConsolidationReport:
     essences_generated: int = 0
     merge_details: list[MergeDetail] = field(default_factory=list)
     dry_run: bool = False
+    # True when a paged fiber scan hit max_pages and more rows may remain.
+    fiber_scan_truncated: bool = False
+    fiber_scan_warnings: list[str] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
 
     def summary(self) -> str:
@@ -189,6 +192,10 @@ class ConsolidationReport:
             f"  Tokens saved: {self.tokens_saved}",
             f"  Duration: {self.duration_ms:.1f}ms",
         ]
+        if self.fiber_scan_truncated:
+            lines.append("  WARNING: fiber scan truncated (partial consolidation)")
+        for warning in self.fiber_scan_warnings:
+            lines.append(f"  WARNING: {warning}")
         if self.merge_details:
             lines.append("  Merge details:")
             for detail in self.merge_details:
@@ -308,6 +315,52 @@ class ConsolidationEngine:
         self._config = config or ConsolidationConfig()
         self._dream_decay_multiplier = dream_decay_multiplier
         self._tier_config = tier_config
+
+    async def _load_fibers_paged(
+        self,
+        report: ConsolidationReport | None = None,
+        *,
+        page_size: int = 1000,
+        max_pages: int = 50,
+    ) -> list[Fiber]:
+        """Load fibers via offset pagination; never silently truncate.
+
+        When the scan hits ``max_pages`` with more rows remaining, marks the
+        report as partial and emits a truncation warning instead of pretending
+        the full set was loaded.
+        """
+        page_size = max(1, min(page_size, 1000))
+        max_pages = max(1, max_pages)
+        all_fibers: list[Fiber] = []
+        for page in range(max_pages):
+            page_rows = await self._storage.get_fibers(
+                limit=page_size,
+                order_by="created_at",
+                descending=True,
+                offset=page * page_size,
+            )
+            if not page_rows:
+                break
+            all_fibers.extend(page_rows)
+            if len(page_rows) < page_size:
+                break
+        else:
+            more = await self._storage.get_fibers(
+                limit=1,
+                order_by="created_at",
+                descending=True,
+                offset=max_pages * page_size,
+            )
+            if more:
+                msg = (
+                    f"fiber scan truncated at {len(all_fibers)} rows "
+                    f"(page_size={page_size}, max_pages={max_pages})"
+                )
+                logger.warning("%s; consolidation is partial", msg)
+                if report is not None:
+                    report.fiber_scan_truncated = True
+                    report.fiber_scan_warnings.append(msg)
+        return all_fibers
 
     async def _run_strategy(
         self,
@@ -576,7 +629,7 @@ class ConsolidationEngine:
             pinned_neuron_ids = await self._storage.get_pinned_neuron_ids()
 
         # Build fiber salience cache for high-salience protection
-        fibers_for_salience = await self._storage.get_fibers(limit=10000)
+        fibers_for_salience = await self._load_fibers_paged(report)
         fiber_salience_cache: dict[str, list[Fiber]] = {}
         semantic_neuron_ids: set[str] = set()
         for fib in fibers_for_salience:
@@ -814,7 +867,7 @@ class ConsolidationEngine:
         Instead of O(n²) pairwise comparison, builds a neuron→fiber inverted
         index to find only fibers that actually share neurons.
         """
-        fibers = await self._storage.get_fibers(limit=10000)
+        fibers = await self._load_fibers_paged(report)
         if len(fibers) < 2:
             return
 
@@ -1102,7 +1155,7 @@ class ConsolidationEngine:
         dry_run: bool,
     ) -> None:
         """Create concept neurons for tag-based clusters using inverted index."""
-        fibers = await self._storage.get_fibers(limit=10000)
+        fibers = await self._load_fibers_paged(report)
         if len(fibers) < self._config.summarize_min_cluster_size:
             return
 

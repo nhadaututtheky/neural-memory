@@ -291,7 +291,7 @@ class TestHabitPriming:
             ]
         )
         storage.get_synapses = AsyncMock(return_value=[before_synapse])
-        storage.get_neuron = AsyncMock(return_value=jwt_concept)
+        storage.get_neurons_batch = AsyncMock(return_value={jwt_concept.id: jwt_concept})
 
         session = _make_session(topic_ema={"auth": 0.8})
         result = await prime_from_habits(storage, session)
@@ -323,7 +323,7 @@ class TestHabitPriming:
         before_synapse = FakeSynapse(source_id="c_auth", target_id="c_jwt", weight=0.9)
         storage.find_neurons = AsyncMock(return_value=[auth_concept])
         storage.get_synapses = AsyncMock(return_value=[before_synapse])
-        storage.get_neuron = AsyncMock(return_value=jwt_concept)
+        storage.get_neurons_batch = AsyncMock(return_value={jwt_concept.id: jwt_concept})
 
         # jwt is already established in session → skip
         session = _make_session(topic_ema={"auth": 0.8, "jwt": 0.7})
@@ -353,8 +353,8 @@ class TestHabitPriming:
 
         storage.find_neurons = mock_find_neurons
         storage.get_synapses = AsyncMock(return_value=synapses)
-        storage.get_neuron = AsyncMock(
-            side_effect=lambda nid: next((n for n in target_neurons if n.id == nid), None)
+        storage.get_neurons_batch = AsyncMock(
+            return_value={n.id: n for n in target_neurons},
         )
 
         session = _make_session(topic_ema={"auth": 0.8})
