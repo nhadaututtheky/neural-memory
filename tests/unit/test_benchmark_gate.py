@@ -7,6 +7,8 @@ from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
 
+import pytest
+
 from scripts.benchmark.evidence import (
     PINNED_BACKEND,
     PINNED_EMBEDDING_MODEL,
@@ -340,8 +342,13 @@ def test_pinned_baseline_matches_source_artifact_and_corpus() -> None:
     if corpus_path.exists():
         corpus_bytes = corpus_path.read_bytes().replace(b"\r\n", b"\n")
         assert hashlib.sha256(corpus_bytes).hexdigest() == baseline["corpus_sha256"]
-    assert source_metrics.recall_at_5 == baseline["metrics"]["recall_at_5"]
-    assert source_metrics.ndcg_at_5 == baseline["metrics"]["ndcg_at_5"]
+    # Recomputed floats can drift 1 ULP across platforms; pin equality within eps.
+    assert source_metrics.recall_at_5 == pytest.approx(
+        float(baseline["metrics"]["recall_at_5"]), abs=1e-12
+    )
+    assert source_metrics.ndcg_at_5 == pytest.approx(
+        float(baseline["metrics"]["ndcg_at_5"]), abs=1e-12
+    )
     assert source_ids == baseline["source_instance_ids"]
     assert len(source_ids) == len(set(source_ids))
     assert set(source_ids) == set(baseline["instance_ids"])

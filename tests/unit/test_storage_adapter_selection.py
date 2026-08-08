@@ -49,11 +49,13 @@ def test_invalid_persisted_adapter_warns_and_falls_back(
     )
     config_path.write_text(content, encoding="utf-8")
 
-    with caplog.at_level(logging.WARNING):
+    with caplog.at_level(logging.WARNING, logger="neural_memory.core.brain_mode"):
         loaded = UnifiedConfig.load(config_path)
 
     assert loaded.storage_adapter == "legacy"
-    assert "Unknown storage_adapter 'mystery'" in caplog.text
+    assert any(
+        "Unknown storage_adapter 'mystery'" in record.getMessage() for record in caplog.records
+    )
 
 
 @pytest.mark.asyncio
