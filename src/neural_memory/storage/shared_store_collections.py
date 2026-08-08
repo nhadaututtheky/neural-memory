@@ -126,15 +126,26 @@ class SharedFiberBrainMixin:
         limit: int = 10,
         order_by: Literal["created_at", "salience", "frequency"] = "created_at",
         descending: bool = True,
+        offset: int = 0,
     ) -> list[Fiber]:
-        """Get fibers with ordering."""
+        """Get fibers with ordering and offset pagination."""
         params = {
             "limit": limit,
             "order_by": order_by,
             "descending": descending,
+            "offset": offset,
         }
         result = await self._request("GET", "/memory/fibers", params=params)
         return [dict_to_fiber(f) for f in result.get("fibers", [])]
+
+    async def get_fibers_by_ids(self, fiber_ids: list[str]) -> dict[str, Fiber]:
+        """Batch-fetch fibers; falls back to sequential GET when API lacks batch."""
+        results: dict[str, Fiber] = {}
+        for fiber_id in fiber_ids:
+            fiber = await self.get_fiber(fiber_id)
+            if fiber is not None:
+                results[fiber_id] = fiber
+        return results
 
     # ========== Brain Operations ==========
 

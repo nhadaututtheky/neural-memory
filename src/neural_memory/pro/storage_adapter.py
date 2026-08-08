@@ -746,9 +746,10 @@ class InfinityDBStorage(
         limit: int = 10,
         order_by: Literal["created_at", "salience", "frequency"] = "created_at",
         descending: bool = True,
+        offset: int = 0,
     ) -> list[Fiber]:
-        # Fetch extra to allow sorting, then trim to limit
-        fetch_limit = min(limit * 3, 300)
+        # Fetch extra to allow sorting, then trim with offset/limit
+        fetch_limit = min(max((limit + max(0, offset)) * 3, limit + limit), 1000)
         results = await self.db.find_fibers(limit=fetch_limit)
         fibers = [_meta_to_fiber(f) for f in results]
         # Sort by requested field
@@ -758,7 +759,16 @@ class InfinityDBStorage(
             "frequency": lambda f: f.frequency,
         }.get(order_by, lambda f: f.created_at or _EPOCH)
         fibers.sort(key=sort_key, reverse=descending)
-        return fibers[:limit]
+        start = max(0, offset)
+        return fibers[start : start + limit]
+
+    async def get_fibers_by_ids(self, fiber_ids: list[str]) -> dict[str, Fiber]:
+        results: dict[str, Fiber] = {}
+        for fiber_id in fiber_ids:
+            fiber = await self.get_fiber(fiber_id)
+            if fiber is not None:
+                results[fiber_id] = fiber
+        return results
 
     # ========== Brain Operations ==========
 

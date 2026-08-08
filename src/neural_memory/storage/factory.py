@@ -575,6 +575,7 @@ def _install_local_delegators() -> None:
         "search_fiber_summaries",
         "update_fiber_metadata",
         "find_fibers_batch",
+        "get_fibers_by_ids",
         "get_synapses_for_neurons",
         "get_neuron_hashes",
         "has_neuron_by_content_hash",

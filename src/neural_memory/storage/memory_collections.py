@@ -95,6 +95,8 @@ class InMemoryCollectionsMixin:
                 continue
             if not (fiber.neuron_ids & nid_set):
                 continue
+            if created_before is not None and fiber.created_at > created_before:
+                continue
             # fiber.tags property = auto_tags | agent_tags (union)
             if tags is not None:
                 _tags = normalize_tags_lower(tags)
@@ -132,6 +134,7 @@ class InMemoryCollectionsMixin:
         limit: int = 10,
         order_by: Literal["created_at", "salience", "frequency"] = "created_at",
         descending: bool = True,
+        offset: int = 0,
     ) -> list[Fiber]:
         brain_id = self._get_brain_id()
         fibers = list(self._fibers[brain_id].values())
@@ -142,7 +145,13 @@ class InMemoryCollectionsMixin:
             "frequency": lambda f: f.frequency,
         }
         fibers.sort(key=sort_keys[order_by], reverse=descending)
-        return fibers[:limit]
+        start = max(0, offset)
+        return fibers[start : start + limit]
+
+    async def get_fibers_by_ids(self, fiber_ids: list[str]) -> dict[str, Fiber]:
+        brain_id = self._get_brain_id()
+        store = self._fibers[brain_id]
+        return {fid: store[fid] for fid in fiber_ids if fid in store}
 
     # ========== TypedMemory Operations ==========
 

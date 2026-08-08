@@ -334,6 +334,12 @@ class FiberMixin:
             joiner = " AND " if tag_mode != "or" else " OR "
             tag_sql = " AND (" + joiner.join(tag_parts) + ")"
 
+        created_sql = ""
+        if created_before is not None:
+            params.append(d.serialize_dt(created_before))
+            created_sql = f" AND f.created_at <= {d.ph(n)}"
+            n += 1
+
         params.append(total_limit)
         sql = (
             f"SELECT DISTINCT f.* FROM fibers f "
@@ -343,6 +349,7 @@ class FiberMixin:
             f"WHERE fn.brain_id = {d.ph(1)} AND fn.neuron_id {in_sql}"
             f"{expired_filter}"
             f"{tag_sql}"
+            f"{created_sql}"
             f" ORDER BY f.salience DESC LIMIT {d.ph(n)}"
         )
 
@@ -664,11 +671,13 @@ class FiberMixin:
         limit: int = 10,
         order_by: Literal["created_at", "salience", "frequency"] = "created_at",
         descending: bool = True,
+        offset: int = 0,
     ) -> list[Fiber]:
-        """Get fibers with ordering."""
+        """Get fibers with ordering and offset pagination."""
         d = self._dialect
         brain_id = self._get_brain_id()
         limit = min(limit, 1000)
+        offset = max(0, offset)
 
         _allowed_order = {"created_at", "salience", "frequency"}
         if order_by not in _allowed_order:
@@ -677,7 +686,21 @@ class FiberMixin:
 
         sql = (
             f"SELECT * FROM fibers WHERE brain_id = {d.ph(1)} "
-            f"ORDER BY {order_by} {order_dir} LIMIT {d.ph(2)}"
+            f"ORDER BY {order_by} {order_dir} "
+            f"LIMIT {d.ph(2)} OFFSET {d.ph(3)}"
         )
-        rows = await d.fetch_all(sql, (brain_id, limit))
+        rows = await d.fetch_all(sql, (brain_id, limit, offset))
         return [row_to_fiber(d, row) for row in rows]
+
+    async def get_fibers_by_ids(self, fiber_ids: list[str]) -> dict[str, Fiber]:
+        """Batch-fetch fibers by ID for the active brain."""
+        if not fiber_ids:
+            return {}
+        d = self._dialect
+        brain_id = self._get_brain_id()
+        in_sql, in_params = d.in_clause(2, fiber_ids)
+        rows = await d.fetch_all(
+            f"SELECT * FROM fibers WHERE brain_id = {d.ph(1)} AND id {in_sql}",
+            [brain_id, *in_params],
+        )
+        return {str(row["id"]): row_to_fiber(d, row) for row in rows}

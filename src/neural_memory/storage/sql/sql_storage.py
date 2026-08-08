@@ -101,6 +101,8 @@ class SQLStorage(
         self._dialect = dialect
         self._current_brain_id: str | None = None
         self._neuron_cache = NeuronLookupCache(ttl_seconds=30.0, max_entries=500)
+        # SimHash snapshot: (brain_id, data_version|None, monotonic_ts, hashes)
+        self._hash_snapshot: tuple[str, int | None, float, list[tuple[str, int]]] | None = None
         self._init_vector_search()
 
     # ------------------------------------------------------------------
@@ -169,6 +171,8 @@ class SQLStorage(
         """Set the current brain context for operations."""
         if brain_id != self._current_brain_id:
             self._close_vector_index()  # Each brain has its own sidecar
+            self._hash_snapshot = None  # Never leak hashes across brains
+            self._neuron_cache.invalidate()
         self._current_brain_id = brain_id
 
     def _get_brain_id(self) -> str:

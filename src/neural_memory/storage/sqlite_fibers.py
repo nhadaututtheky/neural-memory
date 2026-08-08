@@ -545,8 +545,10 @@ class SQLiteFiberMixin:
         limit: int = 10,
         order_by: Literal["created_at", "salience", "frequency"] = "created_at",
         descending: bool = True,
+        offset: int = 0,
     ) -> list[Fiber]:
         limit = min(limit, 1000)
+        offset = max(0, offset)
         conn = self._ensure_read_conn()
         brain_id = self._get_brain_id()
 
@@ -554,8 +556,23 @@ class SQLiteFiberMixin:
         _allowed_order = {"created_at", "salience", "frequency"}
         if order_by not in _allowed_order:
             order_by = "created_at"
-        query = f"SELECT * FROM fibers WHERE brain_id = ? ORDER BY {order_by} {order_dir} LIMIT ?"
+        query = (
+            f"SELECT * FROM fibers WHERE brain_id = ? "
+            f"ORDER BY {order_by} {order_dir} LIMIT ? OFFSET ?"
+        )
 
-        async with conn.execute(query, (brain_id, limit)) as cursor:
+        async with conn.execute(query, (brain_id, limit, offset)) as cursor:
             rows = await cursor.fetchall()
             return [row_to_fiber(row) for row in rows]
+
+    async def get_fibers_by_ids(self, fiber_ids: list[str]) -> dict[str, Fiber]:
+        """Batch-fetch fibers by ID for the active brain."""
+        if not fiber_ids:
+            return {}
+        conn = self._ensure_read_conn()
+        brain_id = self._get_brain_id()
+        placeholders = ",".join("?" for _ in fiber_ids)
+        query = f"SELECT * FROM fibers WHERE brain_id = ? AND id IN ({placeholders})"
+        async with conn.execute(query, (brain_id, *fiber_ids)) as cursor:
+            rows = await cursor.fetchall()
+            return {row["id"]: row_to_fiber(row) for row in rows}

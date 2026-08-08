@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -27,6 +28,9 @@ logger = logging.getLogger(__name__)
 
 # Cap suggestion results
 _MAX_SUGGEST = 100
+
+# SimHash snapshot cache: short TTL + SQLite data_version for cross-process freshness.
+_HASH_SNAPSHOT_TTL_SECONDS = 5.0
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +149,7 @@ class NeuronMixin:
 
         # Cache / Merkle invalidation
         self._neuron_cache.invalidate_key(neuron.content, neuron.type.value)
+        self._invalidate_hash_snapshot()
         await self.invalidate_merkle_prefix("neuron", neuron.id, is_pro=True)  # type: ignore[attr-defined]
         return neuron.id
 
@@ -181,6 +186,57 @@ class NeuronMixin:
             (content_hash,),
         )
         return row is not None
+
+    def _invalidate_hash_snapshot(self) -> None:
+        """Drop cached SimHash snapshot (writes / brain switch)."""
+        self._hash_snapshot = None  # type: ignore[attr-defined]
+
+    async def _read_sqlite_data_version(self) -> int | None:
+        """Return SQLite PRAGMA data_version, or None on non-SQLite backends."""
+        d = self._dialect
+        if getattr(d, "name", None) != "sqlite":
+            return None
+        try:
+            row = await d.fetch_one("PRAGMA data_version")
+        except Exception:
+            logger.debug("PRAGMA data_version unavailable", exc_info=True)
+            return None
+        if row is None:
+            return None
+        value = next(iter(row.values()), None)
+        try:
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    async def get_neuron_hashes(self) -> list[tuple[str, int]]:
+        """Fetch (neuron_id, content_hash) pairs for SimHash pre-filtering.
+
+        Caches a short-lived snapshot keyed by brain + SQLite data_version so
+        repeated recalls avoid full scans while still observing writes from
+        this process (invalidate) and other processes (data_version / TTL).
+        """
+        d = self._dialect
+        brain_id = self._get_brain_id()
+        data_version = await self._read_sqlite_data_version()
+        snap = getattr(self, "_hash_snapshot", None)
+        if snap is not None:
+            snap_brain, snap_version, snap_ts, snap_hashes = snap
+            if (
+                snap_brain == brain_id
+                and snap_version == data_version
+                and time.monotonic() - snap_ts < _HASH_SNAPSHOT_TTL_SECONDS
+            ):
+                return list(snap_hashes)
+
+        rows = await d.fetch_all(
+            f"SELECT id, content_hash FROM neurons "
+            f"WHERE brain_id = {d.ph(1)} AND content_hash != 0",
+            (brain_id,),
+        )
+        hashes = [(str(row["id"]), int(row["content_hash"])) for row in rows]
+        self._hash_snapshot = (brain_id, data_version, time.monotonic(), hashes)  # type: ignore[attr-defined]
+        return list(hashes)
 
     async def find_neurons_exact_batch(
         self,
@@ -260,7 +316,8 @@ class NeuronMixin:
                 exact_sql += f" AND ephemeral = {d.ph(len(exact_params) + 1)}"
                 exact_params.append(1 if ephemeral else 0)
             if created_before is not None:
-                exact_sql += f" AND created_at < {d.ph(len(exact_params) + 1)}"
+                # Inclusive upper bound — matches FTS/LIKE and legacy SQLite.
+                exact_sql += f" AND created_at <= {d.ph(len(exact_params) + 1)}"
                 exact_params.append(d.serialize_dt(created_before))
             row = await d.fetch_one(exact_sql, exact_params)
             if row is None:
@@ -420,6 +477,7 @@ class NeuronMixin:
             raise ValueError(f"Neuron {neuron.id} does not exist")
 
         self._neuron_cache.invalidate()
+        self._invalidate_hash_snapshot()
 
     async def delete_neuron(self, neuron_id: str) -> bool:
         d = self._dialect
@@ -430,6 +488,7 @@ class NeuronMixin:
             (neuron_id, brain_id),
         )
         self._neuron_cache.invalidate()
+        self._invalidate_hash_snapshot()
         if count > 0:
             await self.invalidate_merkle_prefix("neuron", neuron_id, is_pro=True)  # type: ignore[attr-defined]
         return count > 0
@@ -458,6 +517,7 @@ class NeuronMixin:
             deleted += count
 
         self._neuron_cache.invalidate()
+        self._invalidate_hash_snapshot()
         return deleted
 
     # ========== Neuron State Operations ==========

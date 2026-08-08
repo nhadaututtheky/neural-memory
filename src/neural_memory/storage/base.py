@@ -609,6 +609,7 @@ class CoreStorage(ABC):
         limit: int = 10,
         order_by: Literal["created_at", "salience", "frequency"] = "created_at",
         descending: bool = True,
+        offset: int = 0,
     ) -> list[Fiber]:
         """
         Get fibers with ordering.
@@ -617,11 +618,25 @@ class CoreStorage(ABC):
             limit: Maximum results
             order_by: Field to order by
             descending: Sort descending if True
+            offset: Number of rows to skip (for pagination)
 
         Returns:
             List of fibers
         """
         ...
+
+    async def get_fibers_by_ids(self, fiber_ids: list[str]) -> dict[str, Fiber]:
+        """Fetch multiple fibers by ID in one call.
+
+        Default falls back to sequential ``get_fiber``. SQL backends override
+        with a single ``IN`` query.
+        """
+        results: dict[str, Fiber] = {}
+        for fiber_id in fiber_ids:
+            fiber = await self.get_fiber(fiber_id)
+            if fiber is not None:
+                results[fiber_id] = fiber
+        return results
 
     # ========== Lifecycle ==========
 

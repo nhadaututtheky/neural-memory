@@ -133,6 +133,33 @@ async def test_get_neuron_hashes_does_not_break_pool() -> None:
         await storage.close()
 
 
+@pytest.mark.asyncio
+async def test_unified_get_neuron_hashes_survives_repeated_reads() -> None:
+    """Unified SQLStorage get_neuron_hashes must stay usable under reuse."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        storage = SQLStorage(SQLiteDialect(Path(tmpdir) / "u.db"))
+        await storage.initialize()
+        brain = Brain.create(name="pool-unified")
+        await storage.save_brain(brain)
+        storage.set_brain(brain.id)
+
+        neuron = Neuron.create(
+            type=NeuronType.CONCEPT,
+            content="rust",
+            content_hash=0xC0FFEE,
+        )
+        await storage.add_neuron(neuron)
+
+        for _ in range(10):
+            hashes = await storage.get_neuron_hashes()
+            assert (neuron.id, neuron.content_hash) in hashes
+            await storage.has_neuron_by_content_hash(neuron.content_hash)
+
+        found = await storage.find_neurons(content_exact="rust")
+        assert len(found) == 1
+        await storage.close()
+
+
 # ── Atomic writes (#54/#55) ─────────────────────────────────────────
 
 

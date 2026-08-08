@@ -197,17 +197,34 @@ class PostgresFiberMixin(PostgresBaseMixin):
         limit: int = 10,
         order_by: Literal["created_at", "salience", "frequency"] = "created_at",
         descending: bool = True,
+        offset: int = 0,
     ) -> list[Fiber]:
-        """Get fibers with ordering."""
+        """Get fibers with ordering and offset pagination."""
         brain_id = self._get_brain_id()
         limit = min(limit, 1000)
+        offset = max(0, offset)
         _allowed_order = {"created_at", "salience", "frequency"}
         if order_by not in _allowed_order:
             order_by = "created_at"
         order_dir = "DESC" if descending else "ASC"
-        query = f"SELECT * FROM fibers WHERE brain_id = $1 ORDER BY {order_by} {order_dir} LIMIT $2"
-        rows = await self._query_ro(query, brain_id, limit)
+        query = (
+            f"SELECT * FROM fibers WHERE brain_id = $1 "
+            f"ORDER BY {order_by} {order_dir} LIMIT $2 OFFSET $3"
+        )
+        rows = await self._query_ro(query, brain_id, limit, offset)
         return [row_to_fiber(r) for r in rows]
+
+    async def get_fibers_by_ids(self, fiber_ids: list[str]) -> dict[str, Fiber]:
+        """Batch-fetch fibers by ID for the active brain."""
+        if not fiber_ids:
+            return {}
+        brain_id = self._get_brain_id()
+        rows = await self._query_ro(
+            "SELECT * FROM fibers WHERE brain_id = $1 AND id = ANY($2::text[])",
+            brain_id,
+            list(fiber_ids),
+        )
+        return {str(r["id"]): row_to_fiber(r) for r in rows}
 
     # ──────────────────── Pinning ────────────────────
 
