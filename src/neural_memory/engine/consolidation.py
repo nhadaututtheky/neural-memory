@@ -1280,13 +1280,9 @@ class ConsolidationEngine:
             for fiber in cluster_fibers:
                 anchor_ids.add(fiber.anchor_neuron_id)
 
-            # Filter out anchor neurons that were pruned in earlier tiers
-            valid_anchor_ids: set[str] = set()
-            for aid in anchor_ids:
-                anchor_neuron = await self._storage.get_neuron(aid)
-                if anchor_neuron is not None:
-                    valid_anchor_ids.add(aid)
-            anchor_ids = valid_anchor_ids
+            # Filter out anchor neurons that were pruned in earlier tiers (one batch)
+            existing_anchors = await self._storage.get_neurons_batch(list(anchor_ids))
+            anchor_ids = set(existing_anchors)
 
             synapse_ids: set[str] = set()
             for anchor_id in list(anchor_ids)[:10]:
@@ -1456,9 +1452,12 @@ class ConsolidationEngine:
 
         max_backfill = 2000  # Safety cap to avoid runaway
 
-        # Fetch fibers in one batch (get_fibers has no offset param; limit=1000 is storage cap)
         fibers = await self._load_fibers_paged(report)
         candidates = [f for f in fibers if not f.essence]
+
+        # Batch-load anchors for candidates (cap map size to max_backfill)
+        anchor_ids = list(dict.fromkeys(f.anchor_neuron_id for f in candidates[:max_backfill]))
+        anchors_by_id = await self._storage.get_neurons_batch(anchor_ids) if anchor_ids else {}
 
         backfilled = 0
         for idx, fiber in enumerate(candidates):
@@ -1467,7 +1466,7 @@ class ConsolidationEngine:
             if idx % 50 == 0 and idx > 0:
                 await asyncio.sleep(0)  # Yield to event loop
 
-            anchor = await self._storage.get_neuron(fiber.anchor_neuron_id)
+            anchor = anchors_by_id.get(fiber.anchor_neuron_id)
             if not anchor or not anchor.content:
                 continue
 
