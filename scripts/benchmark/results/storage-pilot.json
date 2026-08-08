@@ -1,0 +1,83 @@
+{
+  "timestamp": "2026-08-09 05:47:46",
+  "python_version": "3.13.11",
+  "platform": "win32",
+  "scales": [
+    {
+      "backend": "sqlite",
+      "storage_adapter": "legacy",
+      "target_neurons": 1000,
+      "actual_neurons": 776,
+      "actual_fibers": 489,
+      "actual_synapses": 2541,
+      "encode_memories": 250,
+      "encode_elapsed_sec": 16.449322299973574,
+      "encode_rate": 15.198194517740202,
+      "recall_latency": {
+        "p50": 43.88069995911792,
+        "p95": 149.06309999059886,
+        "p99": 170.63469998538494,
+        "mean": 46.48389749490889,
+        "min": 2.8930999687872827,
+        "max": 170.63469998538494,
+        "samples": 40
+      },
+      "phase_timings_avg": {
+        "parse": 0.33608157536946237,
+        "simhash_prefilter": 3.806471048033257,
+        "anchors_rrf": 13.212713152537809,
+        "activation": 27.33919210272449,
+        "post_activation": 30.227026309340115,
+        "fibers": 54.38889999028393,
+        "reconstruction": 66.16264210070337
+      },
+      "consolidation_ms": 5518.0357999634,
+      "rss_before_mb": 28.359375,
+      "rss_after_mb": 77.92578125,
+      "rss_delta_mb": 49.56640625
+    },
+    {
+      "backend": "sqlite",
+      "storage_adapter": "unified",
+      "target_neurons": 1000,
+      "actual_neurons": 776,
+      "actual_fibers": 489,
+      "actual_synapses": 2541,
+      "encode_memories": 250,
+      "encode_elapsed_sec": 19.89900590002071,
+      "encode_rate": 12.56344167422654,
+      "recall_latency": {
+        "p50": 39.596499991603196,
+        "p95": 140.60270000481978,
+        "p99": 152.434500050731,
+        "mean": 46.955809999781195,
+        "min": 2.455800015013665,
+        "max": 152.434500050731,
+        "samples": 40
+      },
+      "phase_timings_avg": {
+        "parse": 0.33529737112602515,
+        "simhash_prefilter": 2.9673894750885665,
+        "anchors_rrf": 13.406781577750257,
+        "activation": 26.324210521507712,
+        "post_activation": 28.025315791111144,
+        "fibers": 64.91907857291933,
+        "reconstruction": 88.54516429294434
+      },
+      "consolidation_ms": 4797.304000006989,
+      "rss_before_mb": 84.20703125,
+      "rss_after_mb": 91.09765625,
+      "rss_delta_mb": 6.890625
+    }
+  ],
+  "pilot": {
+    "phase": "cognitive-efficiency-phase2",
+    "task": "P2-T6",
+    "gate": "unified_p95_no_worse_than_10pct_vs_legacy",
+    "legacy_p95_ms": 149.06309999059886,
+    "unified_p95_ms": 140.60270000481978,
+    "p95_ratio_unified_over_legacy": 0.9432428281290764,
+    "passed": true,
+    "notes": "Scale 1000 neurons, 20 queries x 2 runs; adapters seeded identically."
+  }
+}

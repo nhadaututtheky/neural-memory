@@ -88,6 +88,8 @@ class ScaleResult:
     """Benchmark results for a single (backend, scale) pair."""
 
     backend: str = ""
+    # SQLite pilot: "legacy" | "unified" | "" (non-sqlite backends)
+    storage_adapter: str = ""
     target_neurons: int = 0
     actual_neurons: int = 0
     actual_fibers: int = 0
@@ -342,8 +344,26 @@ BENCHMARK_QUERIES = [
 # ---------------------------------------------------------------------------
 
 
-async def make_sqlite(db_path: str, brain_id: str) -> Any:
-    """Create and initialize a SQLite storage backend."""
+async def make_sqlite(
+    db_path: str,
+    brain_id: str,
+    *,
+    storage_adapter: str = "legacy",
+) -> Any:
+    """Create and initialize a SQLite storage backend.
+
+    Args:
+        storage_adapter: ``legacy`` uses SQLiteStorage; ``unified`` uses
+            SQLStorage(SQLiteDialect) — reversible pilot path for Phase 2.
+    """
+    if storage_adapter == "unified":
+        from neural_memory.storage.sql.sql_storage import SQLStorage
+        from neural_memory.storage.sql.sqlite_dialect import SQLiteDialect
+
+        storage = SQLStorage(SQLiteDialect(db_path))
+        await storage.initialize()
+        return storage
+
     from neural_memory.storage.sqlite_store import SQLiteStorage
 
     storage = SQLiteStorage(db_path=db_path)
@@ -587,13 +607,15 @@ def format_markdown(report: BenchmarkReport) -> str:
         "",
         "## Summary",
         "",
-        "| Backend | Scale | Neurons | Encode (mem/s) | Recall p50 | Recall p95 | Recall p99 | Consol. | RSS delta |",
-        "|---------|------:|--------:|---------------:|-----------:|-----------:|-----------:|--------:|------:|",
+        "| Backend | Adapter | Scale | Neurons | Encode (mem/s) | Recall p50 | Recall p95 | Recall p99 | Consol. | RSS delta |",
+        "|---------|---------|------:|--------:|---------------:|-----------:|-----------:|-----------:|--------:|------:|",
     ]
 
     for s in report.scales:
+        adapter = s.storage_adapter or "—"
         lines.append(
             f"| {s.backend} "
+            f"| {adapter} "
             f"| {s.target_neurons:,} "
             f"| {s.actual_neurons:,} "
             f"| {s.encode_rate:,.0f} "
@@ -675,25 +697,35 @@ async def run_scale(
     queries: list[str],
     runs: int,
     tmp_dir: str,
+    *,
+    storage_adapter: str = "legacy",
 ) -> ScaleResult:
-    """Run benchmark at a single (backend, scale) pair."""
+    """Run benchmark at a single (backend, scale[, adapter]) triple."""
     n_memories = estimate_memories_for_neurons(target_neurons)
+    adapter_label = storage_adapter if backend == "sqlite" else ""
 
     print(f"\n{'=' * 60}")
+    adapter_part = f" | Adapter: {adapter_label}" if adapter_label else ""
     print(
-        f"Backend: {backend.upper()} | Scale: {target_neurons:,} neurons (est. {n_memories:,} memories)"
+        f"Backend: {backend.upper()}{adapter_part} | "
+        f"Scale: {target_neurons:,} neurons (est. {n_memories:,} memories)"
     )
     print(f"{'=' * 60}")
 
-    result = ScaleResult(backend=backend, target_neurons=target_neurons)
+    result = ScaleResult(
+        backend=backend,
+        storage_adapter=adapter_label,
+        target_neurons=target_neurons,
+    )
 
     rss_before = get_rss_mb()
     result.rss_before_mb = rss_before
 
     # Create storage
     if backend == "sqlite":
-        db_path = os.path.join(tmp_dir, f"bench_{backend}_{target_neurons}.db")
-        storage = await make_sqlite(db_path, "benchmark")
+        safe_adapter = storage_adapter.replace(":", "_")
+        db_path = os.path.join(tmp_dir, f"bench_{backend}_{safe_adapter}_{target_neurons}.db")
+        storage = await make_sqlite(db_path, "benchmark", storage_adapter=storage_adapter)
     elif backend == "infdb":
         base_dir = os.path.join(tmp_dir, f"bench_{backend}_{target_neurons}")
         storage = await make_infinitydb(base_dir, "benchmark")
@@ -783,6 +815,15 @@ async def main() -> None:
         help="Comma-separated backends: sqlite,infdb,postgres (default: sqlite)",
     )
     parser.add_argument(
+        "--adapters",
+        type=str,
+        default="legacy",
+        help=(
+            "Comma-separated SQLite adapters for the reversible pilot: "
+            "legacy,unified (default: legacy). Ignored for non-sqlite backends."
+        ),
+    )
+    parser.add_argument(
         "--runs",
         type=int,
         default=2,
@@ -804,6 +845,13 @@ async def main() -> None:
     args = parser.parse_args()
     scales = [int(s.strip()) for s in args.scales.split(",")]
     backends = [b.strip() for b in args.backends.split(",")]
+    adapters = [a.strip() for a in args.adapters.split(",") if a.strip()]
+    if not adapters:
+        adapters = ["legacy"]
+    invalid_adapters = [a for a in adapters if a not in {"legacy", "unified"}]
+    if invalid_adapters:
+        print(f"ERROR: unknown adapters {invalid_adapters}; use legacy and/or unified")
+        sys.exit(1)
     n_queries = min(args.queries, len(BENCHMARK_QUERIES))
     queries = BENCHMARK_QUERIES[:n_queries]
 
@@ -819,6 +867,8 @@ async def main() -> None:
 
     print("NeuralMemory Backend Comparison Benchmark")
     print(f"Backends: {', '.join(b.upper() for b in backends)}")
+    if "sqlite" in backends:
+        print(f"SQLite adapters: {', '.join(adapters)}")
     print(f"Scales: {', '.join(f'{s:,}' for s in scales)} neurons")
     print(f"Queries: {n_queries} x {args.runs} runs each")
     print(f"Output: {args.output}")
@@ -832,8 +882,17 @@ async def main() -> None:
     with tempfile.TemporaryDirectory(prefix="nm_bench_", ignore_cleanup_errors=True) as tmp_dir:
         for scale in scales:
             for backend in backends:
-                result = await run_scale(backend, scale, queries, args.runs, tmp_dir)
-                report.scales.append(result)
+                adapter_loop = adapters if backend == "sqlite" else [""]
+                for storage_adapter in adapter_loop:
+                    result = await run_scale(
+                        backend,
+                        scale,
+                        queries,
+                        args.runs,
+                        tmp_dir,
+                        storage_adapter=storage_adapter or "legacy",
+                    )
+                    report.scales.append(result)
 
     # Output
     md = format_markdown(report)
