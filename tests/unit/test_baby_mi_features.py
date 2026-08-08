@@ -151,11 +151,15 @@ class TestSemanticAlternativePath:
         assert result.stage == MemoryStage.EPISODIC
 
     def test_agent_path_not_enough_rehearsals(self):
-        """3 rehearsals (< 5) with only 2 windows → still EPISODIC."""
-        now = utcnow()
-        entered = now - timedelta(days=4)
-        base = entered + timedelta(days=1)
-        # 3 timestamps in same 2h window — not enough rehearsals or windows
+        """3 rehearsals (< 5) on one calendar day → still EPISODIC.
+
+        Must pin wall-clock times so classic 2+ distinct-day path does not
+        flakily trip when utcnow() sits near a midnight boundary.
+        """
+        now = datetime(2026, 3, 10, 12, 0, 0)
+        entered = datetime(2026, 3, 6, 12, 0, 0)  # 4 days in stage
+        # All three stamps on the same calendar day, same 2h window.
+        base = datetime(2026, 3, 7, 10, 0, 0)
         timestamps = tuple((base + timedelta(minutes=i * 10)).isoformat() for i in range(3))
         record = MaturationRecord(
             fiber_id="f1",
@@ -165,6 +169,8 @@ class TestSemanticAlternativePath:
             rehearsal_count=3,
             reinforcement_timestamps=timestamps,
         )
+        assert record.distinct_reinforcement_days == 1
+        assert record.distinct_reinforcement_windows == 1
         result = compute_stage_transition(record, now=now)
         assert result.stage == MemoryStage.EPISODIC
 

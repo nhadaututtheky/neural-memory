@@ -766,20 +766,19 @@ class InfinityDBStorage(
         """Batch-fetch fibers via in-memory FiberStore when available."""
         if not fiber_ids:
             return {}
+        found: dict[str, Fiber] = {}
         store = getattr(self.db, "_fibers", None)
         if store is not None and hasattr(store, "get_fiber"):
-            results: dict[str, Fiber] = {}
             for fiber_id in fiber_ids:
                 raw = store.get_fiber(fiber_id)
                 if raw is not None:
-                    results[fiber_id] = _meta_to_fiber(raw)
-            return results
-        results: dict[str, Fiber] = {}
+                    found[fiber_id] = _meta_to_fiber(raw)
+            return found
         for fiber_id in fiber_ids:
             fiber = await self.get_fiber(fiber_id)
             if fiber is not None:
-                results[fiber_id] = fiber
-        return results
+                found[fiber_id] = fiber
+        return found
 
     # ========== Brain Operations ==========
 
