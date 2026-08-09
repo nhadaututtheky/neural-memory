@@ -830,6 +830,30 @@ def _sanitize_toml_str(value: str) -> str:
     return cleaned
 
 
+def _toml_literal(value: Any) -> str | None:
+    """Serialize a validated scalar/list value for TOML. Returns None if unsupported."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int) and not isinstance(value, bool):
+        return str(value)
+    if isinstance(value, float):
+        if value != value or value in (float("inf"), float("-inf")):  # NaN/Inf
+            return None
+        return repr(value)
+    if isinstance(value, str):
+        safe = _sanitize_toml_str(value)
+        return f'"{safe}"' if safe or value == "" else None
+    if isinstance(value, list):
+        parts: list[str] = []
+        for item in value:
+            lit = _toml_literal(item)
+            if lit is None:
+                return None
+            parts.append(lit)
+        return f"[{', '.join(parts)}]"
+    return None
+
+
 _ISO_DATETIME_PATTERN = re.compile(r"^[0-9T:\-\+Z\. ]*$")
 
 
@@ -1527,6 +1551,13 @@ class UnifiedConfig:
             f"max_context_tokens = {self.brain.max_context_tokens}",
             f"freshness_weight = {self.brain.freshness_weight}",
             f"simhash_prefilter_threshold = {self.brain.simhash_prefilter_threshold}  # 0=disabled, 1-64=Hamming distance cutoff",
+        ]
+        # Persist validated BrainConfig extras (issue #168 / P3-T2)
+        for key, value in sorted(self.brain.runtime_overrides().items()):
+            lit = _toml_literal(value)
+            if lit is not None:
+                lines.append(f"{key} = {lit}")
+        lines += [
             "",
             "# Embedding settings (cross-language recall via Gemini/OpenAI/OpenRouter)",
             "[embedding]",
@@ -1654,6 +1685,7 @@ class UnifiedConfig:
             f'database = "{_sanitize_toml_str(self.postgres.database)}"',
             f'user = "{_sanitize_toml_str(self.postgres.user)}"',
             'password = ""  # Use env NEURAL_MEMORY_POSTGRES_PASSWORD',
+            f"embedding_dim = {int(self.postgres.embedding_dim)}",
             "",
             "# Telegram backup integration",
             "# Bot token: set NMEM_TELEGRAM_BOT_TOKEN env var (never stored here)",
