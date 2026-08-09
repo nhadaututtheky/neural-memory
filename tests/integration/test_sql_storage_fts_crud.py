@@ -93,6 +93,49 @@ async def test_fiber_summary_text_to_null_removes_fts(store: SQLStorage) -> None
 
 
 @pytest.mark.asyncio
+async def test_fiber_delete_removes_fts(store: SQLStorage) -> None:
+    n = Neuron.create(type=NeuronType.CONCEPT, content="anchor fiber delete fts")
+    await store.add_neuron(n)
+    fiber = Fiber.create(
+        neuron_ids={n.id},
+        synapse_ids=set(),
+        anchor_neuron_id=n.id,
+        summary="deletephrase fiber summary",
+    )
+    await store.add_fiber(fiber)
+    assert any(
+        f.id == fiber.id for f in await store.search_fiber_summaries("deletephrase", limit=10)
+    )
+    assert await store.delete_fiber(fiber.id)
+    hits = await store.search_fiber_summaries("deletephrase", limit=10)
+    assert all(f.id != fiber.id for f in hits)
+
+
+@pytest.mark.asyncio
+async def test_fiber_fts_brain_isolation(store: SQLStorage) -> None:
+    a = Brain.create(name="a", brain_id="brain-a")
+    b = Brain.create(name="b", brain_id="brain-b")
+    await store.save_brain(a)
+    await store.save_brain(b)
+    store.set_brain("brain-a")
+    na = Neuron.create(type=NeuronType.CONCEPT, content="anchor a")
+    await store.add_neuron(na)
+    fa = Fiber.create(
+        neuron_ids={na.id},
+        synapse_ids=set(),
+        anchor_neuron_id=na.id,
+        summary="isolatedphrase only in a",
+    )
+    await store.add_fiber(fa)
+    store.set_brain("brain-b")
+    hits_b = await store.search_fiber_summaries("isolatedphrase", limit=10)
+    assert all(f.id != fa.id for f in hits_b)
+    store.set_brain("brain-a")
+    hits_a = await store.search_fiber_summaries("isolatedphrase", limit=10)
+    assert any(f.id == fa.id for f in hits_a)
+
+
+@pytest.mark.asyncio
 async def test_neuron_add_rollback_leaves_no_row(store: SQLStorage) -> None:
     """If state insert fails inside the transaction, neuron row must not commit."""
     n = Neuron.create(type=NeuronType.CONCEPT, content="rollback neuron")

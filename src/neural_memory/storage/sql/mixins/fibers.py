@@ -449,16 +449,16 @@ class FiberMixin:
         d = self._dialect
         brain_id = self._get_brain_id()
 
-        # Delete junction entries first
-        await d.execute(
-            f"DELETE FROM fiber_neurons WHERE brain_id = {d.ph(1)} AND fiber_id = {d.ph(2)}",
-            (brain_id, fiber_id),
-        )
-
-        count = await d.execute_count(
-            f"DELETE FROM fibers WHERE id = {d.ph(1)} AND brain_id = {d.ph(2)}",
-            (fiber_id, brain_id),
-        )
+        # Junction + fibers row (+ FTS triggers) must commit together.
+        async with d.transaction():
+            await d.execute(
+                f"DELETE FROM fiber_neurons WHERE brain_id = {d.ph(1)} AND fiber_id = {d.ph(2)}",
+                (brain_id, fiber_id),
+            )
+            count = await d.execute_count(
+                f"DELETE FROM fibers WHERE id = {d.ph(1)} AND brain_id = {d.ph(2)}",
+                (fiber_id, brain_id),
+            )
         if count > 0:
             await self.invalidate_merkle_prefix("fiber", fiber_id, is_pro=True)  # type: ignore[attr-defined]
         return count > 0

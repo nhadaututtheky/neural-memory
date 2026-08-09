@@ -493,6 +493,17 @@ class NeuronMixin:
         self._neuron_cache.invalidate()
         self._invalidate_hash_snapshot()
         if count > 0:
+            # Keep HNSW sidecar free of tombstoned IDs (P3-T4).
+            vector_remove = getattr(self, "vector_index_remove", None)
+            if vector_remove is not None:
+                try:
+                    await vector_remove(neuron_id)
+                except Exception:
+                    logger.debug(
+                        "vector_index_remove failed for %s (non-fatal)",
+                        neuron_id,
+                        exc_info=True,
+                    )
             await self.invalidate_merkle_prefix("neuron", neuron_id, is_pro=True)  # type: ignore[attr-defined]
         return count > 0
 
@@ -509,15 +520,27 @@ class NeuronMixin:
         brain_id = self._get_brain_id()
         deleted = 0
         chunk_size = 500
+        vector_remove = getattr(self, "vector_index_remove", None)
 
         for start_idx in range(0, len(neuron_ids), chunk_size):
             chunk = neuron_ids[start_idx : start_idx + chunk_size]
             in_sql, in_params = d.in_clause(2, chunk)
-            count = await d.execute_count(
-                f"DELETE FROM neurons WHERE brain_id = {d.ph(1)} AND id {in_sql}",
-                [brain_id, *in_params],
-            )
+            async with d.transaction():
+                count = await d.execute_count(
+                    f"DELETE FROM neurons WHERE brain_id = {d.ph(1)} AND id {in_sql}",
+                    [brain_id, *in_params],
+                )
             deleted += count
+            if vector_remove is not None:
+                for nid in chunk:
+                    try:
+                        await vector_remove(nid)
+                    except Exception:
+                        logger.debug(
+                            "vector_index_remove failed for %s (non-fatal)",
+                            nid,
+                            exc_info=True,
+                        )
 
         self._neuron_cache.invalidate()
         self._invalidate_hash_snapshot()
