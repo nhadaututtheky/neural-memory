@@ -323,7 +323,8 @@ pip install neural-memory[all]                 # Everything
 | **Read 20 queries** | 1.8s | 2.9s | 34.6s |
 | **API calls** | **0** | 70 | 149 |
 
-Zero LLM calls, zero API cost. [Full benchmarks →](docs/benchmarks.md)
+Zero LLM calls, zero API cost. [Full benchmarks →](docs/benchmarks.md) ·
+[Cognitive Efficiency release evidence →](docs/benchmarks.md#cognitive-efficiency-release-evidence-phase-8)
 
 </details>
 

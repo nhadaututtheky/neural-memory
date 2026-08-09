@@ -380,6 +380,71 @@ def check_docs() -> None:
 # ── 10. Scattered Reference Sync ──────────────────────────────
 
 
+def check_release_evidence() -> None:
+    """Validate candidate-bound release evidence when present (Phase 8).
+
+    Fast path: verify structure, gates, and artifact hashes without re-running
+    LongMemEval. Missing artifact is a warning (nightly/release workflows
+    require it); failed verification is a hard fail when the file exists.
+    """
+    print("\n11. Release Evidence")
+    path = ROOT / "scripts" / "benchmark" / "results" / "release-evidence.json"
+    if not path.is_file():
+        warn(
+            "release evidence missing",
+            "generate with: python scripts/benchmark/package_release_evidence.py",
+        )
+        return
+    try:
+        if str(ROOT) not in sys.path:
+            sys.path.insert(0, str(ROOT))
+        from scripts.benchmark.release_evidence import (
+            git_metadata,
+            load_release_evidence,
+            verify_release_evidence,
+        )
+    except Exception as exc:
+        check("release evidence import", False, str(exc)[:200])
+        return
+
+    try:
+        data = load_release_evidence(path)
+    except ValueError as exc:
+        check("release evidence JSON", False, str(exc)[:200])
+        return
+
+    expected = str(data.get("git_sha") or "")
+    head, _dirty = git_metadata(ROOT)
+    failures = verify_release_evidence(
+        path,
+        expected_sha=expected,
+        require_clean=False,  # field-level dirty checked inside verifier via require_clean on field
+        repo_root=ROOT,
+        require_all_gates=True,
+        check_artifact_files=True,
+    )
+    # Prefer HEAD match when tree is clean; allow evidence bound to recorded candidate SHA.
+    if expected and head != "unknown" and expected.lower() != head.lower():
+        # Stale relative to HEAD is a warning (docs-only follow-up commits), not a hard fail,
+        # unless NM_REQUIRE_RELEASE_EVIDENCE=1.
+        import os
+
+        if os.environ.get("NM_REQUIRE_RELEASE_EVIDENCE") == "1":
+            failures.append(f"evidence git_sha={expected[:12]} does not match HEAD={head[:12]}")
+        else:
+            warn(
+                "release evidence SHA is not HEAD",
+                f"evidence={expected[:12]} HEAD={head[:12]} "
+                "(set NM_REQUIRE_RELEASE_EVIDENCE=1 to fail)",
+            )
+
+    check(
+        "release evidence gates",
+        not failures,
+        "; ".join(failures)[:300] if failures else "",
+    )
+
+
 def check_refs(fix: bool = False) -> None:
     print("\n10. Scattered Reference Sync")
 
@@ -444,6 +509,7 @@ def main() -> int:
     check_plugin()
     check_docs()
     check_refs(fix=fix)
+    check_release_evidence()
 
     print("\n" + "=" * 60)
     if failures:

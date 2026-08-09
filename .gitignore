@@ -236,6 +236,9 @@ mcp-publisher.exe
 scripts/benchmark/results/*
 !scripts/benchmark/results/nm_inprocess_20260418_075113.json
 !scripts/benchmark/results/storage-pilot.json
+!scripts/benchmark/results/runtime-footprint.json
+!scripts/benchmark/results/release-evidence.json
+!scripts/benchmark/results/ablation.json
 scripts/benchmark/data/
 scripts/benchmark_*_results.json
 

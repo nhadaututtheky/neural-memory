@@ -1,0 +1,77 @@
+name: Benchmark Evidence
+
+on:
+  schedule:
+    # Nightly UTC — full evidence matrix when secrets/runners allow
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "LongMemEval instance limit (0 = full S variant)"
+        required: false
+        default: "20"
+      methods:
+        description: "Comma-separated methods"
+        required: false
+        default: "naive,fts5,recency"
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    name: Canonical + ablation evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install package (base + dev)
+        run: |
+          python -m pip install -U pip
+          pip install -e ".[dev]"
+
+      - name: Unit ablation + release evidence contracts
+        run: |
+          pytest tests/unit/test_ablation_runner.py tests/unit/test_release_evidence.py -q
+          pytest tests/e2e/test_cognitive_efficiency_release.py -q
+
+      - name: Package release evidence (candidate SHA)
+        run: |
+          python scripts/benchmark/package_release_evidence.py
+          python scripts/benchmark/release_evidence.py \
+            --verify scripts/benchmark/results/release-evidence.json
+
+      - name: Mini LongMemEval evidence (retrieval-only)
+        continue-on-error: true
+        run: |
+          LIMIT="${{ github.event.inputs.limit || '20' }}"
+          METHODS="${{ github.event.inputs.methods || 'naive,fts5,recency' }}"
+          if [ "$LIMIT" = "0" ]; then
+            LIMIT_ARGS=""
+          else
+            LIMIT_ARGS="--limit $LIMIT"
+          fi
+          python scripts/benchmark/run_evidence.py \
+            --variant s \
+            --methods "$METHODS" \
+            --retrieval-only \
+            $LIMIT_ARGS \
+            --output-dir scripts/benchmark/results/nightly || true
+
+      - name: Upload evidence artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cognitive-efficiency-evidence
+          path: |
+            scripts/benchmark/results/release-evidence.json
+            scripts/benchmark/results/ablation.json
+            scripts/benchmark/results/nightly/**
+            scripts/benchmark/results/runtime-footprint.json
+          if-no-files-found: warn

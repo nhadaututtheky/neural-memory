@@ -1,0 +1,125 @@
+{
+  "all_justified": true,
+  "failures": [],
+  "generated_at": "2026-08-09T10:29:25.229190Z",
+  "git_sha": "3bada7f260189495c885dbb9097348f5c6f16fb6",
+  "schema_version": 1,
+  "seed": 0,
+  "stages": [
+    {
+      "baseline": {
+        "available": true,
+        "context_tokens": 1200.0,
+        "latency_ms": 95.0,
+        "note": "",
+        "quality": 0.72
+      },
+      "disabled": {
+        "available": true,
+        "context_tokens": 400.0,
+        "latency_ms": 80.0,
+        "note": "",
+        "quality": 0.2
+      },
+      "justification": "required_correctness",
+      "keeps_default": true,
+      "latency_delta_ms": -15.0,
+      "quality_delta": 0.52,
+      "required_correctness": true,
+      "stage": "lexical",
+      "token_delta": -800.0
+    },
+    {
+      "baseline": {
+        "available": true,
+        "context_tokens": 1200.0,
+        "latency_ms": 95.0,
+        "note": "",
+        "quality": 0.72
+      },
+      "disabled": {
+        "available": false,
+        "context_tokens": 0.0,
+        "latency_ms": 0.0,
+        "note": "embedding extras not installed; cannot justify default vector stage",
+        "quality": 0.0
+      },
+      "justification": "unavailable_optional_cannot_justify_default",
+      "keeps_default": false,
+      "latency_delta_ms": 0.0,
+      "quality_delta": 0.0,
+      "required_correctness": false,
+      "stage": "vector",
+      "token_delta": 0.0
+    },
+    {
+      "baseline": {
+        "available": true,
+        "context_tokens": 1200.0,
+        "latency_ms": 95.0,
+        "note": "",
+        "quality": 0.72
+      },
+      "disabled": {
+        "available": true,
+        "context_tokens": 900.0,
+        "latency_ms": 70.0,
+        "note": "",
+        "quality": 0.55
+      },
+      "justification": "required_correctness",
+      "keeps_default": true,
+      "latency_delta_ms": -25.0,
+      "quality_delta": 0.16999999999999993,
+      "required_correctness": true,
+      "stage": "graph",
+      "token_delta": -300.0
+    },
+    {
+      "baseline": {
+        "available": true,
+        "context_tokens": 1200.0,
+        "latency_ms": 95.0,
+        "note": "",
+        "quality": 0.72
+      },
+      "disabled": {
+        "available": true,
+        "context_tokens": 1150.0,
+        "latency_ms": 90.0,
+        "note": "",
+        "quality": 0.68
+      },
+      "justification": "quality_gain",
+      "keeps_default": true,
+      "latency_delta_ms": -5.0,
+      "quality_delta": 0.039999999999999925,
+      "required_correctness": false,
+      "stage": "priming",
+      "token_delta": -50.0
+    },
+    {
+      "baseline": {
+        "available": true,
+        "context_tokens": 1200.0,
+        "latency_ms": 95.0,
+        "note": "",
+        "quality": 0.72
+      },
+      "disabled": {
+        "available": true,
+        "context_tokens": 1180.0,
+        "latency_ms": 94.0,
+        "note": "",
+        "quality": 0.7
+      },
+      "justification": "quality_gain",
+      "keeps_default": true,
+      "latency_delta_ms": -1.0,
+      "quality_delta": 0.020000000000000018,
+      "required_correctness": false,
+      "stage": "reconsolidation",
+      "token_delta": -20.0
+    }
+  ]
+}

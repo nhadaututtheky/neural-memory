@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Cognitive Efficiency Phase 8 release evidence gate
+
+- Default-stage ablation runner (`scripts/benchmark/run_ablation.py`) for
+  lexical / vector / graph / priming / reconsolidation with fail-closed N/A
+  rules for optional vector.
+- Candidate-SHA `ReleaseEvidence` manifest + verifier
+  (`scripts/benchmark/release_evidence.py`,
+  `scripts/benchmark/package_release_evidence.py`); pre-ship validates when
+  present; release workflow re-packages and fails closed on mismatch.
+- E2E integrity suite (`tests/e2e/test_cognitive_efficiency_release.py`):
+  restart coherence, outbox durability, change_log feed, checkpoint resume,
+  adapter-aware open.
+- Nightly `.github/workflows/benchmark.yml`; release.yml evidence gate.
+
+### Cognitive Efficiency program (Phases 1–8) complete
+
+Cascaded recall, lean capture + durable outbox, incremental consolidation,
+base footprint ≤4 deps, standard MCP tier default, and release evidence
+binding. Rust/PyO3 remains deferred.
+
 ## [4.60.0] — 2026-07-28
 
 ### Fixed — Pruned memories were never actually hidden from recall

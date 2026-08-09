@@ -1,7 +1,39 @@
 # Benchmarks
 
 
-Last updated: **2026-03-16**
+Last updated: **2026-08-09**
+
+
+## Cognitive Efficiency release evidence (Phase 8)
+
+Candidate-bound release gate for the Cognitive Efficiency program.
+
+| Artifact | Path |
+|----------|------|
+| Release manifest | `scripts/benchmark/results/release-evidence.json` |
+| Ablation matrix | `scripts/benchmark/results/ablation.json` |
+| Quality floors | R@5 > 0.466 · NDCG@5 > 0.464 (pinned last-good NM) |
+| Footprint | base deps ≤ 4 · standard MCP tier = 10 tools |
+
+```bash
+# Package + verify against HEAD
+python scripts/benchmark/package_release_evidence.py
+python scripts/benchmark/release_evidence.py \
+  --verify scripts/benchmark/results/release-evidence.json
+
+# Ablation only (fixture)
+python scripts/benchmark/run_ablation.py --fixture \
+  --output scripts/benchmark/results/ablation.json
+
+# Integrity E2E
+pytest tests/e2e/test_cognitive_efficiency_release.py -q
+```
+
+Nightly workflow: `.github/workflows/benchmark.yml` (mini LongMemEval + package).
+Release tags re-package evidence and fail if SHA/gates do not match.
+
+**Deferred:** Rust/PyO3 — measured bottlenecks remain storage I/O and optional
+embeddings, not pure-Python compute on the hot path after Phases 1–8.
 
 
 ## NeuralMemory vs Mem0 — Competitive Benchmark

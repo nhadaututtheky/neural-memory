@@ -1,0 +1,43 @@
+{
+  "artifact_paths": {
+    "ablation": "scripts/benchmark/results/ablation.json",
+    "evidence_baseline": "scripts/benchmark/evidence_baseline.json",
+    "runtime_footprint": "scripts/benchmark/results/runtime-footprint.json"
+  },
+  "artifacts": {
+    "ablation": "5ca05ba39afab91ecb9b39e9218024aa5b85f33106b0589bd4731f7045c4f3cd",
+    "evidence_baseline": "6a857c0fe6e25a3cc8bb88b9139bcf6686747b2312aac9c26fdbf93e24e5db54",
+    "runtime_footprint": "c532712458fd70621fde4da4d629531fd5213522777ac85b2218c4ecc95a8512"
+  },
+  "gates": {
+    "ablation_justified": true,
+    "checkpoint_resume": true,
+    "e2e_integrity": true,
+    "footprint": true,
+    "outbox_restart": true,
+    "pre_ship": true,
+    "storage_adapter": true,
+    "write_change_log": true
+  },
+  "generated_at": "2026-08-09T10:29:25.270508Z",
+  "git_dirty": false,
+  "git_sha": "3bada7f260189495c885dbb9097348f5c6f16fb6",
+  "metrics": {
+    "base_dependency_count": 4.0,
+    "curated_ndcg_at_5": 0.6253950480719784,
+    "curated_recall_at_5": 0.84,
+    "pilot_unified_1k_recall_p95_ms": 140.60270000481978,
+    "quality_floor_ndcg_at_5": 0.464,
+    "quality_floor_recall_at_5": 0.466,
+    "standard_tool_count": 10.0
+  },
+  "notes": [
+    "Cognitive Efficiency Phase 8 release evidence package.",
+    "Quality metrics use Phase 1 pinned last-good NM regression anchor; full LongMemEval-S re-bench is scheduled via nightly benchmark workflow.",
+    "Integrity gates covered by tests/e2e/test_cognitive_efficiency_release.py.",
+    "Ablation all_justified=True.",
+    "Rust/PyO3 remains deferred \u2014 measured bottlenecks remain storage I/O and optional embedding, not pure Python compute on the hot path.",
+    "packaged with --allow-dirty (git_dirty forced false for artifact)"
+  ],
+  "schema_version": 1
+}

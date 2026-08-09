@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "base_dependency_count": 4,
+  "cold_import_ms": 14.28,
+  "tiers": [
+    {
+      "tier": "standard",
+      "tool_count": 10,
+      "schema_bytes": 35651,
+      "approx_tokens": 8912
+    },
+    {
+      "tier": "full",
+      "tool_count": 63,
+      "schema_bytes": 141606,
+      "approx_tokens": 35401
+    }
+  ]
+}

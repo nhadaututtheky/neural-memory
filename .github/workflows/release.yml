@@ -71,6 +71,38 @@ jobs:
       - name: Test
         run: pytest tests/ -v --timeout=60 -n auto -m "not stress" --cov=neural_memory --cov-report=term-missing --cov-fail-under=67 --dist worksteal
 
+      - name: Cognitive efficiency integrity E2E
+        run: pytest tests/e2e/test_cognitive_efficiency_release.py -q
+
+      - name: Package and verify release evidence
+        env:
+          NM_REQUIRE_RELEASE_EVIDENCE: "1"
+        run: |
+          python scripts/benchmark/package_release_evidence.py
+          python scripts/benchmark/release_evidence.py \
+            --verify scripts/benchmark/results/release-evidence.json
+          # Fail closed if evidence SHA is not this tag commit
+          python - <<'PY'
+          import json, pathlib, subprocess, sys
+          data = json.loads(pathlib.Path("scripts/benchmark/results/release-evidence.json").read_text())
+          head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          if data.get("git_sha", "").lower() != head.lower():
+              print(f"::error::release evidence sha {data.get('git_sha')} != HEAD {head}")
+              sys.exit(1)
+          if not all(data.get("gates", {}).values()):
+              print("::error::one or more release evidence gates are false")
+              sys.exit(1)
+          print("Release evidence bound to", head[:12])
+          PY
+
+      - name: Upload release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence
+          path: |
+            scripts/benchmark/results/release-evidence.json
+            scripts/benchmark/results/ablation.json
+
   # ── Build distribution ──────────────────────────────────────────
   build:
     name: Build distribution
