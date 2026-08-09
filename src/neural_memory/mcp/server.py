@@ -221,6 +221,38 @@ class MCPServer(
         if hasattr(self, "run_session_end_consolidation"):
             tasks["session_end"] = self.run_session_end_consolidation
 
+        # Enrichment outbox worker (Phase 5) — durable post-ack jobs
+        async def _run_enrichment() -> None:
+            try:
+                storage = await self.get_storage()
+                if not hasattr(storage, "claim_enrichment_jobs"):
+                    return
+                from neural_memory.engine.enrichment_worker import process_enrichment_batch
+
+                provider = None
+                try:
+                    brain_id = getattr(storage, "brain_id", None) or getattr(
+                        storage, "_current_brain_id", None
+                    )
+                    if brain_id:
+                        brain = await storage.get_brain(str(brain_id))
+                        if brain and getattr(brain.config, "embedding_enabled", False):
+                            from neural_memory.engine.semantic_discovery import _create_provider
+
+                            provider = _create_provider(brain.config)
+                except Exception:
+                    provider = None
+                await process_enrichment_batch(
+                    storage,
+                    limit=50,
+                    embedding_provider=provider,
+                    worker_id="mcp-scheduler",
+                )
+            except Exception as e:
+                logger.debug("Enrichment worker tick failed: %s", e)
+
+        tasks["enrichment"] = _run_enrichment
+
         self._scheduler = build_scheduler(tasks=tasks, config=maint)
         await self._scheduler.start()
 
@@ -243,6 +275,13 @@ class MCPServer(
         if self._scheduler is not None:
             # Fire session_end event before stopping
             await self._scheduler.trigger("session_end")
+            # Release enrichment leases so pending work is claimable next start
+            try:
+                storage = await self.get_storage()
+                if hasattr(storage, "release_enrichment_leases"):
+                    await storage.release_enrichment_leases("mcp-scheduler")
+            except Exception as e:
+                logger.debug("Enrichment lease release skipped: %s", e)
             await self._scheduler.stop()
 
     def scheduler_tick(self) -> None:

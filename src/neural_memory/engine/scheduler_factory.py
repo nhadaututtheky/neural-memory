@@ -79,6 +79,12 @@ TASK_DEFINITIONS: dict[str, dict[str, Any]] = {
         "config_enabled_key": "notifications_enabled",
         "unit": "hours",
     },
+    "enrichment": {
+        "trigger_type": TriggerType.INTERVAL,
+        "config_key": "enrichment_interval_seconds",
+        "config_enabled_key": "enrichment_worker_enabled",
+        "unit": "seconds",
+    },
 }
 
 

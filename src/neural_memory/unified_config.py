@@ -452,6 +452,9 @@ class MaintenanceConfig:
     notifications_health_threshold: str = "D"  # alert at D or F
     notifications_daily_summary: bool = False
     notifications_zero_activity_alert: bool = True
+    # Durable enrichment outbox worker (Phase 5)
+    enrichment_worker_enabled: bool = True
+    enrichment_interval_seconds: int = 2  # poll interval when enabled
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -491,6 +494,8 @@ class MaintenanceConfig:
             "notifications_health_threshold": self.notifications_health_threshold,
             "notifications_daily_summary": self.notifications_daily_summary,
             "notifications_zero_activity_alert": self.notifications_zero_activity_alert,
+            "enrichment_worker_enabled": self.enrichment_worker_enabled,
+            "enrichment_interval_seconds": self.enrichment_interval_seconds,
         }
 
     @classmethod
@@ -560,6 +565,8 @@ class MaintenanceConfig:
             notifications_health_threshold=data.get("notifications_health_threshold", "D"),
             notifications_daily_summary=data.get("notifications_daily_summary", False),
             notifications_zero_activity_alert=data.get("notifications_zero_activity_alert", True),
+            enrichment_worker_enabled=data.get("enrichment_worker_enabled", True),
+            enrichment_interval_seconds=int(data.get("enrichment_interval_seconds", 2)),
         )
 
 

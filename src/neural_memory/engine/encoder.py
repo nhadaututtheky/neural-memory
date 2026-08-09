@@ -67,6 +67,8 @@ class EncodingResult:
         extraction_stats: Optional concept-extraction counters when callers
             opt in via verbose_extraction. Surface schema:
             ``{"dropped_short", "dropped_noise", "dropped_duplicate_entity"}``.
+        enrichment_status: ``done`` (sync), ``pending`` (outbox), or ``none``.
+        encoding_profile: lean or cognitive profile used for this write.
     """
 
     fiber: Fiber
@@ -75,6 +77,8 @@ class EncodingResult:
     synapses_created: list[Synapse]
     conflicts_detected: int = 0
     extraction_stats: dict[str, int] | None = None
+    enrichment_status: str = "done"
+    encoding_profile: str = "cognitive"
 
 
 def build_default_pipeline(
@@ -353,17 +357,39 @@ class MemoryEncoder:
         self._tag_normalizer = TagNormalizer()
         self._dedup_pipeline = dedup_pipeline
 
-        self._pipeline = pipeline or build_default_pipeline(
-            temporal_extractor=self._temporal,
-            entity_extractor=self._entity,
-            relation_extractor=self._relation,
-            sentiment_extractor=self._sentiment,
-            tag_normalizer=self._tag_normalizer,
-            dedup_pipeline=self._dedup_pipeline,
+        # Profile selection: lean = minimal searchable commit; cognitive = full.
+        # Custom pipeline argument always wins.
+        self._async_enrichment = bool(getattr(config, "async_enrichment_enabled", False))
+        self._encoding_profile = str(
+            getattr(config, "encoding_profile", "cognitive") or "cognitive"
         )
+        if pipeline is not None:
+            self._pipeline = pipeline
+        elif self._encoding_profile == "lean":
+            from neural_memory.engine.encoding_profiles import build_lean_pipeline
 
-        # Append EmbeddingStep if embedding is enabled (non-blocking, last step)
-        if pipeline is None and getattr(config, "embedding_enabled", False):
+            self._pipeline = build_lean_pipeline(
+                temporal_extractor=self._temporal,
+                entity_extractor=self._entity,
+                tag_normalizer=self._tag_normalizer,
+                dedup_pipeline=self._dedup_pipeline,
+            )
+        else:
+            self._pipeline = build_default_pipeline(
+                temporal_extractor=self._temporal,
+                entity_extractor=self._entity,
+                relation_extractor=self._relation,
+                sentiment_extractor=self._sentiment,
+                tag_normalizer=self._tag_normalizer,
+                dedup_pipeline=self._dedup_pipeline,
+            )
+
+        # Sync EmbeddingStep only when embedding enabled AND not async outbox
+        if (
+            pipeline is None
+            and getattr(config, "embedding_enabled", False)
+            and not self._async_enrichment
+        ):
             try:
                 from neural_memory.engine.semantic_discovery import _create_provider
                 from neural_memory.engine.steps.embedding_step import EmbeddingStep
@@ -449,6 +475,28 @@ class MemoryEncoder:
         if ctx.anchor_neuron is not None:
             await self._post_encode_neuro(ctx.anchor_neuron)
 
+        enrichment_status = "done"
+        if self._async_enrichment and ctx.anchor_neuron is not None:
+            try:
+                from neural_memory.engine.enrichment_worker import enqueue_post_encode_jobs
+
+                brain_id = getattr(self._storage, "brain_id", None) or getattr(
+                    self._storage, "_current_brain_id", None
+                )
+                if brain_id:
+                    jobs = await enqueue_post_encode_jobs(
+                        self._storage,
+                        brain_id=str(brain_id),
+                        entity_id=ctx.anchor_neuron.id,
+                        content=content,
+                    )
+                    enrichment_status = "pending" if jobs else "none"
+                else:
+                    enrichment_status = "none"
+            except Exception:
+                logger.debug("Failed to enqueue enrichment jobs", exc_info=True)
+                enrichment_status = "none"
+
         return EncodingResult(
             fiber=fiber,
             neurons_created=ctx.neurons_created,
@@ -460,6 +508,8 @@ class MemoryEncoder:
                 "dropped_noise": ctx.dropped_noise,
                 "dropped_duplicate_entity": ctx.dropped_duplicate_entity,
             },
+            enrichment_status=enrichment_status,
+            encoding_profile=self._encoding_profile,
         )
 
     async def _post_encode_neuro(self, anchor: Neuron) -> None:

@@ -91,7 +91,18 @@ class AutoHandler:
         if len(text) > MAX_CONTENT_LENGTH:
             return {"error": f"Text too long ({len(text)} chars). Max: {MAX_CONTENT_LENGTH}."}
 
+        from neural_memory.safety.capture_hygiene import clean_capture_input
         from neural_memory.safety.input_firewall import check_content
+
+        hygiene = clean_capture_input(text, source="passive")
+        if not hygiene.accepted:
+            logger.debug("Auto-analyze: capture hygiene rejected — %s", hygiene.reason)
+            return {
+                "detected": [],
+                "message": f"Input rejected: {hygiene.reason}",
+                "hygiene_reason": hygiene.reason,
+            }
+        text = hygiene.content
 
         fw = check_content(text)
         if fw.blocked:
@@ -130,7 +141,18 @@ class AutoHandler:
         if len(text) > MAX_CONTENT_LENGTH:
             return {"error": f"Text too long ({len(text)} chars). Max: {MAX_CONTENT_LENGTH}."}
 
+        from neural_memory.safety.capture_hygiene import clean_capture_input
         from neural_memory.safety.input_firewall import check_content
+
+        hygiene = clean_capture_input(text, source="passive")
+        if not hygiene.accepted:
+            logger.debug("Auto-process: capture hygiene rejected — %s", hygiene.reason)
+            return {
+                "saved": 0,
+                "message": f"Input rejected: {hygiene.reason}",
+                "hygiene_reason": hygiene.reason,
+            }
+        text = hygiene.content
 
         fw = check_content(text)
         if fw.blocked:
@@ -291,7 +313,17 @@ class AutoHandler:
         if len(text) > MAX_CONTENT_LENGTH:
             return {"error": f"Text too long ({len(text)} chars). Max: {MAX_CONTENT_LENGTH}."}
 
+        from neural_memory.safety.capture_hygiene import clean_capture_input
         from neural_memory.safety.input_firewall import check_content
+
+        hygiene = clean_capture_input(text, source="flush")
+        if not hygiene.accepted:
+            return {
+                "saved": 0,
+                "message": f"Input rejected: {hygiene.reason}",
+                "hygiene_reason": hygiene.reason,
+            }
+        text = hygiene.content
 
         fw = check_content(text)
         if fw.blocked:
@@ -446,9 +478,15 @@ class AutoHandler:
             if len(truncated_result) >= 50:
                 texts_to_analyze.append(truncated_result)
 
+            from neural_memory.safety.capture_hygiene import clean_capture_input
             from neural_memory.safety.input_firewall import check_content
 
             for text in texts_to_analyze:
+                hygiene = clean_capture_input(text, source="tool")
+                if not hygiene.accepted:
+                    logger.debug("Passive capture: hygiene rejected — %s", hygiene.reason)
+                    continue
+                text = hygiene.content
                 fw = check_content(text)
                 if fw.blocked:
                     logger.debug("Passive capture: firewall blocked — %s", fw.reason)

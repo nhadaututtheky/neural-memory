@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 39
+SCHEMA_VERSION = 40
 
 # â”€â”€ Migrations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Each entry maps (from_version -> to_version) with a list of SQL statements.
@@ -644,6 +644,32 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
     (38, 39): [
         # SM-2 ease factor for spaced repetition (default 2.5)
         "ALTER TABLE review_schedules ADD COLUMN ease_factor REAL NOT NULL DEFAULT 2.5",
+    ],
+    (39, 40): [
+        # Durable enrichment outbox (Phase 5) — separate from change_log.synced
+        """CREATE TABLE IF NOT EXISTS enrichment_jobs (
+            id TEXT NOT NULL,
+            brain_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            entity_id TEXT NOT NULL,
+            idempotency_key TEXT NOT NULL,
+            payload TEXT NOT NULL DEFAULT '{}',
+            status TEXT NOT NULL DEFAULT 'pending',
+            attempts INTEGER NOT NULL DEFAULT 0,
+            available_at TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            last_error TEXT,
+            lease_owner TEXT,
+            lease_expires_at TEXT,
+            PRIMARY KEY (brain_id, id),
+            UNIQUE (brain_id, idempotency_key),
+            FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_enrichment_jobs_claim "
+        "ON enrichment_jobs(brain_id, status, available_at)",
+        "CREATE INDEX IF NOT EXISTS idx_enrichment_jobs_entity "
+        "ON enrichment_jobs(brain_id, entity_id)",
     ],
 }
 
@@ -1300,4 +1326,29 @@ CREATE TABLE IF NOT EXISTS merkle_hashes (
     PRIMARY KEY (brain_id, entity_type, prefix)
 );
 CREATE INDEX IF NOT EXISTS idx_merkle_hashes_brain ON merkle_hashes(brain_id, entity_type);
+
+-- Durable enrichment outbox (v40, Phase 5 lean capture)
+CREATE TABLE IF NOT EXISTS enrichment_jobs (
+    id TEXT NOT NULL,
+    brain_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    payload TEXT NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    available_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    last_error TEXT,
+    lease_owner TEXT,
+    lease_expires_at TEXT,
+    PRIMARY KEY (brain_id, id),
+    UNIQUE (brain_id, idempotency_key),
+    FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_enrichment_jobs_claim
+    ON enrichment_jobs(brain_id, status, available_at);
+CREATE INDEX IF NOT EXISTS idx_enrichment_jobs_entity
+    ON enrichment_jobs(brain_id, entity_id);
 """

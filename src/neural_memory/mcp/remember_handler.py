@@ -735,6 +735,10 @@ class RememberHandler:
                 "fiber_id": result.fiber.id,
                 "memory_type": mem_type.value,
             }
+            # Enrichment outbox status (pending = async, done = sync)
+            enrichment_status = getattr(result, "enrichment_status", "done")
+            if enrichment_status and enrichment_status != "done":
+                compact_response["enrichment_status"] = enrichment_status
             # Only surface critical warnings in compact mode
             if redacted_matches:
                 compact_response["auto_redacted"] = True
@@ -769,6 +773,8 @@ class RememberHandler:
             "priority": priority.value,
             "auto_importance": raw_priority is None,
             "neurons_created": len(result.neurons_created),
+            "enrichment_status": getattr(result, "enrichment_status", "done"),
+            "encoding_profile": getattr(result, "encoding_profile", "cognitive"),
             "message": f"Remembered: {content[:50]}{'...' if len(content) > 50 else ''}",
             **quality_result.to_dict(),
         }

@@ -218,6 +218,15 @@ class BrainConfig:
     cascade_min_candidates: int = 1
     cascade_neighbor_hops: int = 1  # induced-subgraph expansion hops
     cascade_graph_node_budget: int = 500  # max nodes in bounded graph scope
+    # Lean capture + durable enrichment (Phase 5)
+    # Missing encoding_profile on disk → cognitive (compatibility). Fresh
+    # installs may set lean via unified_config / factory defaults.
+    encoding_profile: str = "cognitive"
+    async_enrichment_enabled: bool = False  # existing embedding brains stay sync
+    enrichment_batch_size: int = 50
+    enrichment_max_attempts: int = 5
+    enrichment_lease_seconds: int = 30
+    enrichment_worker_concurrency: int = 4
     # Stratum-aware MMR diversity: cap per lifecycle stage
     stratum_diversity_cap: float = 0.4  # max 40% of results from one stratum
     # Preference-aware retrieval (boost preference-establishing sessions)

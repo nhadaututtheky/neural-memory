@@ -97,6 +97,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         if maint.notifications_webhook_url:
             scheduler_tasks["notifications"] = _run_notifications
 
+        async def _run_enrichment() -> None:
+            if not hasattr(storage, "claim_enrichment_jobs"):
+                return
+            from neural_memory.engine.enrichment_worker import process_enrichment_batch
+
+            await process_enrichment_batch(
+                storage,
+                limit=50,
+                worker_id="fastapi-scheduler",
+            )
+
+        scheduler_tasks["enrichment"] = _run_enrichment
+
         scheduler = build_scheduler(tasks=scheduler_tasks, config=maint)
         await scheduler.start()
         app.state.scheduler = scheduler

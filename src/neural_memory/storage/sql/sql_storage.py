@@ -34,6 +34,7 @@ from neural_memory.storage.sql.mixins.compression import CompressionMixin
 from neural_memory.storage.sql.mixins.depth_priors import DepthPriorsMixin
 from neural_memory.storage.sql.mixins.devices import DevicesMixin
 from neural_memory.storage.sql.mixins.drift import DriftMixin
+from neural_memory.storage.sql.mixins.enrichment_jobs import EnrichmentJobsMixin
 from neural_memory.storage.sql.mixins.entity_refs import EntityRefsMixin
 from neural_memory.storage.sql.mixins.fibers import FiberMixin
 from neural_memory.storage.sql.mixins.maturation import MaturationMixin
@@ -74,6 +75,7 @@ class SQLStorage(
     DepthPriorsMixin,
     DevicesMixin,
     DriftMixin,
+    EnrichmentJobsMixin,
     EntityRefsMixin,
     MaturationMixin,
     MerkleMixin,
