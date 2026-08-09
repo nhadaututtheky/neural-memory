@@ -36,16 +36,22 @@ async def setup_neural_memory(
         NMMemoryStore that can replace Nanobot's ``MemoryStore``.
     """
     from neural_memory.core.brain import Brain
-    from neural_memory.storage.sqlite_store import SQLiteStorage
+    from neural_memory.storage.factory import open_sqlite_storage
 
     db_dir = workspace / "memory"
     db_dir.mkdir(parents=True, exist_ok=True)
     db_path = db_dir / db_filename
 
-    storage = SQLiteStorage(str(db_path))
-    await storage.initialize()
+    # New Nanobot workspaces use unified adapter (fresh install policy)
+    storage = await open_sqlite_storage(
+        str(db_path),
+        storage_adapter="unified",
+        brain_id=brain_id,
+    )
 
     brain = await storage.get_brain(brain_id)
+    if brain is None:
+        brain = await storage.find_brain_by_name(brain_id)
     if brain is None:
         brain = Brain.create(name=brain_id, brain_id=brain_id)
         await storage.save_brain(brain)

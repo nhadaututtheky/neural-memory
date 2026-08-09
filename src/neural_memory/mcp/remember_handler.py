@@ -77,11 +77,15 @@ class RememberHandler:
         try:
             await self.config.ensure_global_brain()
 
-            from neural_memory.storage.sqlite_store import SQLiteStorage
+            from neural_memory.storage.factory import open_sqlite_storage
 
             db_path = self.config.get_brain_db_path(GLOBAL_BRAIN_NAME)
-            storage = SQLiteStorage(db_path)
-            await storage.initialize()
+            adapter = getattr(self.config, "storage_adapter", None)
+            storage = await open_sqlite_storage(
+                db_path,
+                storage_adapter=adapter,
+                set_brain_name=GLOBAL_BRAIN_NAME,
+            )
 
             brain = await storage.find_brain_by_name(GLOBAL_BRAIN_NAME)
             if brain:

@@ -130,7 +130,41 @@ class FiberMixin:
 
         # Invalidate Merkle hash cache for the affected bucket
         await self.invalidate_merkle_prefix("fiber", fiber.id, is_pro=True)  # type: ignore[attr-defined]
+        safe_log = getattr(self, "_safe_record_change", None)
+        if safe_log is not None:
+            await safe_log(
+                "fiber",
+                fiber.id,
+                "insert",
+                payload={
+                    "neuron_ids": list(fiber.neuron_ids),
+                    "anchor_neuron_id": fiber.anchor_neuron_id,
+                },
+            )
         return fiber.id
+
+    async def get_fibers_for_neurons(self, neuron_ids: list[str]) -> list[Fiber]:
+        """Return fibers that contain any of the given neuron IDs (junction table).
+
+        Used by incremental consolidation dirty-set expansion.
+        """
+        if not neuron_ids:
+            return []
+        d = self._dialect
+        brain_id = self._get_brain_id()
+        # Cap lookup to avoid huge IN clauses
+        ids = list(dict.fromkeys(neuron_ids))[:500]
+        in_sql, in_params = d.in_clause(2, ids)
+        rows = await d.fetch_all(
+            f"""SELECT DISTINCT f.*
+                FROM fibers f
+                JOIN fiber_neurons j
+                  ON j.brain_id = f.brain_id AND j.fiber_id = f.id
+                WHERE f.brain_id = {d.ph(1)} AND j.neuron_id {in_sql}
+                LIMIT 500""",
+            [brain_id, *in_params],
+        )
+        return [row_to_fiber(d, r) for r in rows]
 
     # ------------------------------------------------------------------ get
     # ------------------------------------------------------------------
@@ -461,6 +495,9 @@ class FiberMixin:
             )
         if count > 0:
             await self.invalidate_merkle_prefix("fiber", fiber_id, is_pro=True)  # type: ignore[attr-defined]
+            safe_log = getattr(self, "_safe_record_change", None)
+            if safe_log is not None:
+                await safe_log("fiber", fiber_id, "delete")
         return count > 0
 
     # ------------------------------------------------------------------ pinned

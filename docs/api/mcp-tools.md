@@ -569,10 +569,12 @@ Pin memories as permanent KB (skip decay/pruning/compression). Use for critical 
 
 ### `nmem_consolidate`
 
-Run brain consolidation (sleep-like maintenance). Strategy 'all' runs everything in order. Use periodically or after bulk imports. dry_run=true to preview.
+Run brain consolidation (sleep-like maintenance). Strategy 'all' runs everything in order. Use periodically or after bulk imports. dry_run=true to preview. mode=incremental uses change_log dirty sets; action=checkpoint_status|checkpoint_reset inspects Phase 6 checkpoints.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
+| `action` | string (`run`, `checkpoint_status`, `checkpoint_reset`) | No | — | run=consolidate (default), checkpoint_status=list watermarks, checkpoint_reset=clear |
+| `mode` | string (`full`, `incremental`) | No | — | full=classic pass (default for manual), incremental=change_log dirty sets |
 | `strategy` | string (`prune`, `merge`, `summarize`, `mature`, `infer`, `enrich`, `dream`, `learn_habits`, `dedup`, `semantic_link`, `compress`, `process_tool_events`, `detect_drift`, `all`) | No | default: all | Consolidation strategy to run (default: all) |
 | `dry_run` | boolean | No | default: false | Preview changes without applying (default: false) |
 | `prune_weight_threshold` | number | No | default: 0.05 | Synapse weight threshold for pruning (default: 0.05) |

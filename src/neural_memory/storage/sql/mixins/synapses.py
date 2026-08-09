@@ -95,6 +95,17 @@ class SynapseMixin:
             )
             # Invalidate Merkle hash cache
             await self.invalidate_merkle_prefix("synapse", synapse.id, is_pro=True)  # type: ignore[attr-defined]
+            safe_log = getattr(self, "_safe_record_change", None)
+            if safe_log is not None:
+                await safe_log(
+                    "synapse",
+                    synapse.id,
+                    "insert",
+                    payload={
+                        "source_id": synapse.source_id,
+                        "target_id": synapse.target_id,
+                    },
+                )
             return synapse.id
         except Exception as e:
             err = str(e).upper()
@@ -223,6 +234,9 @@ class SynapseMixin:
         )
         if count > 0:
             await self.invalidate_merkle_prefix("synapse", synapse_id, is_pro=True)  # type: ignore[attr-defined]
+            safe_log = getattr(self, "_safe_record_change", None)
+            if safe_log is not None:
+                await safe_log("synapse", synapse_id, "delete")
         return count > 0
 
     async def delete_synapses_batch(self, synapse_ids: set[str]) -> int:

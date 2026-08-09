@@ -25,8 +25,8 @@ def _make_cfg(
 ) -> MagicMock:
     """Create a mock config with MaintenanceConfig.
 
-    Default consolidation_mode is full so existing tests that patch
-    ``run_with_delta`` keep working. Production default remains incremental.
+    Tests that patch ``run_with_delta`` pass consolidation_mode=full (explicit).
+    Production default is incremental when change_log is fed by SQL writes.
     """
     cfg = MagicMock()
     cfg.maintenance = MaintenanceConfig(

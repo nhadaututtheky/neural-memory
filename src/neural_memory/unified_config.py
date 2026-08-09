@@ -456,9 +456,8 @@ class MaintenanceConfig:
     enrichment_worker_enabled: bool = True
     enrichment_interval_seconds: int = 2  # poll interval when enabled
     # Incremental consolidation (Phase 6)
-    # Default full until local write paths auto-feed change_log (P6 review).
-    # Opt in to incremental after verifying change_log is populated on encodes.
-    consolidation_mode: str = "full"  # incremental | full
+    # Incremental is safe once SQL mixins feed change_log on local writes.
+    consolidation_mode: str = "incremental"  # incremental | full
     consolidation_max_changes: int = 5000
     consolidation_max_candidates: int = 10000
     consolidation_bootstrap_full: bool = True  # first run full-bootstrap when no checkpoints
@@ -578,7 +577,7 @@ class MaintenanceConfig:
             notifications_zero_activity_alert=data.get("notifications_zero_activity_alert", True),
             enrichment_worker_enabled=data.get("enrichment_worker_enabled", True),
             enrichment_interval_seconds=int(data.get("enrichment_interval_seconds", 2)),
-            consolidation_mode=str(data.get("consolidation_mode", "full")),
+            consolidation_mode=str(data.get("consolidation_mode", "incremental")),
             consolidation_max_changes=int(data.get("consolidation_max_changes", 5000)),
             consolidation_max_candidates=int(data.get("consolidation_max_candidates", 10000)),
             consolidation_bootstrap_full=bool(data.get("consolidation_bootstrap_full", True)),
@@ -1868,13 +1867,14 @@ class UnifiedConfig:
         if self.has_global_brain():
             return
 
-        from neural_memory.storage.sqlite_store import SQLiteStorage
+        from neural_memory.storage.factory import open_sqlite_storage
 
         db_path = self.get_brain_db_path(GLOBAL_BRAIN_NAME)
-        storage = SQLiteStorage(db_path)
+        storage = await open_sqlite_storage(
+            db_path,
+            storage_adapter=getattr(self, "storage_adapter", None),
+        )
         try:
-            await storage.initialize()
-
             from neural_memory.core.brain import Brain, BrainConfig
 
             brain = Brain.create(name=GLOBAL_BRAIN_NAME, config=BrainConfig())

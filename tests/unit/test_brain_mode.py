@@ -219,6 +219,16 @@ class TestBrainModeConfig:
 
         assert config.mode == BrainMode.LOCAL
         assert config.shared is None
+        # Missing storage_adapter key on persisted blobs → legacy (compat)
+        assert config.storage_adapter == "legacy"
+
+    def test_from_dict_missing_adapter_is_legacy(self) -> None:
+        """Persisted mode without storage_adapter must not jump to unified."""
+        config = BrainModeConfig.from_dict({"mode": "local"})
+        assert config.storage_adapter == "legacy"
+
+    def test_from_dict_explicit_unified(self) -> None:
+        config = BrainModeConfig.from_dict({"mode": "local", "storage_adapter": "unified"})
         assert config.storage_adapter == "unified"
 
     def test_storage_adapter_roundtrip(self) -> None:

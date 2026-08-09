@@ -75,6 +75,25 @@ class ChangeLogMixin:
             ],
         )
 
+    async def _safe_record_change(
+        self,
+        entity_type: str,
+        entity_id: str,
+        operation: str,
+        payload: dict[str, Any] | None = None,
+    ) -> None:
+        """Best-effort change_log write — never fail the primary mutation."""
+        try:
+            await self.record_change(entity_type, entity_id, operation, payload=payload or {})
+        except Exception:
+            logger.debug(
+                "change_log record failed for %s %s %s (non-fatal)",
+                entity_type,
+                operation,
+                entity_id,
+                exc_info=True,
+            )
+
     async def get_changes_since(self, sequence: int = 0, limit: int = 1000) -> list[ChangeEntry]:
         """Get changes after a given sequence number, ordered by id ASC."""
         safe_limit = min(limit, 10000)

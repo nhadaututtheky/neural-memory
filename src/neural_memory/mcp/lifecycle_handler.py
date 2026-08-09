@@ -274,9 +274,16 @@ class LifecycleHandler:
         }
 
     async def _consolidate(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Run memory consolidation on the current brain."""
+        """Run memory consolidation on the current brain.
+
+        Optional args:
+        - mode: ``full`` | ``incremental`` (default: config / full for manual)
+        - action: ``run`` (default) | ``checkpoint_status`` | ``checkpoint_reset``
+        - strategy: consolidation strategy (default all)
+        """
         from neural_memory.engine.consolidation import (
             ConsolidationConfig,
+            ConsolidationEngine,
             ConsolidationStrategy,
         )
         from neural_memory.engine.consolidation_delta import run_with_delta
@@ -288,6 +295,62 @@ class LifecycleHandler:
             logger.error("No brain configured for consolidate")
             return {"error": "No brain configured"}
 
+        action = str(args.get("action") or "run").strip().lower()
+        if action == "checkpoint_status":
+            list_cp = getattr(storage, "list_consolidation_checkpoints", None)
+            if list_cp is None:
+                return {
+                    "action": action,
+                    "brain_id": brain_id,
+                    "checkpoints": [],
+                    "supported": False,
+                }
+            try:
+                cps = await list_cp()
+            except Exception:
+                logger.error("checkpoint_status failed", exc_info=True)
+                return {"error": "Failed to list consolidation checkpoints"}
+            return {
+                "action": action,
+                "brain_id": brain_id,
+                "supported": True,
+                "checkpoints": [
+                    {
+                        "strategy": getattr(c, "strategy", None),
+                        "last_sequence": getattr(c, "last_sequence", None),
+                        "updated_at": str(getattr(c, "updated_at", "") or ""),
+                    }
+                    for c in cps
+                ],
+            }
+
+        if action == "checkpoint_reset":
+            reset_cp = getattr(storage, "reset_consolidation_checkpoint", None)
+            if reset_cp is None:
+                return {"error": "Checkpoint reset requires unified storage"}
+            strategy_filter = args.get("strategy")
+            try:
+                if strategy_filter and strategy_filter != "all":
+                    await reset_cp(str(strategy_filter), audit_reason="mcp_reset")
+                else:
+                    await reset_cp(None, audit_reason="mcp_reset")
+            except Exception:
+                logger.error("checkpoint_reset failed", exc_info=True)
+                return {"error": "Failed to reset consolidation checkpoints"}
+            return {
+                "action": action,
+                "brain_id": brain_id,
+                "status": "reset",
+                "strategy": strategy_filter or "all",
+            }
+
+        if action != "run":
+            return {
+                "error": (
+                    f"Unknown action: {action}. Valid: run, checkpoint_status, checkpoint_reset"
+                )
+            }
+
         # Parse strategy
         strategy_str = args.get("strategy", "all")
         try:
@@ -298,6 +361,9 @@ class LifecycleHandler:
 
         strategies = [strategy]
         dry_run = bool(args.get("dry_run", False))
+        mode = str(args.get("mode") or "full").strip().lower()
+        if mode not in ("full", "incremental"):
+            return {"error": "mode must be 'full' or 'incremental'"}
 
         # Build config with optional overrides (bounded to valid ranges)
         config_kwargs: dict[str, Any] = {}
@@ -317,6 +383,23 @@ class LifecycleHandler:
         config = ConsolidationConfig(**config_kwargs) if config_kwargs else None
 
         try:
+            if mode == "incremental":
+                engine = ConsolidationEngine(storage, config=config)
+                inc = await engine.run_incremental(
+                    strategies=strategies,
+                    max_changes=min(int(args.get("max_changes", 5000) or 5000), 50_000),
+                    max_candidates=min(int(args.get("max_candidates", 10000) or 10000), 100_000),
+                    bootstrap_full=bool(args.get("bootstrap_full", True)),
+                )
+                return {
+                    "strategy": strategy_str,
+                    "dry_run": dry_run,
+                    "mode": inc.mode,
+                    "summary": inc.summary(),
+                    "checkpoints": dict(inc.checkpoints),
+                    "truncated": bool(getattr(inc, "truncated", False)),
+                }
+
             # Pass tier_config for auto-tier (Pro feature, runs post-consolidation)
             tier_config = self.config.tiers if self.config.is_pro() else None
             delta = await run_with_delta(
@@ -334,6 +417,7 @@ class LifecycleHandler:
         result = delta.to_dict()
         result["strategy"] = strategy_str
         result["dry_run"] = dry_run
+        result["mode"] = "full"
         result["summary"] = delta.report.summary()
         return result
 

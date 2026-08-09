@@ -360,9 +360,16 @@ class MemoryEncoder:
         # Profile selection: lean = minimal searchable commit; cognitive = full.
         # Custom pipeline argument always wins.
         self._async_enrichment = bool(getattr(config, "async_enrichment_enabled", False))
-        self._encoding_profile = str(
-            getattr(config, "encoding_profile", "cognitive") or "cognitive"
-        )
+        raw_profile = getattr(config, "encoding_profile", "cognitive")
+        # Coerce non-str (e.g. MagicMock in tests) to cognitive default
+        if not isinstance(raw_profile, str) or not raw_profile.strip():
+            self._encoding_profile = "cognitive"
+        else:
+            normalized = raw_profile.strip().lower()
+            self._encoding_profile = (
+                normalized if normalized in ("lean", "cognitive") else "cognitive"
+            )
+        self._custom_pipeline = pipeline is not None
         if pipeline is not None:
             self._pipeline = pipeline
         elif self._encoding_profile == "lean":
@@ -386,7 +393,7 @@ class MemoryEncoder:
 
         # Sync EmbeddingStep only when embedding enabled AND not async outbox
         if (
-            pipeline is None
+            not self._custom_pipeline
             and getattr(config, "embedding_enabled", False)
             and not self._async_enrichment
         ):
@@ -451,6 +458,49 @@ class MemoryEncoder:
         if mem_type in ("instruction", "workflow"):
             merged_metadata = _inject_instruction_metadata(content, merged_metadata)
 
+        # Per-write profile resolution (decision/high-priority force cognitive)
+        from neural_memory.engine.encoding_profiles import (
+            EncodingProfile,
+            resolve_profile,
+        )
+
+        try:
+            priority_val = int(merged_metadata.get("priority") or 5)
+        except (TypeError, ValueError):
+            priority_val = 5
+        resolution = resolve_profile(
+            configured=self._encoding_profile,
+            async_enrichment=self._async_enrichment,
+            memory_type=str(mem_type or ""),
+            priority=priority_val,
+        )
+        active_pipeline = self._pipeline
+        active_profile = resolution.profile.value
+        active_async = resolution.async_enrichment
+        if (
+            resolution.profile is EncodingProfile.COGNITIVE
+            and self._encoding_profile == "lean"
+            and not self._custom_pipeline
+        ):
+            # Force full cognitive pipeline for this high-priority write
+            active_pipeline = build_default_pipeline(
+                temporal_extractor=self._temporal,
+                entity_extractor=self._entity,
+                relation_extractor=self._relation,
+                sentiment_extractor=self._sentiment,
+                tag_normalizer=self._tag_normalizer,
+                dedup_pipeline=self._dedup_pipeline,
+            )
+            active_async = False
+            active_profile = "cognitive"
+
+        if active_async and not hasattr(self._storage, "enqueue_enrichment_job"):
+            raise RuntimeError(
+                "async_enrichment_enabled requires unified SQLStorage with "
+                "enrichment outbox (storage_adapter=unified). "
+                "Disable async_enrichment or switch adapter."
+            )
+
         ctx = PipelineContext(
             content=content,
             timestamp=timestamp,
@@ -463,7 +513,7 @@ class MemoryEncoder:
             salience_ceiling=salience_ceiling,
         )
 
-        ctx = await self._pipeline.run(ctx, self._storage, self._config)
+        ctx = await active_pipeline.run(ctx, self._storage, self._config)
 
         # Extract fiber from context (set by BuildFiberStep) — use .get() to avoid mutation
         fiber = ctx.effective_metadata.get("_pipeline_fiber")
@@ -476,27 +526,31 @@ class MemoryEncoder:
             await self._post_encode_neuro(ctx.anchor_neuron)
 
         enrichment_status = "done"
-        if self._async_enrichment and ctx.anchor_neuron is not None:
-            try:
-                from neural_memory.engine.enrichment_worker import enqueue_post_encode_jobs
+        if active_async and ctx.anchor_neuron is not None:
+            from neural_memory.engine.enrichment_worker import enqueue_post_encode_jobs
 
-                brain_id = getattr(self._storage, "brain_id", None) or getattr(
-                    self._storage, "_current_brain_id", None
+            brain_id = getattr(self._storage, "brain_id", None) or getattr(
+                self._storage, "_current_brain_id", None
+            )
+            if not brain_id:
+                raise RuntimeError(
+                    "async_enrichment requires brain context on storage (set_brain) before encode"
                 )
-                if brain_id:
-                    jobs = await enqueue_post_encode_jobs(
-                        self._storage,
-                        brain_id=str(brain_id),
-                        entity_id=ctx.anchor_neuron.id,
-                        content=content,
-                        embedding_enabled=bool(getattr(self._config, "embedding_enabled", False)),
-                    )
-                    enrichment_status = "pending" if jobs else "none"
-                else:
-                    enrichment_status = "none"
-            except Exception:
-                logger.debug("Failed to enqueue enrichment jobs", exc_info=True)
-                enrichment_status = "none"
+            try:
+                jobs = await enqueue_post_encode_jobs(
+                    self._storage,
+                    brain_id=str(brain_id),
+                    entity_id=ctx.anchor_neuron.id,
+                    content=content,
+                    embedding_enabled=bool(getattr(self._config, "embedding_enabled", False)),
+                )
+            except Exception as exc:
+                logger.error("Failed to enqueue enrichment jobs", exc_info=True)
+                raise RuntimeError(
+                    "async enrichment enqueue failed; memory was written but "
+                    "outbox job was not created"
+                ) from exc
+            enrichment_status = "pending" if jobs else "none"
 
         return EncodingResult(
             fiber=fiber,
@@ -510,7 +564,7 @@ class MemoryEncoder:
                 "dropped_duplicate_entity": ctx.dropped_duplicate_entity,
             },
             enrichment_status=enrichment_status,
-            encoding_profile=self._encoding_profile,
+            encoding_profile=active_profile,
         )
 
     async def _post_encode_neuro(self, anchor: Neuron) -> None:

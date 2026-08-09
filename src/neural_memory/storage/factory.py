@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import TYPE_CHECKING, Any
 
 from neural_memory.core.brain_mode import (
@@ -177,6 +178,56 @@ async def _create_local_storage(
     return legacy_storage
 
 
+async def open_sqlite_storage(
+    db_path: str | os.PathLike[str],
+    *,
+    storage_adapter: StorageAdapter | str | None = None,
+    brain_id: str | None = None,
+    set_brain_name: str | None = None,
+) -> NeuralStorage:
+    """Open a SQLite brain DB using the configured storage adapter.
+
+    Central entry for runtime paths that previously hard-coded
+    ``SQLiteStorage``. Prefer this (or ``get_shared_storage``) over
+    constructing legacy storage directly.
+
+    Args:
+        db_path: Path to the SQLite file.
+        storage_adapter: ``legacy`` | ``unified``. When ``None``, reads
+            from ``get_config().storage_adapter`` (missing-key → legacy).
+        brain_id: Optional brain UUID to set after open.
+        set_brain_name: If set, look up brain by name and set context.
+    """
+    from pathlib import Path
+
+    path = str(db_path)
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+
+    if storage_adapter is None:
+        try:
+            from neural_memory.unified_config import get_config
+
+            storage_adapter = getattr(get_config(), "storage_adapter", "legacy")
+        except Exception:
+            storage_adapter = "legacy"
+    adapter = normalize_storage_adapter(storage_adapter)
+
+    # brain_id for set_brain; temporary placeholder until name lookup
+    placeholder = brain_id or "default"
+    storage = await _create_local_storage(path, placeholder, adapter)
+
+    if set_brain_name:
+        brain = await storage.find_brain_by_name(set_brain_name)
+        if brain is None:
+            brain = await storage.get_brain(set_brain_name)
+        if brain is not None:
+            storage.set_brain(brain.id)
+    elif brain_id:
+        storage.set_brain(brain_id)
+
+    return storage
+
+
 class HybridStorage(NeuralStorage):
     """
     Hybrid storage that combines local SQLite with remote sync.
@@ -241,10 +292,16 @@ class HybridStorage(NeuralStorage):
         api_key: str | None = None,
         sync_strategy: str = "bidirectional",
         auto_sync_on_encode: bool = True,
-        storage_adapter: StorageAdapter = "legacy",
+        storage_adapter: StorageAdapter = "unified",
     ) -> HybridStorage:
-        """Create and initialize hybrid storage."""
-        local = await _create_local_storage(local_path, brain_id, storage_adapter)
+        """Create and initialize hybrid storage.
+
+        Default adapter is ``unified`` for new hybrid installs. Pass
+        ``storage_adapter="legacy"`` explicitly for upgrade paths.
+        """
+        local = await _create_local_storage(
+            local_path, brain_id, normalize_storage_adapter(storage_adapter)
+        )
 
         remote = SharedStorage(
             server_url=server_url,

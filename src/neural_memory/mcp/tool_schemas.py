@@ -1791,10 +1791,21 @@ _ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "name": "nmem_consolidate",
         "description": "Run brain consolidation (sleep-like maintenance). Strategy 'all' runs everything in order. "
-        "Use periodically or after bulk imports. dry_run=true to preview.",
+        "Use periodically or after bulk imports. dry_run=true to preview. "
+        "mode=incremental uses change_log dirty sets; action=checkpoint_status|checkpoint_reset inspects Phase 6 checkpoints.",
         "inputSchema": {
             "type": "object",
             "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["run", "checkpoint_status", "checkpoint_reset"],
+                    "description": "run=consolidate (default), checkpoint_status=list watermarks, checkpoint_reset=clear",
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["full", "incremental"],
+                    "description": "full=classic pass (default for manual), incremental=change_log dirty sets",
+                },
                 "strategy": {
                     "type": "string",
                     "enum": [

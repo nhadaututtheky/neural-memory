@@ -62,12 +62,10 @@ async def _query_single_brain(
     Returns:
         Tuple of (brain_name, fibers, neurons_activated, context)
     """
-    from neural_memory.storage.sqlite_store import SQLiteStorage
+    from neural_memory.storage.factory import open_sqlite_storage
 
-    storage = SQLiteStorage(db_path)
+    storage = await open_sqlite_storage(db_path, set_brain_name=brain_name)
     try:
-        await storage.initialize()
-
         # Find the brain by name in the DB
         brain = await storage.find_brain_by_name(brain_name)
         if not brain:

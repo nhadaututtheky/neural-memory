@@ -79,15 +79,41 @@ class VectorSearchMixin:
         query_vector: list[float],
         k: int = 20,
     ) -> list[tuple[str, float]]:
-        """K-nearest-neighbor search using HNSW vector index.
+        """K-nearest-neighbor search — backend-aware.
 
-        Validates hits against live SQLite neurons so deleted IDs cannot
-        become anchors (stale sidecar / tombstone lag).
+        - SQLite: HNSW sidecar (hnswlib), live-ID validated.
+        - Postgres (dialect.supports_vector): pgvector via
+          ``find_neurons_by_embedding`` — never the SQLite HNSW path.
 
         Returns:
             [(neuron_id, similarity)] sorted by similarity descending.
             Empty list if index unavailable or empty.
         """
+        dialect = getattr(self, "_dialect", None)
+        # Postgres / vector-capable SQL: do NOT use SQLite HNSW sidecar
+        if dialect is not None and getattr(dialect, "supports_vector", False):
+            find_emb = getattr(self, "find_neurons_by_embedding", None)
+            if find_emb is None:
+                return []
+            try:
+                hits = await find_emb(query_vector, limit=k)
+            except Exception:
+                logger.debug("pgvector knn_search failed", exc_info=True)
+                return []
+            # Normalize to (id, score) — may be Neuron objects or tuples
+            out: list[tuple[str, float]] = []
+            for item in hits or []:
+                if isinstance(item, tuple) and len(item) >= 2:
+                    out.append((str(item[0]), float(item[1])))
+                else:
+                    nid = getattr(item, "id", None)
+                    score = float(getattr(item, "score", getattr(item, "similarity", 0.0)))
+                    if nid:
+                        out.append((str(nid), score))
+                if len(out) >= k:
+                    break
+            return out
+
         index = self._ensure_vector_index()
         if index is None or index.count == 0:
             if os.environ.get("NMEM_REQUIRE_EMBEDDING") == "1":
@@ -119,8 +145,24 @@ class VectorSearchMixin:
         found = await get_batch(neuron_ids)
         return set(found)
 
+    def _persist_vector_index(self) -> None:
+        """Best-effort save so crash before close() does not lose mutations."""
+        index = self._vector_index
+        if index is None:
+            return
+        save = getattr(index, "save", None)
+        if callable(save):
+            try:
+                save()
+            except Exception:
+                logger.debug("vector index save failed (non-critical)", exc_info=True)
+
     async def vector_index_add(self, neuron_id: str, vector: list[float]) -> None:
         """Add or replace a neuron's embedding in the vector index."""
+        dialect = getattr(self, "_dialect", None)
+        if dialect is not None and getattr(dialect, "supports_vector", False):
+            # Postgres: embeddings live in SQL; sidecar not used
+            return
         index = self._ensure_vector_index()
         if index is not None:
             # Replace semantics: remove prior vector if present, then add.
@@ -129,16 +171,22 @@ class VectorSearchMixin:
             except Exception:
                 logger.debug("vector replace: prior id absent for %s", neuron_id, exc_info=True)
             index.add(neuron_id, vector)
+            self._persist_vector_index()
 
     async def vector_index_remove(self, neuron_id: str) -> None:
         """Remove/tombstone a neuron from the vector index."""
+        dialect = getattr(self, "_dialect", None)
+        if dialect is not None and getattr(dialect, "supports_vector", False):
+            return
         if self._vector_index is not None:
             self._vector_index.remove(neuron_id)
+            self._persist_vector_index()
         else:
             # Lazy-open so delete after brain switch still hits the right sidecar.
             index = self._ensure_vector_index()
             if index is not None:
                 index.remove(neuron_id)
+                self._persist_vector_index()
 
     def _close_vector_index(self) -> None:
         """Close and save vector index. Call from storage close()."""

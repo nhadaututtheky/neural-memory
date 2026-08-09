@@ -154,6 +154,10 @@ class NeuronMixin:
         self._neuron_cache.invalidate_key(neuron.content, neuron.type.value)
         self._invalidate_hash_snapshot()
         await self.invalidate_merkle_prefix("neuron", neuron.id, is_pro=True)  # type: ignore[attr-defined]
+        # Feed incremental consolidation dirty set (P6 residual)
+        safe_log = getattr(self, "_safe_record_change", None)
+        if safe_log is not None:
+            await safe_log("neuron", neuron.id, "insert")
         return neuron.id
 
     async def get_neuron(self, neuron_id: str) -> Neuron | None:
@@ -505,6 +509,9 @@ class NeuronMixin:
                         exc_info=True,
                     )
             await self.invalidate_merkle_prefix("neuron", neuron_id, is_pro=True)  # type: ignore[attr-defined]
+            safe_log = getattr(self, "_safe_record_change", None)
+            if safe_log is not None:
+                await safe_log("neuron", neuron_id, "delete")
         return count > 0
 
     async def delete_neurons_batch(self, neuron_ids: list[str]) -> int:
@@ -522,9 +529,15 @@ class NeuronMixin:
         chunk_size = 500
         vector_remove = getattr(self, "vector_index_remove", None)
 
+        safe_log = getattr(self, "_safe_record_change", None)
         for start_idx in range(0, len(neuron_ids), chunk_size):
             chunk = neuron_ids[start_idx : start_idx + chunk_size]
-            in_sql, in_params = d.in_clause(2, chunk)
+            # Only remove vectors for IDs that still exist (P2-3 review #8)
+            existing = await self.get_neurons_batch(chunk)
+            live_ids = list(existing.keys())
+            if not live_ids:
+                continue
+            in_sql, in_params = d.in_clause(2, live_ids)
             async with d.transaction():
                 count = await d.execute_count(
                     f"DELETE FROM neurons WHERE brain_id = {d.ph(1)} AND id {in_sql}",
@@ -532,7 +545,7 @@ class NeuronMixin:
                 )
             deleted += count
             if vector_remove is not None:
-                for nid in chunk:
+                for nid in live_ids:
                     try:
                         await vector_remove(nid)
                     except Exception:
@@ -541,6 +554,9 @@ class NeuronMixin:
                             nid,
                             exc_info=True,
                         )
+            if safe_log is not None:
+                for nid in live_ids:
+                    await safe_log("neuron", nid, "delete")
 
         self._neuron_cache.invalidate()
         self._invalidate_hash_snapshot()

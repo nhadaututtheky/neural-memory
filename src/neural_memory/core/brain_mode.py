@@ -315,9 +315,15 @@ class BrainModeConfig:
                 conflict_resolution=h.get("conflict_resolution", "prefer_local"),
             )
 
+        # Missing key on persisted mode blobs → legacy (compat with UnifiedConfig).
+        # Explicit "unified" or new-install constructors still use unified.
+        if "storage_adapter" in data:
+            adapter = normalize_storage_adapter(data.get("storage_adapter"))
+        else:
+            adapter = "legacy"
         return cls(
             mode=mode,
-            storage_adapter=normalize_storage_adapter(data.get("storage_adapter", "unified")),
+            storage_adapter=adapter,
             shared=shared,
             hybrid=hybrid,
         )

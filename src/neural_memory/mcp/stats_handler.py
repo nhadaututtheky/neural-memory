@@ -126,12 +126,15 @@ class StatsHandler:
 
             global_db = self.config.get_brain_db_path(GLOBAL_BRAIN_NAME)
             if global_db.exists():
-                from neural_memory.storage.sqlite_store import SQLiteStorage
+                from neural_memory.storage.factory import open_sqlite_storage
 
                 global_storage = None
                 try:
-                    global_storage = SQLiteStorage(global_db)
-                    await global_storage.initialize()
+                    global_storage = await open_sqlite_storage(
+                        global_db,
+                        storage_adapter=getattr(self.config, "storage_adapter", None),
+                        set_brain_name=GLOBAL_BRAIN_NAME,
+                    )
                     global_brain = await global_storage.find_brain_by_name(GLOBAL_BRAIN_NAME)
                     if global_brain:
                         global_storage.set_brain(global_brain.id)

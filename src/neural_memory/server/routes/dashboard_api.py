@@ -2184,33 +2184,38 @@ async def _open_sqlite_storage(
 ) -> Any:
     """Open a SQLite storage instance for the given brain.
 
-    Note: the import is `sqlite_store`, not `sqlite` — the module was
-    renamed long ago and this endpoint was not updated until the issue
-    #147 follow-up. Both this file and `cli/commands/migrate.py` had the
-    same stale path.
+    Routes through adapter-aware ``open_sqlite_storage`` so dashboard
+    migrations honor ``storage_adapter`` (legacy vs unified).
     """
-    from neural_memory.storage.sqlite_store import SQLiteStorage
+    from neural_memory.storage.factory import open_sqlite_storage
 
     brains_dir = Path(cfg.data_dir) / "brains"
     db_path = brains_dir / f"{brain_name}.db"
-
     if fresh:
         # Write to temp file, will be renamed on success
-        tmp_path = brains_dir / f"{brain_name}_migrating.db"
-        storage = SQLiteStorage(str(tmp_path))
-    else:
-        storage = SQLiteStorage(str(db_path))
+        db_path = brains_dir / f"{brain_name}_migrating.db"
 
-    await storage.initialize()
+    adapter = getattr(cfg, "storage_adapter", None)
+    storage = await open_sqlite_storage(
+        db_path,
+        storage_adapter=adapter,
+        set_brain_name=None if fresh else brain_name,
+    )
 
-    # Set brain context. SQLiteStorage now exposes `list_brains()`
-    # uniformly with the InfinityDB / SQL adapters (added in v4.53.2 to
-    # close the issue #147 dashboard regression).
-    brain_list = await storage.list_brains()
-    if brain_list:
-        brain_id = brain_list[0].get("id") or brain_list[0].get("name")
-        if brain_id:
-            storage.set_brain(brain_id)
+    # Ensure brain context for legacy DBs / fresh temp files
+    if getattr(storage, "brain_id", None) is None:
+        list_brains = getattr(storage, "list_brains", None)
+        if callable(list_brains):
+            brain_list = await list_brains()
+            if brain_list:
+                first = brain_list[0]
+                brain_id = (
+                    first.get("id") if isinstance(first, dict) else getattr(first, "id", None)
+                ) or (
+                    first.get("name") if isinstance(first, dict) else getattr(first, "name", None)
+                )
+                if brain_id:
+                    storage.set_brain(str(brain_id))
 
     return storage
 
