@@ -17,14 +17,14 @@ class TestCreateStorage:
     @pytest.mark.asyncio
     async def test_local_mode_with_path(self, tmp_path: object) -> None:
         from neural_memory.storage.factory import create_storage
+        from neural_memory.storage.sql.sql_storage import SQLStorage
 
         db_path = str(tmp_path) + "/test.db"  # type: ignore[operator]
         config = BrainModeConfig(mode=BrainMode.LOCAL)
         storage = await create_storage(config, "brain-1", local_path=db_path)
 
-        from neural_memory.storage.sqlite_store import SQLiteStorage
-
-        assert isinstance(storage, SQLiteStorage)
+        # Phase 3: new-install / default local mode uses unified SQLStorage.
+        assert isinstance(storage, SQLStorage)
         await storage.close()
 
     @pytest.mark.asyncio

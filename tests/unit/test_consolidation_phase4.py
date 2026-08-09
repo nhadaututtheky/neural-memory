@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from neural_memory.engine.consolidation import ConsolidationConfig
 from neural_memory.engine.memory_stages import (
@@ -167,11 +167,13 @@ class TestFastTrackSpacingIsolation:
 
     def test_fast_track_no_spacing_stays_episodic(self) -> None:
         """10+ rehearsals but only 1 distinct window → should NOT promote."""
-        now = utcnow()
-        entered = now - timedelta(days=1, hours=1)
+        # Pin wall-clock so classic 2+ calendar-day path never trips near midnight.
+        now = datetime(2026, 3, 10, 12, 0, 0)
+        entered = datetime(2026, 3, 9, 11, 0, 0)  # >1 day for fast-track time gate
 
-        # All 10 timestamps in same 2h window AND same day → 1 window, 1 day
-        timestamps = tuple((entered + timedelta(minutes=i * 5)).isoformat() for i in range(10))
+        # All 10 timestamps same calendar day + same 2h window → 1 window, 1 day
+        base = datetime(2026, 3, 9, 14, 0, 0)
+        timestamps = tuple((base + timedelta(minutes=i * 5)).isoformat() for i in range(10))
 
         record = MaturationRecord(
             fiber_id="f1",
@@ -181,6 +183,8 @@ class TestFastTrackSpacingIsolation:
             rehearsal_count=10,
             reinforcement_timestamps=timestamps,
         )
+        assert record.distinct_reinforcement_days == 1
+        assert record.distinct_reinforcement_windows == 1
 
         result = compute_stage_transition(record, now=now)
         # Time gate satisfied (1 day with fast-track) but spacing NOT met
