@@ -71,13 +71,16 @@ FIBER_FTS_SETUP_STATEMENTS: list[str] = [
         INSERT INTO fibers_fts(fibers_fts, rowid, summary, brain_id)
         VALUES ('delete', old.rowid, old.summary, old.brain_id);
     END""",
-    # Auto-sync: update
-    """CREATE TRIGGER IF NOT EXISTS fibers_au AFTER UPDATE ON fibers
-    WHEN old.summary IS NOT NULL AND old.summary != '' BEGIN
+    # Auto-sync: update — handle NULL↔text both directions (P3-T3).
+    # Drop/recreate in ensure_fiber_fts_tables so upgrades pick this up.
+    "DROP TRIGGER IF EXISTS fibers_au",
+    """CREATE TRIGGER IF NOT EXISTS fibers_au AFTER UPDATE ON fibers BEGIN
         INSERT INTO fibers_fts(fibers_fts, rowid, summary, brain_id)
-        VALUES ('delete', old.rowid, old.summary, old.brain_id);
+        SELECT 'delete', old.rowid, old.summary, old.brain_id
+        WHERE old.summary IS NOT NULL AND old.summary != '';
         INSERT INTO fibers_fts(rowid, summary, brain_id)
-        VALUES (new.rowid, COALESCE(new.summary, ''), new.brain_id);
+        SELECT new.rowid, new.summary, new.brain_id
+        WHERE new.summary IS NOT NULL AND new.summary != '';
     END""",
 ]
 

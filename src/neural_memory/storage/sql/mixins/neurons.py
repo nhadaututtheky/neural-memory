@@ -136,19 +136,19 @@ class NeuronMixin:
             vals.append(embedding)
 
         phs = d.phs(len(cols))
-        await d.execute(
-            f"INSERT INTO neurons ({', '.join(cols)}) VALUES ({phs})",
-            vals,
-        )
-
-        # Initialise neuron state
-        await d.execute(
-            f"""INSERT INTO neuron_states
-               (neuron_id, brain_id, firing_threshold, refractory_period_ms,
-                homeostatic_target, created_at)
-               VALUES ({d.phs(6)})""",
-            [neuron.id, brain_id, 0.3, 500.0, 0.5, d.serialize_dt(utcnow())],
-        )
+        # Neuron row + default state must commit together (and with FTS triggers).
+        async with d.transaction():
+            await d.execute(
+                f"INSERT INTO neurons ({', '.join(cols)}) VALUES ({phs})",
+                vals,
+            )
+            await d.execute(
+                f"""INSERT INTO neuron_states
+                   (neuron_id, brain_id, firing_threshold, refractory_period_ms,
+                    homeostatic_target, created_at)
+                   VALUES ({d.phs(6)})""",
+                [neuron.id, brain_id, 0.3, 500.0, 0.5, d.serialize_dt(utcnow())],
+            )
 
         # Cache / Merkle invalidation
         self._neuron_cache.invalidate_key(neuron.content, neuron.type.value)

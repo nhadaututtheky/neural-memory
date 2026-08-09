@@ -1350,8 +1350,9 @@ class UnifiedConfig:
     # Storage backend: "sqlite" (default), "postgres", or "infinitydb"
     storage_backend: str = "sqlite"
 
-    # SQLite implementation pilot: "legacy" (default) or "unified"
-    storage_adapter: StorageAdapter = "legacy"
+    # SQLite implementation: "unified" for new installs; existing configs without
+    # the key still resolve to "legacy" in load() for upgrade compatibility.
+    storage_adapter: StorageAdapter = "unified"
 
     # Tool memory auto-capture
     tool_memory: ToolMemoryConfig = field(default_factory=ToolMemoryConfig)
@@ -1426,6 +1427,7 @@ class UnifiedConfig:
                 data_dir=data_dir,
                 current_brain=legacy_brain or get_default_brain(),
                 device_id=_get_device_id(data_dir),
+                storage_adapter="unified",  # new installs default to unified SQL
             )
             config.save()
             if legacy_brain:
@@ -1446,6 +1448,13 @@ class UnifiedConfig:
         raw_device_id = str(data.get("device_id", "") or sync_data.get("device_id", "")).strip()
         if not raw_device_id:
             raw_device_id = get_device_id(data_dir)
+
+        # Compatibility: existing configs without storage_adapter stay on legacy.
+        # Fresh keys / explicit values go through normalize_storage_adapter.
+        if "storage_adapter" in data:
+            resolved_adapter = normalize_storage_adapter(data.get("storage_adapter"))
+        else:
+            resolved_adapter = "legacy"
 
         return cls(
             data_dir=data_dir,
@@ -1477,7 +1486,7 @@ class UnifiedConfig:
             storage_backend=_validate_storage_backend(
                 str(data.get("storage_backend") or sync_data.get("storage_backend") or "sqlite")
             ),
-            storage_adapter=normalize_storage_adapter(data.get("storage_adapter", "legacy")),
+            storage_adapter=resolved_adapter,
             postgres=PostgresConfig.from_dict(data.get("postgres", {})),
             proactive=ProactiveConfig.from_dict(data.get("proactive", {})),
             response=ResponseConfig.from_dict(data.get("response", {})),

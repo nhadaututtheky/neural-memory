@@ -14,11 +14,30 @@ from neural_memory.storage.sqlite_store import SQLiteStorage
 from neural_memory.unified_config import UnifiedConfig
 
 
-def test_unified_config_defaults_to_legacy_adapter(tmp_path: Path) -> None:
+def test_unified_config_defaults_to_unified_adapter(tmp_path: Path) -> None:
+    """New installs / bare UnifiedConfig default to the unified SQL adapter."""
     config = UnifiedConfig(data_dir=tmp_path)
 
     assert config.storage_backend == "sqlite"
-    assert config.storage_adapter == "legacy"
+    assert config.storage_adapter == "unified"
+
+
+def test_fresh_config_file_writes_unified_adapter(tmp_path: Path) -> None:
+    loaded = UnifiedConfig.load(tmp_path / "config.toml")
+    assert loaded.storage_adapter == "unified"
+    text = (tmp_path / "config.toml").read_text(encoding="utf-8")
+    assert 'storage_adapter = "unified"' in text
+
+
+def test_existing_config_missing_adapter_key_stays_legacy(tmp_path: Path) -> None:
+    """Upgrade path: configs written before storage_adapter stay on legacy."""
+    path = tmp_path / "config.toml"
+    path.write_text(
+        'version = "1.0"\ncurrent_brain = "default"\nstorage_backend = "sqlite"\n',
+        encoding="utf-8",
+    )
+    loaded = UnifiedConfig.load(path)
+    assert loaded.storage_adapter == "legacy"
 
 
 def test_unified_config_adapter_round_trip(tmp_path: Path) -> None:
@@ -44,7 +63,7 @@ def test_invalid_persisted_adapter_warns_and_falls_back(
     config.save()
     config_path = tmp_path / "config.toml"
     content = config_path.read_text(encoding="utf-8").replace(
-        'storage_adapter = "legacy"',
+        'storage_adapter = "unified"',
         'storage_adapter = "mystery"',
     )
     config_path.write_text(content, encoding="utf-8")

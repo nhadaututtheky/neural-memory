@@ -81,6 +81,9 @@ class VectorSearchMixin:
     ) -> list[tuple[str, float]]:
         """K-nearest-neighbor search using HNSW vector index.
 
+        Validates hits against live SQLite neurons so deleted IDs cannot
+        become anchors (stale sidecar / tombstone lag).
+
         Returns:
             [(neuron_id, similarity)] sorted by similarity descending.
             Empty list if index unavailable or empty.
@@ -93,18 +96,49 @@ class VectorSearchMixin:
                 logger.info("No vector index found. Run `nmem embed` to enable semantic search.")
                 self._vector_cold_start_warned = True
             return []
-        return index.search(query_vector, k=k)
+        # Over-fetch then filter so k live hits remain when some IDs are stale.
+        raw = index.search(query_vector, k=max(k * 3, k))
+        if not raw:
+            return []
+        live = await self._filter_live_neuron_ids([nid for nid, _ in raw])
+        validated: list[tuple[str, float]] = []
+        for nid, score in raw:
+            if nid in live:
+                validated.append((nid, score))
+            if len(validated) >= k:
+                break
+        return validated
+
+    async def _filter_live_neuron_ids(self, neuron_ids: list[str]) -> set[str]:
+        """Return the subset of IDs that still exist in the active brain."""
+        if not neuron_ids:
+            return set()
+        get_batch = getattr(self, "get_neurons_batch", None)
+        if get_batch is None:
+            return set(neuron_ids)
+        found = await get_batch(neuron_ids)
+        return set(found)
 
     async def vector_index_add(self, neuron_id: str, vector: list[float]) -> None:
-        """Add a neuron's embedding to the vector index."""
+        """Add or replace a neuron's embedding in the vector index."""
         index = self._ensure_vector_index()
         if index is not None:
+            # Replace semantics: remove prior vector if present, then add.
+            try:
+                index.remove(neuron_id)
+            except Exception:
+                logger.debug("vector replace: prior id absent for %s", neuron_id, exc_info=True)
             index.add(neuron_id, vector)
 
     async def vector_index_remove(self, neuron_id: str) -> None:
-        """Remove a neuron from the vector index."""
+        """Remove/tombstone a neuron from the vector index."""
         if self._vector_index is not None:
             self._vector_index.remove(neuron_id)
+        else:
+            # Lazy-open so delete after brain switch still hits the right sidecar.
+            index = self._ensure_vector_index()
+            if index is not None:
+                index.remove(neuron_id)
 
     def _close_vector_index(self) -> None:
         """Close and save vector index. Call from storage close()."""

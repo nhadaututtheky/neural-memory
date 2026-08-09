@@ -150,8 +150,8 @@ class BrainModeConfig:
     mode: BrainMode = BrainMode.LOCAL
     """Current storage mode."""
 
-    storage_adapter: StorageAdapter = "legacy"
-    """Local SQLite implementation used by LOCAL and HYBRID modes."""
+    storage_adapter: StorageAdapter = "unified"
+    """Local SQLite implementation used by LOCAL and HYBRID modes (unified default)."""
 
     shared: SharedConfig | None = None
     """Configuration for shared mode."""
@@ -160,8 +160,8 @@ class BrainModeConfig:
     """Configuration for hybrid mode."""
 
     @classmethod
-    def local(cls, storage_adapter: StorageAdapter = "legacy") -> BrainModeConfig:
-        """Create local-only configuration."""
+    def local(cls, storage_adapter: StorageAdapter = "unified") -> BrainModeConfig:
+        """Create local-only configuration (new installs default to unified SQL)."""
         return cls(
             mode=BrainMode.LOCAL,
             storage_adapter=normalize_storage_adapter(storage_adapter),
@@ -199,7 +199,7 @@ class BrainModeConfig:
         api_key: str | None = None,
         sync_interval: int = 60,
         strategy: SyncStrategy = SyncStrategy.BIDIRECTIONAL,
-        storage_adapter: StorageAdapter = "legacy",
+        storage_adapter: StorageAdapter = "unified",
     ) -> BrainModeConfig:
         """
         Create hybrid (offline-first) configuration.
@@ -317,7 +317,7 @@ class BrainModeConfig:
 
         return cls(
             mode=mode,
-            storage_adapter=normalize_storage_adapter(data.get("storage_adapter", "legacy")),
+            storage_adapter=normalize_storage_adapter(data.get("storage_adapter", "unified")),
             shared=shared,
             hybrid=hybrid,
         )

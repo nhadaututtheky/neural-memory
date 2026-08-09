@@ -110,27 +110,18 @@ class SQLStorage(
     # ------------------------------------------------------------------
 
     async def initialize(self) -> None:
-        """Initialize the dialect and create schema tables."""
+        """Initialize the dialect and create schema tables.
+
+        SQLite path is migration-safe (mirrors legacy SQLiteStorage):
+        - Fresh DB: apply SCHEMA, FTS, stamp SCHEMA_VERSION
+        - Old DB: run_migrations then SCHEMA IF NOT EXISTS
+        - Current: no-op migrations, re-apply IF NOT EXISTS DDL
+        - Future / corrupt version: raise without mutating user data mid-flight
+        """
         await self._dialect.initialize()
 
         if self._dialect.name == "sqlite":
-            # SQLite uses the existing SCHEMA DDL (with AUTOINCREMENT, TEXT
-            # for timestamps/JSON, etc.) and then sets up FTS5 virtual tables.
-            from neural_memory.storage.sqlite_schema import SCHEMA
-
-            await self._dialect.execute_script(SCHEMA)
-
-            # FTS setup requires individual execute() calls (not executescript)
-            # because trigger bodies contain semicolons inside BEGIN...END.
-            from neural_memory.storage.sqlite_schema import (
-                ensure_fiber_fts_tables,
-                ensure_fts_tables,
-            )
-
-            conn = self._dialect._ensure_conn()  # type: ignore[attr-defined]
-            await ensure_fts_tables(conn)
-            await ensure_fiber_fts_tables(conn)
-            self._dialect._has_fts = True  # type: ignore[attr-defined]
+            await self._initialize_sqlite_schema()
         elif self._dialect.name == "postgres":
             # PostgreSQL needs a compatible DDL variant — the dialect
             # provides it via get_schema_ddl().
@@ -143,6 +134,91 @@ class SQLStorage(
             await self._dialect.execute_script(SCHEMA)
 
         logger.info("SQLStorage initialized with %s dialect", self._dialect.name)
+
+    async def _initialize_sqlite_schema(self) -> None:
+        """Migration-safe SQLite schema bootstrap for the unified adapter."""
+        from neural_memory.storage.sqlite_schema import (
+            SCHEMA,
+            SCHEMA_VERSION,
+            ensure_fiber_fts_tables,
+            ensure_fts_tables,
+            run_migrations,
+        )
+
+        conn = self._dialect._ensure_conn()  # type: ignore[attr-defined]
+
+        # Version table must exist before we read the stamp.
+        await self._dialect.execute(
+            "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY)"
+        )
+
+        row = await self._dialect.fetch_one("SELECT version FROM schema_version")
+        current: int | None = None
+        if row is not None:
+            raw = row.get("version") if isinstance(row, dict) else None
+            if raw is None and row:
+                raw = next(iter(row.values()), None)
+            try:
+                current = int(raw) if raw is not None else None
+            except (TypeError, ValueError) as exc:
+                raise RuntimeError(
+                    f"Corrupt schema_version value {raw!r}; refusing to migrate. "
+                    "Restore from backup or delete the corrupt DB after export."
+                ) from exc
+
+        if current is not None and current > SCHEMA_VERSION:
+            raise RuntimeError(
+                f"Database schema version {current} is newer than this package "
+                f"({SCHEMA_VERSION}). Upgrade neural-memory or restore an older DB."
+            )
+
+        if current is not None and current < 0:
+            raise RuntimeError(f"Invalid schema_version {current}; refusing to migrate.")
+
+        if current is not None and current < SCHEMA_VERSION:
+            logger.info(
+                "SQLStorage migrating schema %d → %d",
+                current,
+                SCHEMA_VERSION,
+            )
+            try:
+                await run_migrations(conn, current)
+            except Exception:
+                logger.error(
+                    "SQLStorage migration failed at version %s; DB left for recovery",
+                    current,
+                    exc_info=True,
+                )
+                raise
+
+        # Full schema: CREATE TABLE/INDEX IF NOT EXISTS (safe after migration)
+        await self._dialect.execute_script(SCHEMA)
+
+        # FTS5 virtual tables + sync triggers (individual execute, not script)
+        await ensure_fts_tables(conn)
+        await ensure_fiber_fts_tables(conn)
+        self._dialect._has_fts = True  # type: ignore[attr-defined]
+
+        # Stamp version for brand-new databases (no prior row)
+        row_after = await self._dialect.fetch_one("SELECT version FROM schema_version")
+        if row_after is None:
+            await self._dialect.execute(
+                "INSERT INTO schema_version (version) VALUES (?)",
+                (SCHEMA_VERSION,),
+            )
+            logger.info("SQLStorage stamped schema_version=%d (fresh DB)", SCHEMA_VERSION)
+        else:
+            # Ensure stamp matches current package after successful migrate/init
+            stamped = row_after.get("version") if isinstance(row_after, dict) else None
+            try:
+                stamped_i = int(stamped) if stamped is not None else None
+            except (TypeError, ValueError):
+                stamped_i = None
+            if stamped_i is not None and stamped_i < SCHEMA_VERSION:
+                await self._dialect.execute(
+                    "UPDATE schema_version SET version = ?",
+                    (SCHEMA_VERSION,),
+                )
 
     async def close(self) -> None:
         """Close the dialect connection(s).
