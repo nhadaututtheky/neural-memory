@@ -84,16 +84,17 @@ async def process_enrichment_batch(
                 )
                 if ok is None:
                     skipped += 1
-                    await storage.complete_enrichment_job(job.id)
+                    await storage.complete_enrichment_job(job.id, worker_id=owner)
                     return
                 if ok:
-                    await storage.complete_enrichment_job(job.id)
+                    await storage.complete_enrichment_job(job.id, worker_id=owner)
                     completed += 1
                 else:
                     updated = await storage.fail_enrichment_job(
                         job.id,
                         error="handler_returned_false",
                         max_attempts=max_attempts,
+                        worker_id=owner,
                     )
                     if updated and updated.status is EnrichmentStatus.DEAD:
                         dead += 1
@@ -112,6 +113,7 @@ async def process_enrichment_batch(
                         job.id,
                         error=str(exc)[:500],
                         max_attempts=max_attempts,
+                        worker_id=owner,
                     )
                     if updated and updated.status is EnrichmentStatus.DEAD:
                         dead += 1
@@ -176,8 +178,19 @@ async def _apply_embed(
         return None
 
     vector = await provider.embed(content)
-    if hasattr(storage, "vector_index_add"):
-        await storage.vector_index_add(neuron_id, vector)
+    if not hasattr(storage, "vector_index_add"):
+        raise RuntimeError("vector_index_unavailable")
+    # Ensure index can accept writes (hnswlib etc.)
+    index = getattr(storage, "_vector_index", None)
+    ensure = getattr(storage, "_ensure_vector_index", None)
+    if ensure is not None:
+        try:
+            index = ensure()
+        except Exception:
+            index = None
+    if index is None and ensure is not None:
+        raise RuntimeError("vector_index_unavailable")
+    await storage.vector_index_add(neuron_id, vector)
     return True
 
 
@@ -208,6 +221,7 @@ async def enqueue_post_encode_jobs(
     entity_id: str,
     content: str,
     kinds: list[EnrichmentKind] | None = None,
+    embedding_enabled: bool = False,
 ) -> list[Any]:
     """Enqueue standard post-encode enrichment jobs (idempotent)."""
     if not hasattr(storage, "enqueue_enrichment_job"):
@@ -215,11 +229,12 @@ async def enqueue_post_encode_jobs(
 
     from neural_memory.core.enrichment_job import EnrichmentJob
 
-    selected = kinds or [
-        EnrichmentKind.EMBED,
-        EnrichmentKind.LINK,
-        EnrichmentKind.ENRICH,
-    ]
+    if kinds is not None:
+        selected = list(kinds)
+    else:
+        selected = [EnrichmentKind.LINK, EnrichmentKind.ENRICH]
+        if embedding_enabled:
+            selected.insert(0, EnrichmentKind.EMBED)
     enqueued: list[Any] = []
     for kind in selected:
         job = EnrichmentJob.create(

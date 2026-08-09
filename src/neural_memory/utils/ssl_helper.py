@@ -41,8 +41,11 @@ def safe_client_session(**kwargs: Any) -> Any:
     """Create an ``aiohttp.ClientSession`` with certifi SSL context.
 
     Drop-in replacement for ``aiohttp.ClientSession(**kwargs)``.
+    Requires ``neural-memory[sync]`` (or ``[server]`` which includes aiohttp).
     """
-    import aiohttp
+    from neural_memory.utils.optional_dependencies import require_capability
+
+    aiohttp = require_capability("aiohttp", "sync", "HTTP client session")
 
     ssl_ctx = get_ssl_context()
     connector = aiohttp.TCPConnector(ssl=ssl_ctx)

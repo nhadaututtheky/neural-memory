@@ -232,21 +232,39 @@ class EnrichmentJobsMixin:
 
         return claimed
 
-    async def complete_enrichment_job(self, job_id: str) -> bool:
+    async def complete_enrichment_job(
+        self,
+        job_id: str,
+        *,
+        worker_id: str | None = None,
+    ) -> bool:
         d = self._dialect
         brain_id = self._get_brain_id()
         now_s = d.serialize_dt(utcnow())
-        await d.execute(
-            f"""UPDATE enrichment_jobs
-                SET status = 'done',
-                    lease_owner = NULL,
-                    lease_expires_at = NULL,
-                    last_error = NULL,
-                    updated_at = {d.ph(1)}
-                WHERE brain_id = {d.ph(2)} AND id = {d.ph(3)}
-                  AND status = 'running'""",
-            [now_s, brain_id, job_id],
-        )
+        if worker_id:
+            await d.execute(
+                f"""UPDATE enrichment_jobs
+                    SET status = 'done',
+                        lease_owner = NULL,
+                        lease_expires_at = NULL,
+                        last_error = NULL,
+                        updated_at = {d.ph(1)}
+                    WHERE brain_id = {d.ph(2)} AND id = {d.ph(3)}
+                      AND status = 'running' AND lease_owner = {d.ph(4)}""",
+                [now_s, brain_id, job_id, worker_id],
+            )
+        else:
+            await d.execute(
+                f"""UPDATE enrichment_jobs
+                    SET status = 'done',
+                        lease_owner = NULL,
+                        lease_expires_at = NULL,
+                        last_error = NULL,
+                        updated_at = {d.ph(1)}
+                    WHERE brain_id = {d.ph(2)} AND id = {d.ph(3)}
+                      AND status = 'running'""",
+                [now_s, brain_id, job_id],
+            )
         row = await d.fetch_one(
             f"""SELECT status FROM enrichment_jobs
                 WHERE brain_id = {d.ph(1)} AND id = {d.ph(2)}""",
@@ -262,6 +280,7 @@ class EnrichmentJobsMixin:
         max_attempts: int = _MAX_ATTEMPTS_DEFAULT,
         backoff_base: float = _BACKOFF_BASE_SEC,
         backoff_cap: float = _BACKOFF_CAP_SEC,
+        worker_id: str | None = None,
     ) -> EnrichmentJob | None:
         """Mark failed; requeue with backoff or dead-letter when exhausted."""
         d = self._dialect
@@ -269,42 +288,81 @@ class EnrichmentJobsMixin:
         job = await self.get_enrichment_job(job_id)
         if job is None:
             return None
+        # Lost lease — another worker owns it
+        if worker_id and job.lease_owner and job.lease_owner != worker_id:
+            return job
+        if job.status is not EnrichmentStatus.RUNNING and worker_id:
+            return job
 
         now = utcnow()
         max_attempts = max(1, min(int(max_attempts), 20))
         error_text = (error or "unknown")[:500]
 
         if job.attempts >= max_attempts:
-            await d.execute(
-                f"""UPDATE enrichment_jobs
-                    SET status = 'dead',
-                        lease_owner = NULL,
-                        lease_expires_at = NULL,
-                        last_error = {d.ph(1)},
-                        updated_at = {d.ph(2)}
-                    WHERE brain_id = {d.ph(3)} AND id = {d.ph(4)}""",
-                [error_text, d.serialize_dt(now), brain_id, job_id],
-            )
+            if worker_id:
+                await d.execute(
+                    f"""UPDATE enrichment_jobs
+                        SET status = 'dead',
+                            lease_owner = NULL,
+                            lease_expires_at = NULL,
+                            last_error = {d.ph(1)},
+                            updated_at = {d.ph(2)}
+                        WHERE brain_id = {d.ph(3)} AND id = {d.ph(4)}
+                          AND status = 'running' AND lease_owner = {d.ph(5)}""",
+                    [error_text, d.serialize_dt(now), brain_id, job_id, worker_id],
+                )
+            else:
+                await d.execute(
+                    f"""UPDATE enrichment_jobs
+                        SET status = 'dead',
+                            lease_owner = NULL,
+                            lease_expires_at = NULL,
+                            last_error = {d.ph(1)},
+                            updated_at = {d.ph(2)}
+                        WHERE brain_id = {d.ph(3)} AND id = {d.ph(4)}""",
+                    [error_text, d.serialize_dt(now), brain_id, job_id],
+                )
         else:
             delay = min(backoff_cap, backoff_base * (2 ** max(0, job.attempts - 1)))
             available = now + timedelta(seconds=delay)
-            await d.execute(
-                f"""UPDATE enrichment_jobs
-                    SET status = 'pending',
-                        lease_owner = NULL,
-                        lease_expires_at = NULL,
-                        last_error = {d.ph(1)},
-                        available_at = {d.ph(2)},
-                        updated_at = {d.ph(3)}
-                    WHERE brain_id = {d.ph(4)} AND id = {d.ph(5)}""",
-                [
-                    error_text,
-                    d.serialize_dt(available),
-                    d.serialize_dt(now),
-                    brain_id,
-                    job_id,
-                ],
-            )
+            if worker_id:
+                await d.execute(
+                    f"""UPDATE enrichment_jobs
+                        SET status = 'pending',
+                            lease_owner = NULL,
+                            lease_expires_at = NULL,
+                            last_error = {d.ph(1)},
+                            available_at = {d.ph(2)},
+                            updated_at = {d.ph(3)}
+                        WHERE brain_id = {d.ph(4)} AND id = {d.ph(5)}
+                          AND status = 'running' AND lease_owner = {d.ph(6)}""",
+                    [
+                        error_text,
+                        d.serialize_dt(available),
+                        d.serialize_dt(now),
+                        brain_id,
+                        job_id,
+                        worker_id,
+                    ],
+                )
+            else:
+                await d.execute(
+                    f"""UPDATE enrichment_jobs
+                        SET status = 'pending',
+                            lease_owner = NULL,
+                            lease_expires_at = NULL,
+                            last_error = {d.ph(1)},
+                            available_at = {d.ph(2)},
+                            updated_at = {d.ph(3)}
+                        WHERE brain_id = {d.ph(4)} AND id = {d.ph(5)}""",
+                    [
+                        error_text,
+                        d.serialize_dt(available),
+                        d.serialize_dt(now),
+                        brain_id,
+                        job_id,
+                    ],
+                )
         return await self.get_enrichment_job(job_id)
 
     async def requeue_enrichment_job(

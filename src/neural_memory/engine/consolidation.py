@@ -714,10 +714,12 @@ class ConsolidationEngine:
         # Get synapses (scoped to dirty set when running incrementally)
         all_synapses = await self._storage.get_synapses()
         dirty = getattr(self, "_incremental_dirty", None)
+        _incremental_active = False
         if dirty is not None:
             dirty_s: frozenset[str] = getattr(dirty, "synapse_ids", frozenset()) or frozenset()
             dirty_n: frozenset[str] = getattr(dirty, "neuron_ids", frozenset()) or frozenset()
             if dirty_s or dirty_n:
+                _incremental_active = True
                 all_synapses = [
                     s
                     for s in all_synapses
@@ -873,8 +875,13 @@ class ConsolidationEngine:
                     )
                     await self._storage.update_fiber(updated_fiber)
 
-        # Find orphan neurons (no synapses AND not in any fiber)
+        # Find orphan neurons (no synapses AND not in any fiber).
+        # Under incremental dirty scope, synapse connectivity is incomplete —
+        # full-brain orphan scan would false-delete healthy neurons (P6 review #1).
         if not self._config.prune_isolated_neurons:
+            return
+        if _incremental_active:
+            report.extra["incremental_orphan_prune_skipped"] = True
             return
 
         # Derive remaining synapses from cached list instead of re-fetching

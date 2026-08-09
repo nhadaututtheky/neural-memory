@@ -13,11 +13,23 @@ Install NeuralMemory from PyPI:
 pip install neural-memory
 ```
 
-This installs the core library with CLI support.
+This installs the **base profile** (≤4 direct runtime deps: `aiosqlite`, `typer`, `rich`, `networkx`) with CLI, MCP stdio, SQLite, and in-memory storage.
+
+Fresh installs default MCP tool discovery to the **standard** tier (10 tools). Existing configs without `[tool_tier]` keep **full** discovery for compatibility.
 
 ## Optional Dependencies
 
 NeuralMemory has optional features you can install as needed:
+
+### Sync / shared HTTP client
+
+```bash
+pip install neural-memory[sync]
+```
+
+Includes:
+
+- `aiohttp` for remote SharedStorage and WebSocket sync clients
 
 ### Server (FastAPI + Web UI)
 
@@ -27,9 +39,9 @@ pip install neural-memory[server]
 
 Includes:
 
-- FastAPI REST API
+- FastAPI REST API + pydantic models
 - Interactive Web UI for brain visualization
-- WebSocket sync support
+- WebSocket sync support (`aiohttp` included)
 
 ### Vietnamese NLP
 

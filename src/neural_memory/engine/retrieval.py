@@ -541,8 +541,16 @@ class ReflexPipeline:
                     "cascade_scope_size": len(_cascade_gate.graph_scope),
                     "cascade_candidate_count": len(_cascade_evidence.ranked_ids),
                 }
+                if self._embedding_provider is None:
+                    _cascade_meta["cascade_degradation"] = ["embedding"]
+                    _cascade_meta["cascade_missing_sources"] = ["embedding"]
 
-                if _cascade_gate.sufficient and not _skip_cascade_early:
+                if _skip_cascade_early:
+                    # as_of / non-default status: full cognitive path (no bound scope)
+                    _cascade_scope = None
+                    _cascade_meta["cascade_stage"] = "full_correctness_path"
+                    _cascade_meta["cascade_phase_timings_ms"] = delta_phase_timings(_cascade_cum)
+                elif _cascade_gate.sufficient:
                     _levels = scores_to_activation_levels(_cascade_evidence.scores)
                     activations = {
                         nid: ActivationResult(
@@ -592,7 +600,11 @@ class ReflexPipeline:
                     _cascade_meta["cascade_phase_timings_ms"] = delta_phase_timings(_cascade_cum)
             except Exception:
                 logger.debug("Cascaded recall pre-graph failed (non-critical)", exc_info=True)
-                _cascade_meta = {"cascade_stage": "error_fallback"}
+                _cascade_meta = {
+                    **_cascade_meta,
+                    "cascade_stage": "error_fallback",
+                    "cascade_fallback_reason": "pregraph_exception",
+                }
         _phase_timings["cascade_pregraph"] = (time.perf_counter() - start_time) * 1000
 
         # Choose activation method based on strategy (auto-select from graph density)
@@ -601,9 +613,9 @@ class ReflexPipeline:
             if strategy == "auto":
                 strategy = await self._auto_select_strategy()
 
-            # Bounded cascade scope forces classic activator (only path with scope=).
-            # Avoid full-graph PPR/reflex after candidate gate already bounded the set.
-            if _cascade_scope is not None:
+            # Only force classic_scoped when strategy is classic/auto (has scope support).
+            # Preserve explicit ppr/hybrid/reflex strategies; they run unscoped.
+            if _cascade_scope is not None and strategy in ("classic", "auto", "classic_scoped"):
                 strategy = "classic_scoped"
 
             if strategy == "cone":

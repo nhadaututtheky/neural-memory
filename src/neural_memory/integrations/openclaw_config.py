@@ -12,7 +12,16 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field
+try:
+    from pydantic import BaseModel, Field
+except ImportError as _pydantic_err:  # pragma: no cover - optional extra
+    from neural_memory.utils.optional_dependencies import MissingCapabilityError
+
+    raise MissingCapabilityError(
+        "OpenClaw configuration models",
+        "server",
+        cause=_pydantic_err,
+    ) from _pydantic_err
 
 logger = logging.getLogger(__name__)
 

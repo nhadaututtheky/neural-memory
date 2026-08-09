@@ -6,8 +6,6 @@ import logging
 from datetime import datetime
 from typing import Any, Literal
 
-import aiohttp
-
 from neural_memory.core.neuron import Neuron, NeuronState, NeuronType
 from neural_memory.core.synapse import Synapse, SynapseType
 from neural_memory.storage.base import NeuralStorage
@@ -60,10 +58,12 @@ class SharedStorage(SharedFiberBrainMixin, NeuralStorage):
         """
         self._server_url = server_url.rstrip("/")
         self._brain_id = brain_id
-        self._timeout = aiohttp.ClientTimeout(total=timeout)
+        self._timeout_seconds = float(timeout)
+        self._timeout: Any = None  # set on connect after aiohttp load
         self._api_key = api_key
-        self._session: aiohttp.ClientSession | None = None
+        self._session: Any = None
         self._connected = False
+        self._aiohttp: Any = None
 
     @property
     def server_url(self) -> str:
@@ -84,9 +84,21 @@ class SharedStorage(SharedFiberBrainMixin, NeuralStorage):
         """Set the current brain context."""
         self._brain_id = brain_id
 
+    def _ensure_aiohttp(self) -> Any:
+        """Lazy-load aiohttp (requires neural-memory[sync])."""
+        if self._aiohttp is None:
+            from neural_memory.utils.optional_dependencies import require_capability
+
+            self._aiohttp = require_capability(
+                "aiohttp", "sync", "SharedStorage remote HTTP client"
+            )
+        return self._aiohttp
+
     async def connect(self) -> None:
         """Establish connection to server."""
         if self._session is None:
+            aiohttp = self._ensure_aiohttp()
+            self._timeout = aiohttp.ClientTimeout(total=self._timeout_seconds)
             headers: dict[str, str] = {}
             if self._api_key:
                 headers["Authorization"] = f"Bearer {self._api_key}"
@@ -161,7 +173,10 @@ class SharedStorage(SharedFiberBrainMixin, NeuralStorage):
                     )
                 result: dict[str, Any] = await response.json()
                 return result
-        except aiohttp.ClientError as e:
+        except Exception as e:
+            aiohttp = self._ensure_aiohttp()
+            if not isinstance(e, aiohttp.ClientError):
+                raise
             logger.debug("Connection error: %s", e)
             raise SharedStorageError("Failed to connect to remote server") from e
 

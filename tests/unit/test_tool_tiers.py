@@ -18,9 +18,10 @@ from neural_memory.unified_config import ToolTierConfig
 class TestToolTierConfig:
     """Tests for ToolTierConfig dataclass."""
 
-    def test_default_tier_is_full(self) -> None:
+    def test_default_tier_is_standard(self) -> None:
+        """Fresh installs / new UnifiedConfig default to standard (Phase 7)."""
         cfg = ToolTierConfig()
-        assert cfg.tier == "full"
+        assert cfg.tier == "standard"
 
     def test_from_dict_valid(self) -> None:
         cfg = ToolTierConfig.from_dict({"tier": "standard"})
@@ -39,7 +40,12 @@ class TestToolTierConfig:
         assert cfg.tier == "full"
 
     def test_from_dict_missing_defaults_to_full(self) -> None:
+        """Existing configs without [tool_tier] keep full surface (compat)."""
         cfg = ToolTierConfig.from_dict({})
+        assert cfg.tier == "full"
+
+    def test_from_dict_missing_tier_key_keeps_full(self) -> None:
+        cfg = ToolTierConfig.from_dict({"other": 1})
         assert cfg.tier == "full"
 
     def test_from_dict_case_insensitive(self) -> None:
@@ -203,10 +209,24 @@ class TestConfigRoundTrip:
         assert loaded.tool_tier.tier == "standard"
 
     def test_save_load_default_tier(self, tmp_path: Path) -> None:
+        """Fresh UnifiedConfig saves standard; load round-trips standard."""
         from neural_memory.unified_config import UnifiedConfig
 
         config = UnifiedConfig(data_dir=tmp_path, current_brain="default")
+        assert config.tool_tier.tier == "standard"
         config.save()
 
         loaded = UnifiedConfig.load(tmp_path / "config.toml")
+        assert loaded.tool_tier.tier == "standard"
+
+    def test_load_missing_tool_tier_section_is_full(self, tmp_path: Path) -> None:
+        """Legacy configs without [tool_tier] keep full discovery."""
+        from neural_memory.unified_config import UnifiedConfig
+
+        cfg_path = tmp_path / "config.toml"
+        cfg_path.write_text(
+            'version = "1.0"\ncurrent_brain = "default"\nstorage_backend = "sqlite"\n',
+            encoding="utf-8",
+        )
+        loaded = UnifiedConfig.load(cfg_path)
         assert loaded.tool_tier.tier == "full"

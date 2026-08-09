@@ -456,7 +456,9 @@ class MaintenanceConfig:
     enrichment_worker_enabled: bool = True
     enrichment_interval_seconds: int = 2  # poll interval when enabled
     # Incremental consolidation (Phase 6)
-    consolidation_mode: str = "incremental"  # incremental | full
+    # Default full until local write paths auto-feed change_log (P6 review).
+    # Opt in to incremental after verifying change_log is populated on encodes.
+    consolidation_mode: str = "full"  # incremental | full
     consolidation_max_changes: int = 5000
     consolidation_max_candidates: int = 10000
     consolidation_bootstrap_full: bool = True  # first run full-bootstrap when no checkpoints
@@ -576,7 +578,7 @@ class MaintenanceConfig:
             notifications_zero_activity_alert=data.get("notifications_zero_activity_alert", True),
             enrichment_worker_enabled=data.get("enrichment_worker_enabled", True),
             enrichment_interval_seconds=int(data.get("enrichment_interval_seconds", 2)),
-            consolidation_mode=str(data.get("consolidation_mode", "incremental")),
+            consolidation_mode=str(data.get("consolidation_mode", "full")),
             consolidation_max_changes=int(data.get("consolidation_max_changes", 5000)),
             consolidation_max_candidates=int(data.get("consolidation_max_candidates", 10000)),
             consolidation_bootstrap_full=bool(data.get("consolidation_bootstrap_full", True)),
@@ -592,17 +594,25 @@ class ToolTierConfig:
 
     Controls which tools are exposed via tools/list to reduce token overhead.
     Hidden tools remain callable via dispatch — only schema exposure changes.
+
+    Fresh installs / new UnifiedConfig() default to **standard** (10 tools).
+    Existing configs that omit ``[tool_tier]`` or the ``tier`` key load as
+    **full** for backward compatibility (Phase 7 REQ-31).
     """
 
-    tier: str = "full"
+    tier: str = "standard"
 
     def to_dict(self) -> dict[str, Any]:
         return {"tier": self.tier}
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ToolTierConfig:
-        raw = str(data.get("tier", "full")).lower().strip()
+        # Missing key on disk → preserve full discovery for existing installs
+        if not data or "tier" not in data:
+            return cls(tier="full")
+        raw = str(data.get("tier", "standard")).lower().strip()
         if raw not in _VALID_TOOL_TIERS:
+            # Unknown tier: safe fallback to full (max surface, warn via caller)
             raw = "full"
         return cls(tier=raw)
 

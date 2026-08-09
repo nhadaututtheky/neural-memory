@@ -47,18 +47,29 @@ classifiers = [
     "Framework :: FastAPI",
     "Typing :: Typed",
 ]
+# Base profile (≤4 direct runtime deps): aiosqlite, typer, rich, networkx.
+# Optional features live in extras — see [project.optional-dependencies].
 dependencies = [
-    "pydantic>=2.0",
-    "networkx>=3.0",
-
-    "typer>=0.9.0",
-    "aiohttp>=3.9.0",
     "aiosqlite>=0.19.0",
+    "typer>=0.9.0",
     "rich>=13.0.0",
-    "typing_extensions>=4.0",
+    "networkx>=3.0",
 ]
 
 [project.optional-dependencies]
+# HTTP sync / shared storage / remote clients
+sync = [
+    "aiohttp>=3.9.0",
+]
+# FastAPI REST + dashboard + OpenClaw pydantic models
+server = [
+    "fastapi>=0.100",
+    "uvicorn[standard]>=0.23",
+    "python-multipart>=0.0.22",
+    "httpx>=0.24",
+    "pydantic>=2.0",
+    "aiohttp>=3.9.0",
+]
 pro = [
     "numpy>=1.24.0",
     "hnswlib>=0.8.0",
@@ -67,12 +78,6 @@ pro = [
     # Missing it produces a runtime ImportError when InfinityDB opens
     # (issue #147 — install succeeded but execution failed).
     "sortedcontainers>=2.0",
-]
-server = [
-    "fastapi>=0.100",
-    "uvicorn[standard]>=0.23",
-    "python-multipart>=0.0.22",
-    "httpx>=0.24",
 ]
 postgres = [
     "asyncpg>=0.29.0",
@@ -136,7 +141,7 @@ integration = [
     "neural-memory[chromadb,mem0]",
 ]
 all = [
-    "neural-memory[server,nlp,integration]",
+    "neural-memory[server,sync,nlp,integration]",
 ]
 dev = [
     "pytest>=7.0",
@@ -152,6 +157,8 @@ dev = [
     # declare it explicitly so the Docs Freshness CI job can import it instead
     # of relying on typer's transitive dep, which the runner didn't resolve.
     "click>=8.0",
+    # Test suite exercises server routes + sync clients
+    "neural-memory[server,sync]",
 ]
 docs = [
     "mkdocs>=1.5",

@@ -10,11 +10,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
-
-import aiohttp
+from typing import TYPE_CHECKING, Any
 
 from neural_memory.utils.timeutils import utcnow
+
+if TYPE_CHECKING:
+    import aiohttp
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +134,7 @@ class SyncClient:
         self._reconnect_attempts = 0
         self._running = False
         self._receive_task: asyncio.Task[None] | None = None
+        self._aiohttp: Any = None
 
     @property
     def client_id(self) -> str:
@@ -154,11 +156,20 @@ class SyncClient:
         """Get set of subscribed brain IDs."""
         return frozenset(self._subscribed_brains)
 
+    def _ensure_aiohttp(self) -> Any:
+        """Lazy-load aiohttp (requires neural-memory[sync])."""
+        if self._aiohttp is None:
+            from neural_memory.utils.optional_dependencies import require_capability
+
+            self._aiohttp = require_capability("aiohttp", "sync", "SyncClient WebSocket")
+        return self._aiohttp
+
     async def connect(self) -> None:
         """Connect to the sync server."""
         if self._state == SyncClientState.CONNECTED:
             return
 
+        aiohttp = self._ensure_aiohttp()
         self._state = SyncClientState.CONNECTING
 
         if self._session is None:
@@ -244,6 +255,7 @@ class SyncClient:
         # Wait for confirmation
         if self._ws:
             response = await self._ws.receive()
+            aiohttp = self._ensure_aiohttp()
             if response.type == aiohttp.WSMsgType.TEXT:
                 data = json.loads(response.data)
                 result: bool = data.get("type") == "subscribed"
@@ -350,6 +362,7 @@ class SyncClient:
         # Wait for response
         if self._ws:
             response = await self._ws.receive()
+            aiohttp = self._ensure_aiohttp()
             if response.type == aiohttp.WSMsgType.TEXT:
                 data = json.loads(response.data)
                 if data.get("type") == "history":
@@ -383,6 +396,7 @@ class SyncClient:
 
             try:
                 message = await self._ws.receive()
+                aiohttp = self._ensure_aiohttp()
 
                 if message.type == aiohttp.WSMsgType.TEXT:
                     data = json.loads(message.data)

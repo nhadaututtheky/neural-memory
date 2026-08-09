@@ -289,13 +289,10 @@ async def run_incremental(
             cp = await store.get_consolidation_checkpoint(s.value)
             if cp is None:
                 continue
-            last_seq = getattr(cp, "last_sequence", 0)
-            try:
-                if int(last_seq) > 0:
-                    any_cp = True
-                    break
-            except (TypeError, ValueError):
-                continue
+            # Row existence means bootstrapped (including last_sequence==0 on empty log)
+            if cp is not None:
+                any_cp = True
+                break
         if not any_cp:
             out.mode = "bootstrap_full"
             report = await engine.run(
@@ -439,7 +436,8 @@ async def run_incremental(
                 if report.fiber_scan_truncated:
                     combined_report.fiber_scan_truncated = True
 
-            success = not report.fiber_scan_truncated and not dry_run
+            timed_out = bool(report.extra.get("timed_out_strategies"))
+            success = not report.fiber_scan_truncated and not dry_run and not timed_out
             if success and has_cp and not strat_dirty.truncated:
                 await store.save_consolidation_checkpoint(
                     ConsolidationCheckpoint.create(

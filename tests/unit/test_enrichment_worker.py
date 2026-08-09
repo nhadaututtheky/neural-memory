@@ -66,7 +66,9 @@ async def test_process_embed_job_completes() -> None:
     assert report.claimed == 1
     assert report.completed == 1
     storage.vector_index_add.assert_awaited_once()
-    storage.complete_enrichment_job.assert_awaited_once_with("job-1")
+    storage.complete_enrichment_job.assert_awaited()
+    call_kwargs = storage.complete_enrichment_job.await_args
+    assert call_kwargs.args[0] == "job-1"
 
 
 @pytest.mark.asyncio
@@ -129,9 +131,22 @@ async def test_enqueue_post_encode_idempotent_keys() -> None:
         brain_id="b1",
         entity_id="n9",
         content="test content for embedding",
+        embedding_enabled=True,
     )
     assert len(jobs) == 3
     keys = {j.idempotency_key for j in stored}
     assert "embed:n9" in keys
     assert "link:n9" in keys
     assert "enrich:n9" in keys
+
+    # Without embeddings: no EMBED job
+    stored.clear()
+    jobs2 = await enqueue_post_encode_jobs(
+        storage,
+        brain_id="b1",
+        entity_id="n9",
+        content="test",
+        embedding_enabled=False,
+    )
+    assert len(jobs2) == 2
+    assert all(j.kind.value != "embed" for j in stored)

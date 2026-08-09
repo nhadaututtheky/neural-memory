@@ -489,6 +489,7 @@ class MemoryEncoder:
                         brain_id=str(brain_id),
                         entity_id=ctx.anchor_neuron.id,
                         content=content,
+                        embedding_enabled=bool(getattr(self._config, "embedding_enabled", False)),
                     )
                     enrichment_status = "pending" if jobs else "none"
                 else:

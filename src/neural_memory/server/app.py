@@ -8,10 +8,19 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any, cast
 
-from fastapi import APIRouter, Depends, FastAPI, Header, Query
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse, Response
-from fastapi.staticfiles import StaticFiles
+try:
+    from fastapi import APIRouter, Depends, FastAPI, Header, Query
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import FileResponse, RedirectResponse, Response
+    from fastapi.staticfiles import StaticFiles
+except ImportError as _fastapi_err:  # pragma: no cover - optional extra
+    from neural_memory.utils.optional_dependencies import MissingCapabilityError
+
+    raise MissingCapabilityError(
+        "FastAPI server",
+        "server",
+        cause=_fastapi_err,
+    ) from _fastapi_err
 
 from neural_memory import __version__
 from neural_memory.engine.scheduler import SchedulerCore
@@ -102,10 +111,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 return
             from neural_memory.engine.enrichment_worker import process_enrichment_batch
 
+            provider = None
+            try:
+                brain_id = getattr(storage, "brain_id", None) or getattr(
+                    storage, "_current_brain_id", None
+                )
+                if brain_id:
+                    brain = await storage.get_brain(str(brain_id))
+                    if brain and getattr(brain.config, "embedding_enabled", False):
+                        from neural_memory.engine.semantic_discovery import _create_provider
+
+                        provider = _create_provider(brain.config)
+            except Exception:
+                provider = None
             await process_enrichment_batch(
                 storage,
                 limit=50,
                 worker_id="fastapi-scheduler",
+                embedding_provider=provider,
             )
 
         scheduler_tasks["enrichment"] = _run_enrichment
@@ -194,8 +217,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if hasattr(app.state, "file_watcher"):
         app.state.file_watcher.stop()
 
-    # Stop unified scheduler
+    # Stop unified scheduler and release enrichment leases
     if scheduler is not None:
+        try:
+            if hasattr(storage, "release_enrichment_leases"):
+                await storage.release_enrichment_leases("fastapi-scheduler")
+        except Exception:
+            _logger.debug("Enrichment lease release skipped", exc_info=True)
         await scheduler.stop()
 
     # Stop legacy background tasks (fallback path)
