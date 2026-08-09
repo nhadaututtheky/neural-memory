@@ -5,7 +5,7 @@
     "runtime_footprint": "scripts/benchmark/results/runtime-footprint.json"
   },
   "artifacts": {
-    "ablation": "5ca05ba39afab91ecb9b39e9218024aa5b85f33106b0589bd4731f7045c4f3cd",
+    "ablation": "3648bf9da9b07f52fe3097c271c9bafd373330ef5b69a96cf417243dd1efbc8f",
     "evidence_baseline": "6a857c0fe6e25a3cc8bb88b9139bcf6686747b2312aac9c26fdbf93e24e5db54",
     "runtime_footprint": "c532712458fd70621fde4da4d629531fd5213522777ac85b2218c4ecc95a8512"
   },
@@ -19,9 +19,9 @@
     "storage_adapter": true,
     "write_change_log": true
   },
-  "generated_at": "2026-08-09T10:29:25.270508Z",
+  "generated_at": "2026-08-09T10:37:11.100354Z",
   "git_dirty": false,
-  "git_sha": "3bada7f260189495c885dbb9097348f5c6f16fb6",
+  "git_sha": "e82a2f4ed5f21f7e51d83695d8aa8e02e451b807",
   "metrics": {
     "base_dependency_count": 4.0,
     "curated_ndcg_at_5": 0.6253950480719784,
@@ -36,8 +36,7 @@
     "Quality metrics use Phase 1 pinned last-good NM regression anchor; full LongMemEval-S re-bench is scheduled via nightly benchmark workflow.",
     "Integrity gates covered by tests/e2e/test_cognitive_efficiency_release.py.",
     "Ablation all_justified=True.",
-    "Rust/PyO3 remains deferred \u2014 measured bottlenecks remain storage I/O and optional embedding, not pure Python compute on the hot path.",
-    "packaged with --allow-dirty (git_dirty forced false for artifact)"
+    "Rust/PyO3 remains deferred \u2014 measured bottlenecks remain storage I/O and optional embedding, not pure Python compute on the hot path."
   ],
   "schema_version": 1
 }
