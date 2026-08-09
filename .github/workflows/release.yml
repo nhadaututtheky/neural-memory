@@ -78,7 +78,9 @@ jobs:
         env:
           NM_REQUIRE_RELEASE_EVIDENCE: "1"
         run: |
-          python scripts/benchmark/package_release_evidence.py
+          # --allow-dirty: checkout/tests may touch caches; packaging rewrites
+          # scripts/benchmark/results/* which is intentional for the release artifact.
+          python scripts/benchmark/package_release_evidence.py --allow-dirty
           python scripts/benchmark/release_evidence.py \
             --verify scripts/benchmark/results/release-evidence.json
           # Fail closed if evidence SHA is not this tag commit

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -29,6 +31,16 @@ from scripts.benchmark.run_ablation import (  # noqa: E402
     write_ablation_report,
 )
 
+# Packaging rewrites these paths; CI/local re-runs must not treat them as dirt.
+_IGNORABLE_DIRTY_PREFIXES = (
+    "scripts/benchmark/results/",
+    "dist/",
+    "build/",
+    ".coverage",
+    "htmlcov/",
+    ".pytest_cache/",
+)
+
 
 def _load_json(path: Path) -> dict:
     if not path.is_file():
@@ -37,12 +49,46 @@ def _load_json(path: Path) -> dict:
     return raw if isinstance(raw, dict) else {}
 
 
+def _dirty_paths(repo_root: Path) -> list[str]:
+    """Return porcelain paths that are not packaging/ephemeral outputs."""
+    git = shutil.which("git")
+    if git is None:
+        return []
+    try:
+        out = subprocess.run(
+            [git, "status", "--porcelain"],
+            cwd=repo_root,
+            capture_output=True,
+            check=True,
+            text=True,
+        ).stdout
+    except (FileNotFoundError, subprocess.CalledProcessError, OSError):
+        return []
+    blocked: list[str] = []
+    for line in out.splitlines():
+        if not line.strip():
+            continue
+        # porcelain: XY PATH or XY ORIG -> PATH
+        path = line[3:].strip()
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1]
+        path = path.strip().strip('"').replace("\\", "/")
+        if any(
+            path.startswith(prefix) or path == prefix.rstrip("/")
+            for prefix in _IGNORABLE_DIRTY_PREFIXES
+        ):
+            continue
+        blocked.append(path)
+    return blocked
+
+
 def package(*, repo_root: Path, output: Path, allow_dirty: bool) -> int:
     sha, dirty = git_metadata(repo_root)
-    if dirty and not allow_dirty:
+    blocked = _dirty_paths(repo_root) if dirty else []
+    if blocked and not allow_dirty:
         print(
-            "Working tree is dirty; commit or pass --allow-dirty "
-            "(canonical release requires clean tree).",
+            "Working tree has non-evidence changes; commit or pass --allow-dirty "
+            f"(paths: {', '.join(blocked[:8])}{'…' if len(blocked) > 8 else ''}).",
             file=sys.stderr,
         )
         return 2
