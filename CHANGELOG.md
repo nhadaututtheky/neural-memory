@@ -7,25 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added — Cognitive Efficiency Phase 8 release evidence gate
+## [4.61.0] — 2026-08-09
 
-- Default-stage ablation runner (`scripts/benchmark/run_ablation.py`) for
-  lexical / vector / graph / priming / reconsolidation with fail-closed N/A
-  rules for optional vector.
-- Candidate-SHA `ReleaseEvidence` manifest + verifier
-  (`scripts/benchmark/release_evidence.py`,
-  `scripts/benchmark/package_release_evidence.py`); pre-ship validates when
-  present; release workflow re-packages and fails closed on mismatch.
-- E2E integrity suite (`tests/e2e/test_cognitive_efficiency_release.py`):
-  restart coherence, outbox durability, change_log feed, checkpoint resume,
-  adapter-aware open.
-- Nightly `.github/workflows/benchmark.yml`; release.yml evidence gate.
+### Added — Cognitive Efficiency program (Phases 1–8)
 
-### Cognitive Efficiency program (Phases 1–8) complete
+End-to-end efficiency program: evidence-bound quality, faster hot paths,
+lighter installs, without removing causal cognition.
 
-Cascaded recall, lean capture + durable outbox, incremental consolidation,
-base footprint ≤4 deps, standard MCP tier default, and release evidence
-binding. Rust/PyO3 remains deferred.
+#### Storage cutover
+- **Unified SQLStorage** is the fresh-install SQLite default; missing
+  `storage_adapter` key keeps **legacy** for upgrades.
+- Adapter-aware `open_sqlite_storage()` for runtime entrypoints (MCP global,
+  cross-brain, dashboard, nanobot).
+- Backend-aware KNN (pgvector vs SQLite HNSW) with sidecar persist after mutate.
+
+#### Cascaded cognitive recall
+- FTS/vector candidates first, pre-graph RRF + sufficiency gate, then bounded
+  graph cognition for hard temporal/causal queries.
+- `as_of` / status paths force full correctness (no partial scope).
+
+#### Lean capture + durable enrichment outbox
+- Lean encoding profile with async enrichment jobs; fail-closed without outbox.
+- High-priority / decision writes force full cognitive pipeline.
+
+#### Incremental consolidation
+- Dirty sets from `change_log` (independent of sync `synced` flag).
+- Per-strategy checkpoints; MCP `mode=incremental` and
+  `checkpoint_status` / `checkpoint_reset`.
+- Write-side `_safe_record_change` + `get_fibers_for_neurons`.
+
+#### Footprint and MCP surface
+- Base deps ≤4 (`aiosqlite`, `typer`, `rich`, `networkx`); extras `[sync]` /
+  `[server]`.
+- Fresh installs default **standard** tool tier (10 tools); missing key → full.
+
+#### Release evidence gate
+- Ablation matrix + candidate-SHA `ReleaseEvidence` verifier.
+- E2E integrity suite; nightly `benchmark.yml`; release workflow re-packages
+  evidence and fails closed.
+- pre_ship step 11 validates release evidence when present.
+
+### Fixed
+- P2–P6 residual review blockers (adapter policy, knn, outbox fail-closed,
+  orphan prune under dirty scope, batch vector delete live-IDs only).
+
+### Notes
+- Full LongMemEval-S re-bench runs nightly; release package uses pinned
+  last-good quality floors until nightly refreshes.
+- **Rust/PyO3 remains deferred** — measured bottlenecks stay storage I/O and
+  optional embeddings.
 
 ## [4.60.0] — 2026-07-28
 
