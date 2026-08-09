@@ -455,6 +455,11 @@ class MaintenanceConfig:
     # Durable enrichment outbox worker (Phase 5)
     enrichment_worker_enabled: bool = True
     enrichment_interval_seconds: int = 2  # poll interval when enabled
+    # Incremental consolidation (Phase 6)
+    consolidation_mode: str = "incremental"  # incremental | full
+    consolidation_max_changes: int = 5000
+    consolidation_max_candidates: int = 10000
+    consolidation_bootstrap_full: bool = True  # first run full-bootstrap when no checkpoints
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -496,6 +501,10 @@ class MaintenanceConfig:
             "notifications_zero_activity_alert": self.notifications_zero_activity_alert,
             "enrichment_worker_enabled": self.enrichment_worker_enabled,
             "enrichment_interval_seconds": self.enrichment_interval_seconds,
+            "consolidation_mode": self.consolidation_mode,
+            "consolidation_max_changes": self.consolidation_max_changes,
+            "consolidation_max_candidates": self.consolidation_max_candidates,
+            "consolidation_bootstrap_full": self.consolidation_bootstrap_full,
         }
 
     @classmethod
@@ -567,6 +576,10 @@ class MaintenanceConfig:
             notifications_zero_activity_alert=data.get("notifications_zero_activity_alert", True),
             enrichment_worker_enabled=data.get("enrichment_worker_enabled", True),
             enrichment_interval_seconds=int(data.get("enrichment_interval_seconds", 2)),
+            consolidation_mode=str(data.get("consolidation_mode", "incremental")),
+            consolidation_max_changes=int(data.get("consolidation_max_changes", 5000)),
+            consolidation_max_candidates=int(data.get("consolidation_max_candidates", 10000)),
+            consolidation_bootstrap_full=bool(data.get("consolidation_bootstrap_full", True)),
         )
 
 

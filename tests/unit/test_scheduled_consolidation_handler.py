@@ -21,14 +21,20 @@ def _make_cfg(
     sched_enabled: bool = True,
     interval_hours: int = 24,
     strategies: tuple[str, ...] = ("prune", "merge", "enrich"),
+    consolidation_mode: str = "full",
 ) -> MagicMock:
-    """Create a mock config with MaintenanceConfig."""
+    """Create a mock config with MaintenanceConfig.
+
+    Default consolidation_mode is full so existing tests that patch
+    ``run_with_delta`` keep working. Production default remains incremental.
+    """
     cfg = MagicMock()
     cfg.maintenance = MaintenanceConfig(
         enabled=enabled,
         scheduled_consolidation_enabled=sched_enabled,
         scheduled_consolidation_interval_hours=interval_hours,
         scheduled_consolidation_strategies=strategies,
+        consolidation_mode=consolidation_mode,
     )
     return cfg
 

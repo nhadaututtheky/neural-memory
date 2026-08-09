@@ -87,6 +87,25 @@ class ChangeLogMixin:
         )
         return [_row_to_change_entry(r) for r in rows]
 
+    async def get_change_log_max_sequence(self) -> int:
+        """Return max change_log.id for the current brain (0 if empty).
+
+        Used by incremental consolidation high-watermark snapshots.
+        Does **not** read or write the ``synced`` flag.
+        """
+        d = self._dialect
+        brain_id = self._get_brain_id()
+        row = await d.fetch_one(
+            f"SELECT MAX(id) as max_id FROM change_log WHERE brain_id = {d.ph(1)}",
+            [brain_id],
+        )
+        if not row or row.get("max_id") is None:
+            return 0
+        try:
+            return int(row["max_id"])
+        except (TypeError, ValueError):
+            return 0
+
     async def get_unsynced_changes(self, limit: int = 1000) -> list[ChangeEntry]:
         """Get all unsynced changes, ordered by id ASC."""
         safe_limit = min(limit, 10000)

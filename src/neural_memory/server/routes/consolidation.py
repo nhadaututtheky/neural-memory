@@ -26,6 +26,14 @@ class ConsolidateRequest(BaseModel):
         description="Strategies: prune, merge, summarize, all",
     )
     dry_run: bool = Field(False, description="Preview changes without applying")
+    mode: str = Field(
+        "full",
+        description="full (classic) or incremental (change-log dirty sets)",
+    )
+    bootstrap_full: bool = Field(
+        True,
+        description="When mode=incremental and no checkpoints, run full bootstrap first",
+    )
     prune_weight_threshold: float = Field(0.05, ge=0, le=1)
     merge_overlap_threshold: float = Field(0.5, ge=0, le=1)
     prune_min_inactive_days: float = Field(7.0, ge=0)
@@ -91,7 +99,27 @@ async def consolidate_brain(
     )
 
     engine = ConsolidationEngine(storage, config)
-    report = await engine.run(strategies=strategies, dry_run=request.dry_run)
+    mode = (request.mode or "full").strip().lower()
+    if mode == "incremental":
+        inc = await engine.run_incremental(
+            strategies=strategies,
+            dry_run=request.dry_run,
+            bootstrap_full=request.bootstrap_full,
+        )
+        report = inc.consolidation
+        if report is None:
+            # Zero-work incremental run — empty report
+            from neural_memory.engine.consolidation import ConsolidationReport
+
+            report = ConsolidationReport(dry_run=request.dry_run, duration_ms=inc.duration_ms)
+            report.extra["incremental_mode"] = inc.mode
+            report.extra["checkpoints"] = dict(inc.checkpoints)
+        else:
+            report.extra["incremental_mode"] = inc.mode
+            report.extra["checkpoints"] = dict(inc.checkpoints)
+            report.extra["strategies_advanced"] = list(inc.strategies_advanced)
+    else:
+        report = await engine.run(strategies=strategies, dry_run=request.dry_run)
 
     return ConsolidationResponse(
         started_at=report.started_at.isoformat(),

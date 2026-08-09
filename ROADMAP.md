@@ -4,7 +4,7 @@
 > Every item passes the VISION.md 4-question test + brain test.
 > ZERO LLM dependency — pure algorithmic, regex, graph-based.
 
-**Current state**: v4.31.0 — 63 MCP tools, 7700+ tests, schema v40, SQLite + PostgreSQL + InfinityDB backends, neuroscience engine (10 brain-inspired algorithms), tiered memory (HOT/WARM/COLD + auto-tier + domain boundaries), decision intelligence, 7-module handler architecture, Pro bundled in main package (license-gated), Brain Store community marketplace (GitHub-backed).
+**Current state**: v4.31.0 — 63 MCP tools, 7800+ tests, schema v41, SQLite + PostgreSQL + InfinityDB backends, neuroscience engine (10 brain-inspired algorithms), tiered memory (HOT/WARM/COLD + auto-tier + domain boundaries), decision intelligence, 7-module handler architecture, Pro bundled in main package (license-gated), Brain Store community marketplace (GitHub-backed).
 **Architecture**: Spreading activation reflex engine, biological memory model, MCP standard.
 **Direction**: Feature breadth is sufficient. Future focus shifts to **quality depth** — optimizing every fiber, synapse, and neuron interaction to produce the highest-quality memory graph possible.
 

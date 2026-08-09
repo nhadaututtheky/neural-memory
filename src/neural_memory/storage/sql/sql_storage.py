@@ -31,6 +31,9 @@ from neural_memory.storage.sql.mixins.change_log import ChangeLogMixin
 from neural_memory.storage.sql.mixins.coactivation import CoActivationMixin
 from neural_memory.storage.sql.mixins.cognitive import CognitiveMixin
 from neural_memory.storage.sql.mixins.compression import CompressionMixin
+from neural_memory.storage.sql.mixins.consolidation_checkpoints import (
+    ConsolidationCheckpointsMixin,
+)
 from neural_memory.storage.sql.mixins.depth_priors import DepthPriorsMixin
 from neural_memory.storage.sql.mixins.devices import DevicesMixin
 from neural_memory.storage.sql.mixins.drift import DriftMixin
@@ -72,6 +75,7 @@ class SQLStorage(
     ChangeLogMixin,
     CoActivationMixin,
     CompressionMixin,
+    ConsolidationCheckpointsMixin,
     DepthPriorsMixin,
     DevicesMixin,
     DriftMixin,

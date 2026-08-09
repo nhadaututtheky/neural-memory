@@ -101,8 +101,16 @@ class ScheduledConsolidationHandler:
             await self._run_scheduled_consolidation(cfg)
 
     async def _run_scheduled_consolidation(self, cfg: MaintenanceConfig) -> None:
-        """Execute one scheduled consolidation run."""
-        from neural_memory.engine.consolidation import ConsolidationStrategy
+        """Execute one scheduled consolidation run.
+
+        Default mode is incremental (Phase 6): work scales with change_log
+        dirty sets. Set ``maintenance.consolidation_mode = "full"`` for the
+        classic full-brain pass.
+        """
+        from neural_memory.engine.consolidation import (
+            ConsolidationEngine,
+            ConsolidationStrategy,
+        )
         from neural_memory.engine.consolidation_delta import run_with_delta
 
         try:
@@ -112,13 +120,28 @@ class ScheduledConsolidationHandler:
 
             self._last_consolidation_at = utcnow()
 
-            delta = await run_with_delta(storage, brain_id, strategies=strategies)
-            logger.info(
-                "Scheduled consolidation complete (strategies=%s): %s | purity delta: %+.1f",
-                cfg.scheduled_consolidation_strategies,
-                delta.report.summary(),
-                delta.purity_delta,
-            )
+            mode = str(getattr(cfg, "consolidation_mode", "incremental") or "incremental")
+            if mode == "full":
+                delta = await run_with_delta(storage, brain_id, strategies=strategies)
+                logger.info(
+                    "Scheduled consolidation complete (full, strategies=%s): %s | purity delta: %+.1f",
+                    cfg.scheduled_consolidation_strategies,
+                    delta.report.summary(),
+                    delta.purity_delta,
+                )
+            else:
+                engine = ConsolidationEngine(storage)
+                inc = await engine.run_incremental(
+                    strategies=strategies,
+                    max_changes=int(getattr(cfg, "consolidation_max_changes", 5000)),
+                    max_candidates=int(getattr(cfg, "consolidation_max_candidates", 10000)),
+                    bootstrap_full=bool(getattr(cfg, "consolidation_bootstrap_full", True)),
+                )
+                logger.info(
+                    "Scheduled consolidation complete (incremental mode=%s): %s",
+                    inc.mode,
+                    inc.summary(),
+                )
         except Exception:
             logger.error("Scheduled consolidation failed", exc_info=True)
 

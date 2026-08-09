@@ -397,6 +397,23 @@ class ConsolidationEngine:
                     report.fiber_scan_truncated = True
                     report.fiber_scan_warnings.append(msg)
 
+        # Incremental mode: restrict to dirty fibers + fibers touching dirty neurons
+        dirty = getattr(self, "_incremental_dirty", None)
+        if dirty is not None and not force_reload:
+            dirty_f: frozenset[str] = getattr(dirty, "fiber_ids", frozenset()) or frozenset()
+            dirty_n: frozenset[str] = getattr(dirty, "neuron_ids", frozenset()) or frozenset()
+            if dirty_f or dirty_n:
+                scoped: list[Fiber] = []
+                for f in all_fibers:
+                    if f.id in dirty_f:
+                        scoped.append(f)
+                        continue
+                    if dirty_n and (getattr(f, "neuron_ids", set()) or set()) & dirty_n:
+                        scoped.append(f)
+                all_fibers = scoped
+                if report is not None:
+                    report.extra["incremental_fiber_scope"] = len(all_fibers)
+
         self._fiber_snapshot = all_fibers
         self._fiber_snapshot_report_id = report_id
         return list(all_fibers)
@@ -440,6 +457,36 @@ class ConsolidationEngine:
         handler = dispatch.get(strategy)
         if handler is not None:
             await handler()
+
+    async def run_incremental(
+        self,
+        strategies: list[ConsolidationStrategy] | None = None,
+        *,
+        max_changes: int = 5000,
+        max_candidates: int = 10000,
+        time_budget_s: float = 120.0,
+        dry_run: bool = False,
+        bootstrap_full: bool = False,
+        reference_time: datetime | None = None,
+    ) -> Any:
+        """Run consolidation incrementally using change-log dirty sets.
+
+        See :func:`neural_memory.engine.consolidation_incremental.run_incremental`.
+        """
+        from neural_memory.engine.consolidation_incremental import (
+            run_incremental as _run_inc,
+        )
+
+        return await _run_inc(
+            self,
+            strategies,
+            max_changes=max_changes,
+            max_candidates=max_candidates,
+            time_budget_s=time_budget_s,
+            dry_run=dry_run,
+            bootstrap_full=bootstrap_full,
+            reference_time=reference_time,
+        )
 
     async def run(
         self,
@@ -664,8 +711,19 @@ class ConsolidationEngine:
         if not self._storage.current_brain_id:
             return
 
-        # Get all synapses
+        # Get synapses (scoped to dirty set when running incrementally)
         all_synapses = await self._storage.get_synapses()
+        dirty = getattr(self, "_incremental_dirty", None)
+        if dirty is not None:
+            dirty_s: frozenset[str] = getattr(dirty, "synapse_ids", frozenset()) or frozenset()
+            dirty_n: frozenset[str] = getattr(dirty, "neuron_ids", frozenset()) or frozenset()
+            if dirty_s or dirty_n:
+                all_synapses = [
+                    s
+                    for s in all_synapses
+                    if s.id in dirty_s or s.source_id in dirty_n or s.target_id in dirty_n
+                ]
+                report.extra["incremental_synapse_scope"] = len(all_synapses)
         pruned_synapse_ids: set[str] = set()
 
         # Preload pinned neuron IDs to protect from pruning
@@ -929,7 +987,8 @@ class ConsolidationEngine:
 
         # Find candidate pairs (fibers sharing at least one neuron)
         candidate_pairs: set[tuple[int, int]] = set()
-        max_candidate_pairs = 50_000
+        max_candidate_pairs = int(getattr(self, "_incremental_max_candidates", 50_000) or 50_000)
+        max_candidate_pairs = max(100, min(max_candidate_pairs, 50_000))
         for indices in neuron_to_fibers.values():
             # Skip overly-shared neurons (e.g. entity appearing in 500+ fibers)
             if len(indices) > 100:
@@ -939,6 +998,7 @@ class ConsolidationEngine:
                 for j_pos in range(i_pos + 1, len(indices_list)):
                     candidate_pairs.add((indices_list[i_pos], indices_list[j_pos]))
             if len(candidate_pairs) >= max_candidate_pairs:
+                report.extra["merge_candidate_cap_hit"] = True
                 break
 
         # Union-Find clustering

@@ -26,7 +26,7 @@ async def test_migrate_39_to_40(tmp_path: Path) -> None:
         await conn.commit()
 
         final = await run_migrations(conn, 39)
-        assert final == SCHEMA_VERSION == 40
+        assert final == SCHEMA_VERSION == 41
 
         row = await conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='enrichment_jobs'"
@@ -52,7 +52,7 @@ async def test_fresh_install_has_enrichment_jobs(tmp_path: Path) -> None:
     )
     assert row is not None
     ver = await store._dialect.fetch_one("SELECT version FROM schema_version")
-    assert int(ver["version"]) == 40
+    assert int(ver["version"]) == 41
     await store.close()
 
 
@@ -69,5 +69,5 @@ async def test_already_migrated_noop(tmp_path: Path) -> None:
     store2 = SQLStorage(SQLiteDialect(path))
     await store2.initialize()  # must not raise
     ver = await store2._dialect.fetch_one("SELECT version FROM schema_version")
-    assert int(ver["version"]) == 40
+    assert int(ver["version"]) == 41
     await store2.close()

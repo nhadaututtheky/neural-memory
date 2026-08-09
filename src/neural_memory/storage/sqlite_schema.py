@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 40
+SCHEMA_VERSION = 41
 
 # â”€â”€ Migrations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Each entry maps (from_version -> to_version) with a list of SQL statements.
@@ -644,6 +644,19 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
     (38, 39): [
         # SM-2 ease factor for spaced repetition (default 2.5)
         "ALTER TABLE review_schedules ADD COLUMN ease_factor REAL NOT NULL DEFAULT 2.5",
+    ],
+    (40, 41): [
+        # Per-strategy consolidation checkpoints (Phase 6) — independent of change_log.synced
+        """CREATE TABLE IF NOT EXISTS consolidation_checkpoints (
+            brain_id TEXT NOT NULL,
+            strategy TEXT NOT NULL,
+            last_sequence INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (brain_id, strategy),
+            FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_consolidation_checkpoints_brain "
+        "ON consolidation_checkpoints(brain_id)",
     ],
     (39, 40): [
         # Durable enrichment outbox (Phase 5) — separate from change_log.synced
@@ -1351,4 +1364,16 @@ CREATE INDEX IF NOT EXISTS idx_enrichment_jobs_claim
     ON enrichment_jobs(brain_id, status, available_at);
 CREATE INDEX IF NOT EXISTS idx_enrichment_jobs_entity
     ON enrichment_jobs(brain_id, entity_id);
+
+-- Per-strategy consolidation checkpoints (v41, Phase 6)
+CREATE TABLE IF NOT EXISTS consolidation_checkpoints (
+    brain_id TEXT NOT NULL,
+    strategy TEXT NOT NULL,
+    last_sequence INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (brain_id, strategy),
+    FOREIGN KEY (brain_id) REFERENCES brains(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_consolidation_checkpoints_brain
+    ON consolidation_checkpoints(brain_id);
 """
