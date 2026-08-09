@@ -7,6 +7,12 @@ from unittest.mock import patch
 
 import pytest
 
+from scripts.benchmark.cascade_metrics import (
+    COGNITIVE_P95_MS,
+    SIMPLE_P95_MS,
+    aggregate_route_latencies,
+    percentile,
+)
 from scripts.benchmark.evidence import EvidenceManifest, ground_truth_sha256
 from scripts.benchmark.metrics import QuestionResult
 from scripts.benchmark.report import (
@@ -212,3 +218,47 @@ def test_evidence_report_rolls_back_when_publish_fails(tmp_path: Path) -> None:
     assert not (tmp_path / "evidence_v1_partial.json").exists()
     assert not (tmp_path / "evidence_v1_partial.md").exists()
     assert not list(tmp_path.glob(".evidence_v1_partial.*.tmp"))
+
+
+def test_cascade_percentile_basic() -> None:
+    assert percentile([], 50) is None
+    assert percentile([10.0], 95) == 10.0
+    assert percentile([1, 2, 3, 4, 5], 50) == 3.0
+
+
+def test_aggregate_route_latencies_inconclusive_under_min_samples() -> None:
+    rows = [
+        {"route": "exact", "stage": "candidate_exit", "latency_ms": 12.0},
+        {"route": "causal", "stage": "bounded_graph", "latency_ms": 80.0},
+    ]
+    report = aggregate_route_latencies(rows, min_samples=5)
+    assert report["gates"]["simple_p95_ms"]["status"] == "inconclusive"
+    assert report["gates"]["cognitive_p95_ms"]["status"] == "inconclusive"
+    assert report["all_gates_pass"] is False
+    assert report["routes"]["exact"]["samples"] == 1
+
+
+def test_aggregate_route_latencies_pass_fail_gates() -> None:
+    simple_rows = [
+        {"cascade_route": "exact", "cascade_stage": "candidate_exit", "latency_ms": 20.0 + i}
+        for i in range(8)
+    ]
+    cognitive_rows = [
+        {"route": "causal", "stage": "bounded_graph", "latency_ms": 40.0 + i} for i in range(8)
+    ]
+    report = aggregate_route_latencies(simple_rows + cognitive_rows, min_samples=5)
+    assert report["gates"]["simple_p95_ms"]["status"] == "pass"
+    assert report["gates"]["cognitive_p95_ms"]["status"] == "pass"
+    assert report["all_gates_pass"] is True
+    assert report["simple"]["p95_ms"] is not None
+    assert report["simple"]["p95_ms"] <= SIMPLE_P95_MS
+    assert report["cognitive"]["p95_ms"] <= COGNITIVE_P95_MS
+
+
+def test_aggregate_route_latencies_fail_when_over_budget() -> None:
+    rows = [
+        {"route": "exact", "stage": "candidate_exit", "latency_ms": 200.0 + i} for i in range(10)
+    ]
+    report = aggregate_route_latencies(rows, min_samples=5)
+    assert report["gates"]["simple_p95_ms"]["status"] == "fail"
+    assert report["all_gates_pass"] is False

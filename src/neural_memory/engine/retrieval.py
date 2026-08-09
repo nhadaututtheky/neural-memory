@@ -481,128 +481,270 @@ class ReflexPipeline:
             except Exception:
                 logger.debug("Predictive priming failed (non-critical)", exc_info=True)
 
-        # Choose activation method based on strategy (auto-select from graph density)
-        strategy = self._config.activation_strategy
-        if strategy == "auto":
-            strategy = await self._auto_select_strategy()
+        # 3.8 Cascaded cognitive recall: route + candidate gate (pre-graph)
+        # Exact/strong semantic may early-exit; causal/temporal never do.
+        # as_of / non-default status keep the full correctness path.
+        _cascade_meta: dict[str, Any] = {}
+        _cascade_scope: set[str] | None = None
+        _cascade_early = False
+        activations: dict[str, ActivationResult] = {}
+        intersections: list[str] = []
+        co_activations: list[CoActivation] = []
+        _skip_cascade_early = _status_override or as_of is not None
 
-        if strategy == "cone":
-            # Pro cone queries: HNSW nearest-neighbor (direct import)
-            cone_done = False
-            cone_fn = None
+        if self._config.cascade_recall_enabled:
             try:
-                from neural_memory.pro.retrieval.cone_queries import cone_recall
+                from neural_memory.engine.retrieval_cascade import (
+                    build_candidate_evidence,
+                    build_neighbor_adjacency,
+                    delta_phase_timings,
+                    evaluate_candidates,
+                    expand_scope_with_neighbors,
+                    scores_to_activation_levels,
+                )
+                from neural_memory.engine.retrieval_cascade import (
+                    route_query as cascade_route_query,
+                )
 
-                cone_fn = cone_recall
-            except ImportError:
-                # Fallback: try plugin registry for third-party extensions
-                from neural_memory.plugins import get_retrieval_strategy
+                _cascade_cum: dict[str, float] = {}
+                _cascade_route = cascade_route_query(stimulus)
+                _cascade_cum["route"] = (time.perf_counter() - start_time) * 1000
 
-                cone_fn = get_retrieval_strategy("cone")
-            if cone_fn is not None and self._embedding_provider is not None:
+                _live_ids: frozenset[str] | None = None
                 try:
-                    db = getattr(self._storage, "_db", None)
-                    if db is not None:
-                        query_vec = await self._embedding_provider.embed(query)
-                        cone_results = await cone_fn(query_vec, db)
-                        activations = {}
-                        for cr in cone_results:
-                            activations[cr.neuron_id] = ActivationResult(
-                                neuron_id=cr.neuron_id,
-                                activation_level=cr.combined_score,
-                                hop_distance=0,
-                                path=[cr.neuron_id],
-                                source_anchor=cr.neuron_id,
-                            )
-                        intersections: list[str] = []
-                        co_activations: list[CoActivation] = []
-                        cone_done = True
+                    _cand_ids = {a.neuron_id for rl in ranked_lists for a in rl}
+                    if _cand_ids:
+                        _live_batch = await self._storage.get_neurons_batch(list(_cand_ids))
+                        _live_ids = frozenset(_live_batch.keys())
                 except Exception:
-                    logger.debug("Cone query failed, falling back", exc_info=True)
-            if not cone_done:
-                logger.debug("Cone unavailable — falling back to classic activation")
-                strategy = "classic"
+                    logger.debug("Cascade live-ID check failed (non-critical)", exc_info=True)
 
-        _hybrid_scope: set[str] | None = None
-        if strategy == "hnsw_hybrid":
-            # HNSW-first hybrid: narrow candidates via vector search, then scoped cognitive
-            hybrid_done = False
-            if self._embedding_provider is not None and hasattr(self._storage, "knn_search"):
+                _cascade_evidence = build_candidate_evidence(
+                    _cascade_route,
+                    ranked_lists,
+                    k=self._config.rrf_k,
+                    retriever_weights=_rrf_weights,
+                    candidate_cap=self._config.cascade_candidate_cap,
+                    live_ids=_live_ids,
+                )
+                _cascade_cum["candidates"] = (time.perf_counter() - start_time) * 1000
+
+                _cascade_gate = evaluate_candidates(_cascade_evidence, self._config)
+                _cascade_cum["gate"] = (time.perf_counter() - start_time) * 1000
+
+                _cascade_meta = {
+                    "cascade_route": _cascade_route.value,
+                    "cascade_source_counts": dict(_cascade_evidence.source_counts),
+                    "cascade_gate_reason": _cascade_gate.reason,
+                    "cascade_gate_confidence": round(_cascade_gate.confidence, 4),
+                    "cascade_sufficient": _cascade_gate.sufficient,
+                    "cascade_scope_size": len(_cascade_gate.graph_scope),
+                    "cascade_candidate_count": len(_cascade_evidence.ranked_ids),
+                }
+
+                if _cascade_gate.sufficient and not _skip_cascade_early:
+                    _levels = scores_to_activation_levels(_cascade_evidence.scores)
+                    activations = {
+                        nid: ActivationResult(
+                            neuron_id=nid,
+                            activation_level=level,
+                            hop_distance=0,
+                            path=[nid],
+                            source_anchor=nid,
+                        )
+                        for nid, level in _levels.items()
+                    }
+                    intersections = list(_cascade_evidence.ranked_ids[:5])
+                    co_activations = []
+                    _cascade_early = True
+                    _cascade_meta["cascade_stage"] = "candidate_exit"
+                    _cascade_meta["cascade_phase_timings_ms"] = delta_phase_timings(_cascade_cum)
+                elif _cascade_gate.graph_scope:
+                    try:
+                        _adj = await build_neighbor_adjacency(
+                            self._storage,
+                            _cascade_gate.graph_scope,
+                            neighbor_hops=self._config.cascade_neighbor_hops,
+                            max_nodes=self._config.cascade_graph_node_budget,
+                        )
+                        _expanded = expand_scope_with_neighbors(
+                            _cascade_gate.graph_scope,
+                            _adj,
+                            neighbor_hops=self._config.cascade_neighbor_hops,
+                            max_nodes=self._config.cascade_graph_node_budget,
+                        )
+                        _cascade_scope = (
+                            set(_expanded) if _expanded else set(_cascade_gate.graph_scope)
+                        )
+                    except Exception:
+                        logger.debug(
+                            "Cascade scope expansion failed (non-critical)",
+                            exc_info=True,
+                        )
+                        _cascade_scope = set(_cascade_gate.graph_scope)
+                    _cascade_meta["cascade_stage"] = "bounded_graph"
+                    _cascade_meta["cascade_scope_size"] = len(_cascade_scope)
+                    _cascade_cum["graph_scope"] = (time.perf_counter() - start_time) * 1000
+                    _cascade_meta["cascade_phase_timings_ms"] = delta_phase_timings(_cascade_cum)
+                else:
+                    _cascade_meta["cascade_stage"] = "full_graph_fallback"
+                    _cascade_meta["cascade_fallback_reason"] = "empty_scope"
+                    _cascade_meta["cascade_phase_timings_ms"] = delta_phase_timings(_cascade_cum)
+            except Exception:
+                logger.debug("Cascaded recall pre-graph failed (non-critical)", exc_info=True)
+                _cascade_meta = {"cascade_stage": "error_fallback"}
+        _phase_timings["cascade_pregraph"] = (time.perf_counter() - start_time) * 1000
+
+        # Choose activation method based on strategy (auto-select from graph density)
+        if not _cascade_early:
+            strategy = self._config.activation_strategy
+            if strategy == "auto":
+                strategy = await self._auto_select_strategy()
+
+            # Bounded cascade scope forces classic activator (only path with scope=).
+            # Avoid full-graph PPR/reflex after candidate gate already bounded the set.
+            if _cascade_scope is not None:
+                strategy = "classic_scoped"
+
+            if strategy == "cone":
+                # Pro cone queries: HNSW nearest-neighbor (direct import)
+                cone_done = False
+                cone_fn = None
                 try:
-                    from neural_memory.pro.retrieval.hybrid_recall import hnsw_hybrid_recall
+                    from neural_memory.pro.retrieval.cone_queries import cone_recall
 
-                    query_vec = await self._embedding_provider.embed(query)
-                    hybrid_result = await hnsw_hybrid_recall(
-                        query_embedding=query_vec,
-                        storage=self._storage,
-                        activator=self._activator,
-                        anchor_sets=anchor_sets,
+                    cone_fn = cone_recall
+                except ImportError:
+                    # Fallback: try plugin registry for third-party extensions
+                    from neural_memory.plugins import get_retrieval_strategy
+
+                    cone_fn = get_retrieval_strategy("cone")
+                if cone_fn is not None and self._embedding_provider is not None:
+                    try:
+                        db = getattr(self._storage, "_db", None)
+                        if db is not None:
+                            query_vec = await self._embedding_provider.embed(query)
+                            cone_results = await cone_fn(query_vec, db)
+                            activations = {}
+                            for cr in cone_results:
+                                activations[cr.neuron_id] = ActivationResult(
+                                    neuron_id=cr.neuron_id,
+                                    activation_level=cr.combined_score,
+                                    hop_distance=0,
+                                    path=[cr.neuron_id],
+                                    source_anchor=cr.neuron_id,
+                                )
+                            intersections = []
+                            co_activations = []
+                            cone_done = True
+                    except Exception:
+                        logger.debug("Cone query failed, falling back", exc_info=True)
+                if not cone_done:
+                    logger.debug("Cone unavailable — falling back to classic activation")
+                    strategy = "classic"
+
+            _hybrid_scope: set[str] | None = None
+            if strategy == "hnsw_hybrid":
+                # HNSW-first hybrid: narrow candidates via vector search, then scoped cognitive
+                hybrid_done = False
+                if self._embedding_provider is not None and hasattr(self._storage, "knn_search"):
+                    try:
+                        from neural_memory.pro.retrieval.hybrid_recall import hnsw_hybrid_recall
+
+                        query_vec = await self._embedding_provider.embed(query)
+                        hybrid_result = await hnsw_hybrid_recall(
+                            query_embedding=query_vec,
+                            storage=self._storage,
+                            activator=self._activator,
+                            anchor_sets=anchor_sets,
+                            max_hops=self._depth_to_hops(depth),
+                            anchor_activations=anchor_activations,
+                            bm25_query=query if hasattr(self._storage, "text_search") else None,
+                        )
+                        if hybrid_result is not None:
+                            activations, intersections, _hybrid_scope = hybrid_result
+                            co_activations = []
+                            hybrid_done = True
+                    except Exception:
+                        logger.debug("Hybrid recall failed, falling back", exc_info=True)
+                if not hybrid_done:
+                    logger.debug("Hybrid recall unavailable — falling back to classic")
+                    strategy = "classic"
+
+            if strategy == "ppr" and self._ppr_activator is not None:
+                # Personalized PageRank activation
+                activations, intersections = await self._ppr_activator.activate_from_multiple(
+                    anchor_sets,
+                    anchor_activations=anchor_activations,
+                )
+                co_activations = []
+            elif strategy == "hybrid" and self._ppr_activator is not None:
+                # Hybrid: PPR primary + reflex for fiber pathways
+                (
+                    ppr_activations,
+                    ppr_intersections,
+                ) = await self._ppr_activator.activate_from_multiple(
+                    anchor_sets,
+                    anchor_activations=anchor_activations,
+                )
+                # Also run reflex if fibers exist
+                reflex_activations: dict[str, ActivationResult] = {}
+                co_activations = []
+                if self._use_reflex:
+                    reflex_activations, _, co_activations = await self._reflex_query(
+                        anchor_sets,
+                        reference_time,
+                        anchor_activations=anchor_activations,
+                    )
+                # Merge: PPR primary, reflex fills gaps (dampened 0.6x)
+                activations = dict(ppr_activations)
+                for nid, reflex_result in reflex_activations.items():
+                    existing = activations.get(nid)
+                    dampened = reflex_result.activation_level * 0.6
+                    if existing is None or dampened > existing.activation_level:
+                        activations[nid] = ActivationResult(
+                            neuron_id=nid,
+                            activation_level=dampened,
+                            hop_distance=reflex_result.hop_distance,
+                            path=reflex_result.path,
+                            source_anchor=reflex_result.source_anchor,
+                        )
+                intersections = ppr_intersections
+            elif strategy == "classic_scoped" and _cascade_scope is not None:
+                activations, intersections = await self._activator.activate_from_multiple(
+                    anchor_sets,
+                    max_hops=self._depth_to_hops(depth),
+                    anchor_activations=anchor_activations,
+                    warm_activations=self._warm_activations,
+                    scope=_cascade_scope,
+                )
+                co_activations = []
+                # Empty scoped result → full-graph fallback (preserve recall quality)
+                if not activations and any(anchor_sets):
+                    activations, intersections = await self._activator.activate_from_multiple(
+                        anchor_sets,
                         max_hops=self._depth_to_hops(depth),
                         anchor_activations=anchor_activations,
-                        bm25_query=query if hasattr(self._storage, "text_search") else None,
+                        warm_activations=self._warm_activations,
                     )
-                    if hybrid_result is not None:
-                        activations, intersections, _hybrid_scope = hybrid_result
-                        co_activations = []
-                        hybrid_done = True
-                except Exception:
-                    logger.debug("Hybrid recall failed, falling back", exc_info=True)
-            if not hybrid_done:
-                logger.debug("Hybrid recall unavailable — falling back to classic")
-                strategy = "classic"
-
-        if strategy == "ppr" and self._ppr_activator is not None:
-            # Personalized PageRank activation
-            activations, intersections = await self._ppr_activator.activate_from_multiple(
-                anchor_sets,
-                anchor_activations=anchor_activations,
-            )
-            co_activations = []
-        elif strategy == "hybrid" and self._ppr_activator is not None:
-            # Hybrid: PPR primary + reflex for fiber pathways
-            ppr_activations, ppr_intersections = await self._ppr_activator.activate_from_multiple(
-                anchor_sets,
-                anchor_activations=anchor_activations,
-            )
-            # Also run reflex if fibers exist
-            reflex_activations: dict[str, ActivationResult] = {}
-            co_activations = []
-            if self._use_reflex:
-                reflex_activations, _, co_activations = await self._reflex_query(
+                    _cascade_meta["cascade_fallback_reason"] = "scoped_activation_empty"
+                    _cascade_meta["cascade_stage"] = "full_graph_fallback"
+            elif self._use_reflex:
+                # Reflex activation: trail-based through fiber pathways
+                activations, intersections, co_activations = await self._reflex_query(
                     anchor_sets,
                     reference_time,
                     anchor_activations=anchor_activations,
                 )
-            # Merge: PPR primary, reflex fills gaps (dampened 0.6x)
-            activations = dict(ppr_activations)
-            for nid, reflex_result in reflex_activations.items():
-                existing = activations.get(nid)
-                dampened = reflex_result.activation_level * 0.6
-                if existing is None or dampened > existing.activation_level:
-                    activations[nid] = ActivationResult(
-                        neuron_id=nid,
-                        activation_level=dampened,
-                        hop_distance=reflex_result.hop_distance,
-                        path=reflex_result.path,
-                        source_anchor=reflex_result.source_anchor,
-                    )
-            intersections = ppr_intersections
-        elif self._use_reflex:
-            # Reflex activation: trail-based through fiber pathways
-            activations, intersections, co_activations = await self._reflex_query(
-                anchor_sets,
-                reference_time,
-                anchor_activations=anchor_activations,
-            )
-        else:
-            # Classic spreading activation
-            activations, intersections = await self._activator.activate_from_multiple(
-                anchor_sets,
-                max_hops=self._depth_to_hops(depth),
-                anchor_activations=anchor_activations,
-                warm_activations=self._warm_activations,
-            )
-            co_activations = []
+            else:
+                # Classic spreading activation
+                activations, intersections = await self._activator.activate_from_multiple(
+                    anchor_sets,
+                    max_hops=self._depth_to_hops(depth),
+                    anchor_activations=anchor_activations,
+                    warm_activations=self._warm_activations,
+                )
+                co_activations = []
         _phase_timings["activation"] = (time.perf_counter() - start_time) * 1000
 
         # 4.5 Lateral inhibition: top-K winners suppress competitors
@@ -761,6 +903,7 @@ class ReflexPipeline:
                     "sufficiency_reason": _sufficiency.reason,
                     "sufficiency_confidence": _sufficiency.confidence,
                     "phase_timings_ms": _phase_timings,
+                    **_cascade_meta,
                 },
             )
             # Flush any pending writes even on early exit
@@ -1022,6 +1165,7 @@ class ReflexPipeline:
                 "activation_paths": {nid: ar.path for nid, ar in activations.items() if ar.path},
                 "phase_timings_ms": _phase_timings,
                 "reflex_count": _reflex_count,
+                **_cascade_meta,
             },
         )
 

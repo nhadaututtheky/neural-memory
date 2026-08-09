@@ -85,6 +85,7 @@ class ScaleResult:
     rss_before_mb: float = 0.0
     rss_after_mb: float = 0.0
     rss_delta_mb: float = 0.0
+    cascade_report: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -320,17 +321,18 @@ BENCHMARK_QUERIES = [
     "Terraform infrastructure as code patterns",
     "OAuth2 and CORS security configuration",
     "gRPC vs REST API performance comparison",
-    # Broad/vague (10)
+    # Broad/vague (6)
     "performance optimization",
     "error handling patterns",
     "security best practices",
     "deployment strategy",
     "data validation",
     "monitoring and observability",
-    "testing automation",
-    "memory management",
-    "connection handling",
-    "configuration management",
+    # Causal / temporal (cognitive routes — Phase 4)
+    "Why did the build fail after migration?",
+    "Why was Redis chosen over Memcached?",
+    "When did we migrate to Kubernetes?",
+    "What happened after the OAuth2 rollout?",
 ]
 
 
@@ -391,9 +393,13 @@ async def bench_recall(
     storage: "SQLiteStorage",
     queries: list[str],
     runs: int = 1,
-) -> LatencyStats:
-    """Measure recall latency across queries * runs."""
+) -> tuple[LatencyStats, dict]:
+    """Measure recall latency across queries * runs.
+
+    Returns (latency_stats, cascade_route_report).
+    """
     from neural_memory.engine.retrieval import ReflexPipeline
+    from scripts.benchmark.cascade_metrics import aggregate_route_latencies
 
     brain = await storage.get_brain(storage._current_brain_id)  # type: ignore[arg-type]
     assert brain is not None
@@ -404,13 +410,22 @@ async def bench_recall(
         await pipeline.query(q)
 
     latencies_ms: list[float] = []
+    cascade_rows: list[dict] = []
 
     for run_idx in range(runs):
         for q in queries:
             t0 = time.perf_counter()
-            await pipeline.query(q)
+            result = await pipeline.query(q)
             elapsed_ms = (time.perf_counter() - t0) * 1000
             latencies_ms.append(elapsed_ms)
+            meta = result.metadata or {}
+            cascade_rows.append(
+                {
+                    "route": meta.get("cascade_route"),
+                    "stage": meta.get("cascade_stage"),
+                    "latency_ms": elapsed_ms,
+                }
+            )
 
         if runs > 1:
             print(f"    Recall run {run_idx + 1}/{runs} done", flush=True)
@@ -418,7 +433,7 @@ async def bench_recall(
     latencies_ms.sort()
     n = len(latencies_ms)
 
-    return LatencyStats(
+    stats = LatencyStats(
         p50=latencies_ms[int(n * 0.50)],
         p95=latencies_ms[int(n * 0.95)],
         p99=latencies_ms[int(n * 0.99)] if n >= 100 else latencies_ms[-1],
@@ -427,6 +442,8 @@ async def bench_recall(
         max=latencies_ms[-1],
         samples=n,
     )
+    cascade_report = aggregate_route_latencies(cascade_rows)
+    return stats, cascade_report
 
 
 async def bench_consolidation(storage: "SQLiteStorage") -> float:
@@ -566,12 +583,20 @@ async def run_scale(
 
     # 2. Recall benchmark
     print(f"  Running recall benchmark ({len(queries)} queries x {runs} runs)...")
-    result.recall_latency = await bench_recall(storage, queries, runs)
+    result.recall_latency, result.cascade_report = await bench_recall(storage, queries, runs)
     print(
         f"  Recall: p50={result.recall_latency.p50:.1f}ms "
         f"p95={result.recall_latency.p95:.1f}ms "
         f"p99={result.recall_latency.p99:.1f}ms"
     )
+    if result.cascade_report:
+        gates = result.cascade_report.get("gates", {})
+        simple_g = gates.get("simple_p95_ms", {})
+        cog_g = gates.get("cognitive_p95_ms", {})
+        print(
+            f"  Cascade gates: simple={simple_g.get('status', '?')} "
+            f"cognitive={cog_g.get('status', '?')}"
+        )
 
     # 3. Consolidation benchmark
     print(f"  Running consolidation benchmark...")

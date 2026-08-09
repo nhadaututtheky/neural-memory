@@ -211,6 +211,13 @@ class BrainConfig:
     confidence_weight_freshness: float = 0.20
     # Cascade staleness: propagate stale marks through causal graph
     cascade_staleness_enabled: bool = True
+    # Cascaded cognitive recall (Phase 4): FTS/vector first, bounded graph
+    cascade_recall_enabled: bool = True
+    cascade_candidate_cap: int = 300  # hard cap on pre-graph candidates
+    cascade_exact_margin: float = 0.3  # relative top-1 margin for exact early exit
+    cascade_min_candidates: int = 1
+    cascade_neighbor_hops: int = 1  # induced-subgraph expansion hops
+    cascade_graph_node_budget: int = 500  # max nodes in bounded graph scope
     # Stratum-aware MMR diversity: cap per lifecycle stage
     stratum_diversity_cap: float = 0.4  # max 40% of results from one stratum
     # Preference-aware retrieval (boost preference-establishing sessions)
