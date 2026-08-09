@@ -341,7 +341,17 @@ def main(argv: list[str] | None = None) -> int:
 
     sha = args.expected_sha
     if not sha:
-        sha, _ = git_metadata(args.repo_root)
+        # Prefer self-check against the SHA recorded in the artifact (evidence-only
+        # follow-up commits legitimately differ from HEAD).
+        if args.verify and args.verify.is_file():
+            try:
+                recorded = load_release_evidence(args.verify).get("git_sha")
+                if isinstance(recorded, str) and recorded:
+                    sha = recorded
+            except ValueError:
+                sha = ""
+        if not sha:
+            sha, _ = git_metadata(args.repo_root)
 
     if args.verify:
         failures = verify_release_evidence(
