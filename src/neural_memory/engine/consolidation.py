@@ -2091,6 +2091,15 @@ class ConsolidationEngine:
                     if dry_run:
                         continue
 
+                    existing_aliases = await self._storage.get_synapses(
+                        source_id=anchor_b.id,
+                        target_id=anchor_a.id,
+                        type=SynapseType.ALIAS,
+                    )
+                    if existing_aliases:
+                        logger.debug("ALIAS synapse already exists")
+                        continue
+
                     # Create ALIAS synapse from newer to older (canonical)
                     alias_synapse = Synapse.create(
                         source_id=anchor_b.id,
