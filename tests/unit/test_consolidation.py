@@ -311,6 +311,51 @@ async def test_run_multiple_same_tier_strategies(
 
 
 @pytest.mark.asyncio
+async def test_dedup_is_idempotent_for_existing_alias() -> None:
+    """DEDUP does not recreate an ALIAS that already links the same anchors."""
+    storage = InMemoryStorage()
+    brain = Brain.create(name="dedup_test", brain_id="dedup-brain")
+    await storage.save_brain(brain)
+    storage.set_brain(brain.id)
+
+    canonical = Neuron.create(
+        type=NeuronType.CONCEPT,
+        content="canonical anchor",
+        metadata={"is_anchor": True},
+        neuron_id="anchor-old",
+        content_hash=12345,
+    )
+    duplicate = Neuron.create(
+        type=NeuronType.CONCEPT,
+        content="duplicate anchor",
+        metadata={"is_anchor": True},
+        neuron_id="anchor-new",
+        content_hash=12345,
+    )
+    await storage.add_neuron(canonical)
+    await storage.add_neuron(duplicate)
+    await storage.add_synapse(
+        Synapse.create(
+            source_id=duplicate.id,
+            target_id=canonical.id,
+            type=SynapseType.ALIAS,
+            synapse_id="existing-alias",
+        )
+    )
+
+    report = ConsolidationReport()
+    await ConsolidationEngine(storage)._dedup(report, dry_run=False)
+
+    aliases = await storage.get_synapses(
+        source_id=duplicate.id,
+        target_id=canonical.id,
+        type=SynapseType.ALIAS,
+    )
+    assert report.duplicates_found == 1
+    assert [synapse.id for synapse in aliases] == ["existing-alias"]
+
+
+@pytest.mark.asyncio
 async def test_run_strategies_across_tiers(
     consolidation_storage: InMemoryStorage,
 ) -> None:
