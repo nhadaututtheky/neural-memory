@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Schema version for migrations
-SCHEMA_VERSION = 41
+SCHEMA_VERSION = 42
 
 # â”€â”€ Migrations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Each entry maps (from_version -> to_version) with a list of SQL statements.
@@ -31,22 +31,24 @@ FTS_SETUP_STATEMENTS: list[str] = [
         content_rowid='rowid',
         tokenize='porter unicode61 remove_diacritics 2'
     )""",
-    # Auto-sync: insert
+    # Auto-sync: insert — store cjk_spaced() text so unicode61 tokenizes
+    # each CJK character separately (see utils/cjk.py). The 'delete'
+    # commands below must receive the same spacing they were inserted with.
     """CREATE TRIGGER IF NOT EXISTS neurons_ai AFTER INSERT ON neurons BEGIN
         INSERT INTO neurons_fts(rowid, content, brain_id)
-        VALUES (new.rowid, new.content, new.brain_id);
+        VALUES (new.rowid, cjk_spaced(new.content), new.brain_id);
     END""",
     # Auto-sync: delete
     """CREATE TRIGGER IF NOT EXISTS neurons_ad AFTER DELETE ON neurons BEGIN
         INSERT INTO neurons_fts(neurons_fts, rowid, content, brain_id)
-        VALUES ('delete', old.rowid, old.content, old.brain_id);
+        VALUES ('delete', old.rowid, cjk_spaced(old.content), old.brain_id);
     END""",
     # Auto-sync: update
     """CREATE TRIGGER IF NOT EXISTS neurons_au AFTER UPDATE ON neurons BEGIN
         INSERT INTO neurons_fts(neurons_fts, rowid, content, brain_id)
-        VALUES ('delete', old.rowid, old.content, old.brain_id);
+        VALUES ('delete', old.rowid, cjk_spaced(old.content), old.brain_id);
         INSERT INTO neurons_fts(rowid, content, brain_id)
-        VALUES (new.rowid, new.content, new.brain_id);
+        VALUES (new.rowid, cjk_spaced(new.content), new.brain_id);
     END""",
 ]
 
@@ -59,27 +61,29 @@ FIBER_FTS_SETUP_STATEMENTS: list[str] = [
         content_rowid='rowid',
         tokenize='porter unicode61 remove_diacritics 2'
     )""",
-    # Auto-sync: insert
+    # Auto-sync: insert — store cjk_spaced() text so unicode61 tokenizes
+    # each CJK character separately (see utils/cjk.py). The 'delete'
+    # commands below must receive the same spacing they were inserted with.
     """CREATE TRIGGER IF NOT EXISTS fibers_ai AFTER INSERT ON fibers
     WHEN new.summary IS NOT NULL AND new.summary != '' BEGIN
         INSERT INTO fibers_fts(rowid, summary, brain_id)
-        VALUES (new.rowid, new.summary, new.brain_id);
+        VALUES (new.rowid, cjk_spaced(new.summary), new.brain_id);
     END""",
     # Auto-sync: delete
     """CREATE TRIGGER IF NOT EXISTS fibers_ad AFTER DELETE ON fibers
     WHEN old.summary IS NOT NULL AND old.summary != '' BEGIN
         INSERT INTO fibers_fts(fibers_fts, rowid, summary, brain_id)
-        VALUES ('delete', old.rowid, old.summary, old.brain_id);
+        VALUES ('delete', old.rowid, cjk_spaced(old.summary), old.brain_id);
     END""",
     # Auto-sync: update — handle NULL↔text both directions (P3-T3).
     # Drop/recreate in ensure_fiber_fts_tables so upgrades pick this up.
     "DROP TRIGGER IF EXISTS fibers_au",
     """CREATE TRIGGER IF NOT EXISTS fibers_au AFTER UPDATE ON fibers BEGIN
         INSERT INTO fibers_fts(fibers_fts, rowid, summary, brain_id)
-        SELECT 'delete', old.rowid, old.summary, old.brain_id
+        SELECT 'delete', old.rowid, cjk_spaced(old.summary), old.brain_id
         WHERE old.summary IS NOT NULL AND old.summary != '';
         INSERT INTO fibers_fts(rowid, summary, brain_id)
-        SELECT new.rowid, new.summary, new.brain_id
+        SELECT new.rowid, cjk_spaced(new.summary), new.brain_id
         WHERE new.summary IS NOT NULL AND new.summary != '';
     END""",
 ]
@@ -658,6 +662,23 @@ MIGRATIONS: dict[tuple[int, int], list[str]] = {
         "CREATE INDEX IF NOT EXISTS idx_consolidation_checkpoints_brain "
         "ON consolidation_checkpoints(brain_id)",
     ],
+    (41, 42): [
+        # CJK recall fix: unicode61 treats a CJK run as one token, so
+        # Chinese short-word queries ("起源", "服务器") never match content
+        # holding longer CJK phrases. The rebuilt FTS sync triggers store
+        # cjk_spaced() text (each hanzi becomes its own token) and the FTS
+        # query builders phrase the spaced tokens the same way — see
+        # utils/cjk.py. Drop both FTS tables here; run_migrations recreates
+        # them with the new triggers and backfills cjk_spaced() text.
+        "DROP TRIGGER IF EXISTS neurons_au",
+        "DROP TRIGGER IF EXISTS neurons_ad",
+        "DROP TRIGGER IF EXISTS neurons_ai",
+        "DROP TABLE IF EXISTS neurons_fts",
+        "DROP TRIGGER IF EXISTS fibers_au",
+        "DROP TRIGGER IF EXISTS fibers_ad",
+        "DROP TRIGGER IF EXISTS fibers_ai",
+        "DROP TABLE IF EXISTS fibers_fts",
+    ],
     (39, 40): [
         # Durable enrichment outbox (Phase 5) — separate from change_log.synced
         """CREATE TABLE IF NOT EXISTS enrichment_jobs (
@@ -744,6 +765,32 @@ async def run_migrations(conn: aiosqlite.Connection, current_version: int) -> in
             await conn.execute(
                 "INSERT OR IGNORE INTO fibers_fts(rowid, summary, brain_id) "
                 "SELECT rowid, summary, brain_id FROM fibers WHERE summary IS NOT NULL"
+            )
+            await conn.commit()
+            version = next_version
+            continue
+
+        # v41->v42 drops FTS tables; recreate with CJK-spaced triggers + backfill
+        if key == (41, 42):
+            statements_42 = MIGRATIONS.get(key, [])
+            for sql in statements_42:
+                try:
+                    await conn.execute(sql)
+                except Exception:
+                    pass  # triggers/tables may not exist
+            await ensure_fts_tables(conn)
+            await ensure_fiber_fts_tables(conn)
+            # Backfill with cjk_spaced() text so Chinese short-word
+            # queries hit (utils/cjk.py). Requires the cjk_spaced SQL
+            # function, registered by the storage layer before migrations.
+            await conn.execute(
+                "INSERT OR IGNORE INTO neurons_fts(rowid, content, brain_id) "
+                "SELECT rowid, cjk_spaced(content), brain_id FROM neurons"
+            )
+            await conn.execute(
+                "INSERT OR IGNORE INTO fibers_fts(rowid, summary, brain_id) "
+                "SELECT rowid, cjk_spaced(summary), brain_id FROM fibers "
+                "WHERE summary IS NOT NULL AND summary != ''"
             )
             await conn.commit()
             version = next_version

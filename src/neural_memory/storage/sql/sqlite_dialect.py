@@ -12,6 +12,7 @@ import aiosqlite
 
 from neural_memory.storage.read_pool import DEFAULT_POOL_SIZE, ReadPool
 from neural_memory.storage.sql.dialect import Dialect
+from neural_memory.utils.cjk import cjk_spaced
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,11 @@ class SQLiteDialect(Dialect):
 
         self._conn = await aiosqlite.connect(self._db_path)
         self._conn.row_factory = aiosqlite.Row
+
+        # FTS sync triggers call cjk_spaced() so the index stores
+        # CJK-spaced text (see utils/cjk.py). Must be registered before
+        # any write or migration touches the FTS tables.
+        await self._conn.create_function("cjk_spaced", 1, cjk_spaced)
 
         await self._conn.execute("PRAGMA foreign_keys = ON")
         await self._conn.execute("PRAGMA journal_mode=WAL")

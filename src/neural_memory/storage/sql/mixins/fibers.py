@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from neural_memory.core.fiber import Fiber
 from neural_memory.storage.sql.row_mappers import row_to_fiber
+from neural_memory.utils.cjk import cjk_spaced, is_cjk_char
 from neural_memory.utils.tag_normalizer import normalize_tags_lower
 from neural_memory.utils.timeutils import utcnow
 
@@ -40,11 +41,23 @@ logger = logging.getLogger(__name__)
 
 
 def _build_fts_query(search_term: str) -> str:
-    """Build an FTS5 MATCH expression from a user search string."""
-    tokens = search_term.split()
-    if not tokens:
+    """Build an FTS5 MATCH expression from a user search string.
+
+    Splits on whitespace, quotes each piece to escape FTS5 operators
+    (AND, OR, NOT, NEAR, *, etc.), and joins with implicit AND.
+    CJK runs are spaced (see utils/cjk.py) and quoted as a phrase so
+    Chinese short words match the cjk_spaced() index.
+    """
+    terms = search_term.split()
+    if not terms:
         return '""'
-    return " ".join(f'"{token.replace(chr(34), chr(34) + chr(34))}"' for token in tokens)
+    parts: list[str] = []
+    for piece in terms:
+        if any(is_cjk_char(ch) for ch in piece):
+            parts.append(f'"{cjk_spaced(piece).strip()}"')
+        else:
+            parts.append(f'"{piece.replace(chr(34), chr(34) + chr(34))}"')
+    return " ".join(parts)
 
 
 # ---------------------------------------------------------------------------

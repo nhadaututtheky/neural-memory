@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **CJK FTS recall**: SQLite's `unicode61` tokenizer treated a CJK run as a
+  single token, so Chinese short-word queries (`起源`, `服务器`) never matched
+  content holding longer CJK phrases. FTS sync triggers now store
+  `cjk_spaced()` text (each hanzi becomes its own token) and the FTS query
+  builders phrase CJK terms the same way; schema v41→v42 rebuilds and
+  backfills the index. English/Vietnamese behavior unchanged.
+
 ## [4.61.0] — 2026-08-09
 
 ### Added — Cognitive Efficiency program (Phases 1–8)
