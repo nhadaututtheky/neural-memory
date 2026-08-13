@@ -29,7 +29,7 @@ def _build_fts_query(search_term: str) -> str:
     parts: list[str] = []
     for piece in terms:
         if any(is_cjk_char(ch) for ch in piece):
-            parts.append(f'"{cjk_spaced(piece).strip()}"')
+            parts.append(f'"{(cjk_spaced(piece) or "").strip()}"')
         else:
             parts.append(f'"{piece.replace(chr(34), chr(34) + chr(34))}"')
     return " ".join(parts)
