@@ -778,20 +778,32 @@ async def run_migrations(conn: aiosqlite.Connection, current_version: int) -> in
                     await conn.execute(sql)
                 except Exception:
                     pass  # triggers/tables may not exist
-            await ensure_fts_tables(conn)
-            await ensure_fiber_fts_tables(conn)
-            # Backfill with cjk_spaced() text so Chinese short-word
-            # queries hit (utils/cjk.py). Requires the cjk_spaced SQL
-            # function, registered by the storage layer before migrations.
-            await conn.execute(
-                "INSERT OR IGNORE INTO neurons_fts(rowid, content, brain_id) "
-                "SELECT rowid, cjk_spaced(content), brain_id FROM neurons"
+            # Rebuild each FTS layer only when its content table exists.
+            # Real v41 databases always have neurons/fibers; bare/minimal
+            # test databases (migration unit tests) may not, and the sync
+            # triggers cannot be created without the content table.
+            has_neurons = await conn.execute_fetchall(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='neurons'"
             )
-            await conn.execute(
-                "INSERT OR IGNORE INTO fibers_fts(rowid, summary, brain_id) "
-                "SELECT rowid, cjk_spaced(summary), brain_id FROM fibers "
-                "WHERE summary IS NOT NULL AND summary != ''"
+            has_fibers = await conn.execute_fetchall(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='fibers'"
             )
+            if has_neurons:
+                await ensure_fts_tables(conn)
+                # Backfill with cjk_spaced() text so Chinese short-word
+                # queries hit (utils/cjk.py). Requires the cjk_spaced SQL
+                # function, registered by the storage layer before migrations.
+                await conn.execute(
+                    "INSERT OR IGNORE INTO neurons_fts(rowid, content, brain_id) "
+                    "SELECT rowid, cjk_spaced(content), brain_id FROM neurons"
+                )
+            if has_fibers:
+                await ensure_fiber_fts_tables(conn)
+                await conn.execute(
+                    "INSERT OR IGNORE INTO fibers_fts(rowid, summary, brain_id) "
+                    "SELECT rowid, cjk_spaced(summary), brain_id FROM fibers "
+                    "WHERE summary IS NOT NULL AND summary != ''"
+                )
             await conn.commit()
             version = next_version
             continue

@@ -31,7 +31,7 @@ async def storage(tmp_path: Path) -> SQLStorage:
 async def test_schema_version_is_40(storage: SQLStorage) -> None:
     row = await storage._dialect.fetch_one("SELECT version FROM schema_version")
     assert row is not None
-    assert int(row["version"]) == SCHEMA_VERSION == 41
+    assert int(row["version"]) == SCHEMA_VERSION == 42
 
 
 @pytest.mark.asyncio
