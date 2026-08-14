@@ -159,6 +159,17 @@ class SQLiteStorage(
         async with self._conn.execute("SELECT version FROM schema_version") as cursor:
             row = await cursor.fetchone()
 
+        # A database created by a newer release must not be opened by
+        # this one: its FTS triggers may call functions we do not register
+        # (e.g. cjk_spaced after schema v42), failing only on the first
+        # write with a confusing error. Fail fast instead.
+        if row is not None and row["version"] > SCHEMA_VERSION:
+            raise RuntimeError(
+                f"Database schema version {row['version']} is newer than this "
+                f"package ({SCHEMA_VERSION}). Upgrade neural-memory or "
+                "restore an older DB."
+            )
+
         if row is not None and row["version"] < SCHEMA_VERSION:
             await run_migrations(self._conn, row["version"])
 

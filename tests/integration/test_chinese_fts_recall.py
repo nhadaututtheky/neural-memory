@@ -80,6 +80,13 @@ async def test_chinese_delete_removes_fts(store: SQLStorage) -> None:
     assert all(h.id != n.id for h in hits)
 
 
+async def test_chinese_query_with_quote_does_not_crash(store: SQLStorage) -> None:
+    await store.add_neuron(Neuron.create(type=NeuronType.CONCEPT, content="起源世界与太古文明"))
+    # A quote mixed into a CJK query must be escaped, not break FTS5 parsing.
+    hits = await store.find_neurons(content_contains='起源" OR *', limit=10)
+    assert isinstance(hits, list)
+
+
 async def test_migration_v41_v42_backfills_cjk_index(tmp_path: Path) -> None:
     """A v41 database with raw (unspaced) FTS data is reindexed on upgrade."""
     db = tmp_path / "mig.db"

@@ -40,6 +40,11 @@ class TestIsCjkChar:
     def test_multi_char_string_false(self) -> None:
         assert not is_cjk_char("起源")
 
+    def test_extension_b_hanzi_true(self) -> None:
+        assert is_cjk_char(chr(0x20000))
+        assert is_cjk_char(chr(0x2A6DF))
+        assert not is_cjk_char(chr(0x2A6E0))
+
 
 class TestBuildFtsQuery:
     def test_english_unchanged(self) -> None:
@@ -56,6 +61,11 @@ class TestBuildFtsQuery:
 
     def test_empty(self) -> None:
         assert _build_fts_query("") == '""'
+
+    def test_chinese_with_double_quote_escaped(self) -> None:
+        # Quotes inside a CJK piece must be doubled like the non-CJK
+        # branch, otherwise the FTS5 phrase is unterminated.
+        assert _build_fts_query('起源" OR *') == '"起  源 """ "OR" "*"'
 
 
 class TestBuildFtsPrefixQuery:

@@ -774,10 +774,8 @@ async def run_migrations(conn: aiosqlite.Connection, current_version: int) -> in
         if key == (41, 42):
             statements_42 = MIGRATIONS.get(key, [])
             for sql in statements_42:
-                try:
-                    await conn.execute(sql)
-                except Exception:
-                    pass  # triggers/tables may not exist
+                # DROP ... IF EXISTS is idempotent; real failures propagate.
+                await conn.execute(sql)
             # Rebuild each FTS layer only when its content table exists.
             # Real v41 databases always have neurons/fibers; bare/minimal
             # test databases (migration unit tests) may not, and the sync
