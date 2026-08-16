@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from neural_memory.core.neuron import Neuron, NeuronState, NeuronType
 from neural_memory.storage.sql.row_mappers import row_to_neuron, row_to_neuron_state
+from neural_memory.utils.cjk import cjk_spaced, is_cjk_char
 from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
@@ -41,32 +42,44 @@ _HASH_SNAPSHOT_TTL_SECONDS = 5.0
 def _build_fts_query(search_term: str) -> str:
     """Build an FTS5 MATCH expression from a user search string.
 
-    Splits on whitespace, quotes each token to escape FTS5 operators
+    Splits on whitespace, quotes each piece to escape FTS5 operators
     (AND, OR, NOT, NEAR, *, etc.), and joins with implicit AND.
-    Double quotes within tokens are escaped by doubling them.
-    Example: 'API design' -> '"API" "design"'
+    CJK runs are spaced (see utils/cjk.py) and quoted as a phrase so
+    Chinese short words match the cjk_spaced() index.
     """
-    tokens = search_term.split()
-    if not tokens:
+    terms = search_term.split()
+    if not terms:
         return '""'
-    return " ".join(f'"{token.replace(chr(34), chr(34) + chr(34))}"' for token in tokens)
+    parts: list[str] = []
+    for piece in terms:
+        if any(is_cjk_char(ch) for ch in piece):
+            escaped = piece.replace(chr(34), chr(34) + chr(34))
+            parts.append(f'"{(cjk_spaced(escaped) or "").strip()}"')
+        else:
+            parts.append(f'"{piece.replace(chr(34), chr(34) + chr(34))}"')
+    return " ".join(parts)
 
 
 def _build_fts_prefix_query(prefix: str) -> str:
-    """Build FTS5 MATCH with prefix on last token.
+    """Build FTS5 MATCH with prefix on last piece.
 
-    All tokens except the last are quoted (exact match).
-    The last token is sanitized and gets a ``*`` suffix (prefix match).
+    All pieces except the last are quoted (exact match).
+    The last piece is sanitized and gets a ``*`` suffix (prefix match).
     Example: ``'API des'`` -> ``'"API" des*'``
+
+    CJK queries fall back to exact phrase matching - a spaced single-char
+    piece sequence has no meaningful FTS5 prefix semantics.
     """
-    tokens = prefix.split()
-    if not tokens:
+    terms = prefix.split()
+    if not terms:
         return '""'
+    if any(is_cjk_char(ch) for piece in terms for ch in piece):
+        return _build_fts_query(prefix)
     parts: list[str] = []
-    for token in tokens[:-1]:
-        escaped = token.replace(chr(34), chr(34) + chr(34))
+    for piece in terms[0:-1]:
+        escaped = piece.replace(chr(34), chr(34) + chr(34))
         parts.append(f'"{escaped}"')
-    last = re.sub(r"[^\w]", "", tokens[-1], flags=re.UNICODE)
+    last = re.sub(r"[^\w]", "", terms[-1], flags=re.UNICODE)
     if last:
         parts.append(f"{last}*")
     return " ".join(parts) if parts else '""'

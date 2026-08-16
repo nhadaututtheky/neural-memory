@@ -57,6 +57,7 @@ from neural_memory.storage.sqlite_tool_events import SQLiteToolEventsMixin
 from neural_memory.storage.sqlite_training_files import SQLiteTrainingFilesMixin
 from neural_memory.storage.sqlite_typed import SQLiteTypedMemoryMixin
 from neural_memory.storage.sqlite_versioning import SQLiteVersioningMixin
+from neural_memory.utils.cjk import cjk_spaced
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +138,11 @@ class SQLiteStorage(
         self._conn = await aiosqlite.connect(self._db_path)
         self._conn.row_factory = aiosqlite.Row
 
+        # FTS sync triggers call cjk_spaced() so the index stores
+        # CJK-spaced text (see utils/cjk.py). Must be registered before
+        # any write or migration touches the FTS tables.
+        await self._conn.create_function("cjk_spaced", 1, cjk_spaced)
+
         await self._conn.execute("PRAGMA foreign_keys = ON")
         await self._conn.execute("PRAGMA journal_mode=WAL")
         await self._conn.execute("PRAGMA busy_timeout=30000")
@@ -152,6 +158,17 @@ class SQLiteStorage(
         # Check stored version and migrate if needed BEFORE full schema
         async with self._conn.execute("SELECT version FROM schema_version") as cursor:
             row = await cursor.fetchone()
+
+        # A database created by a newer release must not be opened by
+        # this one: its FTS triggers may call functions we do not register
+        # (e.g. cjk_spaced after schema v42), failing only on the first
+        # write with a confusing error. Fail fast instead.
+        if row is not None and row["version"] > SCHEMA_VERSION:
+            raise RuntimeError(
+                f"Database schema version {row['version']} is newer than this "
+                f"package ({SCHEMA_VERSION}). Upgrade neural-memory or "
+                "restore an older DB."
+            )
 
         if row is not None and row["version"] < SCHEMA_VERSION:
             await run_migrations(self._conn, row["version"])

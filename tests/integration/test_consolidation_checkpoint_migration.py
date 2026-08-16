@@ -28,7 +28,7 @@ async def storage(tmp_path: Path) -> SQLStorage:
 @pytest.mark.asyncio
 async def test_schema_version_41(storage: SQLStorage) -> None:
     row = await storage._dialect.fetch_one("SELECT version FROM schema_version")
-    assert int(row["version"]) == SCHEMA_VERSION == 41
+    assert int(row["version"]) == SCHEMA_VERSION == 42
 
 
 @pytest.mark.asyncio
@@ -45,7 +45,7 @@ async def test_migrate_40_to_41(tmp_path: Path) -> None:
         )
         await conn.commit()
         final = await run_migrations(conn, 40)
-        assert final == 41
+        assert final == 42
         cur = await conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='consolidation_checkpoints'"
         )
