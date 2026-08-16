@@ -41,7 +41,7 @@ def _manifest() -> EvidenceManifest:
             "retrieval_only": True,
             "ground_truth_sha256": ground_truth,
         },
-        packages={"neural-memory": "4.61.0"},
+        packages={"neural-memory": "4.62.0"},
         hardware={"platform": "test"},
         warmup_runs=1,
     )

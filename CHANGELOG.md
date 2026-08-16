@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.62.0] — 2026-08-16
+
+### Breaking
+
+- **One-way SQLite schema migration v41→v42**: after upgrading, older
+  releases of neural-memory cannot open the database for **writes** — their
+  connections do not register the `cjk_spaced` SQL function that the new FTS
+  sync triggers call (`no such function: cjk_spaced`). PostgreSQL backends are
+  unaffected (ILIKE path, no FTS changes). Back up before upgrading.
+
 ### Fixed
 
 - **CJK FTS recall**: SQLite's `unicode61` tokenizer treated a CJK run as a
