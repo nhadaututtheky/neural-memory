@@ -747,13 +747,12 @@ async def run_migrations(conn: aiosqlite.Connection, current_version: int) -> in
 
         # v30->v31 drops FTS tables; recreate with new tokenizer + reindex
         if key == (30, 31):
-            # Statements drop the tables first, then we recreate + backfill
+            # Statements drop the tables/triggers first, then we recreate +
+            # backfill. All are DROP ... IF EXISTS (idempotent), so real
+            # failures propagate.
             statements_31 = MIGRATIONS.get(key, [])
             for sql in statements_31:
-                try:
-                    await conn.execute(sql)
-                except Exception:
-                    pass  # triggers/tables may not exist
+                await conn.execute(sql)
             await ensure_fts_tables(conn)
             await ensure_fiber_fts_tables(conn)
             # Backfill neurons_fts from existing data
