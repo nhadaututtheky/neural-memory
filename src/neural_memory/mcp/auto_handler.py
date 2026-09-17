@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -388,9 +387,13 @@ class AutoHandler:
         # Tag with session ID for session-end reflection
         session_tag = f"session:{self._get_session_id()}"
 
-        results = await asyncio.gather(
-            *[
-                self._remember(
+        # Save one at a time: the SQLite dialect shares a single connection and
+        # commits after every statement, so concurrent writes interleave and fail
+        # (issue #208).
+        results: list[dict[str, Any]] = []
+        for item in redacted:
+            results.append(
+                await self._remember(
                     {
                         "content": item["content"],
                         "type": item["type"],
@@ -399,9 +402,7 @@ class AutoHandler:
                         "_auto_capture": True,
                     }
                 )
-                for item in redacted
-            ]
-        )
+            )
         # Track saved memories for session-end reflection
         if not hasattr(self, "_session_memories"):
             self._session_memories = []
@@ -553,9 +554,12 @@ class AutoHandler:
         # Tag with session ID for session-end reflection
         session_tag = f"session:{self._get_session_id()}"
 
-        results = await asyncio.gather(
-            *[
-                self._remember(
+        # Save one at a time for the same reason: one shared SQLite connection,
+        # one commit per statement (issue #208).
+        results: list[dict[str, Any]] = []
+        for item in redacted_eligible:
+            results.append(
+                await self._remember(
                     {
                         "content": item["content"],
                         "type": item["type"],
@@ -564,9 +568,7 @@ class AutoHandler:
                         "_auto_capture": True,
                     }
                 )
-                for item in redacted_eligible
-            ]
-        )
+            )
 
         # Track saved memories for session-end reflection
         if not hasattr(self, "_session_memories"):

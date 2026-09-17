@@ -9,7 +9,6 @@ Processes markdown files into a neural memory brain by:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -494,7 +493,7 @@ class DocTrainer:
                 await self._storage.add_neuron(neuron)
                 heading_neuron_ids[path] = neuron.id
 
-        # Collect all CONTAINS synapses, then add in parallel
+        # Collect all CONTAINS synapses, then add them one at a time
         synapses_to_add: list[Synapse] = []
 
         # Parent heading → child heading
@@ -526,13 +525,17 @@ class DocTrainer:
                     )
                 )
 
+        # One synapse at a time: on the shared SQLite connection a concurrent
+        # fan-out makes one task's commit collide with another task's statement,
+        # and the swallowed exception quietly drops the edge out of the count
+        # (issue #208).
         if synapses_to_add:
-            results = await asyncio.gather(
-                *[self._storage.add_synapse(s) for s in synapses_to_add],
-                return_exceptions=True,
-            )
-            for r in results:
-                if not isinstance(r, BaseException):
+            for synapse in synapses_to_add:
+                try:
+                    await self._storage.add_synapse(synapse)
+                except Exception as exc:
+                    logger.warning("Heading hierarchy synapse add failed: %s", exc)
+                else:
                     synapse_count += 1
 
         return synapse_count
@@ -588,13 +591,14 @@ class DocTrainer:
                     )
                 )
 
+        # Serialized for the same reason as _build_heading_hierarchy (issue #208).
         if synapses_to_add:
-            results = await asyncio.gather(
-                *[self._storage.add_synapse(s) for s in synapses_to_add],
-                return_exceptions=True,
-            )
-            for r in results:
-                if not isinstance(r, BaseException):
+            for synapse in synapses_to_add:
+                try:
+                    await self._storage.add_synapse(synapse)
+                except Exception as exc:
+                    logger.warning("Document sequence synapse add failed: %s", exc)
+                else:
                     synapse_count += 1
 
         return synapse_count

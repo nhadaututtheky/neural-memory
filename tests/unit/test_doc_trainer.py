@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -267,6 +268,53 @@ class TestDocTrainer:
 
         # Should have hierarchy synapses: Root → Child, Child → chunk anchor(s)
         assert result.hierarchy_synapses >= 1
+
+    @pytest.mark.asyncio
+    async def test_synapse_writes_do_not_overlap(
+        self, mock_storage: AsyncMock, mock_config: BrainConfig, tmp_path: Path
+    ) -> None:
+        """Doc training must not run add_synapse calls concurrently (issue #208).
+
+        On the shared SQLite connection a concurrent fan-out makes one task's
+        commit collide with another task's statement and silently drops edges,
+        so the in-flight count must never exceed one.
+        """
+        md = (
+            "# Root\n\n"
+            + " ".join(["root content text word"] * 8)
+            + "\n\n## Alpha\n\n"
+            + " ".join(["alpha content text word"] * 8)
+            + "\n\n## Beta\n\n"
+            + " ".join(["beta content text word"] * 8)
+            + "\n\n## Gamma\n\n"
+            + " ".join(["gamma content text word"] * 8)
+        )
+        (tmp_path / "hierarchy.md").write_text(md, encoding="utf-8")
+
+        in_flight = 0
+        high_water = 0
+        original_add_synapse = mock_storage.add_synapse
+
+        async def _tracked(synapse: object) -> object:
+            nonlocal in_flight, high_water
+            in_flight += 1
+            high_water = max(high_water, in_flight)
+            try:
+                await asyncio.sleep(0)  # a concurrent fan-out would switch tasks here
+                return await original_add_synapse(synapse)
+            finally:
+                in_flight -= 1
+
+        mock_storage.add_synapse = _tracked
+
+        trainer = DocTrainer(mock_storage, mock_config)
+        with patch.object(trainer, "_run_enrichment", return_value=0):
+            result = await trainer.train_file(tmp_path / "hierarchy.md")
+
+        # Guard: the fixture has to produce several hierarchy synapses, otherwise
+        # "no overlap" would be vacuously true.
+        assert result.hierarchy_synapses >= 2
+        assert high_water == 1
 
     @pytest.mark.asyncio
     async def test_consolidation_runs(
