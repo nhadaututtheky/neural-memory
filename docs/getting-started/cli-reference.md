@@ -122,7 +122,7 @@ nmem remember [OPTIONS]
 | `--expires / -e` | integer | No | — | Days until this memory expires |
 | `--project / -P` | text | No | — | Associate with a project (by name) |
 | `--shared / -S` | boolean | No | `False` | Use shared/remote storage for this command |
-| `--force / -f` | boolean | No | `False` | Store even if sensitive content detected |
+| `--force / -f` | boolean | No | `False` | Store even if sensitive content is detected or encoding damage is suspected |
 | `--redact / -r` | boolean | No | `False` | Auto-redact sensitive content before storing |
 | `--timestamp / --at` | text | No | — | ISO datetime of original event (e.g. '2026-03-02T08:00:00'). Defaults to now. |
 | `--ephemeral` | boolean | No | `False` | Session-scoped memory: auto-expires after 24h, never synced |
