@@ -108,6 +108,59 @@ class TestChineseExtraction:
         assert "preference" in _types(detected)
 
 
+class TestShortChineseInput:
+    """A short Chinese sentence is a complete thought. The Latin minimum-input
+    floor (20 chars) used to discard it before detection even ran, so
+    "待办：更新部署文档。" returned zero memories."""
+
+    def test_short_todo_is_captured(self) -> None:
+        text = "待办：更新部署文档。"
+        assert len(text) < 20, "fixture must stay under the Latin floor to be meaningful"
+        detected = analyze_text_for_memories(
+            text,
+            capture_decisions=False,
+            capture_errors=False,
+            capture_facts=False,
+            capture_insights=False,
+            capture_preferences=False,
+        )
+        assert "todo" in _types(detected)
+
+    def test_short_error_is_captured(self) -> None:
+        text = "错误：构建失败，原因是没装 tsc。"
+        assert len(text) < 20
+        detected = analyze_text_for_memories(
+            text,
+            capture_decisions=False,
+            capture_todos=False,
+            capture_facts=False,
+            capture_insights=False,
+            capture_preferences=False,
+        )
+        assert "error" in _types(detected)
+
+    def test_short_decision_is_captured(self) -> None:
+        text = "我们决定改用 PostgreSQL。"
+        assert len(text) < 20
+        detected = analyze_text_for_memories(
+            text,
+            capture_errors=False,
+            capture_todos=False,
+            capture_facts=False,
+            capture_insights=False,
+            capture_preferences=False,
+        )
+        assert "decision" in _types(detected)
+
+    def test_english_short_input_still_rejected(self) -> None:
+        """The Latin floor is unchanged by the CJK allowance."""
+        assert analyze_text_for_memories("todo: fix it") == []
+
+    def test_very_short_chinese_is_still_rejected(self) -> None:
+        """Below the CJK floor (8 chars) we still skip, guarding against noise."""
+        assert analyze_text_for_memories("待办：更新") == []
+
+
 class TestEnglishRegression:
     """The English corpus must keep behaving exactly as before."""
 

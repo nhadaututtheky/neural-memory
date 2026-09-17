@@ -45,6 +45,11 @@ _CJK_MIN_CAPTURE_LEN = 4
 # Share of Han characters above which text is treated as predominantly Chinese
 _CHINESE_DOMINANCE_RATIO = 0.3
 
+# Minimum input length before detection runs. CJK packs far more meaning per
+# character, so the Latin floor (20) would silently discard valid one-sentence
+# Chinese input such as "待办：更新部署文档。" (10 characters).
+_CJK_MIN_TEXT_LENGTH = 8
+
 # One-time warning flag for pyvi in auto-capture
 _PYVI_AC_WARNED = False
 
@@ -364,7 +369,11 @@ def analyze_text_for_memories(
 
     Returns list of detected memories with type, content, and confidence.
     """
-    if len(text.strip()) < _MIN_TEXT_LENGTH:
+    stripped = text.strip()
+    min_text_length = (
+        _CJK_MIN_TEXT_LENGTH if _cjk_script(stripped) == "chinese" else _MIN_TEXT_LENGTH
+    )
+    if len(stripped) < min_text_length:
         return []
 
     # Truncate to prevent ReDoS on very large inputs
