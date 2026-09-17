@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
 if TYPE_CHECKING:
@@ -22,6 +23,7 @@ from neural_memory.engine.encoder import MemoryEncoder
 from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline
 from neural_memory.extraction.parser import QueryParser
 from neural_memory.extraction.router import QueryRouter
+from neural_memory.safety.capture_hygiene import detect_encoding_damage
 from neural_memory.safety.freshness import (
     FreshnessLevel,
     analyze_freshness,
@@ -35,6 +37,29 @@ from neural_memory.safety.sensitive import (
     format_sensitive_warning,
 )
 from neural_memory.utils.timeutils import utcnow
+
+
+def _read_content_file(file_path: str) -> str:
+    """Read memory content from a UTF-8 file, with explicit failure modes.
+
+    Reading a file sidesteps the shell pipe entirely, which is the only fully
+    reliable way to inject non-ASCII text on Windows.
+    """
+    path = Path(file_path)
+    try:
+        # utf-8-sig also accepts BOM-less files and strips a BOM when present
+        return path.read_text(encoding="utf-8-sig").strip()
+    except FileNotFoundError:
+        typer.secho(f"Error: file not found: {file_path}", fg=typer.colors.RED, err=True)
+    except UnicodeDecodeError:
+        typer.secho(
+            f"Error: {file_path} is not valid UTF-8. Re-save it as UTF-8 and retry.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+    except OSError as exc:
+        typer.secho(f"Error: cannot read {file_path}: {exc}", fg=typer.colors.RED, err=True)
+    raise typer.Exit(1)
 
 
 def _validate_content(
@@ -163,7 +188,12 @@ def remember(
         bool, typer.Option("--shared", "-S", help="Use shared/remote storage for this command")
     ] = False,
     force: Annotated[
-        bool, typer.Option("--force", "-f", help="Store even if sensitive content detected")
+        bool,
+        typer.Option(
+            "--force",
+            "-f",
+            help="Store even if sensitive content is detected or encoding damage is suspected",
+        ),
     ] = False,
     redact: Annotated[
         bool, typer.Option("--redact", "-r", help="Auto-redact sensitive content before storing")
@@ -186,6 +216,13 @@ def remember(
         bool,
         typer.Option("--stdin", help="Read content from stdin (safe for shell-special characters)"),
     ] = False,
+    file_path: Annotated[
+        str | None,
+        typer.Option(
+            "--file",
+            help="Read content from a UTF-8 file (bypasses shell pipe encoding entirely)",
+        ),
+    ] = None,
     json_output: Annotated[bool, typer.Option("--json", "-j", help="Output as JSON")] = False,
 ) -> None:
     """Store a new memory (type auto-detected if not specified).
@@ -198,14 +235,39 @@ def remember(
         nmem remember "Meeting at 8am" --timestamp "2026-03-02T08:00:00"
         nmem remember "Debug note" --ephemeral
         echo "content with backticks" | nmem remember --stdin --type context
+        nmem remember --file note.txt --type context
+
+    On Windows prefer --file over --stdin: PowerShell 5.1 does not pipe non-UTF-8
+    text by default and silently replaces CJK characters with "?".
     """
     import sys
+
+    if file_path and stdin:
+        typer.secho(
+            "Error: use either --file or --stdin, not both.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    if file_path:
+        content = _read_content_file(file_path)
 
     if stdin:
         content = sys.stdin.read().strip()
     if not content:
         typer.secho(
-            "Error: content is required (pass as argument or use --stdin).",
+            "Error: content is required (pass as argument, or use --stdin/--file).",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    damage = detect_encoding_damage(content)
+    if damage and not force:
+        typer.secho(
+            f"Error: refusing to store damaged content — {damage}. "
+            "Pass --force to store it anyway.",
             fg=typer.colors.RED,
             err=True,
         )

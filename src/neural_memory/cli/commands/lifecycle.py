@@ -77,6 +77,10 @@ def forget(
         str,
         typer.Option("--reason", "-r", help="Reason for forgetting (logged for audit)"),
     ] = "",
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="Confirm permanent deletion when using --hard"),
+    ] = False,
     shared: Annotated[
         bool, typer.Option("--shared", "-S", help="Use shared/remote storage")
     ] = False,
@@ -86,19 +90,43 @@ def forget(
 
     Soft delete sets expires_at=now; consolidation removes the fiber later.
     Hard delete drops the fiber + typed_memory immediately (CASCADE handles
-    fiber_neurons).
+    fiber_neurons) and requires --force, mirroring the confirmation gate on
+    nmem_cleanup and on the MCP tools.
 
     Examples:
         nmem forget 256545b4-0b83-42b3-9291-31ef8563f05b
-        nmem forget 256545b4-... --hard --reason "duplicate of newer entry"
+        nmem forget 256545b4-... --hard --force --reason "duplicate of newer entry"
     """
 
     async def _forget() -> dict[str, Any]:
         _storage, facade = await _build_facade(shared=shared)
-        return await facade._forget({"memory_id": memory_id, "hard": hard, "reason": reason or ""})
+        # The MCP facade gates hard deletes behind confirm=true (#79). Omitting it
+        # here left the CLI unable to ever finish a deletion: the gate answered
+        # pending_confirmation, which the CLI then printed as success.
+        return await facade._forget(
+            {
+                "memory_id": memory_id,
+                "hard": hard,
+                "reason": reason or "",
+                "confirm": force,
+            }
+        )
 
     result = run_async(_forget())
     _exit_on_error(result, json_output=json_output)
+
+    if result.get("status") == "pending_confirmation":
+        # An unmet confirmation gate is not a deletion — surface it as an error
+        # with a non-zero exit code instead of reporting success.
+        error = (
+            f"Refusing to permanently delete {memory_id} without confirmation. "
+            "Re-run with --force to proceed."
+        )
+        if json_output:
+            output_result({**result, "error": error}, as_json=True)
+        else:
+            typer.secho(f"Error: {error}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
 
     if json_output:
         output_result(result, as_json=True)
