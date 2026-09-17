@@ -1,10 +1,10 @@
 """Auto-save trigger detection for the eternal context system.
 
 Detects events that should trigger an auto-save of context state:
-- Workflow completion ("done", "xong", "pass test")
-- Decision made (reuses DECISION_PATTERNS from auto_capture)
-- Error fixed ("fixed by", "sua xong")
-- User leaving ("bye", "tam nghi", "het gio")
+- Workflow completion ("done", "xong", "pass test", plus Chinese equivalents)
+- Decision made (reuses DECISION_PATTERNS from auto_capture; Chinese-aware)
+- Error fixed ("fixed by", "sua xong", "已修复")
+- User leaving ("bye", "tam nghi", "再见", "下线了")
 - Message checkpoint (every N messages)
 - Context capacity warning (token estimate > threshold)
 
@@ -111,12 +111,14 @@ DECISION_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"let's (?:go with|use|choose)[:\s]+.{5,}", re.IGNORECASE),
     # Vietnamese
     re.compile(r"(?:quyết định|chọn|dùng|chuyển sang)[:\s]+.{5,}", re.IGNORECASE),
-    # Chinese — require trailing content so bare “决定” in prose does not fire
+    # Chinese — a subject and an explicit marker are both required; descriptive
+    # verbs such as 采用/改用/切换到 alone fire on ordinary prose
+    # ("我们采用 PostgreSQL 作为主库"), which is not a decision event.
     re.compile(
-        r"(?:我们|我|团队)?(?:决定|确定|选定|采用|改用|换成|切换到|迁移到)"
-        r"[：:，,、\s]*.{4,}",
+        r"(?:我们|我|团队)(?:决定|选定|敲定|拍板)[：:，,、\s]*.{4,}",
         re.IGNORECASE,
     ),
+    re.compile(r"(?:方案|决策|结论|决定)(?:是|为|定为)[：:，,、\s]*.{4,}", re.IGNORECASE),
 ]
 
 # Minimum text length to avoid false positives

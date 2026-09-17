@@ -65,7 +65,7 @@ _MIN_HUMAN_CHARS = 20
 # Content piped through a mis-encoded shell reaches storage silently damaged:
 # PowerShell 5.1 defaults $OutputEncoding to ASCII, so non-ASCII collapses to
 # "?". These thresholds keep the check from firing on legitimate "?" usage
-# such as the C#/JS null-coalescing operator.
+# such as the C#/JS null-coalescing operator or optional chaining.
 _MIN_QUESTION_LEN = 8
 _MAX_QUESTION_RATIO = 0.3
 
@@ -181,11 +181,16 @@ def detect_encoding_damage(text: str) -> str | None:
 
     stripped = text.strip()
     if len(stripped) >= _MIN_QUESTION_LEN:
-        ratio = stripped.count("?") / len(stripped)
+        # Optional chaining (a?.b?.c) is legitimate TypeScript/JavaScript, not
+        # damage: each "?." pair contributes a question mark every three
+        # characters, so a long chain alone can cross the ratio threshold.
+        # Count only question marks that do not introduce a property access.
+        suspicious = stripped.replace("?.", "")
+        ratio = suspicious.count("?") / len(stripped)
         if ratio >= _MAX_QUESTION_RATIO:
             return (
-                f"{ratio:.0%} of the content is '?' — the text was most likely "
-                "collapsed by a non-UTF-8 shell pipe. On Windows set "
-                "$OutputEncoding/[Console]::OutputEncoding to UTF-8, or pass --file"
+                f"{ratio:.0%} of the content is '?' — this usually means the text "
+                "was collapsed by a non-UTF-8 shell pipe (on Windows, PowerShell "
+                "defaults $OutputEncoding to ASCII)"
             )
     return None

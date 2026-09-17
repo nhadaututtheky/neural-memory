@@ -47,8 +47,11 @@ _CHINESE_DOMINANCE_RATIO = 0.3
 
 # Minimum input length before detection runs. CJK packs far more meaning per
 # character, so the Latin floor (20) would silently discard valid one-sentence
-# Chinese input such as "待办：更新部署文档。" (10 characters).
+# Chinese input such as a short todo line (10 characters).
 _CJK_MIN_TEXT_LENGTH = 8
+
+# Trailing sentence particles that carry no meaning once captured as a memory
+_CJK_TRAILING_PARTICLES = re.compile(r"[了吧呢啊嘛呀哦]+$")
 
 # One-time warning flag for pyvi in auto-capture
 _PYVI_AC_WARNED = False
@@ -67,8 +70,13 @@ DECISION_PATTERNS = [
     r"(?:quyết định|đã chọn)[:\s]+(.+?)(?:\.|$)",
     # Chinese — CJK has no word boundaries, so no \b and no trailing dot anchor;
     # capture runs to the next sentence break or end of line instead.
-    r"(?:我们|我|团队)?(?:决定|确定|选定|选用|采用|改用|换成|切换到|迁移到)[：:，,、\s]*([^\n。；;！!？?]{4,})",
-    r"(?:方案|决定)(?:是|为|定为)[：:，,、\s]*([^\n。；;！!？?]{4,})",
+    # An explicit decision marker is required. Descriptive verbs (采用/改用/
+    # 切换到/迁移到) are deliberately excluded: they show up in ordinary prose
+    # ("我们采用 PostgreSQL 作为主库") that would otherwise be auto-saved as a
+    # decision at 0.8 confidence, above the passive-write gate.
+    r"(?:我们|我|团队)(?:决定|选定|敲定|拍板)[：:，,、\s]*([^\n。；;！!？?]{4,})",
+    r"(?:方案|决策|结论|决定)(?:是|为|定为|就是)[：:，,、\s]*([^\n。；;！!？?]{4,})",
+    r"(?:决定|决策|方案)[：:]([^\n。；;！!？?]{4,})",
 ]
 
 ERROR_PATTERNS = [
@@ -98,10 +106,11 @@ TODO_PATTERNS = [
     # Vietnamese — require compound verb+action (avoid bare cần/phải/nên)
     r"(?:cần phải|bắt buộc phải|nhất định phải) (\S+ .{10,80}?)(?:\.|$)",
     r"(?:nhớ là|đừng quên) (\S+ .{10,80}?)(?:\.|$)",
-    # Chinese — action items. Bare verbs such as 需要/必须 appear mid-sentence in
-    # ordinary statements ("因为 API 需要并发写入" is not a task), so a TODO
-    # trigger only counts at the start of a sentence.
-    r"(?:^|[。；;！!？?\n])\s*(?:待办(?:事项)?|下一步|接下来|后续|需要|还要|必须|记得|别忘了|不要忘记)[：:，,、\s]*([^\n。；;！!？?]{4,})",
+    # Chinese — explicit action markers only. Bare 需要/必须/记得 are excluded
+    # even at a sentence start: "需要连接池来扁住并发。" and "记得当时讨论过
+    # 这个点。" are statements, not action items.
+    r"(?:^|[。；;！!？?\n])\s*(?:待办(?:事项)?|下一步|接下来|后续)[：:，,、\s]+([^\n。；;！!？?]{4,})",
+    r"(?:^|[。；;！!？?\n])\s*(?:记得(?:要|去)|别忘了|不要忘记)[：:，,、\s]*([^\n。；;！!？?]{4,})",
 ]
 
 FACT_PATTERNS = [
@@ -141,8 +150,8 @@ PREFERENCE_PATTERNS = [
     # Chinese — preferences and corrections
     r"(?:我们|我)(?:更喜欢|偏好|喜欢|倾向于|希望|想要)[：:，,、\s]*([^\n。；;！!？?]{4,})",
     r"(?:我们|我)(?:不喜欢|讨厌|不希望|不想|避免)[：:，,、\s]*([^\n。；;！!？?]{4,})",
-    r"(?:不要|别|禁止|避免)(?:使用|用|做|写|添加|加上)[：:，,、\s]*([^\n。；;！!？?]{3,})",
-    r"(?:应该|必须|始终|永远)(?:使用|用|做|写|添加|加上)[：:，,、\s]*([^\n。；;！!？?]{3,})",
+    r"(?:不要|别|禁止|避免)(?:使用|用|做|写|添加|加上)[：:，,、\s]*([^\n。；;！!？?]{4,})",
+    r"(?:应该|必须|始终|永远)(?:使用|用|做|写|添加|加上)[：:，,、\s]*([^\n。；;！!？?]{4,})",
 ]
 
 INSIGHT_PATTERNS = [
@@ -159,10 +168,11 @@ INSIGHT_PATTERNS = [
     r"(?:bài học|điều quan trọng)[:\s]+(.+?)(?:\.|$)",
     r"(?:nguyên nhân|root cause) (?:là|do)[:\s]+(.+?)(?:\.|$)",
     r"(?:mới biết|mới phát hiện)[:\s]+(.+?)(?:\.|$)",
-    # Chinese
-    r"(?:原来|发现|意识到|注意到)(?:是|了)?[：:，,、\s]*([^\n。；;！!？?]{4,})",
+    # Chinese — bare 发现/原来 over-fire on ordinary narration such as
+    # "发现一个问题 ...", so only explicit realization markers are kept.
+    r"(?:原来如此|这才明白|才明白)[：:，,、\s]*([^\n。；;！!？?]{4,})",
     r"(?:根因|根本原因)(?:是|在于)[：:，,、\s]*([^\n。；;！!？?]{4,})",
-    r"(?:经验教训|吸取教训|要点|关键在于)[：:，,、\s]*([^\n。；;！!？?]{3,})",
+    r"(?:经验教训|吸取教训|关键在于)[：:，,、\s]*([^\n。；;！!？?]{4,})",
 ]
 
 
@@ -203,13 +213,23 @@ def _cjk_script(text: str) -> str | None:
 
 
 def empty_capture_hint(text: str) -> str:
-    """Explain an empty detection result for non-Latin text.
+    """Explain an empty detection result.
 
     Without a hint, users of languages the extractor cannot read see
     "No memorable content detected" and cannot tell an empty input from an
-    engine that never understood their text — the failure is silent.
+    engine that never understood their text — the failure is silent. A too
+    short input is reported as such, so the advice does not wrongly send the
+    user hunting for a trigger word when the text never reached the detector.
     """
-    script = _cjk_script(text)
+    stripped = text.strip()
+    script = _cjk_script(stripped)
+    min_len = _CJK_MIN_TEXT_LENGTH if script == "chinese" else _MIN_TEXT_LENGTH
+    if len(stripped) < min_len:
+        return (
+            f"No patterns matched: the input is {len(stripped)} characters, below the "
+            f"{min_len}-character minimum that detection requires. "
+            "Add more context and try again."
+        )
     if script == "japanese":
         return (
             "No patterns matched. Japanese text is not yet supported by the "
@@ -223,9 +243,8 @@ def empty_capture_hint(text: str) -> str:
     if script == "chinese":
         return (
             "No patterns matched. Chinese is supported, but detection needs an "
-            "explicit trigger word: 决定/采用/改用/切换到 (decision), "
-            "待办/需要/下一步 (todo), 错误/失败/报错 (error), "
-            "已修复/解决了 (fix), 原来/发现 (insight)."
+            "explicit trigger word: 决定/选定 (decision), 待办/下一步 (todo), "
+            "错误/失败/已修复 (error), 原来如此/根因 (insight)."
         )
     return ""
 
@@ -305,6 +324,8 @@ def _detect_patterns(
             if isinstance(match, tuple):
                 match = " ".join(part for part in match if part)
             captured = match.strip()
+            if is_cjk:
+                captured = _CJK_TRAILING_PARTICLES.sub("", captured).strip()
             if len(captured) < effective_min_len:
                 continue
 

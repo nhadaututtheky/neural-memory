@@ -52,7 +52,10 @@ class TestChineseExtraction:
 
     def test_chinese_fix_detected(self) -> None:
         text = "错误：构建失败，原因是没装 tsc。已修复：安装 typescript 依赖后通过。"
-        assert "error" in _types(analyze_text_for_memories(text))
+        contents = [str(item["content"]) for item in analyze_text_for_memories(text)]
+        # The fix clause must produce its own capture — asserting only that an
+        # "error" exists would still pass if the 已修复 pattern were deleted.
+        assert any("安装 typescript" in c for c in contents), contents
 
     def test_short_chinese_capture_keeps_full_confidence(self) -> None:
         """One Han character is roughly one word — the Latin 'too short' floor
@@ -110,8 +113,8 @@ class TestChineseExtraction:
 
 class TestShortChineseInput:
     """A short Chinese sentence is a complete thought. The Latin minimum-input
-    floor (20 chars) used to discard it before detection even ran, so
-    "待办：更新部署文档。" returned zero memories."""
+    floor (20 chars) used to discard it before detection even ran, so a
+    10-character todo line returned zero memories."""
 
     def test_short_todo_is_captured(self) -> None:
         text = "待办：更新部署文档。"
@@ -189,6 +192,17 @@ class TestUnsupportedLanguageHint:
     def test_english_has_no_hint(self) -> None:
         assert empty_capture_hint("plain english sentence with nothing special") == ""
 
+    def test_short_input_is_reported_as_length_not_missing_trigger(self) -> None:
+        """A short todo line already contains its trigger word — blaming a
+        missing trigger would send the user down a dead end."""
+        hint = empty_capture_hint("待办：更新")
+        assert "below" in hint
+        assert "trigger word" not in hint
+
+    def test_short_english_input_is_also_explained(self) -> None:
+        hint = empty_capture_hint("todo now")
+        assert "below" in hint
+
     def test_chinese_hint_lists_triggers(self) -> None:
         hint = empty_capture_hint("随便写点什么内容，但是没有任何触发词存在")
         assert "Chinese is supported" in hint
@@ -241,3 +255,47 @@ class TestChineseTriggers:
     def test_english_trigger_regression(self) -> None:
         result = check_triggers("We decided to use PostgreSQL for the storage layer")
         assert result.trigger_type == TriggerType.DECISION_MADE
+
+
+class TestChineseOverCapture:
+    """Ordinary Chinese prose must not be captured.
+
+    An earlier revision accepted descriptive verbs (采用/确定/改用/切换到), which
+    auto-saved 12 of these 15 neutral sentences at or above the passive-write
+    gate of 0.75 — e.g. the sentence ending in 确定了 captured the trailing
+    fragment that followed it as a decision. The patterns now require an
+    explicit decision or action marker.
+    """
+
+    NEUTRAL = [
+        "我们采用 PostgreSQL 作为主库，性能更好。",
+        "我们确定用 Redis 做缓存层。",
+        "改用 SQLite 会让部署更简单。",
+        "这个方案确定了，下周开始动手。",
+        "我们把存储切换到 PostgreSQL 之后稳定多了。",
+        "需要连接池来扁住并发。",
+        "错误处理这块还需要再想想。",
+        "发现一个问题，暂时不影响使用。",
+        "记得当时讨论过这个点。",
+        "性能问题主要出在序列化上。",
+        "原来是这样，难怪会慢。",
+        "解决方案还在评估中。",
+    ]
+
+    @pytest.mark.parametrize("text", NEUTRAL)
+    def test_neutral_prose_yields_nothing(self, text: str) -> None:
+        assert analyze_text_for_memories(text) == []
+
+    def test_capture_does_not_keep_trailing_particle(self) -> None:
+        """The trailing particle 了 must not be stored."""
+        detected = analyze_text_for_memories(
+            "以后不要用同步 IO 了。",
+            capture_decisions=False,
+            capture_errors=False,
+            capture_todos=False,
+            capture_facts=False,
+            capture_insights=False,
+        )
+        contents = [item["content"] for item in detected]
+        assert contents, "a prohibition is a legitimate preference"
+        assert all(not c.endswith("了") for c in contents), contents

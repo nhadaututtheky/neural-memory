@@ -31,9 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Empty auto-capture results explain themselves**: when detection finds
-  nothing in predominantly CJK text, the response carries a `hint` naming the
-  language and its trigger words, instead of a bare "No memorable content
-  detected".
+  nothing, the response carries a `hint` instead of a bare "No memorable
+  content detected". For predominantly CJK text it names the language and its
+  trigger words, for input below the detection floor it reports the length, and
+  Japanese/Korean are reported as unsupported. Wired into the analyze, process
+  and flush paths.
 
 ## [4.62.0] — 2026-08-16
 

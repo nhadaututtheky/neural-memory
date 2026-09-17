@@ -361,7 +361,14 @@ class AutoHandler:
         )
 
         if not detected:
-            return {"saved": 0, "message": "No memorable content detected in flush"}
+            empty_result: dict[str, Any] = {
+                "saved": 0,
+                "message": "No memorable content detected in flush",
+            }
+            hint = empty_capture_hint(text)
+            if hint:
+                empty_result["hint"] = hint
+            return empty_result
 
         # Emergency mode: lower confidence threshold to 0.5 (vs normal min_confidence)
         emergency_threshold = 0.5

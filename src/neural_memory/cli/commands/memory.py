@@ -250,6 +250,14 @@ def remember(
         )
         raise typer.Exit(1)
 
+    if file_path and content:
+        typer.secho(
+            "Error: pass content either as an argument or via --file, not both.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(1)
+
     if file_path:
         content = _read_content_file(file_path)
 

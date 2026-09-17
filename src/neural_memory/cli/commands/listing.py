@@ -23,6 +23,8 @@ def _summarize(content: str, *, full: bool) -> str:
     Truncation used to be unconditional, so a script reading --json could not
     tell a complete entry from a clipped one.
     """
+    if not content:
+        return ""
     if full or len(content) <= _SUMMARY_CHARS:
         return content
     return content[:_SUMMARY_CHARS] + "..."
@@ -275,9 +277,11 @@ def list_memories(
 
             # Build line
             type_badge = f"[{mem['type'][:4].upper()}]"
-            content = mem.get("content", "")[:60]
-            if len(mem.get("content", "")) > 60:
-                content += "..."
+            raw_content = mem.get("content", "")
+            if full or len(raw_content) <= 60:
+                content = raw_content
+            else:
+                content = raw_content[:60] + "..."
 
             typer.echo(f"{priority_ind} ", nl=False)
             typer.secho(type_badge, fg=type_color, nl=False)

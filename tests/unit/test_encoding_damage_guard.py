@@ -26,6 +26,18 @@ class TestDetectEncodingDamage:
         """C#/JS '??' is common in code notes and must not be treated as damage."""
         assert detect_encoding_damage("var x = a ?? b; // C# null coalescing") is None
 
+    def test_optional_chaining_is_not_damage(self) -> None:
+        """'?.' contributes a question mark every three characters, so a long
+        optional chain alone crosses the ratio threshold."""
+        assert detect_encoding_damage("a?.b?.c?.d?.e?.f?.g?.h?.i") is None
+
+    def test_optional_chain_in_code_is_not_damage(self) -> None:
+        assert detect_encoding_damage("const x = obj?.a?.b?.c?.d?.e?.f?.g;") is None
+
+    def test_optional_chain_does_not_mask_real_damage(self) -> None:
+        """Removing '?.' must not weaken detection of an actual collapse."""
+        assert detect_encoding_damage("a?.b????????????????") is not None
+
     def test_trailing_double_question_is_not_damage(self) -> None:
         assert detect_encoding_damage("Really?? That seems wrong to me") is None
 
