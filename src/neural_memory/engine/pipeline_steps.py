@@ -27,7 +27,6 @@ Step dependency graph::
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import math
 import re
@@ -1499,15 +1498,17 @@ class CreateSynapsesStep:
                 )
             )
 
-        # Batch add all synapses in parallel
+        # Add synapses one at a time: SQLiteDialect shares a single connection and
+        # commits after every statement, so concurrent add_synapse calls interleave
+        # and fail with "cannot commit transaction - SQL statements in progress"
+        # (issue #208). Serializing costs nothing here - those "parallel" writes were
+        # only coroutine interleaving on that one connection.
         if synapses_to_add:
-            results = await asyncio.gather(
-                *[storage.add_synapse(s) for s in synapses_to_add],
-                return_exceptions=True,
-            )
-            for synapse, result in zip(synapses_to_add, results, strict=True):
-                if isinstance(result, BaseException):
-                    logger.warning("Synapse add failed in CreateSynapsesStep: %s", result)
+            for synapse in synapses_to_add:
+                try:
+                    await storage.add_synapse(synapse)
+                except Exception as exc:
+                    logger.warning("Synapse add failed in CreateSynapsesStep: %s", exc)
                 else:
                     ctx.synapses_created.append(synapse)
 
@@ -1595,14 +1596,14 @@ class CoOccurrenceStep:
                     )
                 )
 
+        # Serialized for the same reason as CreateSynapsesStep: one shared SQLite
+        # connection, one commit per statement (issue #208).
         if synapses_to_add:
-            results = await asyncio.gather(
-                *[storage.add_synapse(s) for s in synapses_to_add],
-                return_exceptions=True,
-            )
-            for synapse, result in zip(synapses_to_add, results, strict=True):
-                if isinstance(result, BaseException):
-                    logger.warning("Co-occurrence synapse add failed: %s", result)
+            for synapse in synapses_to_add:
+                try:
+                    await storage.add_synapse(synapse)
+                except Exception as exc:
+                    logger.warning("Co-occurrence synapse add failed: %s", exc)
                 else:
                     ctx.synapses_created.append(synapse)
 

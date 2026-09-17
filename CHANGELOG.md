@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Concurrent writes on the shared SQLite connection**: `SQLiteDialect` owns a
+  single write connection and commits after every statement, so fanning writes
+  out concurrently on that connection lets one task's `commit()` collide with
+  another task's statement still in progress:
+  `cannot commit transaction - SQL statements in progress`. The row usually
+  landed anyway, but the Merkle invalidation and change-log entry that follow
+  the INSERT were skipped, and the two pipeline steps swallowed the error with
+  `return_exceptions=True` while `DocTrainer` dropped it straight out of its
+  synapse counter, so callers never learned about it. `CreateSynapsesStep`,
+  `CoOccurrenceStep`, both auto-capture save paths, and `DocTrainer`'s heading
+  and document-sequence builders now write one at a time. On SQLite nothing is
+  given up — those writes only ever interleaved as coroutines on the one
+  connection — while on a pooled backend (`PostgresDialect`) these paths do
+  trade away real parallelism.
+
 ## [4.62.0] — 2026-08-16
 
 ### Breaking
