@@ -30,6 +30,21 @@ _VI_MIN_CAPTURE_LEN = 25
 # Maximum ratio of stop words allowed in a Vietnamese capture
 _VI_MAX_STOP_WORD_RATIO = 0.6
 
+# CJK scripts — used for language detection and pattern classification.
+# Han covers Chinese (and Japanese kanji); kana and hangul are unambiguous
+# markers for Japanese/Korean, which this extractor has no patterns for.
+_HAN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+_KANA_RE = re.compile(r"[\u3040-\u30ff\u31f0-\u31ff]")
+_HANGUL_RE = re.compile(r"[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]")
+
+# Minimum captured content length for Chinese patterns. CJK has no word
+# boundaries and packs more meaning per character, so the Latin-script
+# thresholds (5-15 chars) would silently drop valid Chinese captures.
+_CJK_MIN_CAPTURE_LEN = 4
+
+# Share of Han characters above which text is treated as predominantly Chinese
+_CHINESE_DOMINANCE_RATIO = 0.3
+
 # One-time warning flag for pyvi in auto-capture
 _PYVI_AC_WARNED = False
 
@@ -45,6 +60,10 @@ DECISION_PATTERNS = [
     # Vietnamese
     r"(?:quyết định|chọn) (.+?) (?:thay vì|thay cho) (.+?)(?:\.|$)",
     r"(?:quyết định|đã chọn)[:\s]+(.+?)(?:\.|$)",
+    # Chinese — CJK has no word boundaries, so no \b and no trailing dot anchor;
+    # capture runs to the next sentence break or end of line instead.
+    r"(?:我们|我|团队)?(?:决定|确定|选定|选用|采用|改用|换成|切换到|迁移到)[：:，,、\s]*([^\n。；;！!？?]{4,})",
+    r"(?:方案|决定)(?:是|为|定为)[：:，,、\s]*([^\n。；;！!？?]{4,})",
 ]
 
 ERROR_PATTERNS = [
@@ -59,6 +78,10 @@ ERROR_PATTERNS = [
     # Vietnamese
     r"(?:lỗi|bug|vấn đề) (?:là|do|ở)[:\s]+(.+?)(?:\.|$)",
     r"(?:sửa|fix) (?:được |xong )?(?:bằng cách|bởi)[:\s]+(.+?)(?:\.|$)",
+    # Chinese — errors and their fixes
+    r"(?:错误|报错|出错|异常|失败)(?:原因)?[：:，,是为\s]+([^\n。；;！!？?]{4,})",
+    r"(?:踩坑|坑点|坑)[：:，,、\s]*([^\n。；;！!？?]{4,})",
+    r"(?:已修复|修好了|已经修好|解决了|已解决|已排除)[：:，,、\s]+([^\n。；;！!？?]{4,})",
 ]
 
 TODO_PATTERNS = [
@@ -70,6 +93,10 @@ TODO_PATTERNS = [
     # Vietnamese — require compound verb+action (avoid bare cần/phải/nên)
     r"(?:cần phải|bắt buộc phải|nhất định phải) (\S+ .{10,80}?)(?:\.|$)",
     r"(?:nhớ là|đừng quên) (\S+ .{10,80}?)(?:\.|$)",
+    # Chinese — action items. Bare verbs such as 需要/必须 appear mid-sentence in
+    # ordinary statements ("因为 API 需要并发写入" is not a task), so a TODO
+    # trigger only counts at the start of a sentence.
+    r"(?:^|[。；;！!？?\n])\s*(?:待办(?:事项)?|下一步|接下来|后续|需要|还要|必须|记得|别忘了|不要忘记)[：:，,、\s]*([^\n。；;！!？?]{4,})",
 ]
 
 FACT_PATTERNS = [
@@ -80,6 +107,9 @@ FACT_PATTERNS = [
     r"(?:learned|discovered|found out)[:\s]+(.+?)(?:\.|$)",
     # Vietnamese
     r"(?:đáp án|giải pháp|cách fix) (?:là|:)[:\s]+(.+?)(?:\.|$)",
+    # Chinese
+    r"(?:答案|解决办法|解决方案|结论)(?:是|为)[：:，,、\s]*([^\n。；;！!？?]{4,})",
+    r"(?:原因是|原因在于)[：:，,、\s]*([^\n。；;！!？?]{4,})",
 ]
 
 PREFERENCE_PATTERNS = [
@@ -103,6 +133,11 @@ PREFERENCE_PATTERNS = [
     r"(?:sai rồi|không đúng|chưa đúng)[,:\s]+(.{10,}?)(?:\.|$)",
     r"(?:phải là|nên là|đúng ra là)[:\s]+(.{10,}?)(?:\.|$)",
     r"(?:sửa|đổi|chuyển) (?:lại |thành )(.{10,}?)(?:\.|$)",
+    # Chinese — preferences and corrections
+    r"(?:我们|我)(?:更喜欢|偏好|喜欢|倾向于|希望|想要)[：:，,、\s]*([^\n。；;！!？?]{4,})",
+    r"(?:我们|我)(?:不喜欢|讨厌|不希望|不想|避免)[：:，,、\s]*([^\n。；;！!？?]{4,})",
+    r"(?:不要|别|禁止|避免)(?:使用|用|做|写|添加|加上)[：:，,、\s]*([^\n。；;！!？?]{3,})",
+    r"(?:应该|必须|始终|永远)(?:使用|用|做|写|添加|加上)[：:，,、\s]*([^\n。；;！!？?]{3,})",
 ]
 
 INSIGHT_PATTERNS = [
@@ -119,6 +154,10 @@ INSIGHT_PATTERNS = [
     r"(?:bài học|điều quan trọng)[:\s]+(.+?)(?:\.|$)",
     r"(?:nguyên nhân|root cause) (?:là|do)[:\s]+(.+?)(?:\.|$)",
     r"(?:mới biết|mới phát hiện)[:\s]+(.+?)(?:\.|$)",
+    # Chinese
+    r"(?:原来|发现|意识到|注意到)(?:是|了)?[：:，,、\s]*([^\n。；;！!？?]{4,})",
+    r"(?:根因|根本原因)(?:是|在于)[：:，,、\s]*([^\n。；;！!？?]{4,})",
+    r"(?:经验教训|吸取教训|要点|关键在于)[：:，,、\s]*([^\n。；;！!？?]{3,})",
 ]
 
 
@@ -130,6 +169,60 @@ def _is_vietnamese_text(text: str) -> bool:
 def _is_vietnamese_pattern(pattern: str) -> bool:
     """Check if a regex pattern targets Vietnamese text."""
     return bool(_VI_DIACRITICS.search(pattern))
+
+
+def _is_cjk_pattern(pattern: str) -> bool:
+    """Check if a regex pattern targets Chinese (Han) text."""
+    return bool(_HAN_RE.search(pattern))
+
+
+def _cjk_script(text: str) -> str | None:
+    """Classify the dominant CJK script in ``text``.
+
+    Returns ``"chinese"``, ``"japanese"``, ``"korean"``, or ``None`` when the
+    text is not predominantly CJK. Kana and hangul are unambiguous language
+    markers, so a single occurrence wins; Han characters are shared between
+    Chinese and Japanese, so they must dominate to count as Chinese.
+    """
+    stripped = text.strip()
+    if not stripped:
+        return None
+    if _KANA_RE.search(stripped):
+        return "japanese"
+    if _HANGUL_RE.search(stripped):
+        return "korean"
+    han_count = len(_HAN_RE.findall(stripped))
+    if han_count and han_count / len(stripped) >= _CHINESE_DOMINANCE_RATIO:
+        return "chinese"
+    return None
+
+
+def empty_capture_hint(text: str) -> str:
+    """Explain an empty detection result for non-Latin text.
+
+    Without a hint, users of languages the extractor cannot read see
+    "No memorable content detected" and cannot tell an empty input from an
+    engine that never understood their text — the failure is silent.
+    """
+    script = _cjk_script(text)
+    if script == "japanese":
+        return (
+            "No patterns matched. Japanese text is not yet supported by the "
+            "extractor (patterns cover English, Vietnamese, and Chinese)."
+        )
+    if script == "korean":
+        return (
+            "No patterns matched. Korean text is not yet supported by the "
+            "extractor (patterns cover English, Vietnamese, and Chinese)."
+        )
+    if script == "chinese":
+        return (
+            "No patterns matched. Chinese is supported, but detection needs an "
+            "explicit trigger word: 决定/采用/改用/切换到 (decision), "
+            "待办/需要/下一步 (todo), 错误/失败/报错 (error), "
+            "已修复/解决了 (fix), 原来/发现 (insight)."
+        )
+    return ""
 
 
 def _vi_quality_gate(captured: str) -> bool:
@@ -190,7 +283,16 @@ def _detect_patterns(
     detected: list[dict[str, Any]] = []
     for pattern in patterns:
         is_vi = _is_vietnamese_pattern(pattern)
-        effective_min_len = max(min_match_len, _VI_MIN_CAPTURE_LEN) if is_vi else min_match_len
+        is_cjk = _is_cjk_pattern(pattern)
+        if is_vi:
+            effective_min_len = max(min_match_len, _VI_MIN_CAPTURE_LEN)
+        elif is_cjk:
+            # Chinese packs more meaning per character and has no word
+            # boundaries to lean on, so the Latin thresholds (5-15 chars)
+            # would silently drop valid captures such as "改用 SQLite".
+            effective_min_len = min(min_match_len, _CJK_MIN_CAPTURE_LEN)
+        else:
+            effective_min_len = min_match_len
 
         matches = re.findall(pattern, text, re.IGNORECASE)
         for match in matches:
@@ -205,13 +307,17 @@ def _detect_patterns(
             if is_vi and not _vi_quality_gate(captured):
                 continue
 
-            # Adjust confidence based on capture quality
+            # Adjust confidence based on capture quality. The "too short" floor is
+            # script-aware: one Han character carries roughly a word of meaning,
+            # so the Latin 10-char threshold would wrongly penalise valid Chinese
+            # captures such as "没装 tsc".
+            short_capture_floor = _CJK_MIN_CAPTURE_LEN if is_cjk else 10
             adjusted_confidence = confidence
             if is_vi:
                 adjusted_confidence *= _VI_CONFIDENCE_PENALTY
             if len(captured) > 200:
                 adjusted_confidence *= 0.7  # Penalize truly excessive captures
-            elif len(captured) < 10:
+            elif len(captured) < short_capture_floor:
                 adjusted_confidence *= 0.3  # Penalize too-short captures
 
             # Trim at sentence boundary if over-captured

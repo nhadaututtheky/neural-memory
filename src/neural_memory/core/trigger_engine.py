@@ -59,6 +59,8 @@ USER_LEAVING_PATTERNS: list[re.Pattern[str]] = [
     # Vietnamese
     re.compile(r"(?:tôi đi|tạm nghỉ|hết giờ|bye|tạm biệt|nghỉ thôi|đi ngủ)", re.IGNORECASE),
     re.compile(r"(?:kết thúc|xong rồi đi|thôi nhé|hẹn gặp lại)", re.IGNORECASE),
+    # Chinese
+    re.compile(r"(?:再见|拜拜|先这样|就这样吧|我先走了|下线了|下次再聊|明天再说)", re.IGNORECASE),
 ]
 
 MILESTONE_PATTERNS: list[re.Pattern[str]] = [
@@ -73,6 +75,12 @@ MILESTONE_PATTERNS: list[re.Pattern[str]] = [
     # Vietnamese
     re.compile(r"(?:xong|hoàn thành|đã xong|xong rồi|hoàn tất|đã hoàn thành)", re.IGNORECASE),
     re.compile(r"(?:pass test|chạy được|build xong|deploy xong)", re.IGNORECASE),
+    # Chinese
+    re.compile(
+        r"(?:完成了|做完了|搞定了|通过了|上线了|已上线|已合并|已发布|已部署|"
+        r"测试通过|构建通过|全部通过)",
+        re.IGNORECASE,
+    ),
 ]
 
 ERROR_FIXED_PATTERNS: list[re.Pattern[str]] = [
@@ -85,6 +93,12 @@ ERROR_FIXED_PATTERNS: list[re.Pattern[str]] = [
     # Vietnamese
     re.compile(r"(?:sửa xong|fix xong|đã sửa|đã fix|hết lỗi|không lỗi nữa)", re.IGNORECASE),
     re.compile(r"(?:fix được rồi|chạy được rồi)", re.IGNORECASE),
+    # Chinese
+    re.compile(
+        r"(?:已修复|已经修复|修好了|解决了|已解决|不再报错|不再出错|"
+        r"恢复正常|已排除)",
+        re.IGNORECASE,
+    ),
 ]
 
 # Reuse decision patterns from auto_capture (imported at check time)
@@ -97,6 +111,12 @@ DECISION_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"let's (?:go with|use|choose)[:\s]+.{5,}", re.IGNORECASE),
     # Vietnamese
     re.compile(r"(?:quyết định|chọn|dùng|chuyển sang)[:\s]+.{5,}", re.IGNORECASE),
+    # Chinese — require trailing content so bare “决定” in prose does not fire
+    re.compile(
+        r"(?:我们|我|团队)?(?:决定|确定|选定|采用|改用|换成|切换到|迁移到)"
+        r"[：:，,、\s]*.{4,}",
+        re.IGNORECASE,
+    ),
 ]
 
 # Minimum text length to avoid false positives
