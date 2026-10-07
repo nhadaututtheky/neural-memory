@@ -61,6 +61,18 @@ _NOISE_LINE_RE = re.compile(
 
 _MIN_HUMAN_CHARS = 20
 
+# ─── Encoding damage detection ──────────────────────────────────────────────
+# Content piped through a mis-encoded shell reaches storage silently damaged:
+# PowerShell 5.1 defaults $OutputEncoding to ASCII, so non-ASCII collapses to
+# "?". These thresholds keep the check from firing on legitimate "?" usage
+# such as the C#/JS null-coalescing operator or optional chaining.
+_MIN_QUESTION_LEN = 8
+_MAX_QUESTION_RATIO = 0.3
+
+# Two or more consecutive literal escapes indicate undecoded \uXXXX text
+_LITERAL_UNICODE_ESCAPE_RE = re.compile(r"(?:\\u[0-9a-fA-F]{4}){2,}")
+_REPLACEMENT_CHAR_RE = re.compile("\ufffd")
+
 
 @dataclass(frozen=True)
 class CaptureDecision:
@@ -146,3 +158,39 @@ def clean_capture_input(raw: str, source: str = "passive") -> CaptureDecision:
         reason="ok",
         source=source,
     )
+
+
+def detect_encoding_damage(text: str) -> str | None:
+    """Detect content damaged by a mis-encoded shell before it is persisted.
+
+    Damage happens upstream of the encoder — the bytes have already been
+    replaced by the time Python sees them — so the only defence is to refuse
+    the write and tell the user how to inject text safely.
+
+    Args:
+        text: Candidate content, already whitespace-trimmed by the caller.
+
+    Returns:
+        A human-readable reason when damage is detected, otherwise ``None``.
+    """
+    if _REPLACEMENT_CHAR_RE.search(text):
+        return "content contains U+FFFD replacement characters"
+
+    if _LITERAL_UNICODE_ESCAPE_RE.search(text):
+        return "content contains literal \\uXXXX escapes that were never decoded"
+
+    stripped = text.strip()
+    if len(stripped) >= _MIN_QUESTION_LEN:
+        # Optional chaining (a?.b?.c) is legitimate TypeScript/JavaScript, not
+        # damage: each "?." pair contributes a question mark every three
+        # characters, so a long chain alone can cross the ratio threshold.
+        # Count only question marks that do not introduce a property access.
+        suspicious = stripped.replace("?.", "")
+        ratio = suspicious.count("?") / len(stripped)
+        if ratio >= _MAX_QUESTION_RATIO:
+            return (
+                f"{ratio:.0%} of the content is '?' — this usually means the text "
+                "was collapsed by a non-UTF-8 shell pipe (on Windows, PowerShell "
+                "defaults $OutputEncoding to ASCII)"
+            )
+    return None

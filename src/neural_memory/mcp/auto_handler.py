@@ -6,7 +6,7 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-from neural_memory.mcp.auto_capture import analyze_text_for_memories
+from neural_memory.mcp.auto_capture import analyze_text_for_memories, empty_capture_hint
 from neural_memory.mcp.constants import MAX_CONTENT_LENGTH
 
 if TYPE_CHECKING:
@@ -112,7 +112,16 @@ class AutoHandler:
 
         detected = self._run_detection(text)
         if not detected:
-            return {"detected": [], "message": "No memorable content detected"}
+            result: dict[str, Any] = {
+                "detected": [],
+                "message": "No memorable content detected",
+            }
+            # An empty result is indistinguishable from "this engine cannot read
+            # your language" — say so explicitly instead of failing silently.
+            hint = empty_capture_hint(text)
+            if hint:
+                result["hint"] = hint
+            return result
 
         if save:
             saved = await self._save_detected_memories(detected)
@@ -162,7 +171,15 @@ class AutoHandler:
 
         detected = self._run_detection(text)
         if not detected:
-            return {"saved": 0, "message": "No memorable content detected"}
+            # Named distinctly from the cleanup result below, which is an int.
+            empty_result: dict[str, Any] = {
+                "saved": 0,
+                "message": "No memorable content detected",
+            }
+            hint = empty_capture_hint(text)
+            if hint:
+                empty_result["hint"] = hint
+            return empty_result
 
         saved = await self._save_detected_memories(detected)
 
@@ -343,7 +360,14 @@ class AutoHandler:
         )
 
         if not detected:
-            return {"saved": 0, "message": "No memorable content detected in flush"}
+            empty_result: dict[str, Any] = {
+                "saved": 0,
+                "message": "No memorable content detected in flush",
+            }
+            hint = empty_capture_hint(text)
+            if hint:
+                empty_result["hint"] = hint
+            return empty_result
 
         # Emergency mode: lower confidence threshold to 0.5 (vs normal min_confidence)
         emergency_threshold = 0.5

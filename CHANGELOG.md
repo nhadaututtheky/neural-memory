@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Chinese auto-capture**: pattern groups, auto-save triggers, and hints now
+  cover Chinese alongside English and Vietnamese. Previously Chinese text fed
+  to auto-capture returned "No memorable content detected" — there were no
+  Chinese patterns at all, so memories were dropped with no feedback.
+- **`nmem remember --file <path>`**: read content from a UTF-8 file, bypassing
+  shell pipe encoding entirely. Content already damaged by a mis-encoded pipe
+  (question-mark floods, literal `\uXXXX` escapes) is now rejected instead of
+  silently persisted.
+- **`nmem list --full`**: return complete content instead of the 100-character
+  summary used by default.
+
+### Fixed
+
+- **`nmem forget --hard` could never delete anything**: the CLI never passed
+  `confirm` to the MCP facade, so every hard delete returned
+  `pending_confirmation` — and the CLI printed that payload as success. The
+  command now accepts `--force` to confirm, and reports an unmet gate as an
+  error with a non-zero exit code (follow-up to #148).
+
+### Changed
+
+- **Empty auto-capture results explain themselves**: when detection finds
+  nothing, the response carries a `hint` instead of a bare "No memorable
+  content detected". For predominantly CJK text it names the language and its
+  trigger words, for input below the detection floor it reports the length, and
+  Japanese/Korean are reported as unsupported. Wired into the analyze, process
+  and flush paths.
+
 ## [4.62.0] — 2026-08-16
 
 ### Breaking
