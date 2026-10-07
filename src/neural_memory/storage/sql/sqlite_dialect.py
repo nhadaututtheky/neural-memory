@@ -17,6 +17,10 @@ from neural_memory.utils.cjk import cjk_spaced
 
 logger = logging.getLogger(__name__)
 
+# Type aliases for write queue
+_WriteQueueItem = tuple[str, tuple[Any, ...], asyncio.Future[None]]
+_SentinelItem = tuple[None, None, None]
+
 
 class SQLiteDialect(Dialect):
     """SQLite dialect using aiosqlite.
@@ -39,8 +43,8 @@ class SQLiteDialect(Dialect):
         self._in_transaction: bool = False
 
         # Write serialization queue (single writer for SQLite)
-        self._write_queue: asyncio.Queue[tuple[str, tuple, asyncio.Future]] | None = None
-        self._write_task: asyncio.Task | None = None
+        self._write_queue: asyncio.Queue[_WriteQueueItem | _SentinelItem] | None = None
+        self._write_task: asyncio.Task[None] | None = None
 
     # ------------------------------------------------------------------
     # Feature flags
@@ -106,7 +110,7 @@ class SQLiteDialect(Dialect):
     async def close(self) -> None:
         # Stop write worker
         if self._write_task is not None:
-            await self._write_queue.put((None, None, None))  # sentinel
+            await self._write_queue.put((None, None, None))  # type: ignore[arg-type]
             await self._write_task
             self._write_task = None
             self._write_queue = None
