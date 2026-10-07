@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -78,9 +77,11 @@ class EternalHandler:
                 memory_type=MemoryType.FACT, tags={"project_context"}, limit=100
             )
             if old_facts:
-                await asyncio.gather(
-                    *[storage.delete_typed_memory(old.fiber_id) for old in old_facts]
-                )
+                for old in old_facts:
+                    try:
+                        await storage.delete_typed_memory(old.fiber_id)
+                    except BaseException as e:
+                        logger.warning("Delete old project_context fact failed: %s", e)
 
             parts: list[str] = []
             if args.get("project_name"):

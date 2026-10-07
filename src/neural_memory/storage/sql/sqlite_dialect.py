@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
@@ -36,6 +37,10 @@ class SQLiteDialect(Dialect):
         self._pool_size = pool_size
         self._has_fts: bool = False
         self._in_transaction: bool = False
+
+        # Write serialization queue (single writer for SQLite)
+        self._write_queue: asyncio.Queue[tuple[str, tuple, asyncio.Future]] | None = None
+        self._write_task: asyncio.Task | None = None
 
     # ------------------------------------------------------------------
     # Feature flags
@@ -92,9 +97,20 @@ class SQLiteDialect(Dialect):
         self._read_pool = ReadPool(self._db_path, pool_size=self._pool_size)
         await self._read_pool.initialize()
 
+        # Start single-writer worker (serializes all writes on SQLite)
+        self._write_queue = asyncio.Queue()
+        self._write_task = asyncio.create_task(self._write_worker())
+
         logger.info("SQLite dialect initialized: %s", self._db_path)
 
     async def close(self) -> None:
+        # Stop write worker
+        if self._write_task is not None:
+            await self._write_queue.put((None, None, None))  # sentinel
+            await self._write_task
+            self._write_task = None
+            self._write_queue = None
+
         if self._read_pool is not None:
             await self._read_pool.close()
             self._read_pool = None
@@ -121,6 +137,55 @@ class SQLiteDialect(Dialect):
                 yield conn
             return
         yield self._ensure_conn()
+
+    # ------------------------------------------------------------------
+    # Write serialization (single writer for SQLite)
+    # ------------------------------------------------------------------
+
+    async def _write_worker(self) -> None:
+        """Background task that serializes all writes to the single SQLite connection."""
+        assert self._write_queue is not None
+        assert self._conn is not None
+
+        while True:
+            item = await self._write_queue.get()
+            sql, params, fut = item
+
+            # Sentinel to stop the worker
+            if sql is None:
+                self._write_queue.task_done()
+                break
+
+            try:
+                await self._conn.execute(sql, tuple(params))
+                await self._conn.commit()
+                if fut is not None:
+                    fut.set_result(None)
+            except Exception as e:
+                if fut is not None:
+                    fut.set_exception(e)
+                logger.warning("Write worker error: %s", e)
+            finally:
+                self._write_queue.task_done()
+
+    async def execute_write(self, sql: str, params: Sequence[Any] = ()) -> None:
+        """Execute a write statement through the serial write queue.
+
+        This ensures only one write is in flight at a time on the SQLite
+        connection, preventing "cannot commit transaction - SQL statements
+        in progress" errors when multiple coroutines call execute() concurrently.
+
+        For reads, use fetch_all/fetch_one which use the read pool.
+        For explicit transactions, use the transaction() context manager.
+        """
+        if self._write_queue is None:
+            # Fallback for uninitialized or during shutdown — direct execute
+            await self.execute(sql, params)
+            return
+
+        fut = asyncio.get_event_loop().create_future()
+        await self._write_queue.put((sql, tuple(params), fut))
+        await fut
 
     # ------------------------------------------------------------------
     # Query execution

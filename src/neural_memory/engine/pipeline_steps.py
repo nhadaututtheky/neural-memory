@@ -27,7 +27,6 @@ Step dependency graph::
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import math
 import re
@@ -1499,17 +1498,14 @@ class CreateSynapsesStep:
                 )
             )
 
-        # Batch add all synapses in parallel
+        # Batch add all synapses in parallel (serialized via storage.execute_write)
         if synapses_to_add:
-            results = await asyncio.gather(
-                *[storage.add_synapse(s) for s in synapses_to_add],
-                return_exceptions=True,
-            )
-            for synapse, result in zip(synapses_to_add, results, strict=True):
-                if isinstance(result, BaseException):
-                    logger.warning("Synapse add failed in CreateSynapsesStep: %s", result)
-                else:
+            for synapse in synapses_to_add:
+                try:
+                    await storage.add_synapse(synapse)
                     ctx.synapses_created.append(synapse)
+                except BaseException as e:
+                    logger.warning("Synapse add failed in CreateSynapsesStep: %s", e)
 
         # Record deferred entity refs (lazy promotion B7)
         deferred_refs = getattr(ctx, "deferred_entity_refs", [])
@@ -1596,15 +1592,12 @@ class CoOccurrenceStep:
                 )
 
         if synapses_to_add:
-            results = await asyncio.gather(
-                *[storage.add_synapse(s) for s in synapses_to_add],
-                return_exceptions=True,
-            )
-            for synapse, result in zip(synapses_to_add, results, strict=True):
-                if isinstance(result, BaseException):
-                    logger.warning("Co-occurrence synapse add failed: %s", result)
-                else:
+            for synapse in synapses_to_add:
+                try:
+                    await storage.add_synapse(synapse)
                     ctx.synapses_created.append(synapse)
+                except BaseException as e:
+                    logger.warning("Co-occurrence synapse add failed: %s", e)
 
         return ctx
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -19,14 +18,18 @@ async def _gather_count(
     coros: list[Any],
     error_label: str,
 ) -> int:
-    """Run coroutines in parallel, return success count and log failures."""
-    results = await asyncio.gather(*coros, return_exceptions=True)
+    """Run coroutines sequentially (serialized), return success count and log failures.
+
+    Sequential execution avoids SQLite "cannot commit transaction - SQL statements
+    in progress" errors when multiple writes share the same connection.
+    """
     ok = 0
-    for r in results:
-        if isinstance(r, BaseException):
-            logger.warning("%s: %s", error_label, r)
-        else:
+    for coro in coros:
+        try:
+            await coro
             ok += 1
+        except BaseException as e:
+            logger.warning("%s: %s", error_label, e)
     return ok
 
 
@@ -85,7 +88,9 @@ class DeferredWriteQueue:
     async def flush(self, storage: NeuralStorage) -> int:
         """Flush all pending writes to storage.
 
-        Uses asyncio.gather within each category for parallel writes.
+        Writes are serialized (sequential) within each category to avoid
+        SQLite "cannot commit transaction - SQL statements in progress"
+        errors when multiple writes share the same connection.
         Categories run sequentially (creates before updates) to preserve
         ordering guarantees.
 

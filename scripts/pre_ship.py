@@ -150,7 +150,87 @@ def check_ruff(fix: bool = False) -> None:
     )
 
 
-# ── 3. Mypy ─────────────────────────────────────────────────────
+# ── 3. Forbidden Patterns (silent error swallowing) ───────────────
+
+
+# These patterns are FORBIDDEN in write paths but ALLOWED in cleanup/shutdown:
+# - except BaseException: + cleanup + raise  (atomic file writes, coroutine cleanup)
+# - return_exceptions=True in close()/stop()/flush_background_tasks()/drain_background_tasks()
+FORBIDDEN_PATTERNS = [
+    (r"except BaseException\s*:", "bare 'except BaseException:'"),
+    (r"except:\s*pass", "bare 'except: pass'"),
+    (r"return_exceptions=True", "'return_exceptions=True' on write path"),
+]
+
+# Allowed contexts for return_exceptions=True (cleanup/shutdown)
+ALLOWED_RETURN_EXCEPTIONS_CONTEXTS = [
+    "async def close",
+    "async def stop",
+    "async def flush_background_tasks",
+    "async def drain_background_tasks",
+    "async def _drain_pipeline_tasks",
+    "def close",
+    "def stop",
+]
+
+# Allowed contexts for bare except BaseException: (cleanup + re-raise)
+ALLOWED_BASE_EXCEPTION_CONTEXTS = [
+    "atomic write",
+    "tempfile cleanup",
+    "coroutine cleanup",
+    "coroutine.close()",
+]
+
+
+def check_forbidden_patterns() -> None:
+    print("\n3. Forbidden Patterns")
+
+    import re
+
+    src_files = list((ROOT / "src").rglob("*.py"))
+    test_files = list((ROOT / "tests").rglob("*.py"))
+    all_files = src_files + test_files
+
+    violations: list[str] = []
+    for pattern, desc in FORBIDDEN_PATTERNS:
+        regex = re.compile(pattern)
+        for f in all_files:
+            try:
+                text = f.read_text(encoding="utf-8")
+                lines = text.splitlines()
+                for i, line in enumerate(lines, 1):
+                    if regex.search(line):
+                        # Allow in test files for testing error conditions
+                        if "tests/" in str(f):
+                            continue
+
+                        # Context check for return_exceptions=True
+                        if "return_exceptions=True" in line:
+                            # Check if we're in an allowed context (look back 10 lines for method def)
+                            context = "\n".join(lines[max(0, i-10):i])
+                            allowed = any(ctx in context for ctx in ALLOWED_RETURN_EXCEPTIONS_CONTEXTS)
+                            if allowed:
+                                continue
+
+                        # Context check for except BaseException:
+                        if "except BaseException" in line:
+                            context = "\n".join(lines[max(0, i-10):i+5])  # include next few lines for raise
+                            allowed = any(ctx in context for ctx in ALLOWED_BASE_EXCEPTION_CONTEXTS)
+                            # Also allow if it re-raises
+                            if "raise" in context:
+                                continue
+                            if allowed:
+                                continue
+
+                        violations.append(f"{f.relative_to(ROOT)}:{i}: {desc}")
+
+            except Exception:
+                pass
+
+    check("No forbidden patterns in src/", len(violations) == 0, "; ".join(violations[:5]) if violations else "")
+
+
+# ── 4. Mypy ─────────────────────────────────────────────────────
 
 
 def check_mypy() -> None:
@@ -501,6 +581,7 @@ def main() -> int:
 
     check_versions()
     check_ruff(fix=fix)
+    check_forbidden_patterns()
     check_mypy()
     check_imports()
     check_tests()
