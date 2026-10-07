@@ -9,7 +9,6 @@ Processes markdown files into a neural memory brain by:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -527,13 +526,12 @@ class DocTrainer:
                 )
 
         if synapses_to_add:
-            results = await asyncio.gather(
-                *[self._storage.add_synapse(s) for s in synapses_to_add],
-                return_exceptions=True,
-            )
-            for r in results:
-                if not isinstance(r, BaseException):
+            for s in synapses_to_add:
+                try:
+                    await self._storage.add_synapse(s)
                     synapse_count += 1
+                except BaseException as e:
+                    logger.warning("Heading hierarchy synapse add failed: %s", e)
 
         return synapse_count
 
@@ -589,13 +587,12 @@ class DocTrainer:
                 )
 
         if synapses_to_add:
-            results = await asyncio.gather(
-                *[self._storage.add_synapse(s) for s in synapses_to_add],
-                return_exceptions=True,
-            )
-            for r in results:
-                if not isinstance(r, BaseException):
+            for s in synapses_to_add:
+                try:
+                    await self._storage.add_synapse(s)
                     synapse_count += 1
+                except BaseException as e:
+                    logger.warning("Temporal topology synapse add failed: %s", e)
 
         return synapse_count
 

@@ -127,7 +127,9 @@ async def process_enrichment_batch(
                     )
                     failed += 1
 
-    await asyncio.gather(*[_run_one(j) for j in jobs])
+    # Sequential execution (not asyncio.gather) to avoid SQLite write collisions
+    for j in jobs:
+        await _run_one(j)
 
     return EnrichmentReport(
         claimed=len(jobs),

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -388,9 +387,14 @@ class AutoHandler:
         # Tag with session ID for session-end reflection
         session_tag = f"session:{self._get_session_id()}"
 
-        results = await asyncio.gather(
-            *[
-                self._remember(
+        saved_contents: list[str] = []
+        # Track saved memories for session-end reflection
+        if not hasattr(self, "_session_memories"):
+            self._session_memories = []
+
+        for item in redacted:
+            try:
+                result = await self._remember(
                     {
                         "content": item["content"],
                         "type": item["type"],
@@ -399,21 +403,13 @@ class AutoHandler:
                         "_auto_capture": True,
                     }
                 )
-                for item in redacted
-            ]
-        )
-        # Track saved memories for session-end reflection
-        if not hasattr(self, "_session_memories"):
-            self._session_memories = []
-        for item, result in zip(redacted, results, strict=False):
-            if "error" not in result:
-                self._session_memories.append(item)
+                if "error" not in result:
+                    self._session_memories.append(item)
+                    saved_contents.append(item["content"][:50])
+            except BaseException as e:
+                logger.warning("Emergency flush memory save failed: %s", e)
 
-        return [
-            item["content"][:50]
-            for item, result in zip(redacted, results, strict=False)
-            if "error" not in result
-        ]
+        return saved_contents
 
     async def _passive_capture(self, text: str) -> None:
         """Silently analyze text and capture high-confidence memories."""
@@ -553,9 +549,14 @@ class AutoHandler:
         # Tag with session ID for session-end reflection
         session_tag = f"session:{self._get_session_id()}"
 
-        results = await asyncio.gather(
-            *[
-                self._remember(
+        saved_contents: list[str] = []
+        # Track saved memories for session-end reflection
+        if not hasattr(self, "_session_memories"):
+            self._session_memories = []
+
+        for item in redacted_eligible:
+            try:
+                result = await self._remember(
                     {
                         "content": item["content"],
                         "type": item["type"],
@@ -564,22 +565,13 @@ class AutoHandler:
                         "_auto_capture": True,
                     }
                 )
-                for item in redacted_eligible
-            ]
-        )
+                if "error" not in result:
+                    self._session_memories.append(item)
+                    saved_contents.append(item["content"][:50])
+            except BaseException as e:
+                logger.warning("Auto-capture memory save failed: %s", e)
 
-        # Track saved memories for session-end reflection
-        if not hasattr(self, "_session_memories"):
-            self._session_memories = []
-        for item, result in zip(redacted_eligible, results, strict=False):
-            if "error" not in result:
-                self._session_memories.append(item)
-
-        return [
-            item["content"][:50]
-            for item, result in zip(redacted_eligible, results, strict=False)
-            if "error" not in result
-        ]
+        return saved_contents
 
     async def _apply_significance(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Score items for significance and adjust priorities.
