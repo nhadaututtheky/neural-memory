@@ -109,7 +109,7 @@ class SQLiteDialect(Dialect):
 
     async def close(self) -> None:
         # Stop write worker
-        if self._write_task is not None:
+        if self._write_task is not None and self._write_queue is not None:
             await self._write_queue.put((None, None, None))  # type: ignore[arg-type]
             await self._write_task
             self._write_task = None
@@ -160,13 +160,18 @@ class SQLiteDialect(Dialect):
                 self._write_queue.task_done()
                 break
 
+            # params should never be None for actual writes (sentinel has sql=None)
+            write_params = params if params is not None else ()
+
             try:
-                await self._conn.execute(sql, tuple(params))
+                await self._conn.execute(sql, tuple(write_params))
                 await self._conn.commit()
-                if fut is not None:
+                # A cancelled caller marks the future done. set_result would
+                # raise InvalidStateError and kill the worker (#216).
+                if fut is not None and not fut.done():
                     fut.set_result(None)
             except Exception as e:
-                if fut is not None:
+                if fut is not None and not fut.done():
                     fut.set_exception(e)
                 logger.warning("Write worker error: %s", e)
             finally:

@@ -508,11 +508,22 @@ class RememberHandler:
                     }
 
             encode_content = encrypted_content if encrypted_content is not None else content
+
+            # Score before encoding so recall can read fiber.metadata["_quality_score"]
+            # instead of the 5.0 default. Same inputs as the response hints (#219).
+            from neural_memory.engine.quality_scorer import score_memory
+
+            quality_result = score_memory(
+                content,
+                memory_type=mem_type.value,
+                tags=list(tags) if tags else [],
+                context=raw_context if isinstance(raw_context, dict) else None,
+            )
             result = await encoder.encode(
                 content=encode_content,
                 timestamp=event_timestamp,
                 tags=tags if tags else None,
-                metadata={"type": mem_type.value},
+                metadata={"type": mem_type.value, "_quality_score": quality_result.score},
             )
 
             # Attach encryption metadata to fiber
@@ -714,17 +725,6 @@ class RememberHandler:
                 "neurons_created": len(result.neurons_created),
                 "conflicts_detected": result.conflicts_detected,
             },
-        )
-
-        # Phase B: Quality scoring (soft gate — always stores, returns hints)
-        from neural_memory.engine.quality_scorer import score_memory
-
-        raw_tags_list = list(tags) if tags else []
-        quality_result = score_memory(
-            content,
-            memory_type=mem_type.value,
-            tags=raw_tags_list,
-            context=raw_context if isinstance(raw_context, dict) else None,
         )
 
         # Opt-in concept-extraction observability — drops counted in pipeline_steps

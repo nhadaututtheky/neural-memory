@@ -573,7 +573,10 @@ async def create_neuron(
         created_at=request.created_at or utcnow(),
     )
 
-    neuron_id = await storage.add_neuron(neuron)
+    try:
+        neuron_id = await storage.add_neuron(neuron)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
     return NeuronResponse(
         id=neuron_id,
@@ -879,7 +882,10 @@ async def create_synapse(
         created_at=request.created_at or utcnow(),
     )
 
-    synapse_id = await storage.add_synapse(synapse)
+    try:
+        synapse_id = await storage.add_synapse(synapse)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
     return {
         "id": synapse_id,

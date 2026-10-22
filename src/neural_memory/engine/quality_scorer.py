@@ -19,19 +19,30 @@ if TYPE_CHECKING:
 
 _CAUSAL_PATTERN = re.compile(
     r"\b(because|caused|due to|led to|resulted in|reason|since|therefore"
-    r"|so that|in order to|as a result|consequently)\b",
+    r"|so that|in order to|as a result|consequently"
+    # Vietnamese; "vì" also covers "bởi vì" / "vì vậy", but not "thay vì" (comparative)
+    r"|(?<!thay\s)vì|do\s+đó|dẫn\s+đến)\b",
+    re.IGNORECASE,
+)
+
+_ROOT_CAUSE_PATTERN = re.compile(r"\broot[ -]cause\b", re.IGNORECASE)
+
+_FIX_PATTERN = re.compile(
+    r"\b(fix|fixed|fixes|resolved|workaround|solution|patched)\b",
     re.IGNORECASE,
 )
 
 _TEMPORAL_PATTERN = re.compile(
     r"\b(after|before|then|when|while|during|until|once|first|next"
-    r"|previously|subsequently|earlier|later|following)\b",
+    r"|previously|subsequently|earlier|later|following"
+    r"|sau\s+khi|trước\s+khi|trong\s+khi|sau\s+đó)\b",
     re.IGNORECASE,
 )
 
 _COMPARATIVE_PATTERN = re.compile(
     r"\b(over|instead of|replaced|vs|versus|compared to|rather than"
-    r"|better than|worse than|faster|slower|cheaper|preferred)\b",
+    r"|better than|worse than|faster|slower|cheaper|preferred"
+    r"|thay\s+vì|so\s+với|tốt\s+hơn|nhanh\s+hơn|chậm\s+hơn)\b",
     re.IGNORECASE,
 )
 
@@ -73,6 +84,11 @@ _GENERIC_FILLER = frozenset(
         "hieu roi",
         "da",
         "vang",
+        "cảm ơn",
+        "hiểu rồi",
+        "xong rồi",
+        "dạ",
+        "vâng",
     }
 )
 
@@ -127,6 +143,7 @@ def score_memory(
     - Tags provided, at least 1 (+1)
     - Non-default type provided (+1)
     - Cognitive richness (0-3): causal +1, temporal +1, comparative +1
+    - Error/decision types also get hints for a missing cause or fix (no score effect)
 
     Args:
         content: The memory content text.
@@ -186,6 +203,17 @@ def score_memory(
         hints.append(
             "Add reasoning: why (because...), when (after...), or comparison (over X, instead of Y)"
         )
+
+    # Type-specific encoding hints (hints only, no effect on score). #223
+    if memory_type in ("error", "decision"):
+        has_cause = has_causal or bool(_ROOT_CAUSE_PATTERN.search(content))
+        if memory_type == "error":
+            if not has_cause:
+                hints.append('Error memory: state the root cause ("... caused by Y")')
+            if not _FIX_PATTERN.search(content):
+                hints.append('Error memory: state the fix ("... fixed by Z")')
+        elif not has_cause:
+            hints.append('Decision memory: state why ("Chose X over Y because Z")')
 
     # A8 Phase 3: Specificity bonus (+1 for file paths/versions/numbers)
     has_specificity = (

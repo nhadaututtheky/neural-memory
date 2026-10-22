@@ -8,6 +8,7 @@ from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request
+from starlette.requests import HTTPConnection  # noqa: TC002 - FastAPI resolves it at runtime
 
 from neural_memory.core.brain import Brain
 from neural_memory.storage.base import NeuralStorage
@@ -60,10 +61,11 @@ def is_trusted_host(host: str) -> bool:
     return any(addr in net for net in parsed)
 
 
-async def require_local_request(request: Request) -> None:
+async def require_local_request(request: HTTPConnection) -> None:
     """Reject requests from untrusted sources.
 
     Allows localhost and any IP within NEURAL_MEMORY_TRUSTED_NETWORKS CIDRs.
+    Typed as HTTPConnection so the same dependency resolves on WebSocket routes (#222).
     """
     if request.client is None:
         raise HTTPException(status_code=403, detail="Forbidden")

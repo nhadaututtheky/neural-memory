@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from typing import Any
+from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
@@ -18,6 +20,7 @@ from neural_memory.engine.diagnostics import (
     WarningSeverity,
     _score_to_grade,
 )
+from neural_memory.engine.encoder import MemoryEncoder
 from neural_memory.storage.memory_store import InMemoryStorage
 
 # ── Fixtures ─────────────────────────────────────────────────────
@@ -678,3 +681,183 @@ class TestRecommendations:
         non_info_warnings = [w for w in report.warnings if w.severity != WarningSeverity.INFO]
         if non_info_warnings:
             assert len(report.recommendations) >= 1
+
+
+# ── Hub neuron detection ─────────────────────────────────────────
+
+
+async def _hub_store(
+    *,
+    out_degree: int = 0,
+    in_degree: int = 0,
+    hub_meta: bool = False,
+    temporal_meta: bool = False,
+    felt_type: bool = False,
+    hubs: int = 1,
+) -> InMemoryStorage:
+    """Brain where neurons 'hub-0..' each have out_degree + in_degree synapses."""
+    store = InMemoryStorage()
+    brain = Brain.create(name="hubs", config=BrainConfig(), owner_id="test")
+    await store.save_brain(brain)
+    store.set_brain(brain.id)
+
+    neuron_ids: set[str] = set()
+    for hub_index in range(hubs):
+        hub_id = f"hub-{hub_index}"
+        hub_degree = out_degree + in_degree + hub_index
+        await store.add_neuron(
+            Neuron.create(type=NeuronType.CONCEPT, content=f"generic-{hub_index}", neuron_id=hub_id)
+        )
+        neuron_ids.add(hub_id)
+        for leaf_index in range(hub_degree):
+            leaf_id = f"leaf-{hub_index}-{leaf_index}"
+            await store.add_neuron(
+                Neuron.create(type=NeuronType.ENTITY, content=leaf_id, neuron_id=leaf_id)
+            )
+            neuron_ids.add(leaf_id)
+            outgoing = leaf_index < out_degree
+            await store.add_synapse(
+                Synapse.create(
+                    source_id=hub_id if outgoing else leaf_id,
+                    target_id=leaf_id if outgoing else hub_id,
+                    type=SynapseType.FELT if felt_type else SynapseType.RELATED_TO,
+                    metadata=(
+                        {"_hub": True}
+                        if hub_meta
+                        else {"temporal_link": True}
+                        if temporal_meta
+                        else None
+                    ),
+                    synapse_id=f"s-{hub_index}-{leaf_index}",
+                )
+            )
+
+    await store.add_fiber(
+        Fiber.create(
+            neuron_ids=neuron_ids,
+            synapse_ids=set(),
+            anchor_neuron_id="hub-0",
+            fiber_id="f-hub",
+        )
+    )
+    return store
+
+
+async def _analyze(store: InMemoryStorage) -> BrainHealthReport:
+    brain_id = store._current_brain_id
+    assert brain_id is not None
+    return await DiagnosticsEngine(store).analyze(brain_id)
+
+
+def _hub_warnings(report: BrainHealthReport) -> list[DiagnosticWarning]:
+    return [warning for warning in report.warnings if warning.code == "HUB_NEURONS"]
+
+
+class TestHubNeurons:
+    """HUB_NEURONS warning for neurons with more than 20 synapses."""
+
+    @pytest.mark.asyncio
+    async def test_hub_above_threshold_warns_info(self) -> None:
+        report = await _analyze(await _hub_store(out_degree=21))
+        warnings = _hub_warnings(report)
+        assert len(warnings) == 1
+        assert warnings[0].severity == WarningSeverity.INFO
+
+    @pytest.mark.asyncio
+    async def test_degree_exactly_threshold_no_warning(self) -> None:
+        report = await _analyze(await _hub_store(out_degree=20))
+        assert _hub_warnings(report) == []
+
+    @pytest.mark.asyncio
+    async def test_degree_counts_both_directions(self) -> None:
+        report = await _analyze(await _hub_store(out_degree=11, in_degree=10))
+        assert len(_hub_warnings(report)) == 1
+
+    @pytest.mark.asyncio
+    async def test_message_count_and_top_five_ordered(self) -> None:
+        report = await _analyze(await _hub_store(out_degree=21, hubs=7))
+        warning = _hub_warnings(report)[0]
+        assert "7 neurons" in warning.message
+        top = warning.details["top"]
+        assert [item["degree"] for item in top] == [27, 26, 25, 24, 23]
+        assert top[0]["content"] == "generic-6"
+        rec = next(item for item in report.recommendations if "most synapses" in item)
+        assert "'generic-6' (27)" in rec
+        assert "generic-1" not in rec and "generic-0" not in rec
+
+    @pytest.mark.asyncio
+    async def test_dream_hub_synapses_not_counted(self) -> None:
+        report = await _analyze(await _hub_store(out_degree=30, hub_meta=True))
+        assert _hub_warnings(report) == []
+
+    @pytest.mark.asyncio
+    async def test_temporal_link_synapses_not_counted(self) -> None:
+        report = await _analyze(await _hub_store(out_degree=30, temporal_meta=True))
+        assert _hub_warnings(report) == []
+
+    @pytest.mark.asyncio
+    async def test_felt_synapses_not_counted(self) -> None:
+        report = await _analyze(await _hub_store(out_degree=30, felt_type=True))
+        assert _hub_warnings(report) == []
+
+    @pytest.mark.asyncio
+    async def test_encoder_built_brain_has_no_hub_warning(self) -> None:
+        store = InMemoryStorage()
+        brain = Brain.create(name="enc", config=BrainConfig(), owner_id="test")
+        await store.save_brain(brain)
+        store.set_brain(brain.id)
+        encoder = MemoryEncoder(store, brain.config)
+        start = datetime(2026, 1, 1, 8, 0)
+        for index in range(50):
+            text = (
+                f"We fixed a bug in module{index} together with the team"
+                if index % 2
+                else f"Annoying: the module{index} build failed again and wasted an hour"
+            )
+            await encoder.encode(
+                text,
+                timestamp=start + timedelta(hours=index // 3),
+                skip_conflicts=True,
+            )
+        report = await _analyze(store)
+        assert _hub_warnings(report) == []
+
+    @pytest.mark.asyncio
+    async def test_scores_unaffected_by_hub_detection(self) -> None:
+        store = await _hub_store(out_degree=25)
+        with_detection = await _analyze(store)
+        assert _hub_warnings(with_detection)
+
+        async def no_hubs(self: DiagnosticsEngine, synapses: list[Any]) -> tuple[list[Any], int]:
+            del self, synapses
+            return [], 0
+
+        with patch.object(DiagnosticsEngine, "_find_hub_neurons", no_hubs):
+            without_detection = await _analyze(store)
+
+        assert _hub_warnings(without_detection) == []
+        assert with_detection.purity_score == without_detection.purity_score
+        assert with_detection.grade == without_detection.grade
+        assert with_detection.top_penalties == without_detection.top_penalties
+        for name in (
+            "connectivity",
+            "diversity",
+            "freshness",
+            "consolidation_ratio",
+            "orphan_rate",
+            "activation_efficiency",
+            "recall_confidence",
+        ):
+            assert getattr(with_detection, name) == getattr(without_detection, name)
+
+    @pytest.mark.asyncio
+    async def test_synapses_loaded_once(self) -> None:
+        store = await _hub_store(out_degree=25)
+        with patch.object(store, "get_all_synapses", wraps=store.get_all_synapses) as spy:
+            await _analyze(store)
+        assert spy.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_empty_brain_has_no_hub_warning(self, empty_storage: InMemoryStorage) -> None:
+        report = await _analyze(empty_storage)
+        assert _hub_warnings(report) == []

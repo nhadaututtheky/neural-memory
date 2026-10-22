@@ -271,6 +271,19 @@ class TestNeuronCRUD:
         assert data["content"] == "Test concept"
         assert "id" in data
 
+    def test_create_neuron_duplicate_id_returns_400(
+        self, client: TestClient, brain_id: str
+    ) -> None:
+        """Re-using an existing neuron ID is a client error, not a 500."""
+        headers = {"X-Brain-ID": brain_id}
+        body = {"type": "concept", "content": "Test concept"}
+        neuron_id = client.post("/memory/neurons", json=body, headers=headers).json()["id"]
+
+        response = client.post("/memory/neurons", json={**body, "id": neuron_id}, headers=headers)
+
+        assert response.status_code == 400
+        assert "already exists" in response.json()["detail"]
+
     def test_get_neuron(self, client: TestClient, brain_id: str) -> None:
         """Test getting a neuron by ID."""
         create_resp = client.post(
@@ -393,6 +406,42 @@ class TestSynapseCRUD:
         data = response.json()
         assert "id" in data
         assert data["weight"] == 0.8
+
+    def test_create_synapse_missing_neuron_returns_400(
+        self, client: TestClient, brain_with_neurons: dict[str, str]
+    ) -> None:
+        """A synapse that points at a nonexistent neuron is a client error, not a 500."""
+        ids = brain_with_neurons
+        response = client.post(
+            "/memory/synapses",
+            json={
+                "source_id": ids["neuron1"],
+                "target_id": "nonexistent-neuron",
+                "type": "related_to",
+            },
+            headers={"X-Brain-ID": ids["brain_id"]},
+        )
+
+        assert response.status_code == 400
+        assert "does not exist" in response.json()["detail"]
+
+    def test_create_synapse_duplicate_id_returns_400(
+        self, client: TestClient, brain_with_neurons: dict[str, str]
+    ) -> None:
+        """Re-using an existing synapse ID is a client error, not a 500."""
+        ids = brain_with_neurons
+        headers = {"X-Brain-ID": ids["brain_id"]}
+        body = {
+            "source_id": ids["neuron1"],
+            "target_id": ids["neuron2"],
+            "type": "related_to",
+        }
+        synapse_id = client.post("/memory/synapses", json=body, headers=headers).json()["id"]
+
+        response = client.post("/memory/synapses", json={**body, "id": synapse_id}, headers=headers)
+
+        assert response.status_code == 400
+        assert "already exists" in response.json()["detail"]
 
     def test_get_synapse(self, client: TestClient, brain_with_neurons: dict[str, str]) -> None:
         """Test getting a synapse by ID."""
@@ -519,6 +568,32 @@ class TestExportImport:
         assert import_response.status_code == 200
         data = import_response.json()
         assert data["neuron_count"] > 0
+
+    def test_merge_malformed_synapse_returns_400(self, client: TestClient) -> None:
+        """A snapshot synapse without source_id is a client error, not a 500."""
+        brain_id = client.post("/brain/create", json={"name": "merge_target"}).json()["id"]
+        client.post(
+            "/memory/encode",
+            json={"content": "Memory that must survive a bad merge"},
+            headers={"X-Brain-ID": brain_id},
+        )
+        before = client.get(f"/brain/{brain_id}/stats").json()["neuron_count"]
+
+        response = client.post(
+            f"/brain/{brain_id}/merge",
+            json={
+                "snapshot": {
+                    "brain_id": "incoming",
+                    "brain_name": "incoming",
+                    "exported_at": "2026-01-01T00:00:00",
+                    "version": "1",
+                    "synapses": [{"id": "s1"}],
+                }
+            },
+        )
+
+        assert response.status_code == 400
+        assert client.get(f"/brain/{brain_id}/stats").json()["neuron_count"] == before
 
 
 class TestFTS5DiacriticsRemoval:

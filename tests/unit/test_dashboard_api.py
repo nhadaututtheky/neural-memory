@@ -258,3 +258,26 @@ class TestFiberDiagramEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert len(data["synapses"]) == 0  # External synapse filtered
+
+
+class TestVisualizeEndpoint:
+    @pytest.mark.parametrize("bad_limit", ["abc", None, [1]])
+    def test_non_integer_limit_returns_400(self, client: TestClient, bad_limit: Any) -> None:
+        resp = client.post("/api/dashboard/visualize", json={"query": "x", "limit": bad_limit})
+        assert resp.status_code == 400
+
+    def test_overflowing_limit_returns_400(self, client: TestClient) -> None:
+        # 1e400 is valid JSON; json.loads gives inf and int(inf) raises OverflowError
+        resp = client.post(
+            "/api/dashboard/visualize",
+            content='{"query": "x", "limit": 1e400}',
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status_code == 400
+
+    def test_numeric_string_limit_is_accepted(
+        self, client: TestClient, mock_storage: AsyncMock
+    ) -> None:
+        resp = client.post("/api/dashboard/visualize", json={"query": "x", "limit": "7"})
+        assert resp.status_code == 200
+        mock_storage.find_neurons.assert_awaited_with(content_contains="x", limit=7)

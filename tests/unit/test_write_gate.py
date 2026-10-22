@@ -101,6 +101,13 @@ class TestGenericFiller:
     def test_substantive_not_filler(self, content: str) -> None:
         assert _is_generic_filler(content) is False
 
+    @pytest.mark.parametrize("content", ["cảm ơn", "Vâng", "dạ", "xong rồi", "hiểu rồi."])
+    def test_accented_vietnamese_filler_rejected_by_gate(self, content: str) -> None:
+        config = WriteGateConfig(enabled=True, reject_generic_filler=True)
+        result = check_write_gate(content, gate_config=config)
+        assert result.rejected
+        assert result.rejection_reason.startswith("Generic filler rejected")
+
     def test_empty_string_not_filler(self) -> None:
         assert _is_generic_filler("") is False
 

@@ -1527,7 +1527,10 @@ async def visualize_memory(
 
     chart_type = body.get("chart_type")
     output_format = str(body.get("format", "vega_lite"))
-    limit = min(int(body.get("limit", 20)), 50)
+    try:
+        limit = min(int(body.get("limit", 20)), 50)
+    except (TypeError, ValueError, OverflowError):
+        raise HTTPException(status_code=400, detail="limit must be an integer") from None
 
     try:
         neurons = await storage.find_neurons(content_contains=query, limit=limit)

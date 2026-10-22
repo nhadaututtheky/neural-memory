@@ -59,7 +59,9 @@ class TestMaturationFastTrack:
 
     def test_fast_track_still_needs_spacing(self) -> None:
         """Even with 10 rehearsals, still needs temporal spacing for promotion."""
-        now = utcnow()
+        # Fixed mid-day "now": a UTC day boundary inside the window would
+        # otherwise count as 2 distinct days and make this test flaky (#218).
+        now = datetime(2026, 1, 15, 12, 0)
         entered = now - timedelta(days=1, hours=1)
 
         # All timestamps in the same 2h window — no temporal spread

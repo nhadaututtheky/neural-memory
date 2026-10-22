@@ -269,11 +269,16 @@ async def merge_brain(
         conflict_strategy = ConflictStrategy(request.strategy)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid merge strategy")
-    merged_snapshot, merge_report = merge_snapshots(
-        local=local_snapshot,
-        incoming=incoming_snapshot,
-        strategy=conflict_strategy,
-    )
+    try:
+        merged_snapshot, merge_report = merge_snapshots(
+            local=local_snapshot,
+            incoming=incoming_snapshot,
+            strategy=conflict_strategy,
+        )
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=400, detail=f"Malformed snapshot: missing field {exc}"
+        ) from None
 
     # Stage the merged snapshot into a temporary brain id FIRST so it is durable
     # on disk before we clear the real brain. A process crash/OOM/SIGKILL

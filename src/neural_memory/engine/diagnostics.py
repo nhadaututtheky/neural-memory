@@ -8,6 +8,7 @@ Supports both MCP and CLI exposure.
 from __future__ import annotations
 
 import math
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -20,6 +21,12 @@ from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
+
+
+# A neuron linked to more synapses than this is reported as a hub (ROADMAP F3).
+_HUB_DEGREE_THRESHOLD = 20
+_HUB_TOP_N = 5
+_HUB_LABEL_MAX = 40
 
 
 # ── Data structures ──────────────────────────────────────────────
@@ -319,7 +326,9 @@ class DiagnosticsEngine:
         diversity = self._compute_diversity(synapse_stats)
         freshness = self._compute_freshness(fibers)
         consolidation_ratio = await self._compute_consolidation_ratio(fiber_count)
-        orphan_rate = await self._compute_orphan_rate(neuron_count, fibers)
+        all_synapses = await self._storage.get_all_synapses()
+        orphan_rate = await self._compute_orphan_rate(neuron_count, fibers, all_synapses)
+        hub_neurons = await self._find_hub_neurons(all_synapses)
         activation_efficiency = await self._compute_activation_efficiency(neuron_count)
         recall_confidence = self._compute_recall_confidence(synapse_stats)
 
@@ -366,6 +375,7 @@ class DiagnosticsEngine:
             fibers=fibers,
             contradicts_count=contradicts_count,
             activation_efficiency=activation_efficiency,
+            hub_neurons=hub_neurons,
         )
 
         # Rank penalty factors with actual metrics for dynamic action strings
@@ -478,7 +488,10 @@ class DiagnosticsEngine:
         return len(semantic_records) / fiber_count
 
     async def _compute_orphan_rate(
-        self, neuron_count: int, fibers: list[Any] | None = None
+        self,
+        neuron_count: int,
+        fibers: list[Any] | None = None,
+        all_synapses: list[Any] | None = None,
     ) -> float:
         """Compute fraction of neurons with no synapses AND no fiber membership.
 
@@ -491,7 +504,8 @@ class DiagnosticsEngine:
         if neuron_count == 0:
             return 0.0
 
-        all_synapses = await self._storage.get_all_synapses()
+        if all_synapses is None:
+            all_synapses = await self._storage.get_all_synapses()
         connected: set[str] = set()
         for s in all_synapses:
             connected.add(s.source_id)
@@ -504,6 +518,38 @@ class DiagnosticsEngine:
 
         orphan_count = max(0, neuron_count - len(connected))
         return orphan_count / neuron_count
+
+    async def _find_hub_neurons(self, all_synapses: list[Any]) -> tuple[list[tuple[str, int]], int]:
+        """Find neurons whose degree is above the hub threshold.
+
+        Degree counts synapses where the neuron is source or target. DREAM hub
+        synapses (`_hub` metadata), encoder temporal links (`temporal_link`
+        metadata) and emotion links (`FELT`, to shared emotion STATE neurons)
+        are structural output, not topic links, and are skipped.
+
+        Returns:
+            (top, total): up to 5 (label, degree) pairs, highest degree first,
+            and the total number of hub neurons.
+        """
+        degree: Counter[str] = Counter()
+        for synapse in all_synapses:
+            meta = synapse.metadata or {}
+            if meta.get("_hub") or meta.get("temporal_link") or synapse.type == SynapseType.FELT:
+                continue
+            degree[synapse.source_id] += 1
+            degree[synapse.target_id] += 1
+
+        hubs = [(nid, deg) for nid, deg in degree.most_common() if deg > _HUB_DEGREE_THRESHOLD]
+        if not hubs:
+            return [], 0
+
+        neurons = await self._storage.get_neurons_batch([nid for nid, _ in hubs[:_HUB_TOP_N]])
+        top: list[tuple[str, int]] = []
+        for nid, deg in hubs[:_HUB_TOP_N]:
+            neuron = neurons.get(nid)
+            label = neuron.content if neuron else nid
+            top.append((label[:_HUB_LABEL_MAX], deg))
+        return top, len(hubs)
 
     async def _compute_activation_efficiency(self, neuron_count: int) -> float:
         """Compute fraction of neurons that have been activated at least once.
@@ -543,6 +589,7 @@ class DiagnosticsEngine:
         fibers: list[Any],
         contradicts_count: int = 0,
         activation_efficiency: float = 1.0,
+        hub_neurons: tuple[list[tuple[str, int]], int] = ([], 0),
     ) -> tuple[list[DiagnosticWarning], list[str]]:
         """Generate warnings and recommendations from metrics."""
         warnings: list[DiagnosticWarning] = []
@@ -700,6 +747,28 @@ class DiagnosticsEngine:
             )
             recommendations.append(
                 "Run `nmem_conflicts` to review and resolve memory contradictions."
+            )
+
+        # Hub neurons (too many synapses, likely too generic)
+        top_hubs, hub_total = hub_neurons
+        if hub_total > 0:
+            listing = ", ".join(f"'{label}' ({degree})" for label, degree in top_hubs)
+            warnings.append(
+                DiagnosticWarning(
+                    severity=WarningSeverity.INFO,
+                    code="HUB_NEURONS",
+                    message=(
+                        f"{hub_total} neurons have more than {_HUB_DEGREE_THRESHOLD} synapses."
+                    ),
+                    details={
+                        "count": hub_total,
+                        "top": [{"content": label, "degree": deg} for label, deg in top_hubs],
+                    },
+                )
+            )
+            recommendations.append(
+                f"Neurons with the most synapses: {listing}. "
+                "They may be too generic to be useful; consider storing more specific terms."
             )
 
         return warnings, recommendations

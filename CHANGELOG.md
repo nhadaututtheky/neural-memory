@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Quality scorer for Vietnamese**: common Vietnamese causal (`vì`, `do đó`,
+  `dẫn đến`), temporal (`sau khi`, `trước khi`, `trong khi`, `sau đó`) and
+  comparative (`thay vì`, `so với`, `tốt hơn`) markers now count toward
+  cognitive richness, and accented filler (`cảm ơn`, `vâng`, `dạ`, `xong rồi`,
+  `hiểu rồi`) is rejected by the write gate like its unaccented forms (#221).
+- Quality scorer: `error` memories without a root cause or a fix, and
+  `decision` memories without a reason, now get a template hint. Hints only;
+  scores and write-gate decisions are unchanged (#223).
+- **Hub neuron warning in `nmem_health`**: `DiagnosticsEngine` reports an
+  info-level `HUB_NEURONS` warning when a neuron has more than 20 synapses
+  (source or target; DREAM `_hub`, temporal-link and emotion `FELT` synapses
+  excluded) and names the top 5 by degree. Purity score is unchanged (#217).
+
+### Fixed
+
+- **SQLite write worker survives cancelled callers**: a cancelled
+  `execute_write()` future no longer raises `InvalidStateError` inside the
+  worker and kills every later write (#216).
+- API key middleware returned HTTP 500 instead of 403 when the provided key
+  contained non-ASCII characters (`hmac.compare_digest` raised `TypeError` on
+  `str`) (#220).
+- **`/sync/ws` WebSocket always failed**: `require_local_request` is typed as
+  `HTTPConnection`, so FastAPI can inject it on WebSocket routes as well as
+  HTTP routes (#222).
+- `POST /memory/neurons` and `POST /memory/synapses` return 400 instead of an
+  unhandled 500 when a storage constraint is violated (duplicate ID, or a
+  synapse whose source or target neuron does not exist) (#224).
+- **`POST /brain/{id}/merge`**: a snapshot entry missing a required key now
+  returns 400 instead of an unhandled `KeyError` (#225).
+- **Dashboard `/visualize`**: a non-integer or overflowing `limit` returns 400
+  instead of an unhandled 500 (#226).
+- **`nmem_remember` persists the write-time quality score** as
+  `fiber.metadata["_quality_score"]`. Recall already read this key for
+  `confidence_score.content_quality` but nothing wrote it, so every memory
+  scored 5.0. Existing memories keep the default (no backfill) (#219).
+
 ## [4.62.0] — 2026-08-16
 
 ### Breaking
