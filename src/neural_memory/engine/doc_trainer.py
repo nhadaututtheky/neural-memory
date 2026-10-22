@@ -22,6 +22,7 @@ from neural_memory.engine.doc_extractor import (
     extract_to_markdown,
 )
 from neural_memory.engine.encoder import MemoryEncoder
+from neural_memory.storage.write_schedule import run_writes
 from neural_memory.utils.timeutils import utcnow
 
 # Extensions that are already markdown and don't need extraction
@@ -32,6 +33,27 @@ if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
 
 logger = logging.getLogger(__name__)
+
+
+async def _add_synapses(
+    storage: NeuralStorage,
+    synapses: list[Synapse],
+    error_label: str,
+) -> int:
+    """Insert synapses. Postgres overlaps them. SQLite runs them one at a time."""
+
+    async def _one(synapse: Synapse) -> int:
+        try:
+            await storage.add_synapse(synapse)
+        except Exception as exc:
+            logger.warning("%s: %s", error_label, exc)
+            return 0
+        return 1
+
+    if not synapses:
+        return 0
+    counts = await run_writes(storage, [_one(synapse) for synapse in synapses])
+    return sum(counts)
 
 
 @dataclass(frozen=True)
@@ -525,13 +547,11 @@ class DocTrainer:
                     )
                 )
 
-        if synapses_to_add:
-            for s in synapses_to_add:
-                try:
-                    await self._storage.add_synapse(s)
-                    synapse_count += 1
-                except BaseException as e:
-                    logger.warning("Heading hierarchy synapse add failed: %s", e)
+        synapse_count += await _add_synapses(
+            self._storage,
+            synapses_to_add,
+            "Heading hierarchy synapse add failed",
+        )
 
         return synapse_count
 
@@ -586,13 +606,11 @@ class DocTrainer:
                     )
                 )
 
-        if synapses_to_add:
-            for s in synapses_to_add:
-                try:
-                    await self._storage.add_synapse(s)
-                    synapse_count += 1
-                except BaseException as e:
-                    logger.warning("Temporal topology synapse add failed: %s", e)
+        synapse_count += await _add_synapses(
+            self._storage,
+            synapses_to_add,
+            "Temporal topology synapse add failed",
+        )
 
         return synapse_count
 

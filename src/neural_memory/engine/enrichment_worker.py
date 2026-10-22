@@ -13,6 +13,7 @@ from neural_memory.core.enrichment_job import (
     EnrichmentReport,
     EnrichmentStatus,
 )
+from neural_memory.storage.write_schedule import run_writes
 
 logger = logging.getLogger(__name__)
 
@@ -127,9 +128,9 @@ async def process_enrichment_batch(
                     )
                     failed += 1
 
-    # Sequential execution (not asyncio.gather) to avoid SQLite write collisions
-    for j in jobs:
-        await _run_one(j)
+    # Postgres overlaps jobs up to ``concurrency``. SQLite runs them one at
+    # a time; the dialect is also a single writer if a caller gathers.
+    await run_writes(storage, [_run_one(job) for job in jobs])
 
     return EnrichmentReport(
         claimed=len(jobs),

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from neural_memory.mcp.auto_capture import analyze_text_for_memories, empty_capture_hint
 from neural_memory.mcp.constants import MAX_CONTENT_LENGTH
+from neural_memory.storage.write_schedule import run_writes
 
 if TYPE_CHECKING:
     from neural_memory.engine.session_reflection import SessionReflection
@@ -35,6 +36,57 @@ class AutoHandler:
 
     async def get_storage(self) -> NeuralStorage:
         raise NotImplementedError
+
+    async def _save_captured_items(
+        self,
+        items: list[dict[str, Any]],
+        *,
+        tags: list[str],
+        error_label: str,
+    ) -> list[str]:
+        """Encode captured items. Postgres overlaps them. SQLite stays sequential.
+
+        Successful items are recorded on ``_session_memories`` in input order.
+        """
+        if not hasattr(self, "_session_memories"):
+            self._session_memories = []
+        if not items:
+            return []
+
+        try:
+            storage: NeuralStorage | None = await self.get_storage()
+        except Exception:
+            logger.debug("Auto-capture storage unavailable", exc_info=True)
+            storage = None
+
+        bound_tags = list(tags)
+
+        async def _one(item: dict[str, Any]) -> dict[str, Any] | None:
+            try:
+                result = await self._remember(
+                    {
+                        "content": item["content"],
+                        "type": item["type"],
+                        "priority": item.get("priority", 5),
+                        "tags": list(bound_tags),
+                        "_auto_capture": True,
+                    }
+                )
+            except Exception as exc:
+                logger.warning("%s: %s", error_label, exc)
+                return None
+            if "error" in result:
+                return None
+            return item
+
+        saved_items = await run_writes(storage, [_one(item) for item in items])
+        saved_contents: list[str] = []
+        for item in saved_items:
+            if item is None:
+                continue
+            self._session_memories.append(item)
+            saved_contents.append(str(item["content"])[:50])
+        return saved_contents
 
     def _get_session_id(self) -> str:
         """Get current session ID (consistent with recall_handler)."""
@@ -411,29 +463,11 @@ class AutoHandler:
         # Tag with session ID for session-end reflection
         session_tag = f"session:{self._get_session_id()}"
 
-        saved_contents: list[str] = []
-        # Track saved memories for session-end reflection
-        if not hasattr(self, "_session_memories"):
-            self._session_memories = []
-
-        for item in redacted:
-            try:
-                result = await self._remember(
-                    {
-                        "content": item["content"],
-                        "type": item["type"],
-                        "priority": item.get("priority", 5),
-                        "tags": ["emergency_flush", session_tag],
-                        "_auto_capture": True,
-                    }
-                )
-                if "error" not in result:
-                    self._session_memories.append(item)
-                    saved_contents.append(item["content"][:50])
-            except BaseException as e:
-                logger.warning("Emergency flush memory save failed: %s", e)
-
-        return saved_contents
+        return await self._save_captured_items(
+            redacted,
+            tags=["emergency_flush", session_tag],
+            error_label="Emergency flush memory save failed",
+        )
 
     async def _passive_capture(self, text: str) -> None:
         """Silently analyze text and capture high-confidence memories."""
@@ -573,29 +607,11 @@ class AutoHandler:
         # Tag with session ID for session-end reflection
         session_tag = f"session:{self._get_session_id()}"
 
-        saved_contents: list[str] = []
-        # Track saved memories for session-end reflection
-        if not hasattr(self, "_session_memories"):
-            self._session_memories = []
-
-        for item in redacted_eligible:
-            try:
-                result = await self._remember(
-                    {
-                        "content": item["content"],
-                        "type": item["type"],
-                        "priority": item.get("priority", 5),
-                        "tags": [session_tag],
-                        "_auto_capture": True,
-                    }
-                )
-                if "error" not in result:
-                    self._session_memories.append(item)
-                    saved_contents.append(item["content"][:50])
-            except BaseException as e:
-                logger.warning("Auto-capture memory save failed: %s", e)
-
-        return saved_contents
+        return await self._save_captured_items(
+            redacted_eligible,
+            tags=[session_tag],
+            error_label="Auto-capture memory save failed",
+        )
 
     async def _apply_significance(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Score items for significance and adjust priorities.

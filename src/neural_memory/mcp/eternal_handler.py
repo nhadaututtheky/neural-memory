@@ -9,6 +9,7 @@ from neural_memory.core.eternal_context import EternalContext
 from neural_memory.core.memory_types import MemoryType
 from neural_memory.core.trigger_engine import check_triggers
 from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline
+from neural_memory.storage.write_schedule import run_writes
 from neural_memory.utils.timeutils import utcnow
 
 if TYPE_CHECKING:
@@ -17,6 +18,14 @@ if TYPE_CHECKING:
 from neural_memory.mcp.tool_handler_utils import _require_brain_id
 
 logger = logging.getLogger(__name__)
+
+
+async def _delete_project_fact(storage: NeuralStorage, fiber_id: str) -> None:
+    """Drop one old project-context fact. A failure does not stop the rest."""
+    try:
+        await storage.delete_typed_memory(fiber_id)
+    except Exception as exc:
+        logger.warning("Delete old project_context fact failed: %s", exc)
 
 
 class EternalHandler:
@@ -77,11 +86,10 @@ class EternalHandler:
                 memory_type=MemoryType.FACT, tags={"project_context"}, limit=100
             )
             if old_facts:
-                for old in old_facts:
-                    try:
-                        await storage.delete_typed_memory(old.fiber_id)
-                    except BaseException as e:
-                        logger.warning("Delete old project_context fact failed: %s", e)
+                await run_writes(
+                    storage,
+                    [_delete_project_fact(storage, old.fiber_id) for old in old_facts],
+                )
 
             parts: list[str] = []
             if args.get("project_name"):

@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from neural_memory.storage.write_schedule import run_writes
+
 if TYPE_CHECKING:
     from neural_memory.core.fiber import Fiber
     from neural_memory.core.neuron import NeuronState
@@ -15,22 +17,26 @@ logger = logging.getLogger(__name__)
 
 
 async def _gather_count(
+    storage: object,
     coros: list[Any],
     error_label: str,
 ) -> int:
-    """Run coroutines sequentially (serialized), return success count and log failures.
+    """Run writes, return how many succeeded, and log the failures.
 
-    Sequential execution avoids SQLite "cannot commit transaction - SQL statements
-    in progress" errors when multiple writes share the same connection.
+    Postgres overlaps the writes. SQLite runs them one at a time so the
+    single writer connection is not asked to commit from two tasks at once.
     """
-    ok = 0
-    for coro in coros:
+
+    async def _one(coro: Any) -> int:
         try:
             await coro
-            ok += 1
-        except BaseException as e:
-            logger.warning("%s: %s", error_label, e)
-    return ok
+        except Exception as exc:
+            logger.warning("%s: %s", error_label, exc)
+            return 0
+        return 1
+
+    counts = await run_writes(storage, [_one(coro) for coro in coros])
+    return sum(counts)
 
 
 class DeferredWriteQueue:
@@ -88,11 +94,9 @@ class DeferredWriteQueue:
     async def flush(self, storage: NeuralStorage) -> int:
         """Flush all pending writes to storage.
 
-        Writes are serialized (sequential) within each category to avoid
-        SQLite "cannot commit transaction - SQL statements in progress"
-        errors when multiple writes share the same connection.
-        Categories run sequentially (creates before updates) to preserve
-        ordering guarantees.
+        Categories run one after another (creates before updates). Inside a
+        category, Postgres overlaps the writes and SQLite runs them one at
+        a time.
 
         Args:
             storage: Storage backend to write to
@@ -105,6 +109,7 @@ class DeferredWriteQueue:
         # Fiber updates — parallel
         if self._fiber_updates:
             count += await _gather_count(
+                storage,
                 [storage.update_fiber(f) for f in self._fiber_updates],
                 "Deferred fiber update failed",
             )
@@ -112,6 +117,7 @@ class DeferredWriteQueue:
         # Synapse creates — parallel (before updates to avoid update-before-create)
         if self._synapse_creates:
             count += await _gather_count(
+                storage,
                 [storage.add_synapse(s) for s in self._synapse_creates],
                 "Deferred synapse create failed",
             )
@@ -119,6 +125,7 @@ class DeferredWriteQueue:
         # Synapse updates — parallel
         if self._synapse_updates:
             count += await _gather_count(
+                storage,
                 [storage.update_synapse(s) for s in self._synapse_updates],
                 "Deferred synapse update failed",
             )
@@ -126,6 +133,7 @@ class DeferredWriteQueue:
         # Neuron state updates — parallel
         if self._state_updates:
             count += await _gather_count(
+                storage,
                 [storage.update_neuron_state(s) for s in self._state_updates],
                 "Deferred state update failed",
             )
@@ -133,6 +141,7 @@ class DeferredWriteQueue:
         # Co-activation records — parallel
         if self._co_activation_records:
             count += await _gather_count(
+                storage,
                 [
                     storage.record_co_activation(a, b, strength, anchor)
                     for a, b, strength, anchor in self._co_activation_records

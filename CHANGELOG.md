@@ -34,6 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Postgres regains concurrent writes** at the call sites that were
+  serialized for SQLite (`pipeline_steps`, `doc_trainer`, the deferred
+  write queue, auto-capture, eternal project-context deletes, and the
+  enrichment worker). SQLite callers stay one-at-a-time. The dialect
+  queue remains the single writer (#211).
 - **SQLite writes share one worker**: `execute()`, `execute_many()`,
   `execute_script()`, and the row-count helpers now run on the same
   single-writer queue as `execute_write()`. Two commits can no longer

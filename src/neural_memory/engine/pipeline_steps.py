@@ -46,6 +46,7 @@ from neural_memory.extraction.keywords import extract_keywords, extract_weighted
 from neural_memory.extraction.relations import RelationExtractor
 from neural_memory.extraction.sentiment import SentimentExtractor, Valence
 from neural_memory.extraction.temporal import TemporalExtractor
+from neural_memory.storage.write_schedule import run_writes
 from neural_memory.utils.simhash import is_near_duplicate, simhash
 from neural_memory.utils.tag_normalizer import TagNormalizer
 
@@ -55,6 +56,20 @@ if TYPE_CHECKING:
     from neural_memory.storage.base import NeuralStorage
 
 logger = logging.getLogger(__name__)
+
+
+async def _add_synapse(
+    storage: NeuralStorage,
+    synapse: Synapse,
+    step_name: str,
+) -> Synapse | None:
+    """Insert one synapse. A failure is logged and skipped."""
+    try:
+        await storage.add_synapse(synapse)
+    except Exception as exc:
+        logger.warning("Synapse add failed in %s: %s", step_name, exc)
+        return None
+    return synapse
 
 
 # ── Helpers shared across steps ──
@@ -1498,14 +1513,18 @@ class CreateSynapsesStep:
                 )
             )
 
-        # Batch add all synapses in parallel (serialized via storage.execute_write)
+        # Independent inserts. Postgres overlaps them; SQLite stays sequential.
         if synapses_to_add:
-            for synapse in synapses_to_add:
-                try:
-                    await storage.add_synapse(synapse)
+            added = await run_writes(
+                storage,
+                [
+                    _add_synapse(storage, synapse, "CreateSynapsesStep")
+                    for synapse in synapses_to_add
+                ],
+            )
+            for synapse in added:
+                if synapse is not None:
                     ctx.synapses_created.append(synapse)
-                except BaseException as e:
-                    logger.warning("Synapse add failed in CreateSynapsesStep: %s", e)
 
         # Record deferred entity refs (lazy promotion B7)
         deferred_refs = getattr(ctx, "deferred_entity_refs", [])
@@ -1592,12 +1611,13 @@ class CoOccurrenceStep:
                 )
 
         if synapses_to_add:
-            for synapse in synapses_to_add:
-                try:
-                    await storage.add_synapse(synapse)
+            added = await run_writes(
+                storage,
+                [_add_synapse(storage, synapse, "co-occurrence") for synapse in synapses_to_add],
+            )
+            for synapse in added:
+                if synapse is not None:
                     ctx.synapses_created.append(synapse)
-                except BaseException as e:
-                    logger.warning("Co-occurrence synapse add failed: %s", e)
 
         return ctx
 
