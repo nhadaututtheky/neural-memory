@@ -237,7 +237,7 @@ Automatically extracts: 1 decision, 1 fact, 1 TODO.
 - **Temporal reasoning** — Causal chain traversal, event sequences, temporal range queries
 - **Brain versioning** — Snapshot, rollback, diff brain state
 - **Brain transplant** — Transfer filtered knowledge between brains
-- **Vietnamese + English** — Full bilingual support for extraction and sentiment
+- **Chinese + Vietnamese + English** — Extraction and auto-save triggers across all three (sentiment lexicons remain English + Vietnamese); Japanese and Korean return an explicit unsupported-language hint instead of a silent empty result
 
 ## Depth Levels
 

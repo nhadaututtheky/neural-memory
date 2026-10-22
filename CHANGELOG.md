@@ -21,6 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   info-level `HUB_NEURONS` warning when a neuron has more than 20 synapses
   (source or target; DREAM `_hub`, temporal-link and emotion `FELT` synapses
   excluded) and names the top 5 by degree. Purity score is unchanged (#217).
+- **Chinese auto-capture**: pattern groups, auto-save triggers, and hints now
+  cover Chinese alongside English and Vietnamese. Single-character subjects
+  (`我`, `别`) do not match inside a longer Han word, and a few kana inside a
+  Han sentence stay Chinese (#209).
+- **`nmem remember --file <path>`**: read content from a UTF-8 file, bypassing
+  shell pipe encoding. Content already damaged by a mis-encoded pipe
+  (question-mark floods, literal `\uXXXX` escapes, U+FFFD) is rejected unless
+  `--force` is set (#209).
+- **`nmem list --full`**: return complete content instead of the default
+  summary (#209).
 
 ### Fixed
 
@@ -44,6 +54,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fiber.metadata["_quality_score"]`. Recall already read this key for
   `confidence_score.content_quality` but nothing wrote it, so every memory
   scored 5.0. Existing memories keep the default (no backfill) (#219).
+- **`nmem forget --hard` could never delete anything**: the CLI never passed
+  `confirm`, so every hard delete returned `pending_confirmation` and the CLI
+  printed that as success. `--force` confirms the delete, and an unmet gate is
+  now a non-zero exit (#209).
+
+### Changed
+
+- **Empty auto-capture results explain themselves**: when detection finds
+  nothing, the response carries a `hint`. Chinese text names its trigger words,
+  a too-short input reports the length floor, and Japanese/Korean are reported
+  as unsupported (#209).
 
 ## [4.62.0] — 2026-08-16
 

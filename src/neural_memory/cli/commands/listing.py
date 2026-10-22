@@ -13,6 +13,22 @@ from neural_memory.safety.freshness import evaluate_freshness, format_age
 
 logger = logging.getLogger(__name__)
 
+# Truncation width for list summaries — --full returns stored content verbatim
+_SUMMARY_CHARS = 100
+
+
+def _summarize(content: str, *, full: bool) -> str:
+    """Return stored content as-is for ``--full``, else a truncated summary.
+
+    Truncation used to be unconditional, so a script reading --json could not
+    tell a complete entry from a clipped one.
+    """
+    if not content:
+        return ""
+    if full or len(content) <= _SUMMARY_CHARS:
+        return content
+    return content[:_SUMMARY_CHARS] + "..."
+
 
 def list_memories(
     memory_type: Annotated[
@@ -36,9 +52,16 @@ def list_memories(
         typer.Option("--include-expired", help="Include expired memories in results"),
     ] = False,
     limit: Annotated[int, typer.Option("--limit", "-l", help="Maximum number of results")] = 20,
+    full: Annotated[
+        bool,
+        typer.Option("--full", help="Return full content instead of a 100-char summary"),
+    ] = False,
     json_output: Annotated[bool, typer.Option("--json", "-j", help="Output as JSON")] = False,
 ) -> None:
     """List memories with filtering by type, priority, project, and status.
+
+    Content is summarised to 100 characters by default; pass --full (or use
+    ``nmem show <id>``) when the complete text matters.
 
     Memory types: fact, decision, preference, todo, insight, context,
                   instruction, error, workflow, reference
@@ -101,7 +124,7 @@ def list_memories(
                         "fiber_id": tm.fiber_id,
                         "type": tm.memory_type.value,
                         "priority": tm.priority.name.lower(),
-                        "content": content[:100] + "..." if len(content) > 100 else content,
+                        "content": _summarize(content, full=full),
                         "expired_days_ago": abs(tm.days_until_expiry)
                         if tm.days_until_expiry
                         else 0,
@@ -142,9 +165,7 @@ def list_memories(
                         "fiber_id": fiber.id,
                         "type": "unknown",
                         "priority": "normal",
-                        "content": content[:100] + "..."
-                        if content and len(content) > 100
-                        else content or "",
+                        "content": _summarize(content, full=full),
                         "age": format_age(freshness.age_days),
                         "created_at": fiber.created_at.isoformat(),
                     }
@@ -180,7 +201,7 @@ def list_memories(
                 "fiber_id": tm.fiber_id,
                 "type": tm.memory_type.value,
                 "priority": tm.priority.name.lower(),
-                "content": content[:100] + "..." if len(content) > 100 else content,
+                "content": _summarize(content, full=full),
                 "age": format_age(freshness.age_days),
                 "expires": expiry_info,
                 "verified": tm.provenance.verified,
@@ -256,9 +277,11 @@ def list_memories(
 
             # Build line
             type_badge = f"[{mem['type'][:4].upper()}]"
-            content = mem.get("content", "")[:60]
-            if len(mem.get("content", "")) > 60:
-                content += "..."
+            raw_content = mem.get("content", "")
+            if full or len(raw_content) <= 60:
+                content = raw_content
+            else:
+                content = raw_content[:60] + "..."
 
             typer.echo(f"{priority_ind} ", nl=False)
             typer.secho(type_badge, fg=type_color, nl=False)

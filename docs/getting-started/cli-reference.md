@@ -122,11 +122,12 @@ nmem remember [OPTIONS]
 | `--expires / -e` | integer | No | — | Days until this memory expires |
 | `--project / -P` | text | No | — | Associate with a project (by name) |
 | `--shared / -S` | boolean | No | `False` | Use shared/remote storage for this command |
-| `--force / -f` | boolean | No | `False` | Store even if sensitive content detected |
+| `--force / -f` | boolean | No | `False` | Store even if sensitive content is detected or encoding damage is suspected |
 | `--redact / -r` | boolean | No | `False` | Auto-redact sensitive content before storing |
 | `--timestamp / --at` | text | No | — | ISO datetime of original event (e.g. '2026-03-02T08:00:00'). Defaults to now. |
 | `--ephemeral` | boolean | No | `False` | Session-scoped memory: auto-expires after 24h, never synced |
 | `--stdin` | boolean | No | `False` | Read content from stdin (safe for shell-special characters) |
+| `--file` | text | No | — | Read content from a UTF-8 file (bypasses shell pipe encoding entirely) |
 | `--json / -j` | boolean | No | `False` | Output as JSON |
 
 ### `nmem recall`
@@ -981,6 +982,7 @@ nmem list [OPTIONS]
 | `--expired / -e` | boolean | No | `False` | Show only expired memories |
 | `--include-expired` | boolean | No | `False` | Include expired memories in results |
 | `--limit / -l` | integer | No | `20` | Maximum number of results |
+| `--full` | boolean | No | `False` | Return full content instead of a 100-char summary |
 | `--json / -j` | boolean | No | `False` | Output as JSON |
 
 ### `nmem migrate`
@@ -1047,6 +1049,7 @@ nmem forget [OPTIONS]
 | `memory_id` | text | Yes | — | (positional argument) |
 | `--hard` | boolean | No | `False` | Permanent deletion (cascade cleanup). Default is soft delete (expire now). |
 | `--reason / -r` | text | No | `` | Reason for forgetting (logged for audit) |
+| `--force / -f` | boolean | No | `False` | Confirm permanent deletion when using --hard |
 | `--shared / -S` | boolean | No | `False` | Use shared/remote storage |
 | `--json / -j` | boolean | No | `False` | Output as JSON |
 
