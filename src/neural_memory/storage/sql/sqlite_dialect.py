@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar, cast
 
 import aiosqlite
 
@@ -17,9 +17,11 @@ from neural_memory.utils.cjk import cjk_spaced
 
 logger = logging.getLogger(__name__)
 
-# Type aliases for write queue
-_WriteQueueItem = tuple[str, tuple[Any, ...], asyncio.Future[None]]
-_SentinelItem = tuple[None, None, None]
+_T = TypeVar("_T")
+# One queued write: the operation plus the caller's future.
+# None on the queue is the sentinel that stops the worker.
+_WriteOp = Callable[[aiosqlite.Connection], Awaitable[Any]]
+_WriteItem = tuple[_WriteOp, asyncio.Future[Any]]
 
 
 class SQLiteDialect(Dialect):
@@ -27,6 +29,10 @@ class SQLiteDialect(Dialect):
 
     Manages a single write connection + optional ReadPool for parallel reads.
     Handles commit after each write, FTS5 virtual tables, and WAL mode.
+
+    Writes go through one worker so two commits cannot overlap on that
+    connection. ``transaction()`` holds the connection until it commits
+    or rolls back, and a queued write cannot join that transaction.
     """
 
     def __init__(
@@ -41,9 +47,13 @@ class SQLiteDialect(Dialect):
         self._pool_size = pool_size
         self._has_fts: bool = False
         self._in_transaction: bool = False
+        # Held for the whole transaction() body. The worker takes the same
+        # lock per item, so a queued write waits out an open transaction.
+        self._write_lock = asyncio.Lock()
+        self._txn_task: asyncio.Task[Any] | None = None
 
         # Write serialization queue (single writer for SQLite)
-        self._write_queue: asyncio.Queue[_WriteQueueItem | _SentinelItem] | None = None
+        self._write_queue: asyncio.Queue[_WriteItem | None] | None = None
         self._write_task: asyncio.Task[None] | None = None
 
     # ------------------------------------------------------------------
@@ -110,7 +120,7 @@ class SQLiteDialect(Dialect):
     async def close(self) -> None:
         # Stop write worker
         if self._write_task is not None and self._write_queue is not None:
-            await self._write_queue.put((None, None, None))  # type: ignore[arg-type]
+            await self._write_queue.put(None)
             await self._write_task
             self._write_task = None
             self._write_queue = None
@@ -153,59 +163,131 @@ class SQLiteDialect(Dialect):
 
         while True:
             item = await self._write_queue.get()
-            sql, params, fut = item
-
-            # Sentinel to stop the worker
-            if sql is None:
+            if item is None:
                 self._write_queue.task_done()
                 break
 
-            # params should never be None for actual writes (sentinel has sql=None)
-            write_params = params if params is not None else ()
-
+            op, fut = item
             try:
-                await self._conn.execute(sql, tuple(write_params))
-                await self._conn.commit()
-                # A cancelled caller marks the future done. set_result would
-                # raise InvalidStateError and kill the worker (#216).
-                if fut is not None and not fut.done():
-                    fut.set_result(None)
-            except Exception as e:
-                if fut is not None and not fut.done():
-                    fut.set_exception(e)
-                logger.warning("Write worker error: %s", e)
+                async with self._write_lock:
+                    try:
+                        result = await op(self._conn)
+                    except Exception as exc:
+                        await self._rollback_if_open(self._conn)
+                        self._reject_write(fut, exc)
+                    else:
+                        self._resolve_write(fut, result)
             finally:
                 self._write_queue.task_done()
 
-    async def execute_write(self, sql: str, params: Sequence[Any] = ()) -> None:
-        """Execute a write statement through the serial write queue.
+    @staticmethod
+    def _resolve_write(fut: asyncio.Future[Any], result: Any) -> None:
+        """Deliver a write result unless the caller already gave up.
 
-        This ensures only one write is in flight at a time on the SQLite
-        connection, preventing "cannot commit transaction - SQL statements
-        in progress" errors when multiple coroutines call execute() concurrently.
-
-        For reads, use fetch_all/fetch_one which use the read pool.
-        For explicit transactions, use the transaction() context manager.
+        Cancelling the caller cancels this future. ``set_result`` would then
+        raise ``InvalidStateError`` and kill the worker (#216).
         """
-        if self._write_queue is None:
-            # Fallback for uninitialized or during shutdown — direct execute
-            await self.execute(sql, params)
+        if fut.done():
+            return
+        try:
+            fut.set_result(result)
+        except asyncio.InvalidStateError:
             return
 
-        fut = asyncio.get_event_loop().create_future()
-        await self._write_queue.put((sql, tuple(params), fut))
-        await fut
+    @staticmethod
+    def _reject_write(fut: asyncio.Future[Any], exc: BaseException) -> None:
+        """Deliver a write failure. Log it when nobody is waiting anymore."""
+        if not fut.done():
+            try:
+                fut.set_exception(exc)
+            except asyncio.InvalidStateError:
+                logger.warning("SQLite write failed after the caller went away: %s", exc)
+            return
+        logger.warning("SQLite write failed after the caller went away: %s", exc)
+
+    async def _rollback_if_open(self, conn: aiosqlite.Connection) -> None:
+        """Roll back a failed write so the next statement sees a clean connection."""
+        if not conn.in_transaction:
+            return
+        try:
+            await conn.rollback()
+        except Exception:
+            logger.warning("SQLite rollback failed", exc_info=True)
+
+    async def _rollback_despite_cancel(self, conn: aiosqlite.Connection) -> None:
+        """Roll back even when this task is already cancelled.
+
+        A cancelled task raises ``CancelledError`` at the next await, so the
+        rollback itself would be skipped and the connection left inside the
+        transaction. Clear the pending cancel for that await, then put it back.
+        """
+        current = asyncio.current_task()
+        pending = 0
+        if current is not None:
+            while current.cancelling():
+                current.uncancel()
+                pending += 1
+        try:
+            await self._rollback_if_open(conn)
+        finally:
+            if current is not None:
+                for _ in range(pending):
+                    current.cancel()
+
+    async def _dispatch(
+        self,
+        op: Callable[[aiosqlite.Connection], Awaitable[_T]],
+    ) -> _T:
+        """Run ``op`` on the writer connection, serialized with every other write.
+
+        Inside ``transaction()`` the caller already holds the write lock, so
+        the statement runs here directly. Queueing it would wait for the
+        worker, and the worker would wait for the lock.
+        """
+        # ``current_task()`` is None outside a Task. Treating that as the
+        # transaction owner would skip the queue whenever ``_txn_task`` is
+        # also None.
+        current = asyncio.current_task()
+        owns_transaction = current is not None and self._txn_task is current
+        if owns_transaction or self._write_queue is None:
+            return await op(self._ensure_conn())
+        return await self._submit(op)
+
+    async def _submit(
+        self,
+        op: Callable[[aiosqlite.Connection], Awaitable[_T]],
+    ) -> _T:
+        assert self._write_queue is not None
+        fut: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
+        await self._write_queue.put((op, fut))
+        return cast("_T", await fut)
+
+    async def _commit_unless_txn(self, conn: aiosqlite.Connection) -> None:
+        if not self._in_transaction:
+            await conn.commit()
+
+    async def execute_write(self, sql: str, params: Sequence[Any] = ()) -> None:
+        """Execute one write through the same queue as ``execute``.
+
+        Kept for callers that only need a statement and a commit. Reads stay
+        on ``fetch_all`` / ``fetch_one``. Explicit transactions use
+        ``transaction()``.
+        """
+        await self.execute(sql, params)
 
     # ------------------------------------------------------------------
     # Query execution
     # ------------------------------------------------------------------
 
     async def execute(self, sql: str, params: Sequence[Any] = ()) -> str:
-        conn = self._ensure_conn()
-        await conn.execute(sql, tuple(params))
-        if not self._in_transaction:
-            await conn.commit()
-        return ""
+        bound = tuple(params)
+
+        async def op(conn: aiosqlite.Connection) -> str:
+            await conn.execute(sql, bound)
+            await self._commit_unless_txn(conn)
+            return ""
+
+        return await self._dispatch(op)
 
     async def fetch_all(self, sql: str, params: Sequence[Any] = ()) -> list[dict[str, Any]]:
         async with self._read_connection() as conn:
@@ -226,39 +308,57 @@ class SQLiteDialect(Dialect):
                 return dict(zip(columns, row, strict=False))
 
     async def execute_many(self, sql: str, args_list: Sequence[Sequence[Any]]) -> None:
-        conn = self._ensure_conn()
-        await conn.executemany(sql, [tuple(a) for a in args_list])
-        if not self._in_transaction:
-            await conn.commit()
+        # Snapshot the rows so a caller mutating the list cannot change a
+        # write that is already queued.
+        bound_rows = tuple(tuple(row) for row in args_list)
+
+        async def op(conn: aiosqlite.Connection) -> None:
+            await conn.executemany(sql, bound_rows)
+            await self._commit_unless_txn(conn)
+
+        await self._dispatch(op)
 
     async def execute_script(self, sql: str) -> None:
-        conn = self._ensure_conn()
-        await conn.executescript(sql)
+        async def op(conn: aiosqlite.Connection) -> None:
+            # executescript commits any pending transaction itself.
+            await conn.executescript(sql)
+
+        await self._dispatch(op)
 
     async def execute_count(self, sql: str, params: Sequence[Any] = ()) -> int:
-        conn = self._ensure_conn()
-        cursor = await conn.execute(sql, tuple(params))
-        if not self._in_transaction:
-            await conn.commit()
-        return cursor.rowcount
+        bound = tuple(params)
+
+        async def op(conn: aiosqlite.Connection) -> int:
+            cursor = await conn.execute(sql, bound)
+            await self._commit_unless_txn(conn)
+            return cursor.rowcount
+
+        return await self._dispatch(op)
 
     async def execute_returning_count(self, sql: str, params: Sequence[Any] = ()) -> int:
-        conn = self._ensure_conn()
-        await conn.execute(sql, tuple(params))
-        if not self._in_transaction:
-            await conn.commit()
-        cursor = await conn.execute("SELECT changes() as cnt", ())
-        row = await cursor.fetchone()
-        return row[0] if row else 0
+        bound = tuple(params)
+
+        async def op(conn: aiosqlite.Connection) -> int:
+            await conn.execute(sql, bound)
+            await self._commit_unless_txn(conn)
+            # changes() must run before another writer resets it.
+            cursor = await conn.execute("SELECT changes() as cnt", ())
+            row = await cursor.fetchone()
+            return row[0] if row else 0
+
+        return await self._dispatch(op)
 
     async def insert_returning_id(self, sql: str, params: Sequence[Any] = ()) -> int:
-        conn = self._ensure_conn()
-        async with conn.execute(sql, tuple(params)) as cursor:
-            row = await cursor.fetchone()
-            inserted_id = int(row[0]) if row and row[0] is not None else 0
-        if not self._in_transaction:
-            await conn.commit()
-        return inserted_id
+        bound = tuple(params)
+
+        async def op(conn: aiosqlite.Connection) -> int:
+            async with conn.execute(sql, bound) as cursor:
+                row = await cursor.fetchone()
+                inserted_id = int(row[0]) if row and row[0] is not None else 0
+            await self._commit_unless_txn(conn)
+            return inserted_id
+
+        return await self._dispatch(op)
 
     # ------------------------------------------------------------------
     # Placeholder generation
@@ -346,21 +446,35 @@ class SQLiteDialect(Dialect):
     async def transaction(self) -> AsyncIterator[None]:
         """Atomic transaction for SQLite.
 
-        Sets ``_in_transaction`` so that individual execute/execute_many
-        calls skip their per-statement ``conn.commit()``. The commit (or
-        rollback) happens here at the end of the block.
+        Holds the write lock for the whole block so queued writes wait
+        outside it. Statements issued on this task skip their own commit.
+        Do not wait, inside the block, on another task that writes: that
+        task cannot start until this block releases the lock.
+
+        Nested transactions on the same task are rejected. A second
+        ``BEGIN`` would deadlock on the lock.
         """
+        current = asyncio.current_task()
+        if current is not None and self._txn_task is current:
+            raise RuntimeError("SQLiteDialect transactions cannot be nested")
+
         conn = self._ensure_conn()
-        await conn.execute("BEGIN IMMEDIATE")
-        self._in_transaction = True
+        await self._write_lock.acquire()
+        self._txn_task = asyncio.current_task()
         try:
-            yield
-            await conn.commit()
-        except Exception:
-            await conn.rollback()
-            raise
+            await conn.execute("BEGIN IMMEDIATE")
+            self._in_transaction = True
+            try:
+                yield
+                await conn.commit()
+            except BaseException:
+                await self._rollback_despite_cancel(conn)
+                raise
+            finally:
+                self._in_transaction = False
         finally:
-            self._in_transaction = False
+            self._txn_task = None
+            self._write_lock.release()
 
     def auto_increment_pk(self) -> str:
         return "INTEGER PRIMARY KEY AUTOINCREMENT"

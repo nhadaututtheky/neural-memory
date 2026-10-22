@@ -34,6 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **SQLite writes share one worker**: `execute()`, `execute_many()`,
+  `execute_script()`, and the row-count helpers now run on the same
+  single-writer queue as `execute_write()`. Two commits can no longer
+  overlap on the one SQLite connection. An open `transaction()` holds
+  that connection until commit or rollback, so a queued write cannot
+  join it.
 - **SQLite write worker survives cancelled callers**: a cancelled
   `execute_write()` future no longer raises `InvalidStateError` inside the
   worker and kills every later write (#216).
