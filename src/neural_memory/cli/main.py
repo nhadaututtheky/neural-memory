@@ -144,8 +144,23 @@ migrate.register(app)
 watch.register(app)
 
 
+def _prefer_utf8_stdio() -> None:
+    """Print CJK on a non-UTF-8 Windows console instead of raising."""
+    if sys.platform != "win32":
+        return
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if not callable(reconfigure):
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError, ValueError):
+            continue
+
+
 def main() -> None:
     """Main entry point."""
+    _prefer_utf8_stdio()
     app()
 
 

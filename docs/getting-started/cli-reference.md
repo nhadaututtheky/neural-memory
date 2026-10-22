@@ -130,6 +130,11 @@ nmem remember [OPTIONS]
 | `--file` | text | No | — | Read content from a UTF-8 file (bypasses shell pipe encoding entirely) |
 | `--json / -j` | boolean | No | `False` | Output as JSON |
 
+With no argument, a pipe is the content: `echo "决定：用 Redis" | nmem remember`.
+The bytes are decoded as UTF-8 when they are valid UTF-8, otherwise with the
+Windows OEM code page. `--file` still reads a UTF-8 file. PowerShell 5.1 and
+CP1252 replace CJK with `?` before the process starts; use `--file` there.
+
 ### `nmem recall`
 
 Query memories with intelligent routing (query type auto-detected).

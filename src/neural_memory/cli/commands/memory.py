@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
@@ -12,6 +13,7 @@ if TYPE_CHECKING:
 import typer
 
 from neural_memory.cli._helpers import get_config, get_storage, output_result, run_async
+from neural_memory.cli.pipe_text import read_stdin_text
 from neural_memory.core.memory_types import (
     DEFAULT_EXPIRY_DAYS,
     MemoryType,
@@ -42,8 +44,8 @@ from neural_memory.utils.timeutils import utcnow
 def _read_content_file(file_path: str) -> str:
     """Read memory content from a UTF-8 file, with explicit failure modes.
 
-    Reading a file sidesteps the shell pipe entirely, which is the only fully
-    reliable way to inject non-ASCII text on Windows.
+    Reading a file sidesteps the shell pipe entirely. Use it when the shell
+    code page cannot represent the characters (PowerShell 5.1, CP1252).
     """
     path = Path(file_path)
     try:
@@ -60,6 +62,44 @@ def _read_content_file(file_path: str) -> str:
     except OSError as exc:
         typer.secho(f"Error: cannot read {file_path}: {exc}", fg=typer.colors.RED, err=True)
     raise typer.Exit(1)
+
+
+def _stdin_is_pipe() -> bool:
+    """Return whether stdin is redirected. A console must not block on read."""
+    try:
+        return not sys.stdin.isatty()
+    except (AttributeError, OSError, ValueError):
+        return False
+
+
+def _resolve_content(*, content: str, stdin: bool, file_path: str | None) -> str:
+    """Pick the memory text from the argument, a pipe, or ``--file``.
+
+    A bare ``nmem remember`` reads a pipe so ``echo ... | nmem remember``
+    works. An argument wins over an unread pipe. ``--stdin`` forces the
+    pipe even when an argument was passed. ``--file`` stays UTF-8 on disk.
+    """
+    if file_path and stdin:
+        typer.secho(
+            "Error: use either --file or --stdin, not both.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    if file_path and content:
+        typer.secho(
+            "Error: pass content either as an argument or via --file, not both.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    if file_path:
+        return _read_content_file(file_path)
+    if stdin or (not content and _stdin_is_pipe()):
+        return read_stdin_text()
+    return content
 
 
 def _validate_content(
@@ -214,7 +254,10 @@ def remember(
     ] = False,
     stdin: Annotated[
         bool,
-        typer.Option("--stdin", help="Read content from stdin (safe for shell-special characters)"),
+        typer.Option(
+            "--stdin",
+            help="Read content from stdin even when an argument is also present",
+        ),
     ] = False,
     file_path: Annotated[
         str | None,
@@ -234,38 +277,17 @@ def remember(
         nmem remember "API_KEY=xxx" --redact
         nmem remember "Meeting at 8am" --timestamp "2026-03-02T08:00:00"
         nmem remember "Debug note" --ephemeral
-        echo "content with backticks" | nmem remember --stdin --type context
+        echo "决定用 Redis" | nmem remember
         nmem remember --file note.txt --type context
 
-    On Windows prefer --file over --stdin: PowerShell 5.1 does not pipe non-UTF-8
-    text by default and silently replaces CJK characters with "?".
+    A pipe is decoded as UTF-8 when the bytes are valid UTF-8, otherwise
+    with the Windows OEM code page. PowerShell 5.1 pipes ASCII and replaces
+    CJK with "?". CP1252 cannot represent CJK either. Use --file for those.
     """
-    import sys
-
-    if file_path and stdin:
-        typer.secho(
-            "Error: use either --file or --stdin, not both.",
-            fg=typer.colors.RED,
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    if file_path and content:
-        typer.secho(
-            "Error: pass content either as an argument or via --file, not both.",
-            fg=typer.colors.RED,
-            err=True,
-        )
-        raise typer.Exit(1)
-
-    if file_path:
-        content = _read_content_file(file_path)
-
-    if stdin:
-        content = sys.stdin.read().strip()
+    content = _resolve_content(content=content, stdin=stdin, file_path=file_path)
     if not content:
         typer.secho(
-            "Error: content is required (pass as argument, or use --stdin/--file).",
+            "Error: content is required (pass as argument, pipe it in, or use --file).",
             fg=typer.colors.RED,
             err=True,
         )

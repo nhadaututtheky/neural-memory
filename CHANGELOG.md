@@ -38,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Windows pipes keep CJK when the bytes are still there**: `nmem remember`
+  with no argument reads a pipe and decodes UTF-8, then the OEM code page
+  (CP936, CP949, and the rest). `--file` is unchanged. A shell that already
+  replaced the characters with `?` (PowerShell 5.1 ASCII, CP1252) cannot be
+  repaired (#213).
 - **Postgres regains concurrent writes** at the call sites that were
   serialized for SQLite (`pipeline_steps`, `doc_trainer`, the deferred
   write queue, auto-capture, eternal project-context deletes, and the

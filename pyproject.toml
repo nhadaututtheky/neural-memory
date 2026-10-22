@@ -295,6 +295,7 @@ ignore = [
 "scripts/**" = ["T201", "S603", "S105", "ERA001", "E741", "SIM110", "SIM212", "B905", "F541", "N806", "C401"]  # CLI scripts: print, subprocess, ANSI codes, style
 "src/neural_memory/core/trigger_engine.py" = ["RUF001"]  # Chinese trigger patterns use fullwidth punctuation
 "tests/unit/test_capture_policy.py" = ["RUF001"]  # Chinese fixtures use fullwidth punctuation
+"tests/unit/test_pipe_text.py" = ["RUF001"]  # CJK fixtures use fullwidth punctuation
 "tests/unit/test_chinese_capture.py" = ["RUF001"]  # Chinese fixtures use fullwidth punctuation
 "tests/unit/test_silent_failure_metrics.py" = ["RUF001"]  # CJK fixtures use fullwidth punctuation
 
