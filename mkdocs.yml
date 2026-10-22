@@ -106,6 +106,7 @@ nav:
     - Learning Habits: guides/learning-habits.md
     - Safety & Security: guides/safety.md
     - Observability: guides/observability.md
+    - Adding a capture language: guides/adding-language-support.md
     - Docs Chatbot: guides/docs-chatbot.md
   - API Reference:
     - MCP Tools: api/mcp-tools.md

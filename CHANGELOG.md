@@ -76,6 +76,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Capture policies**: English, Vietnamese, and Chinese auto-capture
+  patterns now live on `CapturePolicy` (`mcp/capture_policy.py`).
+  Detection still runs every registered policy, so a mixed sentence
+  keeps the same matches. A new language is one subclass plus
+  `register_policy`. Japanese and Korean stay unsupported (#212).
 - **Empty auto-capture results explain themselves**: when detection finds
   nothing, the response carries a `hint`. Chinese text names its trigger words,
   a too-short input reports the length floor, and Japanese/Korean are reported

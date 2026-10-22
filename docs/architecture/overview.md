@@ -333,7 +333,8 @@ src/neural_memory/
 ├── mcp/
 │   ├── server.py              # MCP server implementation
 │   ├── tool_schemas.py        # MCP tool definitions
-│   ├── auto_capture.py        # Pattern-based memory detection
+│   ├── auto_capture.py        # Runs every CapturePolicy, then dedups
+│   ├── capture_policy.py      # English, Vietnamese, and Chinese policies
 │   ├── db_train_handler.py       # Database schema training handler
 │   ├── alert_handler.py          # Proactive alerts lifecycle
 │   └── prompt.py              # System prompts
