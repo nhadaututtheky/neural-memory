@@ -8,6 +8,7 @@ import re
 from typing import Any
 
 from neural_memory.extraction.keywords import STOP_WORDS_VI
+from neural_memory.utils.metrics import record_empty_capture
 from neural_memory.utils.simhash import is_near_duplicate, simhash
 
 logger = logging.getLogger(__name__)
@@ -220,6 +221,32 @@ def _cjk_script(text: str) -> str | None:
     return None
 
 
+def classify_empty_capture(text: str) -> tuple[str, str]:
+    """Return ``(reason, language)`` for an empty detection.
+
+    ``reason`` is ``too_short``, ``cjk_unsupported``, or ``no_trigger``.
+    ``language`` is ``zh``, ``ja``, ``ko``, ``vi``, or ``en``.
+    """
+    stripped = text.strip()
+    script = _cjk_script(stripped)
+    if script == "chinese":
+        language = "zh"
+    elif script == "japanese":
+        language = "ja"
+    elif script == "korean":
+        language = "ko"
+    elif _is_vietnamese_text(stripped):
+        language = "vi"
+    else:
+        language = "en"
+    min_len = _CJK_MIN_TEXT_LENGTH if script == "chinese" else _MIN_TEXT_LENGTH
+    if len(stripped) < min_len:
+        return "too_short", language
+    if script in {"japanese", "korean"}:
+        return "cjk_unsupported", language
+    return "no_trigger", language
+
+
 def empty_capture_hint(text: str) -> str:
     """Explain an empty detection result.
 
@@ -228,27 +255,31 @@ def empty_capture_hint(text: str) -> str:
     engine that never understood their text — the failure is silent. A too
     short input is reported as such, so the advice does not wrongly send the
     user hunting for a trigger word when the text never reached the detector.
+
+    Each call records one empty-capture sample. Callers use this only when
+    detection found nothing.
     """
+    reason, language = classify_empty_capture(text)
+    record_empty_capture(reason, language)
     stripped = text.strip()
-    script = _cjk_script(stripped)
-    min_len = _CJK_MIN_TEXT_LENGTH if script == "chinese" else _MIN_TEXT_LENGTH
-    if len(stripped) < min_len:
+    min_len = _CJK_MIN_TEXT_LENGTH if language == "zh" else _MIN_TEXT_LENGTH
+    if reason == "too_short":
         return (
             f"No patterns matched: the input is {len(stripped)} characters, below the "
             f"{min_len}-character minimum that detection requires. "
             "Add more context and try again."
         )
-    if script == "japanese":
+    if language == "ja":
         return (
             "No patterns matched. Japanese text is not yet supported by the "
             "extractor (patterns cover English, Vietnamese, and Chinese)."
         )
-    if script == "korean":
+    if language == "ko":
         return (
             "No patterns matched. Korean text is not yet supported by the "
             "extractor (patterns cover English, Vietnamese, and Chinese)."
         )
-    if script == "chinese":
+    if language == "zh":
         return (
             "No patterns matched. Chinese is supported, but detection needs an "
             "explicit trigger word: 决定/选定 (decision), 待办/下一步 (todo), "

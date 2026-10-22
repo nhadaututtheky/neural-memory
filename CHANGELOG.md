@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Prometheus metrics for silent failures**: `GET /metrics` exposes SQLite
+  write latency and collision count, CLI encoding-damage rejections, and
+  empty auto-capture reasons. Counters no-op without the `server` extra.
+  A Grafana dashboard and a collision alert live in `docs/grafana/` (#214).
 - **Quality scorer for Vietnamese**: common Vietnamese causal (`vì`, `do đó`,
   `dẫn đến`), temporal (`sau khi`, `trước khi`, `trong khi`, `sau đó`) and
   comparative (`thay vì`, `so với`, `tốt hơn`) markers now count toward

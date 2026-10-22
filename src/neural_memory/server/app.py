@@ -817,6 +817,14 @@ def create_app(
             )
         return ReadyResponse(ready=True, detail="ok")
 
+    @app.get("/metrics", tags=["health"])
+    async def prometheus_metrics() -> Response:
+        """Expose silent-failure counters for a local Prometheus scrape."""
+        from neural_memory.utils.metrics import render_metrics
+
+        body, content_type = render_metrics()
+        return Response(content=body, media_type=content_type)
+
     # Root endpoint
     @app.get("/", tags=["dashboard"])
     async def root() -> RedirectResponse:

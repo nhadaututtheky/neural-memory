@@ -1,0 +1,13 @@
+groups:
+  - name: neural-memory
+    rules:
+      - alert: NeuralMemorySQLiteWriteCollision
+        expr: increase(neural_memory_sqlite_write_collision_total[5m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: SQLite writes overlapped on the single-writer connection
+          description: >
+            neural_memory_sqlite_write_collision_total increased during the
+            last 5 minutes. The SQLite queue keeps this at zero. An increase
+            means a commit collision reached the driver.

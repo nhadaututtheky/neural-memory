@@ -32,6 +32,15 @@ Check server health.
 }
 ```
 
+### Metrics
+
+#### GET /metrics
+
+Prometheus text for silent-failure counters: SQLite write latency and
+collisions, CLI encoding rejections, and empty auto-capture. Same access as
+`/health`: no API key, and scrapes do not consume the rate-limit budget.
+The series contain counts only. See [Observability](../guides/observability.md).
+
 ### Root
 
 #### GET /

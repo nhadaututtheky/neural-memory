@@ -23,7 +23,7 @@ from neural_memory.engine.encoder import MemoryEncoder
 from neural_memory.engine.retrieval import DepthLevel, ReflexPipeline
 from neural_memory.extraction.parser import QueryParser
 from neural_memory.extraction.router import QueryRouter
-from neural_memory.safety.capture_hygiene import detect_encoding_damage
+from neural_memory.safety.capture_hygiene import encoding_rejection
 from neural_memory.safety.freshness import (
     FreshnessLevel,
     analyze_freshness,
@@ -271,8 +271,8 @@ def remember(
         )
         raise typer.Exit(1)
 
-    damage = detect_encoding_damage(content)
-    if damage and not force:
+    damage = encoding_rejection(content, command="remember", force=force)
+    if damage is not None:
         typer.secho(
             f"Error: refusing to store damaged content — {damage}. "
             "Pass --force to store it anyway.",

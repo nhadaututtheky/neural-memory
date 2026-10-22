@@ -22,7 +22,7 @@ from starlette.types import ASGIApp
 logger = logging.getLogger(__name__)
 
 # Paths exempt from rate limiting (health checks should never be throttled)
-_EXEMPT_PREFIXES: tuple[str, ...] = ("/health", "/ready")
+_EXEMPT_PREFIXES: tuple[str, ...] = ("/health", "/ready", "/metrics")
 
 
 def _get_limit() -> int:

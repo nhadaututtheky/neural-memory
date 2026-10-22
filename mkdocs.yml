@@ -105,6 +105,7 @@ nav:
     - Schema v21 Migration: guides/schema-v21-migration.md
     - Learning Habits: guides/learning-habits.md
     - Safety & Security: guides/safety.md
+    - Observability: guides/observability.md
     - Docs Chatbot: guides/docs-chatbot.md
   - API Reference:
     - MCP Tools: api/mcp-tools.md

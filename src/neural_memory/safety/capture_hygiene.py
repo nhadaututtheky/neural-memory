@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from neural_memory.utils.metrics import record_encoding_rejection
+
 # Max cleaned content length returned to callers
 _MAX_CLEAN_CHARS = 20_000
 
@@ -160,6 +162,40 @@ def clean_capture_input(raw: str, source: str = "passive") -> CaptureDecision:
     )
 
 
+def _inspect_encoding_damage(text: str) -> tuple[str, str] | None:
+    """Return ``(damage_type, reason)`` when ``text`` looks encoding-damaged."""
+    if _REPLACEMENT_CHAR_RE.search(text):
+        return (
+            "replacement_char",
+            "content contains U+FFFD replacement characters",
+        )
+
+    if _LITERAL_UNICODE_ESCAPE_RE.search(text):
+        return (
+            "unicode_escape",
+            "content contains literal \\uXXXX escapes that were never decoded",
+        )
+
+    stripped = text.strip()
+    if len(stripped) >= _MIN_QUESTION_LEN:
+        # Optional chaining (a?.b?.c) is legitimate TypeScript/JavaScript, not
+        # damage: each "?." pair contributes a question mark every three
+        # characters, so a long chain alone can cross the ratio threshold.
+        # Count only question marks that do not introduce a property access.
+        suspicious = stripped.replace("?.", "")
+        ratio = suspicious.count("?") / len(stripped)
+        if ratio >= _MAX_QUESTION_RATIO:
+            return (
+                "question_mark_flood",
+                (
+                    f"{ratio:.0%} of the content is '?' — this usually means the text "
+                    "was collapsed by a non-UTF-8 shell pipe (on Windows, PowerShell "
+                    "defaults $OutputEncoding to ASCII)"
+                ),
+            )
+    return None
+
+
 def detect_encoding_damage(text: str) -> str | None:
     """Detect content damaged by a mis-encoded shell before it is persisted.
 
@@ -173,24 +209,21 @@ def detect_encoding_damage(text: str) -> str | None:
     Returns:
         A human-readable reason when damage is detected, otherwise ``None``.
     """
-    if _REPLACEMENT_CHAR_RE.search(text):
-        return "content contains U+FFFD replacement characters"
+    found = _inspect_encoding_damage(text)
+    if found is None:
+        return None
+    return found[1]
 
-    if _LITERAL_UNICODE_ESCAPE_RE.search(text):
-        return "content contains literal \\uXXXX escapes that were never decoded"
 
-    stripped = text.strip()
-    if len(stripped) >= _MIN_QUESTION_LEN:
-        # Optional chaining (a?.b?.c) is legitimate TypeScript/JavaScript, not
-        # damage: each "?." pair contributes a question mark every three
-        # characters, so a long chain alone can cross the ratio threshold.
-        # Count only question marks that do not introduce a property access.
-        suspicious = stripped.replace("?.", "")
-        ratio = suspicious.count("?") / len(stripped)
-        if ratio >= _MAX_QUESTION_RATIO:
-            return (
-                f"{ratio:.0%} of the content is '?' — this usually means the text "
-                "was collapsed by a non-UTF-8 shell pipe (on Windows, PowerShell "
-                "defaults $OutputEncoding to ASCII)"
-            )
-    return None
+def encoding_rejection(text: str, *, command: str, force: bool) -> str | None:
+    """Return the reason to refuse ``text``, and count that refusal.
+
+    ``force`` stores the text and does not count as a rejection. ``command``
+    is kept to ``remember``, ``forget``, or ``list`` when it is recorded.
+    """
+    found = _inspect_encoding_damage(text)
+    if found is None or force:
+        return None
+    damage_type, reason = found
+    record_encoding_rejection(command, damage_type)
+    return reason

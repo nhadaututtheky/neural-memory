@@ -5,7 +5,7 @@ API routes must supply the key via one of:
   - Authorization: Bearer <key>
   - X-API-Key: <key>
 
-Public paths (health, docs, UI, assets) are always allowed through.
+Public paths (health, metrics, docs, UI, assets) are always allowed through.
 """
 
 from __future__ import annotations
@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 _PUBLIC_PREFIXES: tuple[str, ...] = (
     "/health",
     "/ready",
+    "/metrics",
     "/docs",
     "/redoc",
     "/openapi.json",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -14,6 +15,7 @@ import aiosqlite
 from neural_memory.storage.read_pool import DEFAULT_POOL_SIZE, ReadPool
 from neural_memory.storage.sql.dialect import Dialect
 from neural_memory.utils.cjk import cjk_spaced
+from neural_memory.utils.metrics import is_sqlite_write_collision, record_sqlite_write
 
 logger = logging.getLogger(__name__)
 
@@ -243,10 +245,32 @@ class SQLiteDialect(Dialect):
         Inside ``transaction()`` the caller already holds the write lock, so
         the statement runs here directly. Queueing it would wait for the
         worker, and the worker would wait for the lock.
+
+        The sample includes queue wait and execution. A collision error is
+        counted, then raised to the caller.
         """
-        # ``current_task()`` is None outside a Task. Treating that as the
-        # transaction owner would skip the queue whenever ``_txn_task`` is
-        # also None.
+        started = time.monotonic()
+        try:
+            result = await self._run_write(op)
+        except Exception as exc:
+            record_sqlite_write(
+                time.monotonic() - started,
+                collision=is_sqlite_write_collision(exc),
+            )
+            raise
+        record_sqlite_write(time.monotonic() - started, collision=False)
+        return result
+
+    async def _run_write(
+        self,
+        op: Callable[[aiosqlite.Connection], Awaitable[_T]],
+    ) -> _T:
+        """Run ``op`` on this task when it owns the transaction, else queue it.
+
+        ``current_task()`` is None outside a Task. Treating that as the
+        transaction owner would skip the queue whenever ``_txn_task`` is
+        also None.
+        """
         current = asyncio.current_task()
         owns_transaction = current is not None and self._txn_task is current
         if owns_transaction or self._write_queue is None:
