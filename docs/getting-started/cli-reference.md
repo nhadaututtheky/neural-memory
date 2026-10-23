@@ -126,14 +126,13 @@ nmem remember [OPTIONS]
 | `--redact / -r` | boolean | No | `False` | Auto-redact sensitive content before storing |
 | `--timestamp / --at` | text | No | — | ISO datetime of original event (e.g. '2026-03-02T08:00:00'). Defaults to now. |
 | `--ephemeral` | boolean | No | `False` | Session-scoped memory: auto-expires after 24h, never synced |
-| `--stdin` | boolean | No | `False` | Read content from stdin (safe for shell-special characters) |
+| `--stdin` | boolean | No | `False` | Read content from stdin even when an argument is also present |
 | `--file` | text | No | — | Read content from a UTF-8 file (bypasses shell pipe encoding entirely) |
 | `--json / -j` | boolean | No | `False` | Output as JSON |
 
-With no argument, a pipe is the content: `echo "决定：用 Redis" | nmem remember`.
-The bytes are decoded as UTF-8 when they are valid UTF-8, otherwise with the
-Windows OEM code page. `--file` still reads a UTF-8 file. PowerShell 5.1 and
-CP1252 replace CJK with `?` before the process starts; use `--file` there.
+A pipe is decoded as UTF-8 when the bytes are valid UTF-8, otherwise
+with the Windows OEM code page. PowerShell 5.1 pipes ASCII and replaces
+CJK with "?". CP1252 cannot represent CJK either. Use --file for those.
 
 ### `nmem recall`
 
@@ -258,6 +257,10 @@ nmem brain use [OPTIONS]
 |--------|------|----------|---------|-------------|
 | `name` | text | Yes | — | (positional argument) |
 
+This updates config.toml so CLI and MCP servers (without NMEM_BRAIN
+env var) will use the new brain. MCP servers started with NMEM_BRAIN
+are pinned to that brain and will NOT be affected by this command.
+
 ### `nmem brain create`
 
 Create a new brain.
@@ -369,6 +372,9 @@ nmem status [OPTIONS]
 |--------|------|----------|---------|-------------|
 | `--json / -j` | boolean | No | `False` | Output as JSON |
 
+Unlike 'stats' which shows raw counts, 'status' gives a quick
+overview of what's happening and what you should do next.
+
 ### `nmem health`
 
 Show brain health diagnostics with purity score and recommendations.
@@ -380,6 +386,10 @@ nmem health [OPTIONS]
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
 | `--json / -j` | boolean | No | `False` | Output as JSON |
+
+Analyzes connectivity, diversity, freshness, consolidation,
+orphan rate, and activation efficiency to produce a composite
+health grade (A-F) and actionable recommendations.
 
 ### `nmem check`
 
@@ -408,6 +418,12 @@ nmem doctor [OPTIONS]
 | `--fix` | boolean | No | `False` | Auto-fix available issues |
 | `--dev` | boolean | No | `False` | Include source checkout and contributor tooling checks |
 
+Checks Python version, config, brain, dependencies, embedding provider,
+schema version, MCP config, hooks, dedup, surface, and CLI tools.
+
+Use --fix to automatically remediate fixable issues.
+Use --dev to check contributor setup in a source checkout.
+
 ### `nmem dashboard`
 
 Show a rich dashboard with brain stats and recent activity.
@@ -415,6 +431,12 @@ Show a rich dashboard with brain stats and recent activity.
 ```
 nmem dashboard [OPTIONS]
 ```
+
+Displays:
+    - Brain statistics (neurons, synapses, fibers)
+    - Memory types distribution
+    - Freshness analysis
+    - Recent memories
 
 ### `nmem ui`
 
@@ -430,6 +452,8 @@ nmem ui [OPTIONS]
 | `--search / -s` | text | No | — | Search in memory content |
 | `--limit / -n` | integer | No | `20` | Number of memories to show |
 
+Browse memories with color-coded types, priorities, and freshness.
+
 ### `nmem graph`
 
 Visualize neural connections as a tree graph.
@@ -444,6 +468,8 @@ nmem graph [OPTIONS]
 | `--depth / -d` | integer | No | `2` | Traversal depth (1-3) |
 | `--export / -e` | text | No | — | Export format: svg |
 | `--output / -o` | text | No | — | Output file path (used with --export) |
+
+Shows memories and their relationships (caused_by, leads_to, etc.)
 
 ## Training & Import/Export {#training}
 
@@ -529,6 +555,12 @@ nmem init [OPTIONS]
 | `--skip-embeddings` | boolean | No | `False` | Skip embedding provider setup |
 | `--dedup` | boolean | No | `False` | Enable dedup |
 
+Creates config, default brain, auto-configures MCP for
+Claude Code and Cursor, and installs agent skills.
+
+Use --full for extended setup: auto-detect embeddings,
+enable dedup, and generate a maintenance script.
+
 ### `nmem setup`
 
 Set up optional components.
@@ -557,6 +589,8 @@ nmem mcp-config [OPTIONS]
 | `--with-prompt / -p` | boolean | No | `False` | Include system prompt in config |
 | `--compact / -c` | boolean | No | `False` | Use compact prompt (if --with-prompt) |
 
+Outputs JSON configuration that can be added to your MCP settings.
+
 ### `nmem prompt`
 
 Show system prompt for AI tools.
@@ -569,6 +603,9 @@ nmem prompt [OPTIONS]
 |--------|------|----------|---------|-------------|
 | `--compact / -c` | boolean | No | `False` | Show compact version |
 | `--copy` | boolean | No | `False` | Copy to clipboard (requires pyperclip) |
+
+This prompt instructs AI assistants (Claude, GPT, etc.) on when and how
+to use NeuralMemory for persistent memory across sessions.
 
 ### `nmem hooks`
 
@@ -610,6 +647,13 @@ nmem config tier [OPTIONS]
 | `name` | text | No | `` | (positional argument) |
 | `--show / -s` | boolean | No | `False` | Show current tier |
 
+Tiers control which tools are exposed in tools/list:
+  minimal  — 4 core tools (~84% token savings)
+  standard — 8 tools (~69% savings)
+  full     — all 63 tools (default)
+
+Hidden tools remain callable — only schema exposure changes.
+
 ### `nmem install-skills`
 
 Install NeuralMemory skills to ~/.claude/skills/.
@@ -622,6 +666,11 @@ nmem install-skills [OPTIONS]
 |--------|------|----------|---------|-------------|
 | `--force / -f` | boolean | No | `False` | Overwrite existing skills with latest version |
 | `--list / -l` | boolean | No | `False` | List available skills without installing |
+
+Skills add AI agent workflows for memory management:
+  memory-intake     Structured memory creation from messy notes
+  memory-audit      6-dimension quality review with graded findings
+  memory-evolution   Evidence-based optimization from usage patterns
 
 ## Server & MCP {#server}
 
@@ -647,6 +696,19 @@ Run the MCP (Model Context Protocol) server.
 nmem mcp [OPTIONS]
 ```
 
+This starts an MCP server over stdio that exposes NeuralMemory tools
+to Claude Code, Claude Desktop, and other MCP-compatible clients.
+
+Available tools:
+    nmem_remember  - Store a memory
+    nmem_recall    - Query memories
+    nmem_context   - Get recent context
+    nmem_todo      - Add a TODO memory
+    nmem_stats     - Get brain statistics
+
+Configuration for Claude Code:
+    claude mcp add --scope user neural-memory -- nmem-mcp
+
 ## Maintenance {#maintenance}
 
 ### `nmem decay`
@@ -663,6 +725,9 @@ nmem decay [OPTIONS]
 | `--dry-run / -n` | boolean | No | `False` | Preview changes without applying |
 | `--prune / -p` | float | No | `0.01` | Prune below this activation level |
 
+Memories that haven't been accessed recently will have their
+activation levels reduced following the Ebbinghaus forgetting curve.
+
 ### `nmem consolidate`
 
 Consolidate brain memories by pruning, merging, or summarizing.
@@ -673,13 +738,29 @@ nmem consolidate [OPTIONS]
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `strategy_positional` | text | No | — | (positional argument) |
 | `--brain / -b` | text | No | — | Brain to consolidate |
 | `--strategy / -s` | text | No | `all` | Consolidation strategy. Valid values: prune, merge, summarize, mature, infer, enrich, dream, learn_habits, dedup, sem... |
 | `--dry-run / -n` | boolean | No | `False` | Preview changes without applying |
 | `--prune-threshold` | float | No | `0.05` | Weight threshold for pruning synapses |
 | `--merge-overlap` | float | No | `0.5` | Jaccard overlap threshold for merging fibers |
 | `--min-inactive-days` | float | No | `7.0` | Minimum inactive days before pruning |
+
+Runs one or more consolidation passes on the current (or specified) brain.
+Use --strategy to pick a specific pass, or omit it to run everything.
+
+Strategies:
+    prune         - Remove weak synapses and orphan neurons
+    merge         - Combine overlapping fibers
+    summarize     - Create concept neurons for topic clusters
+    mature        - Advance episodic memories to semantic stage
+    infer         - Add inferred synapses from co-activation patterns
+    enrich        - Enrich neurons with extracted metadata
+    dream         - Generate synthetic bridging memories
+    learn_habits  - Extract recurring workflow patterns
+    dedup         - Merge near-duplicate memories
+    semantic_link - Add cross-domain semantic connections
+    compress      - Compress old low-activation fibers
+    all           - Run all strategies in dependency order (default)
 
 ### `nmem cleanup`
 
@@ -711,6 +792,10 @@ nmem flush [OPTIONS]
 | `text` | text | No | — | (positional argument) |
 | `--json / -j` | boolean | No | `False` | Output as JSON |
 
+Aggressively detects and saves all memorable content with
+lowered confidence threshold. Designed for pre-compaction
+or session-end scenarios.
+
 ## Project Management {#project}
 
 ### `nmem project create`
@@ -729,6 +814,8 @@ nmem project create [OPTIONS]
 | `--tag / -t` | text | No | — | Project tags |
 | `--priority / -p` | float | No | `1.0` | Project priority (default: 1.0) |
 | `--json / -j` | boolean | No | `False` | Output as JSON |
+
+Projects group related memories and enable time-bounded retrieval.
 
 ### `nmem project list`
 
@@ -799,6 +886,9 @@ nmem shared enable [OPTIONS]
 | `--api-key / -k` | text | No | — | API key for authentication |
 | `--timeout / -t` | float | No | `30.0` | Request timeout in seconds |
 
+When shared mode is enabled, all memory operations (remember, recall, etc.)
+will use the remote server instead of local storage.
+
 ### `nmem shared disable`
 
 Disable shared mode and use local storage.
@@ -840,6 +930,11 @@ nmem shared sync [OPTIONS]
 | `--direction / -d` | text | No | `both` | Sync direction: push, pull, or both |
 | `--json / -j` | boolean | No | `False` | Output as JSON |
 
+Directions:
+    push  - Upload local brain to server
+    pull  - Download brain from server to local
+    both  - Full bidirectional sync (default)
+
 ### `nmem habits list`
 
 List learned workflow habits.
@@ -851,6 +946,9 @@ nmem habits list [OPTIONS]
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
 | `--json / -j` | boolean | No | `False` | Output as JSON |
+
+Shows all habits discovered through action sequence mining,
+including step sequences, frequencies, and confidence scores.
 
 ### `nmem habits show`
 
@@ -877,6 +975,9 @@ nmem habits clear [OPTIONS]
 |--------|------|----------|---------|-------------|
 | `--force / -f` | boolean | No | `False` | Skip confirmation |
 
+Removes all WORKFLOW fibers with _habit_pattern metadata.
+This does not affect action event history.
+
 ### `nmem habits status`
 
 Show progress toward habit detection.
@@ -888,6 +989,10 @@ nmem habits status [OPTIONS]
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
 | `--json / -j` | boolean | No | `False` | Output as JSON |
+
+Displays emerging action patterns that haven't yet reached the
+frequency threshold to become learned habits. Helps you understand
+how close your workflows are to being recognized.
 
 ### `nmem version create`
 
@@ -990,6 +1095,12 @@ nmem list [OPTIONS]
 | `--full` | boolean | No | `False` | Return full content instead of a 100-char summary |
 | `--json / -j` | boolean | No | `False` | Output as JSON |
 
+Content is summarised to 100 characters by default; pass --full (or use
+``nmem show <id>``) when the complete text matters.
+
+Memory types: fact, decision, preference, todo, insight, context,
+              instruction, error, workflow, reference
+
 ### `nmem migrate`
 
 Migrate brain data between storage backends.
@@ -1020,6 +1131,8 @@ nmem update [OPTIONS]
 |--------|------|----------|---------|-------------|
 | `--force / -f` | boolean | No | `False` | Force update even if already latest |
 | `--check / -c` | boolean | No | `False` | Only check for updates, don't install |
+
+Automatically detects install method (pip or git source) and updates accordingly.
 
 ## Other {#other}
 
@@ -1058,6 +1171,11 @@ nmem forget [OPTIONS]
 | `--shared / -S` | boolean | No | `False` | Use shared/remote storage |
 | `--json / -j` | boolean | No | `False` | Output as JSON |
 
+Soft delete sets expires_at=now; consolidation removes the fiber later.
+Hard delete drops the fiber + typed_memory immediately (CASCADE handles
+fiber_neurons) and requires --force, mirroring the confirmation gate on
+nmem_cleanup and on the MCP tools.
+
 ### `nmem lifecycle`
 
 Manage memory lifecycle states.
@@ -1071,6 +1189,8 @@ nmem lifecycle [OPTIONS]
 | `action` | text | No | `status` | (positional argument) |
 | `neuron_id` | text | No | — | (positional argument) |
 | `--brain / -b` | text | No | — | Brain name |
+
+View lifecycle distribution or freeze/thaw/recover individual memories.
 
 ### `nmem pin`
 
@@ -1086,6 +1206,8 @@ nmem pin [OPTIONS]
 | `--shared / -S` | boolean | No | `False` | Use shared/remote storage |
 | `--limit / -l` | integer | No | `50` | When fiber_id='list', cap number of results |
 | `--json / -j` | boolean | No | `False` | Output as JSON |
+
+Use 'list' as the argument to list currently-pinned fibers.
 
 ### `nmem shared activate`
 
@@ -1113,6 +1235,9 @@ nmem show [OPTIONS]
 | `--shared / -S` | boolean | No | `False` | Use shared/remote storage |
 | `--json / -j` | boolean | No | `False` | Output as JSON |
 
+Works for typed fibers, untyped fibers, and bare neurons. Useful for
+debugging when recall returns an ID that other commands can't resolve.
+
 ### `nmem storage status`
 
 Show current storage backend status.
@@ -1120,6 +1245,9 @@ Show current storage backend status.
 ```
 nmem storage status [OPTIONS]
 ```
+
+Displays which backend is active, Pro license status,
+and whether data files exist for each backend.
 
 ### `nmem storage switch`
 
@@ -1132,6 +1260,9 @@ nmem storage switch [OPTIONS]
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
 | `backend` | text | Yes | — | (positional argument) |
+
+Switches config.toml to use the specified backend.
+Data must already exist for the target backend (run migrate first).
 
 ### `nmem sync activate`
 
@@ -1167,6 +1298,9 @@ nmem sync enable [OPTIONS]
 | `--api-key / -k` | text | No | — | API key for authentication |
 | `--timeout / -t` | float | No | `30.0` | Request timeout in seconds |
 
+When shared mode is enabled, all memory operations (remember, recall, etc.)
+will use the remote server instead of local storage.
+
 ### `nmem sync status`
 
 Show shared mode status and configuration.
@@ -1191,6 +1325,11 @@ nmem sync sync [OPTIONS]
 |--------|------|----------|---------|-------------|
 | `--direction / -d` | text | No | `both` | Sync direction: push, pull, or both |
 | `--json / -j` | boolean | No | `False` | Output as JSON |
+
+Directions:
+    push  - Upload local brain to server
+    pull  - Download brain from server to local
+    both  - Full bidirectional sync (default)
 
 ### `nmem sync test`
 

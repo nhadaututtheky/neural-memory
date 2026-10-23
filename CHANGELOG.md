@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.63.0] — 2026-10-23
+
 ### Added
 
 - **Prometheus metrics for silent failures**: `GET /metrics` exposes SQLite
@@ -43,6 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (CP936, CP949, and the rest). `--file` is unchanged. A shell that already
   replaced the characters with `?` (PowerShell 5.1 ASCII, CP1252) cannot be
   repaired (#213).
+- **Encoder imports again**: the write scheduler loads when a write runs, so
+  importing the encoder no longer pulls storage startup back into a
+  half-initialized `EncodingResult`.
+- **Windows pre-ship scan**: forbidden-pattern checks skip `tests` by path
+  part, so a stress test is not reported as production code when the path
+  uses backslashes.
 - **Postgres regains concurrent writes** at the call sites that were
   serialized for SQLite (`pipeline_steps`, `doc_trainer`, the deferred
   write queue, auto-capture, eternal project-context deletes, and the
@@ -90,6 +98,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing, the response carries a `hint`. Chinese text names its trigger words,
   a too-short input reports the length floor, and Japanese/Korean are reported
   as unsupported (#209).
+- **CLI reference generation** follows Typer's vendored Click, so the
+  command list is not empty, and `nmem remember` documents the pipe decoder.
 
 ## [4.62.0] — 2026-08-16
 

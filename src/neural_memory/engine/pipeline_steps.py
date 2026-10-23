@@ -46,7 +46,6 @@ from neural_memory.extraction.keywords import extract_keywords, extract_weighted
 from neural_memory.extraction.relations import RelationExtractor
 from neural_memory.extraction.sentiment import SentimentExtractor, Valence
 from neural_memory.extraction.temporal import TemporalExtractor
-from neural_memory.storage.write_schedule import run_writes
 from neural_memory.utils.simhash import is_near_duplicate, simhash
 from neural_memory.utils.tag_normalizer import TagNormalizer
 
@@ -1402,6 +1401,17 @@ class CreateAnchorStep:
 # ── Step 7: Create Synapses (anchor → time/entity/concept) ──
 
 
+async def _schedule_writes(storage: object, coros: list[Any]) -> list[Any]:
+    """Run independent writes without importing storage at module load.
+
+    Storage package init imports the encoder. A top-level import in this
+    module leaves ``EncodingResult`` half-initialized.
+    """
+    from neural_memory.storage.write_schedule import run_writes
+
+    return list(await run_writes(storage, coros))
+
+
 class CreateSynapsesStep:
     """Wire anchor to time, entity, and concept neurons."""
 
@@ -1515,7 +1525,7 @@ class CreateSynapsesStep:
 
         # Independent inserts. Postgres overlaps them; SQLite stays sequential.
         if synapses_to_add:
-            added = await run_writes(
+            added = await _schedule_writes(
                 storage,
                 [
                     _add_synapse(storage, synapse, "CreateSynapsesStep")
@@ -1611,7 +1621,7 @@ class CoOccurrenceStep:
                 )
 
         if synapses_to_add:
-            added = await run_writes(
+            added = await _schedule_writes(
                 storage,
                 [_add_synapse(storage, synapse, "co-occurrence") for synapse in synapses_to_add],
             )

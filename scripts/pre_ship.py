@@ -200,8 +200,10 @@ def check_forbidden_patterns() -> None:
                 lines = text.splitlines()
                 for i, line in enumerate(lines, 1):
                     if regex.search(line):
-                        # Allow in test files for testing error conditions
-                        if "tests/" in str(f):
+                        # Allow in test files for testing error conditions.
+                        # Compare path parts: Windows uses backslashes, so a
+                        # "tests/" substring never matches there.
+                        if "tests" in f.relative_to(ROOT).parts:
                             continue
 
                         # Context check for return_exceptions=True
