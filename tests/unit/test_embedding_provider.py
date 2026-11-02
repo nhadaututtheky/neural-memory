@@ -80,6 +80,14 @@ class TestEmbeddingConfig:
         )
         assert config.provider == "openrouter"
 
+    def test_cheaper_inference_provider_valid(self) -> None:
+        """Should accept 'cheaper_inference' as a valid provider."""
+        config = EmbeddingConfig(
+            provider="cheaper_inference",
+            model="text-embedding-3-small",
+        )
+        assert config.provider == "cheaper_inference"
+
 
 # ── Provider protocol tests ──────────────────────────────────────
 
@@ -754,7 +762,15 @@ class TestEmbeddingSettings:
         """Should accept all valid provider names."""
         from neural_memory.unified_config import EmbeddingSettings
 
-        for provider in ("sentence_transformer", "openai", "openrouter", "gemini", "ollama", ""):
+        for provider in (
+            "sentence_transformer",
+            "openai",
+            "openrouter",
+            "cheaper_inference",
+            "gemini",
+            "ollama",
+            "",
+        ):
             s = EmbeddingSettings(provider=provider)
             assert s.provider == provider
 
@@ -1094,5 +1110,118 @@ class TestOpenRouterEmbedding:
             provider = _create_provider(config)
             assert isinstance(provider, OpenRouterEmbedding)
             assert provider._model == "openai/text-embedding-3-small"
+
+        _provider_cache.clear()
+
+
+# ── CheaperInferenceEmbedding tests ──────────────────────────────
+
+
+class TestCheaperInferenceEmbedding:
+    """Test CheaperInferenceEmbedding with mocked OpenAI client."""
+
+    def test_requires_api_key(self) -> None:
+        """Should raise ValueError when no API key is provided."""
+        import os
+        import unittest.mock
+
+        from neural_memory.engine.embedding.cheaper_inference_embedding import (
+            CheaperInferenceEmbedding,
+        )
+
+        env_without_key = {k: v for k, v in os.environ.items() if k != "CHEAPER_INFERENCE_API_KEY"}
+        with unittest.mock.patch.dict(os.environ, env_without_key, clear=True):
+            with pytest.raises(ValueError, match="CHEAPER_INFERENCE_API_KEY"):
+                CheaperInferenceEmbedding()
+
+    def test_accepts_cheaper_inference_env_key(self) -> None:
+        """Should pick up CHEAPER_INFERENCE_API_KEY from environment."""
+        import os
+        import unittest.mock
+
+        from neural_memory.engine.embedding.cheaper_inference_embedding import (
+            CheaperInferenceEmbedding,
+        )
+
+        env = {k: v for k, v in os.environ.items() if k != "CHEAPER_INFERENCE_API_KEY"}
+        env["CHEAPER_INFERENCE_API_KEY"] = "env-cheaper-inference-key"
+        with unittest.mock.patch.dict(os.environ, env, clear=True):
+            provider = CheaperInferenceEmbedding()
+            assert provider._api_key == "env-cheaper-inference-key"
+
+    def test_defaults(self) -> None:
+        """Should use the documented Cheaper Inference defaults."""
+        from neural_memory.engine.embedding.cheaper_inference_embedding import (
+            CheaperInferenceEmbedding,
+        )
+
+        provider = CheaperInferenceEmbedding(api_key="test-key")
+        assert provider._model == "text-embedding-3-small"
+        assert provider._base_url == "https://api.cheaperinference.com/v1"
+
+    def test_dimension_known_model(self) -> None:
+        """Should return 1536 for the small OpenAI embedding model."""
+        from neural_memory.engine.embedding.cheaper_inference_embedding import (
+            CheaperInferenceEmbedding,
+        )
+
+        provider = CheaperInferenceEmbedding(
+            api_key="test-key",
+            model="text-embedding-3-small",
+        )
+        assert provider.dimension == 1536
+
+    @pytest.mark.asyncio
+    async def test_embed_with_mock_client(self) -> None:
+        """Should call the Cheaper Inference client and return embedding."""
+        import unittest.mock
+
+        from neural_memory.engine.embedding.cheaper_inference_embedding import (
+            CheaperInferenceEmbedding,
+        )
+
+        provider = CheaperInferenceEmbedding(api_key="test-key")
+
+        mock_embedding = unittest.mock.MagicMock()
+        mock_embedding.embedding = [0.1, 0.2, 0.3]
+        mock_embedding.index = 0
+
+        mock_response = unittest.mock.MagicMock()
+        mock_response.data = [mock_embedding]
+
+        mock_client = unittest.mock.AsyncMock()
+        mock_client.embeddings.create = unittest.mock.AsyncMock(return_value=mock_response)
+
+        provider._client = mock_client
+
+        result = await provider.embed("hello")
+        assert result == [0.1, 0.2, 0.3]
+        mock_client.embeddings.create.assert_called_once_with(
+            input=["hello"],
+            model="text-embedding-3-small",
+        )
+
+    def test_factory_creates_cheaper_inference_provider(self) -> None:
+        """_create_provider should create CheaperInferenceEmbedding for 'cheaper_inference'."""
+        import os
+        import unittest.mock
+
+        from neural_memory.core.brain import BrainConfig
+        from neural_memory.engine.embedding.cheaper_inference_embedding import (
+            CheaperInferenceEmbedding,
+        )
+        from neural_memory.engine.semantic_discovery import _create_provider, _provider_cache
+
+        config = BrainConfig(
+            embedding_provider="cheaper_inference",
+            embedding_model="text-embedding-3-small",
+        )
+        env = {k: v for k, v in os.environ.items() if k != "CHEAPER_INFERENCE_API_KEY"}
+        env["CHEAPER_INFERENCE_API_KEY"] = "test-cheaper-inference-key"
+
+        with unittest.mock.patch.dict(os.environ, env, clear=True):
+            provider = _create_provider(config)
+            assert isinstance(provider, CheaperInferenceEmbedding)
+            assert provider._model == "text-embedding-3-small"
 
         _provider_cache.clear()

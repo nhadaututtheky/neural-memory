@@ -436,6 +436,7 @@ def _check_embedding_provider() -> dict[str, Any]:
         "sentence_transformer": "sentence_transformers",
         "openai": "openai",
         "openrouter": "openai",
+        "cheaper_inference": "openai",
         "gemini": "google.genai",
         "ollama": "ollama",
     }
@@ -454,6 +455,7 @@ def _check_embedding_provider() -> dict[str, Any]:
                 "sentence_transformer": "pip install neural-memory[embeddings]",
                 "openai": "pip install neural-memory[embeddings-openai]",
                 "openrouter": "pip install neural-memory[embeddings-openrouter]",
+                "cheaper_inference": "pip install neural-memory[embeddings-cheaper-inference]",
                 "gemini": "pip install neural-memory[embeddings-gemini]",
                 "ollama": "pip install neural-memory[embeddings]",
             }

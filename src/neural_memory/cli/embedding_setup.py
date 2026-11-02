@@ -64,6 +64,16 @@ _PROVIDERS: list[dict[str, str]] = [
         "note": "OpenAI-compatible, needs OPENROUTER_API_KEY",
         "env_key": "OPENROUTER_API_KEY",
     },
+    {
+        "key": "cheaper_inference",
+        "name": "Cheaper Inference",
+        "type": "cloud",
+        "module": "openai",
+        "install": "pip install neural-memory[embeddings-cheaper-inference]",
+        "default_model": "text-embedding-3-small",
+        "note": "OpenAI-compatible, needs CHEAPER_INFERENCE_API_KEY",
+        "env_key": "CHEAPER_INFERENCE_API_KEY",
+    },
 ]
 
 

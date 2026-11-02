@@ -91,6 +91,23 @@ class TestDoctor:
             assert "not installed" in result["detail"]
             assert result["fix"] == "Run: pip install neural-memory[embeddings-openrouter]"
 
+    def test_check_embedding_cheaper_inference_not_installed(self) -> None:
+        from neural_memory.cli.doctor import _check_embedding_provider
+
+        mock_config = MagicMock()
+        mock_config.embedding.enabled = True
+        mock_config.embedding.provider = "cheaper_inference"
+        mock_config.embedding.model = "text-embedding-3-small"
+
+        with (
+            patch("neural_memory.unified_config.get_config", return_value=mock_config),
+            patch("neural_memory.cli.doctor.importlib.import_module", side_effect=ImportError),
+        ):
+            result = _check_embedding_provider()
+            assert result["status"] == "fail"
+            assert "not installed" in result["detail"]
+            assert result["fix"] == "Run: pip install neural-memory[embeddings-cheaper-inference]"
+
     def test_check_embedding_openai_not_installed_uses_embeddings_extra(self) -> None:
         from neural_memory.cli.doctor import _check_embedding_provider
 
@@ -331,7 +348,14 @@ class TestEmbeddingSetup:
         from neural_memory.cli.embedding_setup import _PROVIDERS
 
         keys = {p["key"] for p in _PROVIDERS}
-        assert keys == {"sentence_transformer", "gemini", "ollama", "openai", "openrouter"}
+        assert keys == {
+            "sentence_transformer",
+            "gemini",
+            "ollama",
+            "openai",
+            "openrouter",
+            "cheaper_inference",
+        }
 
     def test_cloud_provider_install_hints_use_embeddings_extra(self) -> None:
         from neural_memory.cli.embedding_setup import _PROVIDERS
@@ -339,6 +363,10 @@ class TestEmbeddingSetup:
         install_by_key = {provider["key"]: provider["install"] for provider in _PROVIDERS}
         assert install_by_key["openai"] == "pip install neural-memory[embeddings-openai]"
         assert install_by_key["openrouter"] == "pip install neural-memory[embeddings-openrouter]"
+        assert (
+            install_by_key["cheaper_inference"]
+            == "pip install neural-memory[embeddings-cheaper-inference]"
+        )
 
     def test_pyproject_embedding_extras_include_cloud_sdk(self) -> None:
         import tomllib
@@ -354,6 +382,11 @@ class TestEmbeddingSetup:
 
         embeddings_openrouter = data["project"]["optional-dependencies"]["embeddings-openrouter"]
         assert "openai>=1.0" in embeddings_openrouter
+
+        embeddings_cheaper_inference = data["project"]["optional-dependencies"][
+            "embeddings-cheaper-inference"
+        ]
+        assert "openai>=1.0" in embeddings_cheaper_inference
 
     def test_all_providers_have_required_fields(self) -> None:
         from neural_memory.cli.embedding_setup import _PROVIDERS
@@ -412,7 +445,7 @@ class TestWizard:
     def test_provider_metadata(self) -> None:
         from neural_memory.cli.wizard import _PROVIDERS
 
-        assert len(_PROVIDERS) == 5
+        assert len(_PROVIDERS) == 6
         for p in _PROVIDERS:
             assert "key" in p
             assert "name" in p
