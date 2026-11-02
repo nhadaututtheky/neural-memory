@@ -173,6 +173,7 @@ class EmbeddingSettings:
         "sentence_transformer",
         "openai",
         "openrouter",
+        "cheaper_inference",
         "gemini",
         "ollama",
         "auto",
@@ -1588,7 +1589,7 @@ class UnifiedConfig:
                 lines.append(f"{key} = {lit}")
         lines += [
             "",
-            "# Embedding settings (cross-language recall via Gemini/OpenAI/OpenRouter)",
+            "# Embedding settings (cross-language recall via Gemini/OpenAI/OpenRouter/Cheaper Inference)",
             "[embedding]",
             f"enabled = {'true' if self.embedding.enabled else 'false'}",
             f'provider = "{self.embedding.provider}"',

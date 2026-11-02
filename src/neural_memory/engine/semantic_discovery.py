@@ -64,6 +64,7 @@ def _auto_detect_provider() -> tuple[str, str]:
     3. Gemini API key set (free tier available)
     4. OpenAI API key set (paid)
     5. OpenRouter API key set (OpenAI-compatible)
+    6. Cheaper Inference API key set (OpenAI-compatible)
 
     Returns:
         Tuple of (provider_name, model_name).
@@ -112,13 +113,18 @@ def _auto_detect_provider() -> tuple[str, str]:
     if os.environ.get("OPENROUTER_API_KEY"):
         return ("openrouter", "openai/text-embedding-3-small")
 
+    # 6. Check Cheaper Inference API key (OpenAI-compatible)
+    if os.environ.get("CHEAPER_INFERENCE_API_KEY"):
+        return ("cheaper_inference", "text-embedding-3-small")
+
     raise RuntimeError(
         "No embedding provider available. Install one of:\n"
         "  pip install neural-memory[embeddings]    # sentence-transformers (local, free)\n"
         "  ollama pull bge-m3                       # Ollama (local, free)\n"
         "  export GEMINI_API_KEY=...                # Google Gemini (free tier)\n"
         "  export OPENAI_API_KEY=...                # OpenAI (paid)\n"
-        "  export OPENROUTER_API_KEY=...            # OpenRouter (OpenAI-compatible)"
+        "  export OPENROUTER_API_KEY=...            # OpenRouter (OpenAI-compatible)\n"
+        "  export CHEAPER_INFERENCE_API_KEY=...     # Cheaper Inference (OpenAI-compatible)"
     )
 
 
@@ -169,6 +175,12 @@ def _create_provider(config: BrainConfig, task_type: str = "RETRIEVAL_QUERY") ->
         from neural_memory.engine.embedding.openrouter_embedding import OpenRouterEmbedding
 
         provider = OpenRouterEmbedding(model=model_name)
+    elif provider_name == "cheaper_inference":
+        from neural_memory.engine.embedding.cheaper_inference_embedding import (
+            CheaperInferenceEmbedding,
+        )
+
+        provider = CheaperInferenceEmbedding(model=model_name)
     elif provider_name == "gemini":
         from neural_memory.engine.embedding.gemini_embedding import GeminiEmbedding
 

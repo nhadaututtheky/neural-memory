@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Cheaper Inference embedding provider**: `provider = "cheaper_inference"`
+  uses the OpenAI-compatible embeddings API at
+  `https://api.cheaperinference.com/v1` with `CHEAPER_INFERENCE_API_KEY`.
+  Auto-detect, `nmem doctor`, the setup wizard and the
+  `embeddings-cheaper-inference` extra know the new provider.
+
 ## [4.63.0] — 2026-10-23
 
 ### Added

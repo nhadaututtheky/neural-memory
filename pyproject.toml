@@ -136,6 +136,9 @@ embeddings-openai = [
 embeddings-openrouter = [
     "openai>=1.0",
 ]
+embeddings-cheaper-inference = [
+    "openai>=1.0",
+]
 embeddings-gemini = [
     "google-genai>=1.0",
 ]

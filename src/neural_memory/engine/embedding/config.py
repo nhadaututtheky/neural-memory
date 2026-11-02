@@ -9,6 +9,7 @@ _VALID_PROVIDERS = (
     "sentence_transformer",
     "openai",
     "openrouter",
+    "cheaper_inference",
     "gemini",
     "ollama",
     "auto",
