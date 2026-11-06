@@ -6,6 +6,8 @@ import logging
 import re
 from dataclasses import dataclass
 
+from neural_memory.utils.cjk import is_cjk_char
+
 logger = logging.getLogger(__name__)
 
 # English stop words — standard
@@ -299,6 +301,81 @@ STOP_WORDS_VI: frozenset[str] = frozenset(
 # Combined stop words for backward compatibility
 STOP_WORDS: frozenset[str] = STOP_WORDS_EN | STOP_WORDS_VI | _STOP_WORDS_CONVERSATIONAL_EN
 
+# Han characters present anywhere in the text. Used as a cheap pre-check so
+# Latin-only input never pays for a per-character scan.
+_CJK_ANY = re.compile(
+    "[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff"
+    "\U00020000-\U0002a6df\U0002a700-\U0002b73f\U0002b740-\U0002b81f"
+    "\U0002b820-\U0002ceaf\U0002ceb0-\U0002ebef\U00030000-\U0003134f]"
+)
+
+# Longest Han run still treated as one term. A run has no internal word
+# boundaries, so a window cut out of it would be a guess, and a guess that lands
+# on a common but unrelated word retrieves unrelated memories --
+# `_build_fts_query` phrases the term as a single FTS phrase and the
+# fiber-summary tier answers from its top hit. So the whole run is used or
+# nothing is.
+#
+# Five rather than four because a run of five is still a term, not a sentence:
+# 服务器迁移 and 角色管理页 are ordinary domain words. It is a boundary, not a
+# solution: a six-character term still yields nothing, because an exact phrase
+# that long stops appearing in stored summaries and any window cut out of one
+# would be a guess. Segmentation is what would actually lift this bound.
+_CJK_MAX_WHOLE_RUN = 5
+
+
+def _cjk_runs(text: str) -> list[str]:
+    """Return every run of consecutive Han characters, in reading order.
+
+    No splitting inside a run: Latin word boundaries do not exist here, and a
+    single Han character is not a reliable separator -- 会 belongs to
+    社会/会议/会计, 用 to 用户, 问 to 问题,
+    so cutting at characters that look like particles destroys the word.
+
+    There is deliberately no utterance or function-word filter. Callers are
+    agents, not people typing chat messages: a recall query is a search term
+    (媒体投稿, 用户, 服务器迁移), not
+    "帮我看一下媒体投稿的记录 吧". A filter for
+    chat phrasing was written and removed -- it cost 300 lines and every rule
+    it grew was rejected by the next review round with a fresh counterexample,
+    while never once changing the answer for a real query.
+    """
+    runs: list[str] = []
+    current: list[str] = []
+    for ch in text:
+        if is_cjk_char(ch):
+            current.append(ch)
+        else:
+            if current:
+                runs.append("".join(current))
+            current = []
+    if current:
+        runs.append("".join(current))
+    return runs
+
+
+def _extract_cjk_keyword(text: str, min_length: int) -> str | None:
+    """Pick a Chinese keyword for the spaced FTS index, or None.
+
+    The longest run that fits the word-length window wins. Nothing is cut out
+    of a run: a window of a sentence is as likely to be a verb as the topic
+    (数据库连接超时 -> 数据), and a wrong term silently
+    retrieves the wrong memories because `_build_fts_query` phrases it as one
+    FTS phrase. Returning None leaves the caller where it was before this path
+    existed, which is honest.
+
+    Exactly one keyword is returned because `_build_fts_query` joins keywords
+    with an implicit AND, so emitting several competing runs would narrow the
+    result to text containing all of them.
+    """
+    if not _CJK_ANY.search(text):
+        return None
+    usable = [run for run in _cjk_runs(text) if min_length <= len(run) <= _CJK_MAX_WHOLE_RUN]
+    if not usable:
+        return None
+    return max(usable, key=len)
+
+
 # Vietnamese diacritical character pattern (unique to Vietnamese, not French)
 _VI_DIACRITICS = re.compile(r"[ăâđêôơưắằẳẵặấầẩẫậếềểễệốồổỗộớờởỡợứừửữự]")
 
@@ -440,6 +517,11 @@ def extract_weighted_keywords(
         code_spans.append((m.start(), m.end()))
 
     # ── Phase 2: Natural language keywords (existing logic) ────────
+    # Han characters are absent from the Latin range below, so a Chinese query
+    # tokenizes to nothing and recall answers "no relevant memories" for text
+    # that is indexed and retrievable. Extract the Chinese term separately.
+    cjk_keyword = _extract_cjk_keyword(text, min_length)
+
     words = re.findall(r"\b[a-zA-ZÀ-ỹ]+(?:_[a-zA-ZÀ-ỹ]+)*\b", tokenized_text.lower())
 
     # Filter to content words with original position
@@ -451,7 +533,7 @@ def extract_weighted_keywords(
         and w not in stop_words
     ]
 
-    if not filtered and not code_identifiers:
+    if not filtered and not code_identifiers and not cjk_keyword:
         return []
 
     total = max(len(filtered), 1)
@@ -459,6 +541,11 @@ def extract_weighted_keywords(
 
     # Seed with code identifiers (high priority)
     weighted.update(code_identifiers)
+
+    # The Chinese term is what the query is about; rank it with the leading
+    # natural-language words.
+    if cjk_keyword is not None:
+        weighted[cjk_keyword] = max(weighted.get(cjk_keyword, 0.0), 1.0)
 
     # Unigrams with position decay (1.0 at start -> 0.5 at end)
     for idx, (word, _orig_pos) in enumerate(filtered):

@@ -132,3 +132,58 @@ async def test_migration_v41_v42_backfills_cjk_index(tmp_path: Path) -> None:
 
 async def store_add(store: SQLStorage, neuron: Neuron) -> None:
     await store.add_neuron(neuron)
+
+
+async def test_chinese_query_survives_extraction_into_recall(store: SQLStorage) -> None:
+    """A Chinese question must reach the FTS index, not be dropped before it.
+
+    The index side was already correct (#207), but ``extract_keywords`` used a
+    Latin-only character class and returned ``[]`` for Han text, so recall
+    answered "no relevant memories" for memories that were indexed. This walks
+    the whole chain: question -> keywords -> FTS phrase -> stored summary.
+    """
+    from neural_memory.extraction.keywords import extract_keywords
+
+    n = Neuron.create(type=NeuronType.CONCEPT, content="anchor")
+    await store.add_neuron(n)
+    fiber = Fiber.create(
+        neuron_ids={n.id},
+        synapse_ids=set(),
+        anchor_neuron_id=n.id,
+        summary="媒体投稿界面增加了定时投放功能",
+    )
+    await store.add_fiber(fiber)
+
+    for question in ("媒体投稿", "投稿"):
+        keywords = extract_keywords(question)
+        assert keywords, f"{question!r} produced no keywords, so FTS is never queried"
+        hits = await store.search_fiber_summaries(" ".join(keywords), limit=10)
+        assert any(f.id == fiber.id for f in hits), (
+            f"{question!r} -> keywords {keywords} did not reach the indexed fiber"
+        )
+
+
+async def test_content_word_is_what_reaches_the_index(store: SQLStorage) -> None:
+    """A word made of characters that are particles elsewhere still works.
+
+    ``用户``/``更新``/``问题`` each contain a character that is a particle on
+    its own. Treating those characters as separators destroyed the word and
+    left recall with nothing to search, which is the bug this guards against.
+    """
+    from neural_memory.extraction.keywords import extract_keywords
+
+    n = Neuron.create(type=NeuronType.CONCEPT, content="anchor2")
+    await store.add_neuron(n)
+    fiber = Fiber.create(
+        neuron_ids={n.id},
+        synapse_ids=set(),
+        anchor_neuron_id=n.id,
+        summary="用户反馈更新后问题消失",
+    )
+    await store.add_fiber(fiber)
+
+    for word in ("用户", "更新", "问题"):
+        keywords = extract_keywords(word)
+        assert keywords == [word], f"{word!r} -> {keywords}"
+        hits = await store.search_fiber_summaries(" ".join(keywords), limit=10)
+        assert any(f.id == fiber.id for f in hits), f"{word!r} did not reach the fiber"
